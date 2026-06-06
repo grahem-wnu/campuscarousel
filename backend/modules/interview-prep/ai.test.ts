@@ -54,8 +54,10 @@ describe('curatedFeedbackGenerator', () => {
   });
 });
 
+// These exercise the real lazy `import('@aws-sdk/client-bedrock-runtime')` (to construct the
+// command), whose first cold load can exceed vitest's 5s default — give them generous headroom.
 describe('makeBedrockQuestionGenerator', () => {
-  it('parses model output and falls back on failure', async () => {
+  it('parses model output and falls back on failure', { timeout: 30000 }, async () => {
     const gen = makeBedrockQuestionGenerator({ modelId: MODEL, client: stub(JSON.stringify([{ question: 'Tell me about a team conflict.', category: 'behavioral' }])) });
     const qs = await gen({ count: 3, grounding });
     expect(qs[0]).toEqual({ question: 'Tell me about a team conflict.', category: 'behavioral' });
@@ -64,7 +66,7 @@ describe('makeBedrockQuestionGenerator', () => {
 });
 
 describe('makeBedrockFeedbackGenerator', () => {
-  it('uses model output on success and falls back on failure', async () => {
+  it('uses model output on success and falls back on failure', { timeout: 30000 }, async () => {
     const ok = makeBedrockFeedbackGenerator({ modelId: MODEL, client: stub(JSON.stringify({ strengths: ['clear'], improvements: ['add detail'], suggestions: ['STAR'], rating: 4, references: ['County Hospital'] })) });
     const fb = await ok({ question: 'Q', answer: 'A', grounding });
     expect(fb.source).toBe('ai');

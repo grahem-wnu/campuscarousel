@@ -76,6 +76,31 @@ describe('answer — feedback + PRIVACY', () => {
     await expectStatus(h.answer(ctx({ params: { sessionId }, body: { questionIndex: 9, answer: 'x' } })), 404);
   });
 
+  it('READ PATH: a parent never receives keira’s private-derived feedback/answer; keira does', async () => {
+    await seedPrivateAndFamily();
+    const mock = await h.mock(ctx({ body: { count: 1 } })); // created by keira
+    const sessionId = (mock.body as { session: { sessionId: string } }).session.sessionId;
+    await h.answer(ctx({ params: { sessionId }, body: { questionIndex: 0, answer: 'grounded in my private reflection' } }));
+
+    // keira (owner) sees the answer + feedback
+    const asKeira = (await h.detail(ctx({ params: { id: sessionId } }))).body as { questions: { answer?: string; aiFeedback?: string }[] };
+    expect(asKeira.questions[0]?.answer).toBe('grounded in my private reflection');
+    expect(asKeira.questions[0]?.aiFeedback).toBeTruthy();
+
+    // a parent gets the session metadata but the private-derived fields are scrubbed
+    const asKate = (await h.detail(ctx({ requester: kate, params: { id: sessionId } }))).body as { type: string; questions: { answer?: string; aiFeedback?: string }[] };
+    expect(asKate.type).toBe('mock-practice'); // metadata still visible
+    expect(asKate.questions[0]?.answer).toBeUndefined();
+    expect(asKate.questions[0]?.aiFeedback).toBeUndefined();
+
+    // …and via list too
+    const kateList = (await h.list(ctx({ requester: kate }))).body as { interviews: { questions?: { aiFeedback?: string }[] }[] };
+    expect(kateList.interviews[0]?.questions?.[0]?.aiFeedback).toBeUndefined();
+
+    // a parent cannot answer keira's mock (no grounding/overwrite, no private flow-back)
+    await expectStatus(h.answer(ctx({ requester: kate, params: { sessionId }, body: { questionIndex: 0, answer: 'x' } })), 403);
+  });
+
   it('grounds feedback with private entries for keira but NOT for a parent', async () => {
     await seedPrivateAndFamily();
     const mockK = await h.mock(ctx({ body: { count: 1 } }));

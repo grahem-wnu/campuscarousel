@@ -72,6 +72,28 @@ async function loadCustomQuestions(data: Data, username: string): Promise<BankQu
   return Array.isArray(list) ? (list as BankQuestion[]) : [];
 }
 
+/** A session carries an owner (`createdBy`) stamped at create. The Interview type is frozen and has
+ *  no owner field, so it's stored as an extra attribute (it round-trips: stripInternal only drops
+ *  PK/SK/GSI). A foundational owner/visibility field is escalated; until it lands this is the owner. */
+type OwnedInterview = Interview & { createdBy?: string };
+const ownerOf = (s: Interview): string | undefined => (s as OwnedInterview).createdBy;
+
+/**
+ * PRIVACY (read path): a `mock-practice` session's per-question `aiFeedback`/`answer` are derived from
+ * the AI grounding, which includes keira's PRIVATE entries when she is the caller — so that content
+ * must never reach another caller through the family-readable session. Strip those fields unless the
+ * caller is the session's creator. Session metadata + the question text stay family-visible (spec);
+ * `real-interview` logs carry no AI-grounded content and are untouched.
+ */
+function scrubForReader(session: Interview, username: string): Interview {
+  if (session.type !== 'mock-practice') return session;
+  if (ownerOf(session) === username) return session;
+  return {
+    ...session,
+    questions: (session.questions ?? []).map((q) => ({ ...q, answer: undefined, aiFeedback: undefined })),
+  };
+}
+
 export function makeHandlers(deps: InterviewDeps): InterviewHandlers {
   const { getData } = deps;
   const now = deps.now ?? (() => new Date());
@@ -86,24 +108,28 @@ export function makeHandlers(deps: InterviewDeps): InterviewHandlers {
   }
 
   return {
-    // GET /interviews — list (optionally by type), date-ordered by the repo.
+    // GET /interviews — list (optionally by type); private-derived mock fields scrubbed for non-owners.
     list: async (ctx) => {
       const q = validateQuery(listQuerySchema, ctx);
       let items = await getData().interviews.list();
       if (q.type) items = items.filter((i) => i.type === q.type);
-      return { status: 200, body: { interviews: items } };
+      return { status: 200, body: { interviews: items.map((s) => scrubForReader(s, ctx.requester.username)) } };
     },
 
-    // GET /interviews/:id.
+    // GET /interviews/:id — private-derived mock fields scrubbed for non-owners.
     detail: async (ctx) => {
       const { id } = validateParams(idParamSchema, ctx);
-      return { status: 200, body: await requireSession(id) };
+      const session = await requireSession(id);
+      return { status: 200, body: scrubForReader(session, ctx.requester.username) };
     },
 
-    // POST /interviews — create a session (e.g. a real-interview log).
+    // POST /interviews — create a session (e.g. a real-interview log). Stamp the owner.
     create: async (ctx) => {
       const input = validateBody(createSchema, ctx);
-      const created = await getData().interviews.create(input);
+      const created = await getData().interviews.create({
+        ...input,
+        createdBy: ctx.requester.username,
+      } as Parameters<Data['interviews']['create']>[0]);
       return { status: 201, body: created };
     },
 
@@ -139,16 +165,23 @@ export function makeHandlers(deps: InterviewDeps): InterviewHandlers {
         date: today(),
         collegeId: body.collegeId,
         questions: generated.map((g) => ({ question: g.question })),
+        createdBy: ctx.requester.username,
       } as Parameters<Data['interviews']['create']>[0]);
       return { status: 201, body: { session, categories: generated.map((g) => g.category) } };
     },
 
-    // POST /interviews/mock/:sessionId/answer — score one answer with grounded AI feedback.
+    // POST /interviews/mock/:sessionId/answer — score one answer with grounded AI feedback. Only the
+    // session's creator may answer it (so a parent can't ground/overwrite keira's mock, and the
+    // private-derived feedback only ever flows back to its owner).
     answer: async (ctx) => {
       const { sessionId } = validateParams(sessionParamSchema, ctx);
       const { questionIndex, answer } = validateBody(answerSchema, ctx);
       const data = getData();
       const session = await requireSession(sessionId);
+      const owner = ownerOf(session);
+      if (owner && owner !== ctx.requester.username) {
+        throw Errors.forbidden('Only the person who started this mock can answer its questions');
+      }
       const questions = session.questions ?? [];
       const target = questions[questionIndex];
       if (!target) throw Errors.notFound(`No question at index ${questionIndex}`);
