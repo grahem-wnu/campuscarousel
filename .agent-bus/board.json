@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-06-06T05:06:00Z",
+  "updatedAt": "2026-06-06T05:12:00Z",
   "writer": "supervisor",
   "phase": "infra",
   "gates": {
@@ -133,7 +133,7 @@
       "kind": "foundational",
       "wave": 0,
       "spec": "specs/foundational/api.md",
-      "owner": null,
+      "owner": "worker-4",
       "worktree": "",
       "branch": "feat/foundational-api",
       "pr": null,
@@ -143,7 +143,7 @@
         "foundational-data-layer",
         "foundational-auth"
       ],
-      "blockedReason": "",
+      "blockedReason": "STALLED: worker-4 claimed (ref created) but 0 commits in 16+ min, no PR. Branch locked in agents/worker-4 worktree \u2014 supervisor cannot take over a live session. Needs worker-4 relaunched/nudged with /loop.",
       "note": "claimed, building"
     },
     {
@@ -530,6 +530,7 @@
     "reviewer": "back online (verdicts posted); supervisor fallback-review no longer primary",
     "followups": [
       "data-layer: replace NUL-byte separator in memory-client.ts (frozen file is git-binary)"
-    ]
+    ],
+    "ESCALATION": "Workers do ~one pass then stop (not looping). foundational-api stalled. Relaunch the worker fleet with /loop so claimed units actually get built. Foundation is 3/4 contracts merged; api is the last blocker before the activity-journal slice."
   }
 }
