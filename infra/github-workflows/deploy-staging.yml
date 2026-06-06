@@ -1,27 +1,17 @@
-# Deploy to STAGING. Trigger: every push to `dev` (post-merge).
-# Wires continuous deploy so a merge to `dev` lands a live, testable URL (unblocks Gate 2).
-#
-# Auth: GitHub OIDC -> the per-stage deploy role (no long-lived AWS keys in CI).
-#   role ARN comes from the repo variable AWS_DEPLOY_ROLE_STAGING (set by CicdStack).
-# Config: never hardcoded. Cognito pool/client + API base URL are read from SSM
-#   (/keiras-journey/staging/*) at build time and injected as VITE_* for the frontend build.
+# Staged template. The supervisor copies this to .github/workflows/deploy-staging.yml at bootstrap.
+# Fill OIDC role ARN from CicdStack output (repo variable AWS_DEPLOY_ROLE_STAGING).
 name: Deploy Staging
 on:
   push:
     branches: [dev]
 
 permissions:
-  id-token: write   # required for GitHub OIDC
+  id-token: write   # for GitHub OIDC
   contents: read
 
 concurrency:
   group: deploy-staging
   cancel-in-progress: false
-
-env:
-  AWS_REGION: us-east-2
-  APP_ENV: staging
-  SSM_PREFIX: /keiras-journey/staging
 
 jobs:
   deploy:
@@ -29,56 +19,18 @@ jobs:
     environment: staging
     steps:
       - uses: actions/checkout@v4
-
-      # NOTE: no `cache: npm` here on purpose — CI has hit lockfile races across branches.
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
+          cache: npm
+      - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_STAGING }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Install root workspace deps
-        run: |
-          if [ -f package-lock.json ]; then npm ci; else npm install --no-audit --no-fund; fi
-
-      # Backend (CDK). Self-contained `cd infra` install + deploy (infra is NOT a root
-      # workspace, so `npm run -w infra` won't work). Guarded: until the CDK app lands on
-      # `dev`, this step no-ops instead of failing the deploy. cdk deploy is idempotent.
+          aws-region: us-east-2
+      - run: npm ci
       - name: Deploy backend (CDK)
-        run: |
-          if [ -f infra/package.json ]; then
-            (cd infra && npm install --no-audit --no-fund && npm run deploy)
-          else
-            echo "infra CDK app not present on this ref yet — skipping backend deploy."
-            echo "Frontend deploy below still runs against the already-deployed infra (SSM is populated)."
-          fi
-
-      # Read runtime config from SSM and export as VITE_* for the build. These values are
-      # public by design (Cognito app client has no secret) but are still never committed.
-      - name: Load frontend runtime config from SSM
-        run: |
-          set -euo pipefail
-          api_url=$(aws ssm get-parameter --name "${SSM_PREFIX}/apiUrl" --query Parameter.Value --output text)
-          user_pool_id=$(aws ssm get-parameter --name "${SSM_PREFIX}/userPoolId" --query Parameter.Value --output text)
-          user_pool_client_id=$(aws ssm get-parameter --name "${SSM_PREFIX}/userPoolClientId" --query Parameter.Value --output text)
-          {
-            echo "VITE_AWS_REGION=${AWS_REGION}"
-            echo "VITE_API_BASE_URL=${api_url}"
-            echo "VITE_USER_POOL_ID=${user_pool_id}"
-            echo "VITE_USER_POOL_CLIENT_ID=${user_pool_client_id}"
-          } >> "$GITHUB_ENV"
-
-      - name: Build frontend (SSM-injected config)
-        run: npm run -w frontend build
-
-      - name: Publish frontend (S3 sync + CloudFront invalidate)
-        run: |
-          set -euo pipefail
-          bucket=$(aws ssm get-parameter --name "${SSM_PREFIX}/webBucketName" --query Parameter.Value --output text)
-          distribution_id=$(aws ssm get-parameter --name "${SSM_PREFIX}/distributionId" --query Parameter.Value --output text)
-          aws s3 sync frontend/dist "s3://${bucket}" --delete
-          aws cloudfront create-invalidation --distribution-id "${distribution_id}" --paths '/*'
+        run: npm run -w infra deploy -- --context env=staging --require-approval never
+      - name: Build frontend (staging config from SSM)
+        run: npm run -w frontend build -- --mode staging
+      - name: Sync to S3 + invalidate CloudFront
+        run: npm run -w infra publish-web -- --context env=staging
