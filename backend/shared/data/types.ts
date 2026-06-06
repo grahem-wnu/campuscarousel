@@ -344,6 +344,10 @@ export interface Teas extends Timestamped {
 // ---------------------------------------------------------------------------
 export interface Interview extends Timestamped {
   sessionId: string;
+  /** Owner (JWT username), stamped server-side on create. Used to scope private-derived fields
+   *  (per-question aiFeedback/answer that may quote keira's private entries) to the owner — session
+   *  metadata stays family-visible, but those fields are stripped for non-owners. */
+  createdBy: string;
   type: 'mock-practice' | 'real-interview';
   collegeId?: string;
   date: string;
