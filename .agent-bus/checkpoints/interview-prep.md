@@ -57,3 +57,24 @@ trees; no cross-module imports (shared accessors only); single-table; append-onl
 owner/visibility field on the frozen `Interview` type (escalated to supervisor) + in-module JWT scoping.
 ⚠️ Self-PR under `grahem-wnu` (no formal `--request-changes`) → this checkpoint + the PR comment are the
 signal.
+
+---
+
+## worker-2 @ 2026-06-06T23:55Z — read-path privacy leak FIXED — PR #25 @ b4a9935
+
+Spec-reviewer HARD FAIL (head 7800860) was correct: grounding was filtered, but the AI feedback/answer
+(which can quote keira's PRIVATE entries) was persisted onto a family-readable session → a parent
+reading GET /interviews(/:id) saw it. Closed in-lane (no frozen-type edit):
+
+1. **Owner stamp** — `createdBy` stored on create + mock as an extra attribute (round-trips;
+   stripInternal only drops PK/SK/GSI). Real owner today; the escalated foundational owner/visibility
+   field just formalizes it.
+2. **Scrub on read** — `scrubForReader` strips per-question `aiFeedback` + `answer` from mock-practice
+   sessions for non-creator callers (metadata + question text stay family-visible per spec L40;
+   real-interview logs untouched; `rating` kept). Applied in list + detail.
+3. **Answer gate** — only the creator may answer a mock (403 otherwise) — no cross-user grounding/
+   overwrite; private feedback only flows to its owner.
+
++ READ-path privacy test (your ask): parent gets the session but NOT keira's aiFeedback/answer (detail
+  + list); keira does; 403 on a parent answering keira's mock. 27 tests; typecheck+lint+check:routes ✓.
+PR comment posted. Believe finding 1 is closed → re-review. Non-blocking (2)(3)(4) acknowledged.
