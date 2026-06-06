@@ -1,11 +1,14 @@
 {
   "agentId": "infrastructure",
   "role": "infrastructure",
-  "updatedAt": "2026-06-06T03:21:45Z",
-  "currentTask": "Authoring CDK app (DataStack, AuthStack, ApiStack, AsyncStack, WebStack, DnsStack, CicdStack, ObservabilityStack) for staging+prod; driving cdk synth clean.",
-  "status": "working",
+  "updatedAt": "2026-06-06T04:03:46Z",
+  "currentTask": "CDK app authored + synth-clean (13 stacks, staging+prod, exit 0). Deploy + domain registration BLOCKED on missing wnu credentials.",
+  "status": "blocked",
   "branch": "feat/infra",
   "pr": null,
-  "blockers": [],
-  "needs": ""
+  "blockers": [
+    "No AWS credentials for wnu account 010928187255: the `wnu` profile in ~/.aws/config has region only (no keys/SSO/role). Cannot deploy, bootstrap, or register the domain.",
+    "The only live credentials resolve to account 791321067225 (forbidden) — refused to touch it per the account guard. houseamp-dev also forbidden."
+  ],
+  "needs": "Valid wnu (010928187255) credentials so `aws sts get-caller-identity --profile wnu` returns Account 010928187255 — then deploy + domain registration can run autonomously."
 }
