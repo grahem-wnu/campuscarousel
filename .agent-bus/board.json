@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-06-06T16:20:00Z-fanout-open",
+  "updatedAt": "2026-06-06T20:10:00Z-wave2",
   "writer": "supervisor",
   "phase": "fanout",
   "note": "FANOUT OPEN. Grahem authorized proceeding without his live Gate-2 UI walkthrough (privacy already proven via tests + the infra agent's live direct-invoke: keira sees private, kate 403 on real Lambda+DynamoDB). slice-gate sentinel stripped from all modules -> wave 2 eligible. DEFERRED: Grahem's own SPA click-through of private-entry visibility is folded into M6 final QA + must pass before Gate 3 (prod). Supervisor merges APPROVED+green PRs into dev only.",
@@ -28,7 +28,7 @@
       "title": "vertical slice live",
       "gate": "gate2_slice_test",
       "status": "done",
-      "criteria": "activity-journal merged; staging green; privacy proven (tests + live direct-invoke). NOTE: Grahem's live SPA walkthrough deferred to M6 final QA by his choice — required before Gate 3/prod."
+      "criteria": "activity-journal merged; staging green; privacy proven (tests + live direct-invoke). NOTE: Grahem's live SPA walkthrough deferred to M6 final QA by his choice \u2014 required before Gate 3/prod."
     },
     {
       "id": "M3",
@@ -56,7 +56,7 @@
       "title": "integration + QA clean",
       "gate": null,
       "status": "pending",
-      "criteria": "integration pass merged; full staging QA sweep clean; INCLUDES Grahem's deferred Gate-2 live SPA walkthrough (keira marks private, kate cannot see it) — must pass before Gate 3"
+      "criteria": "integration pass merged; full staging QA sweep clean; INCLUDES Grahem's deferred Gate-2 live SPA walkthrough (keira marks private, kate cannot see it) \u2014 must pass before Gate 3"
     },
     {
       "id": "M7",
@@ -83,7 +83,7 @@
       "status": "merged",
       "dependsOn": [],
       "blockedReason": "",
-      "note": "CDK on dev (PR#9, supersedes #2; #2 closed). 13 stacks deployed staging+prod; SSM populated. Domain keirasjourney.com registered 2026-06-06; DnsStack WIRED + MERGED (#12): zone imported (NS intact), us-east-1 ACM cert ISSUED, CloudFront A+AAAA aliases. LIVE: staging.keirasjourney.com 200, keirasjourney.com TLS ok (403 until prod SPA publishes at Gate 3). Heads-up: deploy uses cdk deploy --all (touches prod stacks too) — cicd unit could scope per-env."
+      "note": "CDK on dev (PR#9, supersedes #2; #2 closed). 13 stacks deployed staging+prod; SSM populated. Domain keirasjourney.com registered 2026-06-06; DnsStack WIRED + MERGED (#12): zone imported (NS intact), us-east-1 ACM cert ISSUED, CloudFront A+AAAA aliases. LIVE: staging.keirasjourney.com 200, keirasjourney.com TLS ok (403 until prod SPA publishes at Gate 3). Heads-up: deploy uses cdk deploy --all (touches prod stacks too) \u2014 cicd unit could scope per-env."
     },
     {
       "id": "foundational-backend-bundle",
@@ -224,15 +224,17 @@
       "spec": "specs/modules/why-nursing.md",
       "owner": null,
       "worktree": "",
-      "branch": "",
-      "pr": null,
-      "status": "todo",
+      "branch": "feat/why-nursing",
+      "pr": 11,
+      "status": "merged",
       "dependsOn": [
         "foundational-data-layer",
         "foundational-auth",
         "foundational-api",
-        "foundational-design-system"      ],
-      "blockedReason": ""
+        "foundational-design-system"
+      ],
+      "blockedReason": "",
+      "note": "MERGED (#11)."
     },
     {
       "id": "clinical-hours",
@@ -248,7 +250,8 @@
         "foundational-data-layer",
         "foundational-auth",
         "foundational-api",
-        "foundational-design-system"      ],
+        "foundational-design-system"
+      ],
       "blockedReason": "",
       "note": "MERGED (#13). Reviewer APPROVED (checkpoint). Log/summary/supervisors/PDF export; privacy enforced off JWT."
     },
@@ -259,15 +262,17 @@
       "spec": "specs/modules/goal-tracker.md",
       "owner": null,
       "worktree": "",
-      "branch": "",
-      "pr": null,
-      "status": "todo",
+      "branch": "feat/goal-tracker",
+      "pr": 15,
+      "status": "merged",
       "dependsOn": [
         "foundational-data-layer",
         "foundational-auth",
         "foundational-api",
-        "foundational-design-system"      ],
-      "blockedReason": ""
+        "foundational-design-system"
+      ],
+      "blockedReason": "",
+      "note": "MERGED (#15)."
     },
     {
       "id": "certifications",
@@ -283,7 +288,8 @@
         "foundational-data-layer",
         "foundational-auth",
         "foundational-api",
-        "foundational-design-system"      ],
+        "foundational-design-system"
+      ],
       "blockedReason": "",
       "note": "MERGED (#14, round 3 APPROVED). CRUD, status lifecycle, expiry alerts, AI suggestions."
     },
@@ -302,8 +308,9 @@
         "foundational-auth",
         "foundational-api",
         "foundational-design-system",
-        "college-hub"      ],
-      "blockedReason": "Grahem 2026-06-06: full courses×target-colleges prereq matrix REQUIRED (not the interim single-college checker) -> now depends on college-hub for college data. PR #18 may address item-1 (nav) now, but final approval/merge waits until college-hub merges + the matrix is wired."
+        "college-hub"
+      ],
+      "blockedReason": "Grahem 2026-06-06: full courses\u00d7target-colleges prereq matrix REQUIRED (not the interim single-college checker) -> now depends on college-hub for college data. PR #18 may address item-1 (nav) now, but final approval/merge waits until college-hub merges + the matrix is wired."
     },
     {
       "id": "teas-prep",
@@ -319,7 +326,8 @@
         "foundational-data-layer",
         "foundational-auth",
         "foundational-api",
-        "foundational-design-system"      ],
+        "foundational-design-system"
+      ],
       "blockedReason": ""
     },
     {
@@ -336,7 +344,8 @@
         "foundational-data-layer",
         "foundational-auth",
         "foundational-api",
-        "foundational-design-system"      ],
+        "foundational-design-system"
+      ],
       "blockedReason": ""
     },
     {
@@ -353,7 +362,8 @@
         "foundational-data-layer",
         "foundational-auth",
         "foundational-api",
-        "foundational-design-system"      ],
+        "foundational-design-system"
+      ],
       "blockedReason": ""
     },
     {
@@ -370,7 +380,8 @@
         "foundational-data-layer",
         "foundational-auth",
         "foundational-api",
-        "foundational-design-system"      ],
+        "foundational-design-system"
+      ],
       "blockedReason": ""
     },
     {
@@ -389,7 +400,8 @@
         "foundational-api",
         "foundational-design-system",
         "college-hub",
-        "scholarship-tracker"      ],
+        "scholarship-tracker"
+      ],
       "blockedReason": ""
     },
     {
@@ -407,7 +419,8 @@
         "foundational-auth",
         "foundational-api",
         "foundational-design-system",
-        "college-hub"      ],
+        "college-hub"
+      ],
       "blockedReason": ""
     },
     {
@@ -425,7 +438,8 @@
         "foundational-auth",
         "foundational-api",
         "foundational-design-system",
-        "college-hub"      ],
+        "college-hub"
+      ],
       "blockedReason": ""
     },
     {
@@ -444,7 +458,8 @@
         "foundational-api",
         "foundational-design-system",
         "why-nursing",
-        "activity-journal"      ],
+        "activity-journal"
+      ],
       "blockedReason": ""
     },
     {
@@ -463,7 +478,8 @@
         "foundational-api",
         "foundational-design-system",
         "activity-journal",
-        "why-nursing"      ],
+        "why-nursing"
+      ],
       "blockedReason": ""
     },
     {
@@ -488,7 +504,8 @@
         "application-central",
         "college-hub",
         "certifications",
-        "teas-prep"      ],
+        "teas-prep"
+      ],
       "blockedReason": ""
     },
     {
@@ -514,7 +531,8 @@
         "course-planner",
         "certifications",
         "teas-prep",
-        "interview-prep"      ],
+        "interview-prep"
+      ],
       "blockedReason": ""
     },
     {
