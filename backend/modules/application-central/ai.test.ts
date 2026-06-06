@@ -1,59 +1,72 @@
-import { describe, expect, it, vi } from 'vitest';
-import { extractJson, makeBedrockExperienceFinder, makeBedrockReviewer, type BedrockInvoker } from './ai.js';
-import type { ExperienceCandidate } from './experiences.js';
+import { describe, expect, it } from 'vitest';
+import {
+  curatedEssayReviewer,
+  curatedExperienceFinder,
+  extractJson,
+  makeBedrockEssayReviewer,
+  makeBedrockExperienceFinder,
+  wordCountOf,
+  type BedrockInvoker,
+} from './ai.js';
+import type { ExperiencePool } from './grounding.js';
 
-function fakeClient(text: string): BedrockInvoker {
-  const send = vi.fn(async (_c: unknown) => ({
-    body: new TextEncoder().encode(JSON.stringify({ content: [{ type: 'text', text }] })),
-  }));
-  return { send } as BedrockInvoker;
+const MODEL = 'us.anthropic.test-model';
+function stub(text: string): BedrockInvoker {
+  return { send: async () => ({ body: new TextEncoder().encode(JSON.stringify({ content: [{ text }] })) }) };
 }
-const opts = (text: string) => ({ modelId: 'us.anthropic.test', client: fakeClient(text) });
+const throwing: BedrockInvoker = { send: async () => { throw new Error('Throttle'); } };
 
-const candidates: ExperienceCandidate[] = [
-  { source: 'activity', id: 'a1', title: 'Volunteer', text: 'helped', visibility: 'family' },
-  { source: 'why-nursing', id: 'w1', title: 'Spark', text: 'the moment', visibility: 'private' },
-];
+const pool: ExperiencePool = {
+  experiences: [
+    { kind: 'clinical', date: '2026-02-01', title: 'County Hospital', detail: 'shadowed an ICU nurse' },
+    { kind: 'why-nursing', date: '2026-03-01', title: 'A moment with Marcus', detail: 'soup kitchen conversation' },
+  ],
+  includesPrivate: false,
+  counts: { activities: 0, clinical: 1, whyNursing: 1 },
+};
 
-describe('extractJson', () => {
-  it('extracts JSON from fenced prose', () => {
+describe('extractJson / wordCountOf', () => {
+  it('extracts JSON and counts words', () => {
     expect(extractJson('```json\n{"a":1}\n```')).toEqual({ a: 1 });
+    expect(wordCountOf('  one  two three ')).toBe(3);
+  });
+});
+
+describe('curatedExperienceFinder', () => {
+  it('suggests from the pool with angles', async () => {
+    const r = await curatedExperienceFinder({ prompt: 'Why nursing?', pool });
+    expect(r.source).toBe('curated');
+    expect(r.suggestedExperiences[0]?.title).toBe('County Hospital');
+    expect(r.angles.length).toBeGreaterThan(0);
+  });
+});
+
+describe('curatedEssayReviewer — never rewrites', () => {
+  it('gives feedback + word count + onTarget, with rewrote=false', async () => {
+    const short = await curatedEssayReviewer({ prompt: 'p', content: 'Too short.', targetWords: 500 });
+    expect(short.rewrote).toBe(false);
+    expect(short.onTarget).toBe(false);
+    expect(short.improvements.length).toBeGreaterThan(0);
+    expect(short.wordCount).toBe(2);
   });
 });
 
 describe('makeBedrockExperienceFinder', () => {
-  it('resolves selected keys back to the candidates passed in and keeps angles', async () => {
-    const find = makeBedrockExperienceFinder(
-      opts('{"experiences":[{"key":"why-nursing:w1","why":"core moment"}],"angles":["resilience"]}'),
-    );
-    const out = await find({ candidates });
-    expect(out.experiences).toEqual([{ source: 'why-nursing', id: 'w1', title: 'Spark', why: 'core moment' }]);
-    expect(out.angles).toEqual(['resilience']);
-  });
-
-  it('drops hallucinated keys not in the candidate set', async () => {
-    const find = makeBedrockExperienceFinder(opts('{"experiences":[{"key":"activity:DOES-NOT-EXIST","why":"x"}],"angles":[]}'));
-    expect((await find({ candidates })).experiences).toEqual([]);
-  });
-
-  it('returns empty suggestions on malformed output (never throws)', async () => {
-    const find = makeBedrockExperienceFinder(opts('the model rambled'));
-    await expect(find({ candidates })).resolves.toEqual({ experiences: [], angles: [] });
+  it('parses model output and falls back on failure', { timeout: 30000 }, async () => {
+    const finder = makeBedrockExperienceFinder({ modelId: MODEL, client: stub(JSON.stringify({ suggestedExperiences: [{ title: 'County Hospital', kind: 'clinical', why: 'vivid' }], angles: ['open with a scene'] })) });
+    const r = await finder({ prompt: 'p', pool });
+    expect(r.source).toBe('ai');
+    expect(r.suggestedExperiences[0]?.title).toBe('County Hospital');
+    expect((await makeBedrockExperienceFinder({ modelId: MODEL, client: throwing })({ prompt: 'p', pool })).source).toBe('curated');
   });
 });
 
-describe('makeBedrockReviewer', () => {
-  it('returns structured feedback and never a rewrite', async () => {
-    const review = makeBedrockReviewer(
-      opts('{"strengths":["voice"],"suggestions":["cut adverbs"],"authenticity":"real","structure":"tight","rewrite":"IGNORED"}'),
-    );
-    const fb = await review({ content: 'draft' });
-    expect(fb).toEqual({ strengths: ['voice'], suggestions: ['cut adverbs'], authenticity: 'real', structure: 'tight' });
-    expect(fb).not.toHaveProperty('rewrite'); // the allowlist drops any rewritten prose
-  });
-
-  it('returns empty feedback on failure', async () => {
-    const review = makeBedrockReviewer(opts('no json'));
-    await expect(review({ content: 'x' })).resolves.toEqual({ strengths: [], suggestions: [], authenticity: '', structure: '' });
+describe('makeBedrockEssayReviewer', () => {
+  it('uses model output (still rewrote=false) and falls back on failure', { timeout: 30000 }, async () => {
+    const ok = makeBedrockEssayReviewer({ modelId: MODEL, client: stub(JSON.stringify({ strengths: ['vivid'], improvements: ['cut clichés'], authenticity: 'sounds like you' })) });
+    const r = await ok({ prompt: 'p', content: 'A reasonably long essay draft with several words in it.' });
+    expect(r.source).toBe('ai');
+    expect(r.rewrote).toBe(false);
+    expect((await makeBedrockEssayReviewer({ modelId: MODEL, client: throwing })({ prompt: 'p', content: 'x' })).source).toBe('curated');
   });
 });

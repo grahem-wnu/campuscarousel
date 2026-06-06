@@ -1,18 +1,16 @@
-// Nav + route registration for Application Central (essay workspace). The shell globs
+// Nav + route registration for Application Central. The shell globs
 // frontend/src/modules/*/nav.manifest.ts, assembles the menus, and builds the router from `element`.
-// Secondary nav: the design-system spec fixes the 5 primary tabs (Dashboard, Journal, Colleges,
-// Scholarships, Timeline); the essay workspace lives in the secondary menu.
 
 import type { NavEntry } from '../../shared/shell';
 
 export const nav: NavEntry[] = [
   {
-    id: 'essays',
-    label: 'Essays',
-    group: 'secondary',
-    order: 50,
-    route: '/essays',
+    id: 'application-central',
+    label: 'Applications',
+    group: 'primary',
+    order: 40,
+    route: '/applications',
     icon: 'application',
-    element: () => import('./EssaysPage'),
+    element: () => import('./ApplicationCentralPage'),
   },
 ];

@@ -1,48 +1,40 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Badge, Button, Card, Icon, Spinner, Textarea } from '../../shared/ui';
-import { findExperiences, reviewEssay, updateEssay } from './api';
-import { SOURCE_LABEL, STATUS_META, draftsNewestFirst, latestDraft, wordCount, wordCountTone } from './logic';
-import type { Essay, EssayFeedback, SelectedExperience } from './types';
+import { ESSAY_STATUS_META, wordCount, wordTargetTone } from './logic';
+import { addDraft, findExperiences, reviewEssay, updateEssay } from './api';
+import type { Essay, EssayReview, FindResult } from './types';
 
 interface Props {
   essay: Essay;
-  onUpdated: (essay: Essay) => void;
+  onChanged: (essay: Essay) => void;
+  onBack: () => void;
 }
 
-const TONE_CLASS: Record<string, string> = {
-  neutral: 'text-ink-500',
-  success: 'text-success-700',
-  warn: 'text-warn-700',
-  error: 'text-error-700',
-};
+const TARGET_WORDS = 650; // common-app-ish default
 
-/** The essay workspace: prompt, editor with versioned drafts + word count vs target, and the AI
- *  context sidebar (find relevant experiences, suggested angles, check-my-essay feedback). */
-export function EssayWorkspace({ essay, onUpdated }: Props) {
-  const [content, setContent] = useState(latestDraft(essay.drafts)?.content ?? '');
-  const [target, setTarget] = useState('650');
+/** The essay workspace: prompt, editor with live word count + version history, and an AI context
+ *  sidebar — "Find relevant experiences" (grounded in her real, privacy-filtered data) and
+ *  "Check my essay" (feedback only, never a rewrite). */
+export function EssayWorkspace({ essay, onChanged, onBack }: Props) {
+  const latest = (essay.drafts ?? []).at(-1);
+  const [text, setText] = useState(latest?.content ?? '');
   const [savingDraft, setSavingDraft] = useState(false);
+
+  const [find, setFind] = useState<FindResult | null>(null);
+  const [finding, setFinding] = useState(false);
+  const [review, setReview] = useState<EssayReview | null>(null);
+  const [reviewing, setReviewing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [experiences, setExperiences] = useState<SelectedExperience[]>([]);
-  const [angles, setAngles] = useState<string[]>([]);
-  const [findingExp, setFindingExp] = useState(false);
-
-  const [feedback, setFeedback] = useState<EssayFeedback | null>(null);
-  const [reviewing, setReviewing] = useState(false);
-
-  const count = useMemo(() => wordCount(content), [content]);
-  const targetNum = target.trim() ? Number(target) : null;
-  const tone = wordCountTone(count, Number.isFinite(targetNum) ? targetNum : null);
-  const history = draftsNewestFirst(essay.drafts);
-  const latest = latestDraft(essay.drafts);
-  const dirty = content !== (latest?.content ?? '');
+  const wc = wordCount(text);
+  const meta = ESSAY_STATUS_META[essay.status ?? 'brainstorming'];
 
   async function saveDraft() {
+    if (!text.trim()) return;
     setSavingDraft(true);
     setError(null);
     try {
-      onUpdated(await updateEssay(essay.essayId, { addDraftContent: content }));
+      onChanged(await addDraft(essay.essayId, text));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save the draft.');
     } finally {
@@ -50,26 +42,24 @@ export function EssayWorkspace({ essay, onUpdated }: Props) {
     }
   }
 
-  async function runFindExperiences() {
-    setFindingExp(true);
+  async function runFind() {
+    setFinding(true);
     setError(null);
     try {
-      const res = await findExperiences(essay.essayId);
-      setExperiences(res.experiences);
-      setAngles(res.angles);
-      onUpdated(res.essay);
+      setFind((await findExperiences(essay.essayId)).result);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not find experiences.');
     } finally {
-      setFindingExp(false);
+      setFinding(false);
     }
   }
 
   async function runReview() {
+    if (!text.trim()) return;
     setReviewing(true);
     setError(null);
     try {
-      setFeedback(await reviewEssay(essay.essayId, content));
+      setReview(await reviewEssay(essay.essayId, { content: text, targetWords: TARGET_WORDS }));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not review the essay.');
     } finally {
@@ -77,140 +67,85 @@ export function EssayWorkspace({ essay, onUpdated }: Props) {
     }
   }
 
+  async function setStatus(status: Essay['status']) {
+    onChanged(await updateEssay(essay.essayId, { status }));
+  }
+
   return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_20rem]">
-      {/* Editor column */}
-      <div className="space-y-3">
-        {essay.prompt ? (
-          <Card flush className="bg-ink-50 p-3">
-            <div className="text-xs font-medium uppercase tracking-wide text-ink-400">
-              Prompt{essay.promptSource ? ` · ${essay.promptSource}` : ''}
-            </div>
-            <p className="mt-1 whitespace-pre-wrap text-sm text-ink-700">{essay.prompt}</p>
-          </Card>
-        ) : null}
-
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          {essay.status ? <Badge tone={STATUS_META[essay.status].tone}>{STATUS_META[essay.status].label}</Badge> : null}
-          <div className="flex items-center gap-2 text-xs">
-            <span className={TONE_CLASS[tone]}>
-              {count} words{targetNum ? ` / ${targetNum}` : ''}
-            </span>
-            <label className="text-ink-400">target</label>
-            <input
-              type="number"
-              value={target}
-              onChange={(e) => setTarget(e.target.value)}
-              className="w-16 rounded border border-ink-200 px-1.5 py-0.5 text-xs"
-              aria-label="Target word count"
-            />
-          </div>
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <Button size="sm" variant="ghost" onClick={onBack}>← Essays</Button>
+        <div className="flex items-center gap-2">
+          <Badge tone={meta.tone}>{meta.label}</Badge>
+          {essay.status !== 'final' ? (
+            <Button size="sm" variant="outline" onClick={() => void setStatus('final')}>Mark final</Button>
+          ) : null}
         </div>
-
-        <Textarea
-          rows={16}
-          value={content}
-          onChange={(e) => setContent(e.target.value)}
-          placeholder="Write your essay here. Your drafts are versioned — save whenever you want a checkpoint."
-          className="font-serif leading-relaxed"
-        />
-
-        {error ? <p className="text-sm text-error-700">{error}</p> : null}
-
-        <div className="flex flex-wrap gap-2">
-          <Button icon="book" loading={savingDraft} disabled={!dirty} onClick={() => void saveDraft()}>
-            {dirty ? 'Save draft' : 'Saved'}
-          </Button>
-          <Button variant="outline" icon="check" loading={reviewing} onClick={() => void runReview()} disabled={!content.trim()}>
-            Check my essay
-          </Button>
-        </div>
-
-        {feedback ? (
-          <Card className="space-y-3">
-            <h4 className="text-sm font-semibold text-ink-800">Feedback (your words, kept yours — no rewrite)</h4>
-            {feedback.strengths.length ? (
-              <div>
-                <div className="text-xs font-medium text-success-700">Strengths</div>
-                <ul className="list-inside list-disc text-sm text-ink-700">
-                  {feedback.strengths.map((s, i) => (
-                    <li key={i}>{s}</li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-            {feedback.suggestions.length ? (
-              <div>
-                <div className="text-xs font-medium text-primary-700">Suggestions</div>
-                <ul className="list-inside list-disc text-sm text-ink-700">
-                  {feedback.suggestions.map((s, i) => (
-                    <li key={i}>{s}</li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-            {feedback.authenticity ? <p className="text-sm text-ink-700"><span className="font-medium">Authenticity:</span> {feedback.authenticity}</p> : null}
-            {feedback.structure ? <p className="text-sm text-ink-700"><span className="font-medium">Structure:</span> {feedback.structure}</p> : null}
-            {!feedback.strengths.length && !feedback.suggestions.length && !feedback.authenticity && !feedback.structure ? (
-              <p className="text-sm text-ink-500">No feedback came back — try again in a moment.</p>
-            ) : null}
-          </Card>
-        ) : null}
       </div>
 
-      {/* AI sidebar */}
-      <aside className="space-y-3">
-        <Card className="space-y-2">
-          <h4 className="text-sm font-semibold text-ink-800">Find relevant experiences</h4>
-          <p className="text-xs text-ink-500">
-            Pull from your journal, clinical hours, and Why Nursing entries — including your private
-            ones (only you can see them here).
-          </p>
-          <Button variant="outline" size="sm" icon="search" block loading={findingExp} onClick={() => void runFindExperiences()}>
-            Find experiences
-          </Button>
-          {findingExp ? <div className="flex justify-center py-2"><Spinner size={18} /></div> : null}
-          {experiences.map((e) => (
-            <div key={`${e.source}:${e.id}`} className="rounded-lg border border-ink-100 p-2">
-              <div className="flex items-center gap-1.5">
-                <Badge tone="neutral">{SOURCE_LABEL[e.source]}</Badge>
-                <span className="truncate text-sm font-medium text-ink-800">{e.title}</span>
-              </div>
-              {e.why ? <p className="mt-1 text-xs text-ink-500">{e.why}</p> : null}
+      <Card>
+        <p className="text-xs font-semibold uppercase tracking-wide text-ink-500">Prompt</p>
+        <p className="mt-1 text-sm text-ink-800">{essay.prompt || 'No prompt set — add one in the essay’s details.'}</p>
+      </Card>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        {/* Editor */}
+        <div className="space-y-2 lg:col-span-2">
+          <Textarea rows={16} value={text} onChange={(e) => setText(e.target.value)} placeholder="Write your essay here…" className="font-serif" />
+          <div className="flex items-center justify-between text-sm">
+            <Badge tone={wordTargetTone(wc, TARGET_WORDS)}>{wc} / {TARGET_WORDS} words</Badge>
+            <Button size="sm" loading={savingDraft} disabled={!text.trim()} onClick={() => void saveDraft()}>
+              Save draft v{(essay.drafts?.length ?? 0) + 1}
+            </Button>
+          </div>
+          {essay.drafts && essay.drafts.length > 0 ? (
+            <p className="text-xs text-ink-400">Version history: {essay.drafts.map((d) => `v${d.version} (${d.wordCount ?? wordCount(d.content)}w)`).join(' · ')}</p>
+          ) : null}
+        </div>
+
+        {/* AI sidebar */}
+        <div className="space-y-3">
+          <Card className="space-y-2 border border-primary-200 bg-primary-50">
+            <div className="flex items-center gap-1.5 text-sm font-semibold text-primary-800">
+              <Icon name="star" size={15} /> Essay partner
             </div>
-          ))}
-        </Card>
-
-        {angles.length ? (
-          <Card className="space-y-1">
-            <h4 className="flex items-center gap-1 text-sm font-semibold text-ink-800">
-              <Icon name="star" size={13} /> Suggested angles
-            </h4>
-            <ul className="list-inside list-disc text-sm text-ink-700">
-              {angles.map((a, i) => (
-                <li key={i}>{a}</li>
-              ))}
-            </ul>
+            <Button size="sm" variant="outline" block loading={finding} onClick={() => void runFind()}>Find relevant experiences</Button>
+            <Button size="sm" variant="outline" block loading={reviewing} disabled={!text.trim()} onClick={() => void runReview()}>Check my essay (feedback only)</Button>
+            <p className="text-[11px] text-primary-700">The AI suggests and critiques — it never writes the essay for you.</p>
           </Card>
-        ) : null}
 
-        {history.length ? (
-          <Card className="space-y-2">
-            <h4 className="text-sm font-semibold text-ink-800">Version history</h4>
-            {history.map((dr) => (
-              <button
-                key={dr.version}
-                type="button"
-                onClick={() => setContent(dr.content)}
-                className="flex w-full items-center justify-between rounded-md px-2 py-1 text-left text-sm hover:bg-ink-50"
-              >
-                <span className="text-ink-700">v{dr.version}</span>
-                <span className="text-xs text-ink-400">{dr.wordCount ?? wordCount(dr.content)} words</span>
-              </button>
-            ))}
-          </Card>
-        ) : null}
-      </aside>
+          {finding ? <div className="flex justify-center py-3"><Spinner /></div> : find ? (
+            <Card className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-ink-500">Draw on these</p>
+              <ul className="space-y-1.5 text-sm">
+                {find.suggestedExperiences.map((s, i) => (
+                  <li key={i}><span className="font-medium text-ink-800">{s.title}</span> <span className="text-ink-500">— {s.why}</span></li>
+                ))}
+              </ul>
+              {find.angles.length ? (
+                <>
+                  <p className="pt-1 text-xs font-semibold uppercase tracking-wide text-ink-500">Angles</p>
+                  <ul className="list-disc space-y-0.5 pl-5 text-sm text-ink-700">{find.angles.map((a, i) => <li key={i}>{a}</li>)}</ul>
+                </>
+              ) : null}
+            </Card>
+          ) : null}
+
+          {reviewing ? <div className="flex justify-center py-3"><Spinner /></div> : review ? (
+            <Card className="space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold uppercase tracking-wide text-ink-500">Feedback</p>
+                <Badge tone="neutral">{review.wordCount}w · feedback only</Badge>
+              </div>
+              {review.strengths.length ? <div><p className="text-xs font-medium text-success-700">Strengths</p><ul className="list-disc pl-5 text-sm text-ink-700">{review.strengths.map((s, i) => <li key={i}>{s}</li>)}</ul></div> : null}
+              {review.improvements.length ? <div><p className="text-xs font-medium text-warn-700">Improve</p><ul className="list-disc pl-5 text-sm text-ink-700">{review.improvements.map((s, i) => <li key={i}>{s}</li>)}</ul></div> : null}
+              {review.authenticity ? <p className="text-sm italic text-ink-600">{review.authenticity}</p> : null}
+            </Card>
+          ) : null}
+        </div>
+      </div>
+
+      {error ? <p className="text-sm text-error-600">{error}</p> : null}
     </div>
   );
 }

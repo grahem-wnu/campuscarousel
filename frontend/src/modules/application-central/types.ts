@@ -1,10 +1,10 @@
-// Frontend types for Application Central (essay workspace). Mirror the API responses; the frontend
-// has no access to the backend data-layer package, so the contract is restated here.
+// Frontend types for Application Central. Mirror the API responses (the backend Essay shape + AI +
+// derived overview payloads).
 
 export const ESSAY_STATUSES = ['brainstorming', 'drafting', 'reviewing', 'final'] as const;
 export type EssayStatus = (typeof ESSAY_STATUSES)[number];
 
-export interface Draft {
+export interface EssayDraft {
   version: number;
   content: string;
   createdAt: string;
@@ -16,12 +16,11 @@ export interface Essay {
   collegeId?: string;
   prompt?: string;
   promptSource?: string;
-  drafts?: Draft[];
+  drafts?: EssayDraft[];
   status?: EssayStatus;
   aiSuggestedActivities?: string[];
   aiSuggestedAngles?: string[];
   notes?: string;
-  createdBy?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -32,39 +31,41 @@ export interface EssayInput {
   promptSource?: string;
   status?: EssayStatus;
   notes?: string;
-  draftContent?: string;
 }
 
-export interface EssayUpdate {
-  collegeId?: string;
-  prompt?: string;
-  promptSource?: string;
-  status?: EssayStatus;
-  notes?: string;
-  addDraftContent?: string;
-}
-
-export interface SelectedExperience {
-  source: 'activity' | 'clinical' | 'why-nursing';
-  id: string;
+export interface ExperienceSuggestion {
   title: string;
+  kind: 'activity' | 'clinical' | 'why-nursing';
   why: string;
 }
-
-export interface ExperienceSuggestions {
-  experiences: SelectedExperience[];
+export interface FindResult {
+  suggestedExperiences: ExperienceSuggestion[];
   angles: string[];
-  essay: Essay;
+  source: 'ai' | 'curated';
+}
+export interface FindResponse {
+  result: FindResult;
+  basedOn: { activities: number; clinical: number; whyNursing: number };
 }
 
-export interface EssayFeedback {
+export interface EssayReview {
   strengths: string[];
-  suggestions: string[];
+  improvements: string[];
   authenticity: string;
-  structure: string;
+  wordCount: number;
+  onTarget: boolean | null;
+  rewrote: false;
+  source: 'ai' | 'curated';
 }
 
-export interface ListFilters {
-  collegeId?: string;
-  status?: EssayStatus;
+export interface ApplicationRow {
+  collegeId: string;
+  name: string;
+  status?: string;
+  programType?: string;
+  isTopPick?: boolean;
+  nextDeadline: { label: string; date: string } | null;
+  daysUntilDeadline: number | null;
+  essays: { total: number; final: number; statuses: string[] };
+  hasTeasScore: boolean;
 }
