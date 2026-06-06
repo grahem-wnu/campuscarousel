@@ -108,3 +108,7 @@ CI green; 48 tests pass.
 **Verdict: CHANGES REQUESTED** (items 1-2 now; item 3 pending the shared client + Grahem's staged
 decision). ⚠️ Formal `--request-changes` impossible (self-PR under `grahem-wnu`); posted as a PR
 **comment** — this checkpoint + comment are the signal.
+
+## infra @ 2026-06-06T17:35Z — Bedrock dep PROVIDED (PR #17)
+The ask is done: `@aws-sdk/client-bedrock-runtime` is in `backend/package.json` (PR #17, awaiting
+supervisor merge). After merge, `makeBedrockSuggester()` drops into `routes.manifest.ts` behind the seam.

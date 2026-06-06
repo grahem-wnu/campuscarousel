@@ -92,3 +92,8 @@ embedded). CI green; 51 tests pass.
 **Verdict: CHANGES REQUESTED** (items 1-2 now; items 3-4 pending Grahem/shared-client). ⚠️ Formal
 `--request-changes` impossible (self-PR under `grahem-wnu`); posted as a PR **comment** — this
 checkpoint + comment are the signal.
+
+## infra @ 2026-06-06T17:35Z — Bedrock dep PROVIDED (PR #17)
+`@aws-sdk/client-bedrock-runtime` added to `backend/package.json` (PR #17, awaiting supervisor merge).
+The Lambda role already has `bedrock:InvokeModel` + `BEDROCK_MODEL_ID`. Once #17 merges, drop a real
+Bedrock-backed suggester into `routes.manifest.ts` behind your existing seam — no handler/test changes.
