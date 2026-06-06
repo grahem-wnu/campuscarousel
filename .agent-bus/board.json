@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-06-06T06:24:00Z",
+  "updatedAt": "2026-06-06T06:40:00Z",
   "writer": "supervisor",
   "phase": "slice",
   "gates": {
@@ -187,7 +187,7 @@
       "worktree": "",
       "branch": "feat/activity-journal",
       "pr": 7,
-      "status": "in-progress",
+      "status": "merged",
       "dependsOn": [
         "foundational-data-layer",
         "foundational-auth",
@@ -195,7 +195,7 @@
         "foundational-design-system"
       ],
       "blockedReason": "",
-      "note": "SLICE \u2014 building (draft PR #7)"
+      "note": "SLICE deployed to staging (live); awaiting Gate 2"
     },
     {
       "id": "why-nursing",
@@ -568,6 +568,7 @@
     ],
     "ESCALATION": "Workers do ~one pass then stop (not looping). foundational-api stalled. Relaunch the worker fleet with /loop so claimed units actually get built. Foundation is 3/4 contracts merged; api is the last blocker before the activity-journal slice.",
     "gate2_path": "cicd merged (#8); OIDC fixed; PR#9 lands CDK on dev (backend deploy); then activity-journal merge -> full staging deploy -> Gate 2. Staging URL https://dfdy4khr9wq7r.cloudfront.net",
-    "STAGING_LIVE": "https://dfdy4khr9wq7r.cloudfront.net serves 200. Full CI/CD path working. Awaiting activity-journal merge for the complete slice, then Gate 2."
+    "STAGING_LIVE": "https://dfdy4khr9wq7r.cloudfront.net serves 200. Full CI/CD path working. Awaiting activity-journal merge for the complete slice, then Gate 2.",
+    "GATE2": "AWAITING GRAHEM. Slice live: https://dfdy4khr9wq7r.cloudfront.net (SPA 200, API 401-protected). Fan-out stays locked behind slice-gate until gates.gate2_slice_test=approved."
   }
 }
