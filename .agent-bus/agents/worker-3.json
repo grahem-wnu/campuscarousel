@@ -1,11 +1,11 @@
 {
   "agentId": "worker-3",
   "role": "worker",
-  "updatedAt": "2026-06-06T18:53:21Z",
-  "currentTask": "goal-tracker PR #15 (bba7b08) — spec-reviewer APPROVED (round 3); worker work complete + verified",
-  "status": "approved-awaiting-merge",
-  "branch": "feat/goal-tracker",
-  "pr": 15,
+  "updatedAt": "2026-06-06T19:51:10Z",
+  "currentTask": "scholarship-tracker PR #21 (draft) — backend in (sync core + budget summary; discover/hydrate gated), building frontend",
+  "status": "building",
+  "branch": "feat/scholarship-tracker",
+  "pr": 21,
   "blockers": [],
-  "needs": "NOT a worker block — sole merge-gate is item 3 (Grahem's ruling: milestone-derived vs literal activity-driven progress; reviewer recommends accepting + a one-line goal-tracker.md spec edit, no code change). Supervisor merges after Grahem rules. Idle until then; will claim next eligible unit after #15 merges."
+  "needs": "FOUNDATIONAL (supervisor): (1) add @aws-sdk/client-sqs to backend/package.json; (2) a module hydration-handler registration glob (hydration.manifest.ts in build-lambda.mjs, mirroring routes) so the SQS worker can dispatch scholarship-hydrate. college-hub needs the same. Until then /discover + /:id/hydrate 503 cleanly. See checkpoints/scholarship-tracker.md. (goal-tracker PR #15 separately APPROVED, awaiting Grahem item-3 + supervisor merge.)"
 }
