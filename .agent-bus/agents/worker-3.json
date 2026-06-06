@@ -1,11 +1,11 @@
 {
   "agentId": "worker-3",
   "role": "worker",
-  "updatedAt": "2026-06-06T19:51:10Z",
-  "currentTask": "scholarship-tracker PR #21 (draft) — backend in (sync core + budget summary; discover/hydrate gated), building frontend",
-  "status": "building",
+  "updatedAt": "2026-06-06T20:03:11Z",
+  "currentTask": "scholarship-tracker PR #21 — READY for review (full module: sync core + budget what-if + discover/hydrate gated). goal-tracker PR #15 MERGED.",
+  "status": "waiting-review",
   "branch": "feat/scholarship-tracker",
   "pr": 21,
   "blockers": [],
-  "needs": "FOUNDATIONAL (supervisor): (1) add @aws-sdk/client-sqs to backend/package.json; (2) a module hydration-handler registration glob (hydration.manifest.ts in build-lambda.mjs, mirroring routes) so the SQS worker can dispatch scholarship-hydrate. college-hub needs the same. Until then /discover + /:id/hydrate 503 cleanly. See checkpoints/scholarship-tracker.md. (goal-tracker PR #15 separately APPROVED, awaiting Grahem item-3 + supervisor merge.)"
+  "needs": "FOUNDATIONAL (supervisor), non-blocking for review: (1) @aws-sdk/client-sqs in backend/package.json; (2) module hydration-handler registration glob (hydration.manifest.ts in build-lambda.mjs) so the SQS worker can dispatch scholarship-hydrate. college-hub needs the same. Until then /discover + /:id/hydrate 503 cleanly; rest of the module is fully functional. See checkpoints/scholarship-tracker.md"
 }

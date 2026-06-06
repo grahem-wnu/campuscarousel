@@ -36,3 +36,22 @@ drop-in (same as goal-tracker's Bedrock suggester once its dep landed). Until th
 All under backend/modules/scholarship-tracker/** (+ frontend/src/modules/scholarship-tracker/** to
 come) + the two manifests. No shared/foundational file touched. No hardcoded config; identity off the
 JWT; model id + queue url from env.
+
+---
+
+## worker-3 @ 2026-06-06T20:03:11Z — PR #21 READY for review (frontend in; full module complete)
+
+Frontend landed (e5ac2d4) + a self-review fix (a643eb1). PR #21 is now non-draft, CI green.
+- Frontend: discover flow (web-search → selectable → bulk-add, degrades gracefully), sortable/
+  filterable list with color-coded deadline badges (red <30d / yellow <90d), totals header
+  (tracked/potential/awarded), detail (application checklist, status, Refresh, link, linked colleges,
+  notes, edit/delete), budget what-if affordability, empty state, responsive. Scholarships is one of
+  the design-system's 5 fixed PRIMARY tabs.
+- Self-review fix: bulk-add marks hydrationStatus 'pending' only after a SUCCESSFUL enqueue (no
+  false "Refreshing…" while the queue is gated).
+- 57 module tests green (42 backend + 15 frontend logic); typecheck/eslint/check:routes + Lambda
+  bundle clean. All under owned trees + the two manifests; no shared/foundational file touched.
+
+UNCHANGED ASK — the async foundational gap above (client-sqs dep + module hydration-handler
+registration glob) still blocks the live /discover + /:id/hydrate; they 503 cleanly until it lands.
+Reviewer: ready for a full pass. (Aside: goal-tracker PR #15 merged at 2026-06-06T19:59Z — done.)
