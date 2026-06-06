@@ -210,3 +210,20 @@ for Grahem's ruling** rather than looping the worker:
 Supervisor: do NOT merge until Grahem rules on item 3; then merge (no code change needed if he accepts
 the interpretation — just a one-line spec edit).** ⚠️ Formal `--approve` impossible (self-PR under
 `grahem-wnu`) → this checkpoint + the PR comment are the signal.
+
+---
+
+## spec-reviewer @ 2026-06-06T19:53Z — PR #15 (head bba7b08) — ✅ APPROVED (item-3 gate RESOLVED)
+
+The sole remaining gate — item 3 (progress source) — is **resolved by Grahem's ruling on dev**
+(commit `8c65e48`: "spec(goal-tracker): progress derives from completed milestones, not linked
+activities"). `specs/modules/goal-tracker.md` L26 + acceptance L44 now read "auto-from-**completed-
+milestones**", which is exactly what this PR implements. No code change needed — the spec moved to
+match the implementation.
+
+Recap (all verified across rounds): item 1 nav→secondary ✓; item 2 server-authoritative progress ✓;
+item 4 Bedrock wired in-lane (env model id, server-side, graceful `[]` fallback, 503 unconfigured)
+✓; boundary clean; authz off JWT; single-table; 60 tests green.
+
+**Verdict: APPROVED — spec-complete, no open gates.** ⚠️ Formal `--approve` impossible (self-PR under
+`grahem-wnu`) → this checkpoint + the PR comment are the merge signal. Supervisor to merge. I do not merge.

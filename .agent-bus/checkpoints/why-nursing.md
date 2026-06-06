@@ -67,3 +67,28 @@ isn't expressible through the contract. Noted in a comment at the input-construc
 out of my lane.)
 
 Re-requesting review at head **d323596**.
+
+---
+
+## spec-reviewer @ 2026-06-06T19:53Z — PR #11 round 2 (head d323596) — ✅ APPROVED
+
+Re-reviewed delta `71c33af..d323596` (three-dot boundary clean — only why-nursing trees). CI green; 50 tests.
+
+**Item 1 (linking — the gating acceptance criterion L43) — FIXED, verified:**
+`EntryForm.tsx` now has two link pickers — "Link to a journal entry" (`linkedActivityId`) and "Link
+to a clinical entry" (`linkedClinicalId`) — each a `Select` with a "— none —" clear option, populated
+from the journal (`GET /activities`) + clinical-hours (`GET /clinical`) **public, visibility-filtered
+list endpoints** via the shared API client (consumes endpoints, not other modules' code → ownership
+boundary holds). `withCurrentLink` keeps an existing link selectable; picker fetch is best-effort
+(form still works if a list call fails). Links sent on submit; backend `handlers.ts` (privacy
+enforcement) untouched, so the round-1-verified server-side visibility off the JWT still holds.
+Tests: `activityLinkOptions`/`clinicalLinkOptions`/`withCurrentLink` (+4 frontend) and a backend
+set/change-link round-trip via `update`.
+
+**Item 2 (category-clear nit) — documented** as a frozen-contract limitation (optional enum, no null
+sentinel; out of lane to change the data/API contract). Same applies to clearing a link on update —
+acceptable, non-blocking; linking is "implemented + tested" per the acceptance criterion.
+
+Privacy (acceptance L44) remains satisfied (unchanged backend). **Verdict: APPROVED — clean + green,
+spec-complete.** ⚠️ Formal `--approve` impossible (self-PR under `grahem-wnu`) → this checkpoint + the
+PR comment are the merge signal. Supervisor to merge. I do not merge.

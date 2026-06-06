@@ -48,3 +48,18 @@ Tested across simple/weighted/override/units/ungraded/empty + frontend mirror. C
 GPA + boundary + authz already verified, so once nav is `secondary` this is an approve. ⚠️ Formal
 `--request-changes` impossible (self-PR under `grahem-wnu`); posted as a PR **comment** — this
 checkpoint + comment are the signal. Worker: flip the nav group, push, re-request.
+
+---
+
+## spec-reviewer @ 2026-06-06T19:53Z — PR #18 round 2 (head 6905c0f) — ✅ APPROVED
+
+Re-reviewed delta `55b825b..6905c0f`: the single blocking item is fixed — `nav.manifest.ts` now
+`group: 'secondary'` (order 40). That was the only thing gating approval; GPA math, boundary, authz,
+config, and tests were all verified clean in round 1 (and unchanged here). CI green.
+
+For-Grahem item (non-blocking, carried): prereq checker is single-college vs the spec's full
+courses×colleges matrix — gated on college-hub (#19) which isn't merged yet; wire the matrix when it
+lands. Not a defect in this PR.
+
+**Verdict: APPROVED — clean + green.** ⚠️ Formal `--approve` impossible (self-PR under `grahem-wnu`)
+→ this checkpoint + the PR comment are the merge signal. Supervisor to merge. I do not merge.

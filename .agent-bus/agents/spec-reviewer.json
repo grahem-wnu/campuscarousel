@@ -1,27 +1,25 @@
 {
   "agentId": "spec-reviewer",
   "role": "spec-reviewer",
-  "updatedAt": "2026-06-06T19:32:00Z",
-  "currentTask": "Wave-2 review. This pass: #19 college-hub round 2 — dedup guard FIXED+verified; narrowed to async hydration (100% blocked on supervisor's 2 foundational pieces + a 1-line worker flip). #11/#15/#18 unchanged (no re-push).",
+  "updatedAt": "2026-06-06T19:54:00Z",
+  "currentTask": "Wave-2 review. Big pass: APPROVED #11 (linking added), #18 (nav fixed), #15 (Grahem resolved item-3 on dev → spec-complete). #19 college-hub still async-blocked (rebase-only). #20 teas-prep draft; scholarship-tracker claimed.",
   "status": "idle",
   "branch": "agent-bus",
   "pr": null,
   "blockers": [],
-  "needs": "FOR SUPERVISOR/INFRA — NEW ESCALATION (async hydration, blocks #19 college-hub from spec-compliance; same Bedrock-dep pattern, worker raised both): (1) add @aws-sdk/client-sqs@^3.700.0 to backend/package.json; (2) extend backend/scripts/build-lambda.mjs to glob each module's hydration.manifest.ts into the worker bundle's hydrationRegistry (today only routes.manifest.ts is globbed, so an enqueued hydration message reaches no handler → DLQ). The SQS infra (queue/DLQ/300s worker/HYDRATION_QUEUE_URL/SendMessages grant) is ALREADY deployed on dev — these 2 frozen-file changes are the only missing pieces. Once landed, #19 flips inline→makeSqsEnqueuer() in one line (seam+worker handler+contract built & tested) and hydration becomes true async-per-spec. Acute reason it matters: #19 currently hydrates SYNCHRONOUSLY inline; hydrate-all does N serial Bedrock calls = API Gateway 29s timeout for >2-3 colleges. PENDING GRAHEM PRODUCT CALLS (accumulating): (a) #15 goal-tracker item 3 (milestone- vs linked-activity progress) — sole gate on merging #15; (b) #19 web-search tool NOT enabled — discovery/hydration use model general-knowledge, not live web search; matters most for college-hub data accuracy — wire web search (shared capability) or accept? (c) #19 deferred detail tabs (Essays/Touchpoints/Visits/Benchmark) to wave-3 — confirm seam; (d) #18 course-planner prereqs single-college vs full matrix (gated on #19 college-hub); (e) certifications training-progress field (#14 merged with 'Nh logged'). POSSIBLE STALLS: #11 why-nursing (linking UI) + #18 course-planner (1-line nav) — changes-requested, NOT re-pushed, no active worker heartbeat owns them; nudge/reassign. RECURRING: all PRs under grahem-wnu → merge gate reads checkpoint+PR-comment, not reviewDecision.",
+  "needs": "FOR SUPERVISOR — READY TO MERGE (3): #11 why-nursing, #15 goal-tracker, #18 course-planner are all APPROVED + spec-complete + CI-green (use checkpoint+PR-comment as the gate; self-PR under grahem-wnu means reviewDecision stays empty). Grahem's goal-tracker item-3 ruling (dev 8c65e48) cleared #15's last gate. STILL BLOCKED — #19 college-hub async hydration: needs the 2 foundational pieces NOT YET on dev — (1) add @aws-sdk/client-sqs to backend/package.json; (2) extend backend/scripts/build-lambda.mjs to glob module hydration.manifest.ts into the worker bundle. Once landed, worker flips inline→SQS (1 line) and #19 is approvable. PENDING GRAHEM: (a) #19 web-search tool not enabled (matters for college-hub data accuracy); (b) #19 deferred detail tabs → wave-3 seam; (c) #18 prereq matrix single-college vs full (gated on #19); (d) certifications training-progress field (#14 merged). INCOMING wave-2: #20 teas-prep (draft), scholarship-tracker (claimed), peer-benchmark (not yet). RECURRING: all PRs under grahem-wnu → merge gate reads checkpoint+PR-comment, not reviewDecision.",
   "lastPass": {
-    "at": "2026-06-06T19:32:00Z",
-    "openPrsAgainstDev": 4,
+    "at": "2026-06-06T19:54:00Z",
+    "openPrsAgainstDev": 5,
     "reviewed": [
-      { "pr": 19, "branch": "feat/college-hub", "headSha": "463069d", "round": 2, "verdict": "CHANGES-REQUESTED (narrowed)", "ci": "green", "note": "dedup guard FIXED+verified; sole remaining item = async hydration, 100% blocked on supervisor's 2 foundational pieces (client-sqs dep + build-lambda hydration glob, NOT yet on dev) + a 1-line worker flip; worker done in-lane" }
+      { "pr": 11, "branch": "feat/why-nursing", "headSha": "d323596", "round": 2, "verdict": "APPROVED", "ci": "green", "note": "linking UI added (journal+clinical pickers, populated from public visibility-filtered endpoints, clear option, tested); privacy intact" },
+      { "pr": 18, "branch": "feat/course-planner", "headSha": "6905c0f", "round": 2, "verdict": "APPROVED", "ci": "green", "note": "nav→secondary fixed; GPA/boundary/authz/tests verified round 1" },
+      { "pr": 15, "branch": "feat/goal-tracker", "headSha": "bba7b08", "round": "final", "verdict": "APPROVED", "ci": "green", "note": "item-3 resolved by Grahem ruling on dev (8c65e48); spec now matches code; spec-complete" }
     ],
     "skippedNotRepushed": [
-      { "pr": 11, "branch": "feat/why-nursing", "headSha": "71c33af", "note": "linking UI change-request open; possible stall" },
-      { "pr": 15, "branch": "feat/goal-tracker", "headSha": "bba7b08", "note": "worker-complete; gated on Grahem item-3" },
-      { "pr": 18, "branch": "feat/course-planner", "headSha": "55b825b", "note": "1-line nav change-request open; possible stall" }
+      { "pr": 19, "branch": "feat/college-hub", "headSha": "8217664", "note": "rebase-only (picked up goal-tracker spec edit); async hydration still blocked on 2 foundational pieces; round-2 verdict stands" }
     ],
-    "possibleStalls": [
-      { "pr": 11, "reason": "changes-requested, no re-push, no active worker heartbeat" },
-      { "pr": 18, "reason": "changes-requested (1-line nav), no re-push, no active worker heartbeat" }
-    ]
+    "skippedDraft": [ { "pr": 20, "branch": "feat/teas-prep" } ],
+    "stalls": []
   }
 }
