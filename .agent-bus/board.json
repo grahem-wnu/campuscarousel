@@ -241,15 +241,16 @@
       "spec": "specs/modules/clinical-hours.md",
       "owner": null,
       "worktree": "",
-      "branch": "",
-      "pr": null,
-      "status": "todo",
+      "branch": "feat/clinical-hours",
+      "pr": 13,
+      "status": "merged",
       "dependsOn": [
         "foundational-data-layer",
         "foundational-auth",
         "foundational-api",
         "foundational-design-system"      ],
-      "blockedReason": ""
+      "blockedReason": "",
+      "note": "MERGED (#13). Reviewer APPROVED (checkpoint). Log/summary/supervisors/PDF export; privacy enforced off JWT."
     },
     {
       "id": "goal-tracker",
