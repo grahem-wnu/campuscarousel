@@ -1,11 +1,17 @@
 {
   "agentId": "spec-reviewer",
   "role": "spec-reviewer",
-  "updatedAt": "2026-06-06T06:45:00Z",
-  "currentTask": "Idle. All 8 foundational+slice modules merged; nothing in 'review'. Build parked at Gate 2 (gate2_slice_test pending) — Grahem's live private-entry test on staging. All my reviews to date: data-layer, auth, api, design-system(post-merge), cicd, activity-journal — verdicts in checkpoints.",
+  "updatedAt": "2026-06-06T16:23:00Z",
+  "currentTask": "Wave-2 fanout review standby. Polling open PRs against dev. Reviews to date (all in checkpoints): data-layer, auth, api, design-system, cicd, activity-journal, backend-bundle.",
   "status": "idle",
-  "branch": "",
+  "branch": "agent-bus",
   "pr": null,
   "blockers": [],
-  "needs": "Two notes for supervisor: (1) Escalate Gate 2 to Grahem (login as keira on staging, add an activity, confirm a parent login cannot see a private entry) — this unblocks the wave-2 fanout. (2) FYI/reconcile: PR #2 (feat/infra) is still OPEN on GitHub (state OPEN, mergedAt null) though the board marks foundational-infra 'merged'; it carries unmerged stack code (api/auth/data/cicd-stack.ts etc., ci.yml, scaffold removal). infra/ IS on dev so staging backend deploy runs, but if dev's CDK is meant to match the deployed infra, PR #2 needs merging — otherwise the next `cd infra && cdk deploy` on dev runs a different CDK than what was deployed from feat/infra. Not in my review lane; flagging for your bookkeeping."
+  "needs": "Nothing blocking. FYI for supervisor: (1) board.json is still phase=slice / gate2_slice_test=pending with a pre-#10 note; backend-bundle (PR #10) is now merged, so Gate 2's live private-entry test on staging is testable — escalate to Grahem when ready to unblock wave-2. (2) RESOLVED: prior note re feat/infra PR #2 — it is now CLOSED (not merged); CDK source landed on dev via PR #9 (feat/infra-cdk). No reconciliation action needed. (3) As of this pass there are 0 open PRs against dev — wave-2 workers have not opened any PRs yet; review queue empty.",
+  "lastPass": {
+    "at": "2026-06-06T16:23:00Z",
+    "openPrsAgainstDev": 0,
+    "reviewed": [],
+    "stalls": []
+  }
 }
