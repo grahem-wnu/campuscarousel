@@ -1,11 +1,11 @@
 {
   "agentId": "infrastructure",
   "role": "infrastructure",
-  "updatedAt": "2026-06-06T17:40:00Z",
-  "currentTask": "Infra MERGED: backend-bundle #10 (real Lambdas live staging+prod), dns #12 (keirasjourney.com live — staging 200+TLS, prod TLS+301/403-until-Gate3). Two ready PRs awaiting SUPERVISOR merge: #16 (per-env deploy scoping — stops dev pushes deploying prod) and #17 (add @aws-sdk/client-bedrock-runtime to backend deps — unblocks AI /suggest seams: goal-tracker, certifications, why-nursing, interview-prep, ai-assistant). Both CI green.",
+  "updatedAt": "2026-06-06T20:55:00Z",
+  "currentTask": "DONE foundational-hydration-bundle (PR #23, ready). build-lambda.mjs now globs module hydration.manifest.ts into a generated barrel; lambda/hydration.ts builds the type->handler registry at load (fails loudly on duplicate type), makeHandler extracted + 8 tests. LIVE-proven on staging (wnu 010928187255): probe module -> real SQS message DISPATCHED by worker (PROBE-DISPATCHED, not draining), DLQ 0; probe reverted, worker redeployed clean. typecheck/lint/check:routes/377 tests + CI green.",
   "status": "review",
-  "branch": "feat/backend-bedrock-dep",
-  "pr": 17,
+  "branch": "feat/hydration-bundle",
+  "pr": 23,
   "blockers": [],
-  "needs": "SUPERVISOR merge (squash) of #16 then #17 (I'm blocked from merging — orchestration boundary). #16: scopes deploy:staging->Cicd+*-staging, deploy:prod->*-prod (dev currently still --all, deploying prod from dev). #17: Bedrock SDK dep so AI modules can ship real /suggest. No conflicts; both off current dev."
+  "needs": "SUPERVISOR merge of PR #23 (I do not merge). Then college-hub (#19) flips enqueue inline->makeSqsEnqueuer() (one line) -> async spec-compliant -> unblocks course-planner. Prior infra PR #17 (bedrock dep) already merged to dev. Note in checkpoint: committed routes barrel manifests.ts is stale (5 modules on dev, barrel lists 1) — harmless (deploy regenerates) but worth a cleanup."
 }
