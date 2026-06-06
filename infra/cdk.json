@@ -20,16 +20,18 @@
     "domainName": "keirasjourney.com",
     "bedrockSonnetProfile": "us.anthropic.claude-sonnet-4-6",
     "monthlyBudgetUsd": 75,
+    "_hostedZoneIdNote": "keirasjourney.com was registered via Route53 Domains (2026-06-06); this is its pre-existing authoritative public zone. DnsStack imports it (dnsMode import) rather than creating a new zone, so NS delegation stays intact.",
+    "hostedZoneId": "Z03683613MXDVX9D5VIUV",
     "envs": {
       "staging": {
         "stage": "staging",
-        "dnsMode": "defer",
+        "dnsMode": "import",
         "subdomain": "staging",
         "removalPolicy": "destroy"
       },
       "prod": {
         "stage": "prod",
-        "dnsMode": "defer",
+        "dnsMode": "import",
         "subdomain": "",
         "removalPolicy": "retain"
       }

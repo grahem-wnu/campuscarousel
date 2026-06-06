@@ -10,7 +10,7 @@ import {
 import { S3BucketOrigin } from "aws-cdk-lib/aws-cloudfront-origins";
 import type { ICertificate } from "aws-cdk-lib/aws-certificatemanager";
 import type { IHostedZone } from "aws-cdk-lib/aws-route53";
-import { ARecord, RecordTarget } from "aws-cdk-lib/aws-route53";
+import { AaaaRecord, ARecord, RecordTarget } from "aws-cdk-lib/aws-route53";
 import { CloudFrontTarget } from "aws-cdk-lib/aws-route53-targets";
 import { BlockPublicAccess, Bucket, BucketEncryption } from "aws-cdk-lib/aws-s3";
 import type { Construct } from "constructs";
@@ -83,11 +83,11 @@ export class WebStack extends Stack {
     });
 
     if (useCustomDomain && hostedZone) {
-      new ARecord(this, "AliasRecord", {
-        zone: hostedZone,
-        recordName: config.subdomain || undefined,
-        target: RecordTarget.fromAlias(new CloudFrontTarget(distribution)),
-      });
+      const recordName = config.subdomain || undefined;
+      const aliasTarget = RecordTarget.fromAlias(new CloudFrontTarget(distribution));
+      // IPv4 + IPv6 alias to the distribution (CloudFront serves dual-stack).
+      new ARecord(this, "AliasRecord", { zone: hostedZone, recordName, target: aliasTarget });
+      new AaaaRecord(this, "AliasRecordIpv6", { zone: hostedZone, recordName, target: aliasTarget });
     }
 
     this.distributionId = distribution.distributionId;

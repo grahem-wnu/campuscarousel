@@ -35,8 +35,18 @@ for (const stage of stages) {
   const env = { account: cfg.account, region: cfg.region };
 
   // --- Optional DNS (Gate-1 domain decision). Undefined when deferred. ---
+  // CloudFront requires its ACM cert in us-east-1, but these stacks run in us-east-2, so the
+  // DnsStack (cert + zone import) is pinned to us-east-1. The us-east-2 WebStack consumes that
+  // cert across regions, so both stacks opt into crossRegionReferences (CDK shares the ARN via
+  // SSM-backed exports). Route53 is global, so the imported zone works from either region.
   const dns =
-    cfg.dnsMode === "defer" ? undefined : new DnsStack(app, id("Dns", stage), { env, config: cfg });
+    cfg.dnsMode === "defer"
+      ? undefined
+      : new DnsStack(app, id("Dns", stage), {
+          env: { account: cfg.account, region: "us-east-1" },
+          crossRegionReferences: true,
+          config: cfg,
+        });
 
   // --- Stateful / foundational ---
   const data = new DataStack(app, id("Data", stage), { env, config: cfg });
@@ -56,8 +66,10 @@ for (const stage of stages) {
   });
 
   // --- Web (private S3 + CloudFront OAC) ---
+  // crossRegionReferences lets this us-east-2 stack consume the us-east-1 ACM cert from DnsStack.
   const web = new WebStack(app, id("Web", stage), {
     env,
+    crossRegionReferences: true,
     config: cfg,
     certificate: dns?.certificate,
     hostedZone: dns?.hostedZone,
