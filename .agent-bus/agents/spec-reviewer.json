@@ -1,23 +1,21 @@
 {
   "agentId": "spec-reviewer",
   "role": "spec-reviewer",
-  "updatedAt": "2026-06-06T16:42:00Z",
-  "currentTask": "Wave-2 fanout review. This pass: APPROVED PR #12 (feat/dns) infra activation. Wave-2 module PRs #11/#13/#14 still draft — not reviewed (workers mid-implementation).",
+  "updatedAt": "2026-06-06T17:20:00Z",
+  "currentTask": "Wave-2 fanout review. Reviewed 4 module PRs this pass: #13 clinical-hours APPROVED; #11 why-nursing, #14 certifications, #15 goal-tracker CHANGES-REQUESTED. Verdicts in checkpoints + PR comments.",
   "status": "idle",
   "branch": "agent-bus",
   "pr": null,
   "blockers": [],
-  "needs": "Two items for supervisor: (1) MERGE-GATE: PR #12 (feat/dns) is APPROVED by me (checkpoints/infra.md + PR comment), CI+CodeRabbit green. But GitHub blocks a formal --approve because author and reviewer share the grahem-wnu identity, so reviewDecision stays EMPTY. Your merge gate must NOT require reviewDecision==APPROVED for same-identity PRs — use the checkpoint verdict + PR comment. This will recur for infra PRs. (2) Non-blocking tech-debt for the cicd unit: deploy:staging/:prod use 'cdk deploy --all' and bin/infra.ts builds both envs, so a dev push can touch prod stacks — scope deploys per-env. Flagged by infra author on #12; out of that PR's scope.",
+  "needs": "ESCALATION (cross-cutting, HIGH LEVERAGE) — provision a shared Bedrock client. Both AI modules (#14 certifications, #15 goal-tracker) cannot meet their AI acceptance criteria: @aws-sdk/client-bedrock-runtime is NOT in backend/package.json and there is no shared backend/shared/ai helper. Both workers correctly refused to edit the frozen bundle and shipped injectable seams (cert: curated fallback; goal-tracker: clean 503) + escalated. The Lambda role already has bedrock:InvokeModel + BEDROCK_MODEL_ID env. ACTION: supervisor land a small foundational unit adding the SDK dep + a backend/shared/ai Bedrock client (model id from env/SSM); then the AI modules wire their real suggesters (a few lines, seams already in place). This also unblocks future AI modules (why-nursing AI consumers, interview-prep, ai-assistant). PRODUCT CALL FOR GRAHEM: accept staged AI delivery (merge #14/#15 with stub once their worker-actionable nits are fixed, wire Bedrock as follow-up) OR hold #14/#15 for the shared client. Spec wins unless Grahem says otherwise. ALSO (recurring): all module/infra PRs are authored under grahem-wnu, so I cannot post formal --approve/--request-changes (GitHub self-PR block) — reviewDecision stays EMPTY; your merge gate MUST use checkpoint verdict + PR comment, not reviewDecision.",
   "lastPass": {
-    "at": "2026-06-06T16:42:00Z",
+    "at": "2026-06-06T17:20:00Z",
     "openPrsAgainstDev": 4,
     "reviewed": [
-      { "pr": 12, "branch": "feat/dns", "headSha": "e476ef1", "verdict": "APPROVED", "ci": "green", "note": "infra DNS activation; verdict via PR comment (self-approve blocked by same identity)" }
-    ],
-    "skippedDraft": [
-      { "pr": 11, "branch": "feat/why-nursing" },
-      { "pr": 13, "branch": "feat/clinical-hours" },
-      { "pr": 14, "branch": "feat/certifications" }
+      { "pr": 13, "branch": "feat/clinical-hours", "headSha": "89e7bfa", "verdict": "APPROVED", "ci": "green", "note": "privacy enforced across list/detail/summary/supervisors/PDF; all acceptance met" },
+      { "pr": 11, "branch": "feat/why-nursing", "headSha": "71c33af", "verdict": "CHANGES-REQUESTED", "ci": "green", "note": "privacy ✓; linking acceptance criterion (L43) unmet — no link create-UI in EntryForm" },
+      { "pr": 14, "branch": "feat/certifications", "headSha": "d56012f", "verdict": "CHANGES-REQUESTED", "ci": "green", "note": "worker-actionable: dedupe over-filter + writable-derived statuses; Bedrock blocked on shared client (escalated)" },
+      { "pr": 15, "branch": "feat/goal-tracker", "headSha": "b0cfdde", "verdict": "CHANGES-REQUESTED", "ci": "green", "note": "worker-actionable: nav primary→secondary + server-side progress derivation; auto-from-linked-activities deviation (Grahem) + AI 503 (shared client)" }
     ],
     "stalls": []
   }

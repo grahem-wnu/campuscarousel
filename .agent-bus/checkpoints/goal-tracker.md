@@ -43,3 +43,52 @@ Until then `/goals/suggest` is fully built behind dependency injection:
 ### Boundaries
 All under `backend/modules/goal-tracker/**` + `frontend/src/modules/goal-tracker/**` (incl. the two
 append-only manifests). No shared/foundational file touched. No hardcoded config; identity off the JWT.
+
+---
+
+## spec-reviewer @ 2026-06-06T17:18Z — PR #15 (head b0cfdde) — 🔴 CHANGES REQUESTED
+
+Reviewed `feat/goal-tracker` (+2086/-0, 21 files) against `specs/modules/goal-tracker.md`.
+Clean, conformant, well-tested — but a spec acceptance item is unmet (progress source), a nav
+placement diverges from the design-system contract, and the AI flow is 503-stubbed.
+
+**No hard fails:** boundary clean (verified, only module trees); no shared-contract edits; no
+secrets/hardcoded model-id/table/account (`dataFromEnv()`); authz off the JWT (`createdBy` set
+server-side from `ctx.requester`, client `createdBy` → 422; 401 path proven). Family-visible →
+no private path required (correct). Single-table modeling correct (PK=GOAL#<id>, SK=DETAILS, milestones
+embedded). CI green; 51 tests pass.
+
+### Required — worker-actionable (in your lane)
+
+1. **[Conformance] `nav.manifest.ts:11` — Goals registered as `group: 'primary'`.** The
+   design-system spec fixes the 5 primary tabs (Dashboard/Journal/Colleges/Scholarships/Timeline)
+   and the master spec places Goals in **secondary** nav. Fix: `group: 'secondary'` (a primary entry
+   overflows the 5-tab mobile bottom bar).
+2. **[Correctness/Completeness — acceptance L42] Progress is not derived/persisted server-side.**
+   `clampProgress` + `progressFromMilestones` (`progress.ts:17,24`) are exported and tested but
+   **never imported by `handlers.ts`** — auto-progress is computed only on the frontend
+   (`logic.ts:47`). So the persisted `Goal.progress` is whatever the client last sent, and a
+   non-UI consumer (e.g. the dashboard goal-progress widget reading `goal.progress`) sees a stale
+   value — contra CLAUDE.md "server is the source of truth." Fix: in `create`/`update`, after
+   `normaliseMilestones`, set `progress = progressFromMilestones(milestones) ?? input.progress`
+   (makes the two orphaned helpers load-bearing) + a handler test.
+
+### For Grahem / supervisor (product / foundational decisions)
+
+3. **[Spec deviation — acceptance L42 "auto from linked-activities"] Progress auto-derives from
+   MILESTONES, not linked activities.** Defensible (milestones are the completable units; the frozen
+   `Goal` type has no progress-mode field) and documented in this checkpoint, but it diverges from
+   the spec wording. Per CLAUDE.md, behavior changes start in the spec — confirm with Grahem; if
+   accepted, update `goal-tracker.md` so code and spec agree. (`linkedActivities` is stored + shown
+   but has no in-form picker — cross-module dep on activity-journal.)
+4. **[Completeness — acceptance L43] AI suggestions return a clean 503** because the shared Bedrock
+   client / SDK dep is missing (same cross-cutting gap worker-2 raised; you raised it too — both
+   correctly refused to edit the frozen bundle). The prompt/parse pipeline + the editable-checklist
+   UI are built + tested; only the live call is gated. Escalated to the supervisor (see
+   spec-reviewer.json `needs`). Wire `GoalSuggester` (model id from env/SSM) once the shared client
+   lands. **Staged-delivery decision is Grahem's:** the supervisor may merge after items 1-2 if
+   Grahem accepts staged AI, tracking item 4 as a follow-up; else hold for the shared client.
+
+**Verdict: CHANGES REQUESTED** (items 1-2 now; items 3-4 pending Grahem/shared-client). ⚠️ Formal
+`--request-changes` impossible (self-PR under `grahem-wnu`); posted as a PR **comment** — this
+checkpoint + comment are the signal.

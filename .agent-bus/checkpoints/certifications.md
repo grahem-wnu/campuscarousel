@@ -55,3 +55,56 @@ countdown, sort, expiring filter, cost), `api.ts`, page + `CertificationCard` / 
 **Verification (local, this worktree):** `npm run typecheck` ✓ · `npx eslint <module paths>` ✓ ·
 `npm run check:routes` ✓ (13 routes, 0 dup) · `vitest` ✓ **48 tests** (43 backend + 5 frontend logic).
 No shared/foundational files touched; only owned module paths + the two append-only manifests.
+
+---
+
+## spec-reviewer @ 2026-06-06T17:18Z — PR #14 (head d56012f) — 🔴 CHANGES REQUESTED
+
+Reviewed `feat/certifications` (+1785/-0, 20 files) against `specs/modules/certifications.md`.
+Code quality, boundary, security, authz, config, and tests are strong — but the spec's named AI
+acceptance criterion is unmet, plus two worker-actionable correctness items.
+
+**No hard fails:** boundary clean (all within `backend/modules/certifications/**` +
+`frontend/src/modules/certifications/**`, verified); no shared-contract edits; no
+secrets/hardcoded model-id/table/account (data via `dataFromEnv()`); authz off the JWT (401 path
+proven); no client-side Bedrock. Family-visible entity → no private path required (correct).
+CI green; 48 tests pass.
+
+### Required — worker-actionable (in your lane)
+
+1. **[Correctness] `suggester.ts:115-119` — substring dedupe can over-filter.**
+   `have.some((h) => h.includes(name) || name.includes(h))` lets a short/empty held-cert name match
+   unrelated suggestions (`name.includes('')` is always true; "CPR" suppresses "BLS/CPR
+   Certification"). Fix: guard short/empty `h` (e.g. require length ≥ 4) or compare normalized full
+   names / a curated alias set.
+2. **[Correctness/Completeness] `schema.ts:39` + `status.ts:31,36` — `expiring-soon`/`expired` are
+   write-accepted but also derived, with no reconciliation.** A record stored with one of these
+   passes through forever (`effectiveStatus` only overlays expiry onto stored `active`/`renewed`),
+   so a stored `expired` never auto-recovers and a stored `expiring-soon` never recomputes. Fix:
+   drop those two from the writable enum (let them be purely derived — the cleaner model the spec
+   implies), or have `effectiveStatus` recompute from `expirationDate` for them too.
+
+### Blocked on supervisor (NOT your fault — for tracking, do NOT edit the frozen bundle)
+
+3. **[Completeness — acceptance L41 + §AI L31-32] `/certifications/suggest` does not call Bedrock.**
+   Spec requires "suggestions" via Bedrock; the module ships a curated list behind an injectable
+   seam because `@aws-sdk/client-bedrock-runtime` isn't in the (frozen) `backend/package.json` and
+   there's no shared Bedrock helper. **You did the right thing** (seam + escalation; the curated
+   list does satisfy the spec's named first-visit baseline at L27). This is the cross-cutting
+   foundational gap escalated to the supervisor (see spec-reviewer.json `needs`). Once a shared
+   `backend/shared/ai` Bedrock client lands (model id from env/SSM — `BEDROCK_MODEL_ID` already on
+   the Lambda role), wire `makeBedrockSuggester()` into `routes.manifest.ts` + add a Bedrock-failure
+   fallback test.
+
+### For Grahem / supervisor (product decision)
+- **Staged-AI call:** if Grahem accepts staged delivery, the supervisor MAY merge after items 1-2 are
+  fixed, tracking item 3 (Bedrock) as a follow-up; otherwise hold for the shared client. Reviewer
+  defers this gate to Grahem (spec wins unless Grahem says otherwise).
+- **Training progress bar (acceptance L41 "training progress"):** worker correctly notes the frozen
+  `Certification` type has `trainingHours` but no `trainingHoursRequired`, so a % bar would be
+  fabricated → shows "Nh logged" instead. A real bar needs a shared-type field (foundational). Note
+  for the supervisor whether that field should be added.
+
+**Verdict: CHANGES REQUESTED** (items 1-2 now; item 3 pending the shared client + Grahem's staged
+decision). ⚠️ Formal `--request-changes` impossible (self-PR under `grahem-wnu`); posted as a PR
+**comment** — this checkpoint + comment are the signal.
