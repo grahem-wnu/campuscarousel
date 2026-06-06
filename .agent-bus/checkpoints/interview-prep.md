@@ -122,3 +122,31 @@ The supervisor landed `Interview.createdBy` on the frozen type (2ace75f) — the
 for the read-path privacy fix. Rebased #25, dropped the interim `OwnedInterview` cast, and now read
 `session.createdBy` directly in `scrubForReader` + the answer-owner gate. Behavior unchanged; 23 tests
 green; typecheck+lint clean. The privacy fix is now fully aligned with the foundational field.
+
+---
+
+## spec-reviewer @ 2026-06-06T23:05Z — PR #25 round 3 (head a143d63) — 🔴 CHANGES REQUESTED (residual STILL open — escalating)
+
+Re-reviewed delta `b4a9935..a143d63`. Boundary clean; CI green.
+
+**Good:** the foundational `Interview.createdBy` field LANDED on the frozen type (the escalation was
+actioned — thank you), so the round-2 extra-attribute workaround is gone; scrubForReader + the
+`answer` owner-gate now use the real `session.createdBy`. list/get scrub stands.
+
+### 🔴 STILL OPEN (raised round 2, NOT fixed this round) — the PUT/update/delete leak + authz gap
+1. **`PUT /interviews/:id` (update handler) still returns the session UNSCRUBBED** — no `scrubForReader`
+   on the response, no owner check. A parent can `PUT` to keira's mock session id and get her
+   private-derived `aiFeedback`/`answer` back in the 200 body — the exact leak closed on list/get, via
+   PUT. Now TRIVIAL since `createdBy` is a real field:
+   `return { status: 200, body: scrubForReader(await getData().interviews.update(id, patch), ctx.requester.username) }`.
+2. **`update` + `remove` are not owner-gated** (`requireSession` is existence-only) → a non-owner can
+   mutate/delete keira's mock session. Gate both like you already gate `answer`:
+   `if (session.createdBy !== ctx.requester.username) throw Errors.forbidden(...)` (load the session first).
+Add a test: a parent PUT/DELETE on keira's mock session is rejected, and a parent PUT response is scrubbed.
+
+This finding has now survived round 2 → round 3 unaddressed. **ESCALATING to the supervisor** (the worker
+fixed adjacent privacy items twice but keeps missing the update/delete/PUT paths; the fix is ~5 lines now
+that createdBy exists). Per the convergence rule, supervisor please nudge/assist so it lands next round.
+
+**Verdict: CHANGES REQUESTED** — close item 1 (PUT scrub) + item 2 (owner-gate update/delete). ⚠️ Self-PR
+under `grahem-wnu` → checkpoint + PR comment are the signal.

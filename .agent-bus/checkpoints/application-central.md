@@ -90,3 +90,22 @@ origin head rather than my earlier parallel version.
 
 Privacy (aiVisibleSet, AI output non-persisted) verified by reviewer. 28 tests green; tsc/eslint/
 check:routes clean. Reviewer: re-review at 7e07b10.
+
+---
+
+## spec-reviewer @ 2026-06-06T23:05Z — PR #28 round 2 (head 7e07b10) — 🟡 CHANGES REQUESTED (worker part done; gated on foundational + Grahem)
+
+Re-reviewed delta `38d1660..7e07b10` (CI green). **Nav fixed:** `nav.manifest.ts` now
+`group: 'secondary'`, order 70 — the one worker-actionable item from round 1 is cleared. Privacy /
+boundary / authz / Bedrock all remain verified-clean (AI output not persisted → no #25-style leak).
+
+**No further worker action available** — the remaining gap (rec-strategy board, test-score tracker
+CRUD per-college, decision matrix; spec §Acceptance) needs the mutable **`APPLICATION#` entity on the
+frozen data layer**, which is out of the module's lane and ESCALATED to the supervisor (overview.ts:1-5).
+Note: the foundational team just landed `Interview.createdBy` for #25, so adding `APPLICATION#` is the
+same kind of change.
+
+**Verdict: CHANGES REQUESTED** — but the ball is with supervisor/Grahem, not the worker: (a) supervisor
+add the `APPLICATION#` entity → worker wires the 3 features; OR (b) Grahem accepts a staged merge (ship
+the essay core + AI help now, features follow) — in which case this is mergeable as-is. The worker's
+in-lane work is complete. ⚠️ Self-PR under `grahem-wnu` → checkpoint + PR comment are the signal.

@@ -1,47 +1,41 @@
 {
   "agentId": "spec-reviewer",
   "role": "spec-reviewer",
-  "updatedAt": "2026-06-06T22:48:00Z",
-  "currentTask": "Wave-3 review. This pass: #26 demonstrated-interest-contacts APPROVED, #27 campus-visit-planner APPROVED, #28 application-central CHANGES (nav primary\u2192secondary + rec-board/score/matrix need a foundational APPLICATION# entity). #25 not re-pushed. #18 still sole unmerged wave-2 module.",
+  "updatedAt": "2026-06-06T23:08:00Z",
+  "currentTask": "Wave-3 re-reviews. #25 interview-prep r3: list/get fixed + Interview.createdBy landed, but PUT-residual leak + update/delete owner-gating STILL open (round 2\u21923) \u2192 ESCALATED. #28 application-central r2: nav fixed (worker done); rec-board/score/matrix gated on foundational APPLICATION# entity + Grahem. #18/#26/#27 approved, still unmerged.",
   "status": "idle",
   "branch": "agent-bus",
   "pr": null,
   "blockers": [],
-  "needs": "FOR SUPERVISOR \u2014 (A) MERGE #18 course-planner (APPROVED, MERGEABLE/CLEAN, sole unmerged wave-2 module, ~5 passes) to CLOSE M3. (B) MERGE the 2 newly-approved wave-3 modules: #26 demonstrated-interest-contacts, #27 campus-visit-planner (both APPROVED+green this pass; use checkpoint+PR-comment gate). (C) NEW FOUNDATIONAL ESCALATION (blocks #28 application-central full acceptance): the spec requires a recommendation-strategy board, test-score tracker (CRUD, per-college), and decision matrix \u2014 all need a mutable APPLICATION# entity/accessor on the FROZEN data layer (out of the module lane; worker escalated via overview.ts). Add the APPLICATION# entity (+ per-college test-score routing, replacing the single hasTeasScore boolean), then the worker wires those features. #28 also has a 1-line nav fix (primary\u2192secondary) it can do now. Decide staged-merge (ship #28 essay core now, features follow) vs hold. (D) #25 interview-prep round 2 still open (PUT residual leak + update/delete owner-gating \u2014 worker not yet re-pushed). GRAHEM (standing, spans 5+ AI modules): web-search tool not wired \u2014 wire shared capability or accept general-knowledge + amend specs. WAVE-3 status: ai-assistant merged; interview-prep #25 (changes), demonstrated-interest-contacts #26 (approved), campus-visit-planner #27 (approved), application-central #28 (changes). RECURRING: all PRs under grahem-wnu \u2192 merge gate reads checkpoint+PR-comment, not reviewDecision.",
+  "needs": "FOR SUPERVISOR \u2014 (A) MERGE-LAG is now the critical bottleneck: NOTHING has merged since #24 (~1h+). #18 course-planner, #26 demonstrated-interest-contacts, #27 campus-visit-planner are ALL APPROVED + CI-green + MERGEABLE and unmerged. Please run the merge step \u2014 #18 closes M3; #26/#27 advance wave-3. Use checkpoint+PR-comment as the gate (self-PR under grahem-wnu \u2192 reviewDecision empty). (B) ESCALATION \u2014 #25 interview-prep: the PUT-residual privacy leak + update/delete owner-gating have survived round 2\u21923 unaddressed (worker fixed list/get + answer-gate + migrated to the now-landed Interview.createdBy, but keeps missing the update/remove/PUT paths). Fix is ~5 lines (scrub the PUT response + owner-gate update/delete via session.createdBy). Please nudge worker so it lands next round. (C) FOUNDATIONAL \u2014 #28 application-central needs an APPLICATION# entity on the frozen data layer (for rec-board/test-score-tracker/decision-matrix); worker has done its in-lane part (nav fixed). Same kind of change as the Interview.createdBy you just landed. Decide: add APPLICATION# (worker wires features) OR Grahem accepts staged-merge of the essay core now. GRAHEM (standing): web-search tool not wired across the AI modules. GOOD: Interview.createdBy foundational field landed (thanks) \u2014 unblocked #25 to use a real owner field. RECURRING: merge gate reads checkpoint+PR-comment, not reviewDecision.",
   "lastPass": {
-    "at": "2026-06-06T22:48:00Z",
+    "at": "2026-06-06T23:08:00Z",
     "openPrsAgainstDev": 5,
     "reviewed": [
       {
-        "pr": 26,
-        "branch": "feat/demonstrated-interest-contacts",
-        "headSha": "a58a043",
-        "verdict": "APPROVED",
+        "pr": 25,
+        "branch": "feat/interview-prep",
+        "headSha": "a143d63",
+        "round": 3,
+        "verdict": "CHANGES-REQUESTED",
         "ci": "green",
-        "note": "family-visible; createdBy server-set; recommender brief uses aiVisibleSet; cross-module via shared accessors; nav secondary"
-      },
-      {
-        "pr": 27,
-        "branch": "feat/campus-visit-planner",
-        "headSha": "4636091",
-        "verdict": "APPROVED",
-        "ci": "green",
-        "note": "family-visible; AI prep/trip-plan server-side env-model curated-fallback; cross-module via accessors; nav secondary"
+        "note": "list/get fixed + Interview.createdBy landed; PUT returns unscrubbed + update/delete not owner-gated STILL open (round 2\u21923) \u2192 escalated"
       },
       {
         "pr": 28,
         "branch": "feat/application-central",
-        "headSha": "38d1660",
+        "headSha": "7e07b10",
+        "round": 2,
         "verdict": "CHANGES-REQUESTED",
         "ci": "green",
-        "note": "PRIVACY OK (aiVisibleSet + AI output NOT persisted \u2014 avoids the #25 leak); nav primary\u2192secondary (worker); rec-board/score/matrix need foundational APPLICATION# entity (escalated)"
+        "note": "nav\u2192secondary fixed (worker done); rec-board/score/matrix need foundational APPLICATION# entity (escalated) + Grahem staged-merge decision"
       }
     ],
     "approvedAwaitingMerge": [
       {
         "pr": 18,
         "branch": "feat/course-planner",
-        "note": "sole unmerged wave-2 \u2014 close M3"
+        "note": "sole unmerged wave-2 \u2014 closes M3"
       },
       {
         "pr": 26,
@@ -52,18 +46,19 @@
         "branch": "feat/campus-visit-planner"
       }
     ],
-    "skippedNotRepushed": [
-      {
-        "pr": 25,
-        "branch": "feat/interview-prep",
-        "note": "round-2 PUT residual leak + owner-gating; not re-pushed"
-      }
-    ],
     "merged": [],
     "stalls": [
       {
-        "pr": 18,
-        "reason": "APPROVED+MERGEABLE/CLEAN ~5 passes, not merged \u2014 blocks M3"
+        "prs": [
+          18,
+          26,
+          27
+        ],
+        "reason": "APPROVED+green+MERGEABLE, unmerged; nothing merged since #24 (~1h+) \u2014 supervisor merge step appears stalled"
+      },
+      {
+        "pr": 25,
+        "reason": "PUT/update/delete privacy residual open round 2\u21923 \u2014 escalated"
       }
     ]
   }
