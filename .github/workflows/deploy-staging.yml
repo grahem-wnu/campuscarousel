@@ -44,6 +44,12 @@ jobs:
         run: |
           if [ -f package-lock.json ]; then npm ci; else npm install --no-audit --no-fund; fi
 
+      # Build the real backend Lambda assets (codegen manifest barrel + esbuild bundle) BEFORE
+      # cdk deploy, so Code.fromAsset(backend/dist/*) exists at synth time. Without this, synth
+      # fails loudly rather than shipping a placeholder. `backend` is a root workspace.
+      - name: Build backend Lambdas
+        run: npm run -w backend build:lambda
+
       # Backend (CDK). Self-contained `cd infra` install + deploy (infra is NOT a root
       # workspace, so `npm run -w infra` won't work). Guarded: until the CDK app lands on
       # `dev`, this step no-ops instead of failing the deploy. cdk deploy is idempotent.

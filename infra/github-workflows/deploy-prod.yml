@@ -29,6 +29,8 @@ jobs:
           role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_PROD }}
           aws-region: us-east-2
       - run: npm ci
+      - name: Build backend Lambdas
+        run: npm run -w backend build:lambda
       - name: Deploy backend (CDK)
         run: npm run -w infra deploy -- --context env=prod --require-approval never
       - name: Build frontend (prod config from SSM)
