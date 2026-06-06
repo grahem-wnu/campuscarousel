@@ -7,8 +7,8 @@ import {
   TableEncryption,
 } from "aws-cdk-lib/aws-dynamodb";
 import type { Construct } from "constructs";
-import type { EnvConfig } from "./config.js";
-import { putOutput } from "./ssm.js";
+import type { EnvConfig } from "./config";
+import { putOutput } from "./ssm";
 
 export interface DataStackProps extends StackProps {
   readonly config: EnvConfig;

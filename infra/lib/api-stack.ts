@@ -9,11 +9,11 @@ import { RetentionDays } from "aws-cdk-lib/aws-logs";
 import { PolicyStatement } from "aws-cdk-lib/aws-iam";
 import type { Queue } from "aws-cdk-lib/aws-sqs";
 import type { Construct } from "constructs";
-import type { EnvConfig } from "./config.js";
-import { envHostname } from "./config.js";
-import { putOutput } from "./ssm.js";
-import { bedrockInvokeStatement } from "./policies.js";
-import { PLACEHOLDER_HANDLER } from "./placeholder-handler.js";
+import type { EnvConfig } from "./config";
+import { envHostname } from "./config";
+import { putOutput } from "./ssm";
+import { bedrockInvokeStatement } from "./policies";
+import { PLACEHOLDER_HANDLER } from "./placeholder-handler";
 
 export interface ApiStackProps extends StackProps {
   readonly config: EnvConfig;

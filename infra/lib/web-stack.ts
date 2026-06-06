@@ -14,9 +14,9 @@ import { ARecord, RecordTarget } from "aws-cdk-lib/aws-route53";
 import { CloudFrontTarget } from "aws-cdk-lib/aws-route53-targets";
 import { BlockPublicAccess, Bucket, BucketEncryption } from "aws-cdk-lib/aws-s3";
 import type { Construct } from "constructs";
-import type { EnvConfig } from "./config.js";
-import { envHostname } from "./config.js";
-import { putOutput } from "./ssm.js";
+import type { EnvConfig } from "./config";
+import { envHostname } from "./config";
+import { putOutput } from "./ssm";
 
 export interface WebStackProps extends StackProps {
   readonly config: EnvConfig;

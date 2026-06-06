@@ -5,10 +5,10 @@ import { SqsEventSource } from "aws-cdk-lib/aws-lambda-event-sources";
 import { RetentionDays } from "aws-cdk-lib/aws-logs";
 import { Queue } from "aws-cdk-lib/aws-sqs";
 import type { Construct } from "constructs";
-import type { EnvConfig } from "./config.js";
-import { putOutput } from "./ssm.js";
-import { bedrockInvokeStatement } from "./policies.js";
-import { PLACEHOLDER_HANDLER } from "./placeholder-handler.js";
+import type { EnvConfig } from "./config";
+import { putOutput } from "./ssm";
+import { bedrockInvokeStatement } from "./policies";
+import { PLACEHOLDER_HANDLER } from "./placeholder-handler";
 
 export interface AsyncStackProps extends StackProps {
   readonly config: EnvConfig;

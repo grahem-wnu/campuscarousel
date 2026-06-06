@@ -2,8 +2,8 @@ import { CfnOutput, Stack, type StackProps } from "aws-cdk-lib";
 import { Certificate, CertificateValidation } from "aws-cdk-lib/aws-certificatemanager";
 import { HostedZone, type IHostedZone, PublicHostedZone } from "aws-cdk-lib/aws-route53";
 import type { Construct } from "constructs";
-import type { EnvConfig } from "./config.js";
-import { putOutput } from "./ssm.js";
+import type { EnvConfig } from "./config";
+import { putOutput } from "./ssm";
 
 export interface DnsStackProps extends StackProps {
   readonly config: EnvConfig;

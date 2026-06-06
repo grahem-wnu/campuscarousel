@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 import { App, Tags } from "aws-cdk-lib";
-import { getEnvConfig, getGlobalConfig, type Stage } from "../lib/config.js";
-import { DataStack } from "../lib/data-stack.js";
-import { AuthStack } from "../lib/auth-stack.js";
-import { AsyncStack } from "../lib/async-stack.js";
-import { ApiStack } from "../lib/api-stack.js";
-import { WebStack } from "../lib/web-stack.js";
-import { DnsStack } from "../lib/dns-stack.js";
-import { CicdStack } from "../lib/cicd-stack.js";
-import { ObservabilityStack } from "../lib/observability-stack.js";
+import { getEnvConfig, getGlobalConfig, type Stage } from "../lib/config";
+import { DataStack } from "../lib/data-stack";
+import { AuthStack } from "../lib/auth-stack";
+import { AsyncStack } from "../lib/async-stack";
+import { ApiStack } from "../lib/api-stack";
+import { WebStack } from "../lib/web-stack";
+import { DnsStack } from "../lib/dns-stack";
+import { CicdStack } from "../lib/cicd-stack";
+import { ObservabilityStack } from "../lib/observability-stack";
 
 const app = new App();
 

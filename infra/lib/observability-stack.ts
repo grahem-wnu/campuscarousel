@@ -9,8 +9,8 @@ import {
 } from "aws-cdk-lib/aws-cloudwatch";
 import { LogGroup, RetentionDays } from "aws-cdk-lib/aws-logs";
 import type { Construct } from "constructs";
-import type { EnvConfig } from "./config.js";
-import { putOutput } from "./ssm.js";
+import type { EnvConfig } from "./config";
+import { putOutput } from "./ssm";
 
 export interface ObservabilityStackProps extends StackProps {
   readonly config: EnvConfig;

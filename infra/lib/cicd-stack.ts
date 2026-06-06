@@ -9,8 +9,8 @@ import {
 } from "aws-cdk-lib/aws-iam";
 import { Topic } from "aws-cdk-lib/aws-sns";
 import type { Construct } from "constructs";
-import type { GlobalConfig } from "./config.js";
-import { putOutput } from "./ssm.js";
+import type { GlobalConfig } from "./config";
+import { putOutput } from "./ssm";
 
 export interface CicdStackProps extends StackProps {
   readonly config: GlobalConfig;

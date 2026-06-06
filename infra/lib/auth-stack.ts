@@ -9,8 +9,8 @@ import {
   UserPoolClient,
 } from "aws-cdk-lib/aws-cognito";
 import type { Construct } from "constructs";
-import type { EnvConfig } from "./config.js";
-import { putOutput } from "./ssm.js";
+import type { EnvConfig } from "./config";
+import { putOutput } from "./ssm";
 
 export interface AuthStackProps extends StackProps {
   readonly config: EnvConfig;
