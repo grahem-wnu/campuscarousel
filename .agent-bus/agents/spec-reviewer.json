@@ -1,24 +1,26 @@
 {
   "agentId": "spec-reviewer",
   "role": "spec-reviewer",
-  "updatedAt": "2026-06-06T18:31:00Z",
-  "currentTask": "Wave-2 review. This pass: #15 goal-tracker round 3 — Bedrock wired in-lane correctly (verified); worker-complete (items 1,2,4 done). Sole gate now is Grahem's item-3 ruling. #14 merged. #11/#18 not re-pushed.",
+  "updatedAt": "2026-06-06T18:49:00Z",
+  "currentTask": "Wave-2 review. Idle pass — no new review work: open non-draft PRs (#11, #15, #18) are all at SHAs already reviewed; #19 college-hub is draft. Awaiting worker re-pushes (#11, #18) and Grahem's #15 item-3 ruling.",
   "status": "idle",
   "branch": "agent-bus",
   "pr": null,
   "blockers": [],
-  "needs": "FOR SUPERVISOR: #15 goal-tracker is worker-complete + AI-wired (real Bedrock in deployed env: model id from BEDROCK_MODEL_ID, server-side, graceful [] fallback, 503 when unconfigured; 60 tests). DO NOT auto-merge yet — the one remaining gate is GRAHEM's ruling on item 3 (progress derived from milestones vs spec L42 'auto from linked-activities'). If Grahem accepts the milestone interpretation: one-line edit to specs/modules/goal-tracker.md then merge (recommended — sound UX, unblocks wave-2). If not: follow-up PR. This item has been escalated for 3 rounds; it's a product/spec decision, not a worker defect. PENDING WORKER ACTION (not yet re-pushed): #11 why-nursing (linking UI), #18 course-planner (nav primary→secondary; otherwise an approve — GPA/boundary/authz already verified). ACCUMULATED GRAHEM PRODUCT CALLS: (a) goal-tracker progress source [item 3 above]; (b) course-planner prereqs single-college vs full courses×colleges matrix (gated on college-hub not merged); (c) certifications 'training progress' bar needs trainingHoursRequired on the frozen Certification type if a % bar is wanted (#14 merged with 'Nh logged'). RECURRING: all PRs authored under grahem-wnu → no formal --approve/--request-changes; merge gate MUST read checkpoint verdict + PR comment, not reviewDecision.",
+  "needs": "FOR SUPERVISOR — (A) POSSIBLE STALL / nudge needed: #11 why-nursing (changes-requested: add linking-UI to EntryForm, ~3 rounds open, head unchanged at 71c33af) and #18 course-planner (changes-requested: 1-line nav group primary→secondary, head unchanged at 55b825b) have NOT been re-pushed and no worker heartbeat currently owns them (worker-2 moved to #19 college-hub; worker-3 waiting-review on #15). Please confirm a worker is assigned to each, or reassign — both are quick fixes and they block M3 (all wave-2 merged). #18 is a literal one-liner away from approval (GPA/boundary/authz already verified). (B) GRAHEM DECISIONS still pending: (1) #15 goal-tracker item 3 — accept milestone-derived progress (one-line spec edit, recommended) vs spec's 'auto-from-linked-activities'; this is the SOLE gate on merging an otherwise-complete, AI-wired #15. (2) #18 course-planner prereqs single-college vs full courses×colleges matrix (gated on college-hub #19, still draft). (3) certifications 'training progress' bar needs trainingHoursRequired on the frozen Certification type if wanted (#14 already merged with 'Nh logged'). (C) RECURRING: all PRs authored under grahem-wnu → no formal --approve/--request-changes; merge gate MUST read checkpoint verdict + PR comment, not reviewDecision.",
   "lastPass": {
-    "at": "2026-06-06T18:31:00Z",
-    "openPrsAgainstDev": 3,
-    "reviewed": [
-      { "pr": 15, "branch": "feat/goal-tracker", "headSha": "bba7b08", "round": 3, "verdict": "APPROVED-worker-complete; merge-gated on Grahem item-3", "ci": "green", "note": "Bedrock wired in-lane correctly (env model id, server-side, graceful [] fallback, 503 unconfigured, 60 tests)" }
-    ],
+    "at": "2026-06-06T18:49:00Z",
+    "openPrsAgainstDev": 4,
+    "reviewed": [],
     "skippedNotRepushed": [
-      { "pr": 11, "branch": "feat/why-nursing", "headSha": "71c33af", "note": "linking UI change-request still open" },
-      { "pr": 18, "branch": "feat/course-planner", "headSha": "55b825b", "note": "nav primary→secondary change-request still open; otherwise verified-clean (an approve once fixed)" }
+      { "pr": 11, "branch": "feat/why-nursing", "headSha": "71c33af", "note": "linking-UI change-request open; not re-pushed" },
+      { "pr": 15, "branch": "feat/goal-tracker", "headSha": "bba7b08", "note": "worker-complete; merge-gated on Grahem item-3" },
+      { "pr": 18, "branch": "feat/course-planner", "headSha": "55b825b", "note": "nav change-request open; not re-pushed; otherwise an approve" }
     ],
-    "merged": [14],
-    "stalls": []
+    "skippedDraft": [ { "pr": 19, "branch": "feat/college-hub" } ],
+    "possibleStalls": [
+      { "pr": 11, "reason": "changes-requested, no re-push, no active worker heartbeat" },
+      { "pr": 18, "reason": "changes-requested (1-line), no re-push, no active worker heartbeat" }
+    ]
   }
 }
