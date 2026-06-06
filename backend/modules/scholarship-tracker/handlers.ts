@@ -2,11 +2,10 @@
 // "Privacy") — no `private` state, so every authenticated family member may read and write. Identity
 // still comes from the JWT (ctx.requester); the creator is recorded server-side via `addedBy`.
 // Handlers are built from thunks so tests inject in-memory fakes and production injects the live data
-// client, the AI discoverer, and the SQS hydration enqueuer (see routes.manifest.ts).
+// client, the Bedrock discoverer, the inline hydration dispatcher, and the SQS bulk enqueuer.
 //
-// The synchronous endpoints (CRUD + summary + bulk-add record creation) work today. AI discovery and
-// SQS hydration are injected and currently degrade to a clean 503 until the async hydration infra
-// lands (see discover.ts / hydration.ts).
+// AI is wired live: /discover is a synchronous Bedrock call; /:id/hydrate hydrates inline (reaches a
+// terminal hydrationStatus in-request); bulk-add enqueues hydration to the SQS worker (best-effort).
 
 import {
   Errors,
@@ -18,7 +17,7 @@ import {
 } from '../../shared/api/index.js';
 import type { Data, Scholarship } from '../../shared/data/index.js';
 import type { ScholarshipDiscoverer } from './discover.js';
-import { buildHydrationMessage, type HydrationEnqueuer } from './hydration.js';
+import type { HydrationEnqueuer, InlineDispatcher } from './hydration.js';
 import { summarize } from './summary.js';
 import {
   bulkAddSchema,
@@ -44,6 +43,7 @@ export interface ScholarshipHandlers {
 export function makeHandlers(
   getData: () => Data,
   getDiscoverer: () => ScholarshipDiscoverer,
+  getDispatch: () => InlineDispatcher,
   getEnqueuer: () => HydrationEnqueuer,
 ): ScholarshipHandlers {
   return {
@@ -63,8 +63,7 @@ export function makeHandlers(
     },
 
     // GET /scholarships/summary — totals + budget impact (reads the budget singleton).
-    summary: async (ctx) => {
-      void ctx;
+    summary: async () => {
       const data = getData();
       const [scholarships, budget] = await Promise.all([data.scholarships.list(), data.budget.get()]);
       return { status: 200, body: summarize(scholarships, budget) };
@@ -110,7 +109,7 @@ export function makeHandlers(
       return { status: 204, body: undefined };
     },
 
-    // POST /scholarships/discover — AI web-search discovery; returns selectable results, saves nothing.
+    // POST /scholarships/discover — synchronous AI discovery; returns selectable results, saves nothing.
     discover: async (ctx) => {
       const input = validateBody(discoverSchema, ctx);
       const results = await getDiscoverer().discover(input);
@@ -118,8 +117,8 @@ export function makeHandlers(
     },
 
     // POST /scholarships/bulk-add — save selected discoveries (records created synchronously). If
-    // `hydrate` is requested, enqueue AI hydration per item best-effort: a saved scholarship is never
-    // lost just because the (currently-gated) hydration enqueue is unavailable.
+    // `hydrate` is requested, enqueue async AI hydration per item best-effort: a saved scholarship is
+    // never lost — and is only marked `pending` once its message is actually enqueued.
     bulkAdd: async (ctx) => {
       const input = validateBody(bulkAddSchema, ctx);
       const data = getData();
@@ -131,12 +130,10 @@ export function makeHandlers(
       }
       if (input.hydrate) {
         const enqueuer = getEnqueuer();
-        // Mark `pending` only after a successful enqueue, so a record never shows "Refreshing…"
-        // forever when the (currently-gated) queue is unavailable — it's still saved either way.
         await Promise.all(
           created.map(async (s, i) => {
             try {
-              await enqueuer.enqueue(buildHydrationMessage(s));
+              await enqueuer.enqueue(s.scholarshipId);
               created[i] = await data.scholarships.update(s.scholarshipId, { hydrationStatus: 'pending' });
             } catch (err) {
               console.error('bulk-add: hydration enqueue failed (saved anyway)', s.scholarshipId, err);
@@ -147,16 +144,13 @@ export function makeHandlers(
       return { status: 201, body: { scholarships: created } };
     },
 
-    // POST /scholarships/:id/hydrate — enqueue an AI refresh for one scholarship (async; 202).
+    // POST /scholarships/:id/hydrate — refresh one scholarship inline via Bedrock (terminal status).
     hydrate: async (ctx) => {
       const { id } = validateParams(idParamSchema, ctx);
-      const data = getData();
-      const existing = await data.scholarships.get(id);
+      const existing = await getData().scholarships.get(id);
       if (!existing) throw Errors.notFound('Scholarship not found');
-      // Enqueue first — if the queue is unavailable this throws (503) before we mutate state.
-      await getEnqueuer().enqueue(buildHydrationMessage(existing));
-      const updated = await data.scholarships.update(id, { hydrationStatus: 'pending' });
-      return { status: 202, body: updated };
+      const updated = await getDispatch()(id);
+      return { status: 200, body: updated ?? existing };
     },
   };
 }

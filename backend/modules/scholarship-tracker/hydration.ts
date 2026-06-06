@@ -1,55 +1,103 @@
-// SQS hydration enqueue for POST /scholarships/:id/hydrate and the hydrate flag on bulk-add.
+// Hydration orchestration for Scholarship Tracker. The AI work lives in ai.ts (`Hydrator`); this
+// file wires it to the data layer and exposes the trigger paths behind seams (mirrors
+// backend/modules/college-hub/hydration.ts):
 //
-// The routing Lambda has HYDRATION_QUEUE_URL + SQS send permission (infra/lib/api-stack.ts), but
-// two foundational pieces are missing (raised on .agent-bus/checkpoints/scholarship-tracker.md):
-//   1. @aws-sdk/client-sqs is not in the backend bundle, so the routing Lambda can't actually send.
-//   2. backend/lambda/hydration.ts has no module-registration glob, so a 'scholarship-hydrate'
-//      worker handler can't be wired in (the registry is hardcoded-empty).
-// Until both land, the enqueuer is injected and returns a clean 503. The message shape + builder are
-// pure + tested so the worker side (and the real enqueuer) drop in cleanly later.
+//   • makeInlineDispatcher — hydrate one scholarship synchronously in the API request (fits the
+//     routing Lambda's budget for a single item). Used TODAY by POST /scholarships/:id/hydrate, so
+//     the status leaves 'pending' and reaches a terminal complete/partial/failed immediately.
+//   • makeSqsEnqueuer      — enqueue to the hydration queue (HYDRATION_QUEUE_URL) for the async
+//     worker. Used by bulk-add (many items would blow a single request's budget). @aws-sdk/client-sqs
+//     is on dev; the worker actually draining the queue still waits on the foundational worker-glob
+//     (build-lambda must glob module hydration.manifest.ts — escalated on the checkpoint).
+//   • makeWorkerHandler    — the SQS worker-side handler, registered via hydration.manifest.ts once
+//     that glob lands. Same core, triggered async.
+//
+// hydrateScholarship merges via `mergePreservingUserEdits` so human-edited fields (userEdited[]) are
+// never clobbered, and hydrationStatus/lastDataRefresh reflect the outcome.
 
-import { ApiError } from '../../shared/api/index.js';
+import type { Data, Scholarship } from '../../shared/data/index.js';
+import { makeBedrockHydrator, type Hydrator } from './ai.js';
 
-/** The hydration message a scholarship enqueues. `type` keys the worker's hydration registry. */
+/** SQS message `type` discriminator for a single-scholarship hydration job. */
+export const HYDRATION_TYPE = 'scholarship-hydrate';
+
 export interface ScholarshipHydrationMessage {
-  type: 'scholarship-hydrate';
+  type: typeof HYDRATION_TYPE;
   scholarshipId: string;
-  /** What to research/refresh — the name (and provider) anchor the web search. */
-  name: string;
-  provider?: string;
+}
+
+export function buildHydrationMessage(scholarshipId: string): ScholarshipHydrationMessage {
+  return { type: HYDRATION_TYPE, scholarshipId };
+}
+
+/** Hydrate one scholarship: fetch → AI patch → merge (preserving user edits). Returns the updated
+ *  record, or null if it's gone. */
+export async function hydrateScholarship(
+  getData: () => Data,
+  hydrator: Hydrator,
+  scholarshipId: string,
+): Promise<Scholarship | null> {
+  const data = getData();
+  const existing = await data.scholarships.get(scholarshipId);
+  if (!existing) return null;
+  const patch = await hydrator({ name: existing.name, provider: existing.provider });
+  return data.scholarships.mergePreservingUserEdits(scholarshipId, patch);
+}
+
+/** Inline dispatcher — hydrate now, within the request. Returns the updated record (or null). */
+export type InlineDispatcher = (scholarshipId: string) => Promise<Scholarship | null>;
+export function makeInlineDispatcher(getData: () => Data, hydrator: Hydrator = makeBedrockHydrator()): InlineDispatcher {
+  return (scholarshipId) => hydrateScholarship(getData, hydrator, scholarshipId);
+}
+
+/** SQS worker-side handler for the shared `hydrationRegistry` (payload → Promise<void>). */
+export function makeWorkerHandler(
+  getData: () => Data,
+  hydrator: Hydrator = makeBedrockHydrator(),
+): (payload: unknown) => Promise<void> {
+  return async (payload) => {
+    const msg = (payload ?? {}) as Partial<ScholarshipHydrationMessage>;
+    if (typeof msg.scholarshipId !== 'string' || !msg.scholarshipId) return;
+    await hydrateScholarship(getData, hydrator, msg.scholarshipId);
+  };
+}
+
+// --- Async enqueue (bulk) -------------------------------------------------------------------------
+
+/** Minimal structural type of the SQS client (just `send`) — keeps tests injectable. */
+export interface SqsSender {
+  send(command: unknown): Promise<unknown>;
 }
 
 export interface HydrationEnqueuer {
-  enqueue(message: ScholarshipHydrationMessage): Promise<void>;
+  enqueue(scholarshipId: string): Promise<void>;
 }
 
-/** Build the hydration message for a scholarship (pure; the worker consumes this shape). */
-export function buildHydrationMessage(s: {
-  scholarshipId: string;
-  name: string;
-  provider?: string;
-}): ScholarshipHydrationMessage {
-  const message: ScholarshipHydrationMessage = {
-    type: 'scholarship-hydrate',
-    scholarshipId: s.scholarshipId,
-    name: s.name,
-  };
-  if (s.provider) message.provider = s.provider;
-  return message;
+export interface EnqueuerOptions {
+  queueUrl?: string;
+  client?: SqsSender;
 }
 
 /**
- * Placeholder until the async hydration infra exists (SQS client in the bundle + a registered
- * worker handler). Returns a clean 503. Swapped for a real SQS-backed enqueuer once they land.
+ * SQS-backed enqueuer for bulk hydration. Sends one `scholarship-hydrate` message per scholarship to
+ * HYDRATION_QUEUE_URL. Throws if the queue isn't configured or the send fails — bulk-add treats this
+ * as best-effort (the record is already saved). The client is constructed lazily so importing this
+ * never constructs an AWS client.
  */
-export const unavailableEnqueuer: HydrationEnqueuer = {
-  enqueue() {
-    return Promise.reject(
-      new ApiError(
-        503,
-        'unavailable',
-        'AI hydration is not yet enabled (pending async hydration infra). Scholarship data can still be edited manually.',
-      ),
-    );
-  },
-};
+export function makeSqsEnqueuer(options: EnqueuerOptions = {}): HydrationEnqueuer {
+  let cached: SqsSender | undefined = options.client;
+  return {
+    async enqueue(scholarshipId) {
+      const queueUrl = options.queueUrl ?? process.env.HYDRATION_QUEUE_URL;
+      if (!queueUrl) throw new Error('HYDRATION_QUEUE_URL is not set');
+      if (!cached) {
+        const { SQSClient } = await import('@aws-sdk/client-sqs');
+        cached = new SQSClient({}) as unknown as SqsSender;
+      }
+      const { SendMessageCommand } = await import('@aws-sdk/client-sqs');
+      await cached.send(
+        new SendMessageCommand({ QueueUrl: queueUrl, MessageBody: JSON.stringify(buildHydrationMessage(scholarshipId)) }),
+      );
+    },
+  };
+}

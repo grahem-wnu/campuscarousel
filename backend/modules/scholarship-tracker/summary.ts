@@ -3,8 +3,12 @@
 
 import type { Budget, Scholarship } from '../../shared/data/index.js';
 
-/** Statuses that count as "still in play" for potential value (not yet lost). */
-const ACTIVE_FOR_POTENTIAL = new Set(['discovered', 'researching', 'preparing', 'applied', 'awarded']);
+/**
+ * Statuses whose `amount` counts toward "potential value" = still-undecided pursuits. Excludes
+ * `awarded` (that money is reported under totalAwarded — counting it here too would double-count it
+ * in the budget header and downstream rollups) and `denied`/`expired` (lost).
+ */
+const ACTIVE_FOR_POTENTIAL = new Set(['discovered', 'researching', 'preparing', 'applied']);
 
 export interface ScholarshipSummary {
   totalTracked: number;

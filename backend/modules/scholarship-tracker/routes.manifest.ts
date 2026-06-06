@@ -5,21 +5,29 @@
 // cross-module duplicates. Handler bindings come from `makeHandlers`; `buildRoutes` in handlers.ts
 // holds the same table for tests, and manifest.test.ts asserts the two never drift apart.
 //
-// The data client is resolved lazily so importing this manifest never requires TABLE_NAME. The AI
-// discoverer + SQS hydration enqueuer are injected too; both currently degrade to a clean 503 until
-// the async hydration infra lands (raised on .agent-bus/checkpoints/scholarship-tracker.md).
+// All AI is wired live (lazily): the data client, the Bedrock discoverer, the inline hydration
+// dispatcher, and the SQS bulk enqueuer are resolved on first use so importing this manifest never
+// constructs an AWS client or requires TABLE_NAME/BEDROCK_MODEL_ID/HYDRATION_QUEUE_URL.
 
 import type { RouteDef } from '../../shared/api/index.js';
 import { dataFromEnv, type Data } from '../../shared/data/index.js';
-import { unavailableDiscoverer } from './discover.js';
+import { makeBedrockDiscoverer } from './ai.js';
+import type { ScholarshipDiscoverer } from './discover.js';
 import { makeHandlers } from './handlers.js';
-import { unavailableEnqueuer } from './hydration.js';
+import { makeInlineDispatcher, makeSqsEnqueuer, type HydrationEnqueuer, type InlineDispatcher } from './hydration.js';
 
-let cached: Data | undefined;
+let cachedData: Data | undefined;
+const getData = (): Data => (cachedData ??= dataFromEnv());
+
+let cachedDiscoverer: ScholarshipDiscoverer | undefined;
+let cachedDispatch: InlineDispatcher | undefined;
+let cachedEnqueuer: HydrationEnqueuer | undefined;
+
 const handlers = makeHandlers(
-  (): Data => (cached ??= dataFromEnv()),
-  () => unavailableDiscoverer,
-  () => unavailableEnqueuer,
+  getData,
+  () => (cachedDiscoverer ??= makeBedrockDiscoverer()),
+  () => (cachedDispatch ??= makeInlineDispatcher(getData)),
+  () => (cachedEnqueuer ??= makeSqsEnqueuer()),
 );
 
 export const routes: RouteDef[] = [

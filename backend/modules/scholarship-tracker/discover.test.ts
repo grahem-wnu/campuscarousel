@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildDiscoverPrompt, parseDiscoverResults, unavailableDiscoverer } from './discover.js';
+import { buildDiscoverPrompt, parseDiscoverResults } from './discover.js';
 
 describe('buildDiscoverPrompt', () => {
   it('instructs web search, a real-only constraint, and weaves in context', () => {
@@ -52,11 +52,5 @@ describe('parseDiscoverResults', () => {
     expect(parseDiscoverResults('{"name":"object not array"}')).toEqual([]);
     const many = JSON.stringify(Array.from({ length: 30 }, (_, i) => ({ name: `s${i}` })));
     expect(parseDiscoverResults(many, 5)).toHaveLength(5);
-  });
-});
-
-describe('unavailableDiscoverer', () => {
-  it('rejects with a 503 until the async discovery infra lands', async () => {
-    await expect(unavailableDiscoverer.discover({})).rejects.toMatchObject({ status: 503 });
   });
 });

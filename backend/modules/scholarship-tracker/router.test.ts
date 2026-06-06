@@ -10,15 +10,16 @@ import type { Requester } from '../../shared/auth/index.js';
 import { buildRoutes, makeHandlers } from './handlers.js';
 
 const discoverer = { discover: () => Promise.resolve([{ name: 'Discovered Grant', type: 'merit' as const }]) };
-const enqueued: unknown[] = [];
-const enqueuer = { enqueue: (m: unknown) => (enqueued.push(m), Promise.resolve()) };
+const enqueued: string[] = [];
+const enqueuer = { enqueue: (id: string) => (enqueued.push(id), Promise.resolve()) };
 
 let data: Data;
 let dispatch: ReturnType<typeof createRouter>;
 
 beforeEach(() => {
   data = makeData(new InMemoryTableClient());
-  dispatch = createRouter(buildRoutes(makeHandlers(() => data, () => discoverer, () => enqueuer)));
+  const inlineDispatch = (id: string) => data.scholarships.update(id, { hydrationStatus: 'complete' as const });
+  dispatch = createRouter(buildRoutes(makeHandlers(() => data, () => discoverer, () => inlineDispatch, () => enqueuer)));
   enqueued.length = 0;
 });
 
@@ -86,12 +87,12 @@ describe('router integration', () => {
     expect((parse(res).scholarships as unknown[])).toHaveLength(2);
   });
 
-  it('routes POST /scholarships/:id/hydrate (202 + enqueues)', async () => {
+  it('routes POST /scholarships/:id/hydrate (inline, 200 + terminal status)', async () => {
     const created = await dispatch(event('POST', '/scholarships', { as: keira, body: { name: 'Refresh' } }));
     const id = (parse(created) as { scholarshipId: string }).scholarshipId;
     const res = await dispatch(event('POST', `/scholarships/${id}/hydrate`, { as: keira }));
-    expect(res.statusCode).toBe(202);
-    expect(enqueued).toHaveLength(1);
+    expect(res.statusCode).toBe(200);
+    expect((parse(res) as { hydrationStatus: string }).hydrationStatus).toBe('complete');
   });
 
   it('422s a bad create body', async () => {

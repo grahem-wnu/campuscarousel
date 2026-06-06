@@ -4,7 +4,7 @@ import type { HandlerContext } from '../../shared/api/index.js';
 import type { Requester } from '../../shared/auth/index.js';
 import { makeHandlers, type ScholarshipHandlers } from './handlers.js';
 import type { DiscoveredScholarship, ScholarshipDiscoverer } from './discover.js';
-import type { HydrationEnqueuer, ScholarshipHydrationMessage } from './hydration.js';
+import type { HydrationEnqueuer, InlineDispatcher } from './hydration.js';
 
 const keira: Requester = { username: 'keira', role: 'student' };
 const kate: Requester = { username: 'kate', role: 'parent' };
@@ -12,19 +12,22 @@ const kate: Requester = { username: 'kate', role: 'parent' };
 let data: Data;
 let h: ScholarshipHandlers;
 let discoverResult: DiscoveredScholarship[];
-let enqueued: ScholarshipHydrationMessage[];
-let enqueueImpl: (m: ScholarshipHydrationMessage) => Promise<void>;
+let enqueued: string[];
+let enqueueImpl: (id: string) => Promise<void>;
 
 const discoverer: ScholarshipDiscoverer = { discover: () => Promise.resolve(discoverResult) };
-const enqueuer: HydrationEnqueuer = { enqueue: (m) => enqueueImpl(m) };
+const enqueuer: HydrationEnqueuer = { enqueue: (id) => enqueueImpl(id) };
+// Inline dispatcher fake: marks the scholarship hydrated and returns the updated record.
+const dispatch: InlineDispatcher = (id) =>
+  data.scholarships.update(id, { hydrationStatus: 'complete', provider: 'Hydrated Co' });
 
 beforeEach(() => {
   data = makeData(new InMemoryTableClient());
-  h = makeHandlers(() => data, () => discoverer, () => enqueuer);
+  h = makeHandlers(() => data, () => discoverer, () => dispatch, () => enqueuer);
   discoverResult = [];
   enqueued = [];
-  enqueueImpl = (m) => {
-    enqueued.push(m);
+  enqueueImpl = (id) => {
+    enqueued.push(id);
     return Promise.resolve();
   };
 });
@@ -37,8 +40,7 @@ const ctx = (over: Partial<HandlerContext> = {}): HandlerContext => ({
   ...over,
 });
 
-const expectStatus = (p: Promise<unknown>, status: number) =>
-  expect(p).rejects.toMatchObject({ status });
+const expectStatus = (p: Promise<unknown>, status: number) => expect(p).rejects.toMatchObject({ status });
 
 async function seed(over: Partial<Scholarship> = {}): Promise<string> {
   const s = await data.scholarships.create({ name: 'Seed', status: 'discovered', ...over } as Parameters<
@@ -69,22 +71,15 @@ describe('list (GET /scholarships) — filtering', () => {
     await seed({ name: 'C', type: 'nursing-specific', status: 'awarded' });
   });
 
-  it('returns all with no filter', async () => {
-    expect((((await h.list(ctx())).body) as { scholarships: Scholarship[] }).scholarships).toHaveLength(3);
-  });
-  it('filters by type', async () => {
-    expect((((await h.list(ctx({ query: { type: 'nursing-specific' } }))).body) as { scholarships: Scholarship[] }).scholarships).toHaveLength(2);
-  });
-  it('filters by status', async () => {
-    expect((((await h.list(ctx({ query: { status: 'awarded' } }))).body) as { scholarships: Scholarship[] }).scholarships).toHaveLength(1);
-  });
-  it('filters by linkedCollege', async () => {
-    expect((((await h.list(ctx({ query: { linkedCollege: 'c1' } }))).body) as { scholarships: Scholarship[] }).scholarships).toHaveLength(1);
-  });
-  it('filters by deadlineBefore (and excludes scholarships with no deadline)', async () => {
-    const r = (((await h.list(ctx({ query: { deadlineBefore: '2026-06-01' } }))).body) as { scholarships: Scholarship[] }).scholarships;
-    expect(r.map((s) => s.name)).toEqual(['A']);
-  });
+  const list = async (query: Record<string, string> = {}) =>
+    ((await h.list(ctx({ query }))).body as { scholarships: Scholarship[] }).scholarships;
+
+  it('returns all with no filter', async () => expect(await list()).toHaveLength(3));
+  it('filters by type', async () => expect(await list({ type: 'nursing-specific' })).toHaveLength(2));
+  it('filters by status', async () => expect(await list({ status: 'awarded' })).toHaveLength(1));
+  it('filters by linkedCollege', async () => expect(await list({ linkedCollege: 'c1' })).toHaveLength(1));
+  it('filters by deadlineBefore (excludes no-deadline)', async () =>
+    expect((await list({ deadlineBefore: '2026-06-01' })).map((s) => s.name)).toEqual(['A']));
 });
 
 describe('summary (GET /scholarships/summary)', () => {
@@ -109,8 +104,7 @@ describe('detail / update / remove', () => {
   });
   it('update changes status; 404 when missing', async () => {
     const id = await seed();
-    const res = await h.update(ctx({ params: { id }, body: { status: 'applied', awardedAmount: 0 } }));
-    expect((res.body as Scholarship).status).toBe('applied');
+    expect(((await h.update(ctx({ params: { id }, body: { status: 'applied' } }))).body as Scholarship).status).toBe('applied');
     await expectStatus(h.update(ctx({ params: { id: 'ghost' }, body: { status: 'applied' } })), 404);
   });
   it('remove deletes (204); 404 when missing', async () => {
@@ -137,21 +131,18 @@ describe('discover (POST /scholarships/discover)', () => {
 describe('bulkAdd (POST /scholarships/bulk-add)', () => {
   it('saves all as ai-discovered even when hydration enqueue fails (no false pending)', async () => {
     enqueueImpl = () => Promise.reject(new Error('queue down'));
-    const res = await h.bulkAdd(
-      ctx({ body: { hydrate: true, scholarships: [{ name: 'One' }, { name: 'Two' }] } }),
-    );
+    const res = await h.bulkAdd(ctx({ body: { hydrate: true, scholarships: [{ name: 'One' }, { name: 'Two' }] } }));
     expect(res.status).toBe(201);
     const saved = (res.body as { scholarships: Scholarship[] }).scholarships;
     expect(saved).toHaveLength(2);
     expect(saved[0]).toMatchObject({ addedBy: 'ai-discovered' });
-    expect(saved[0]?.hydrationStatus).toBeUndefined(); // enqueue failed → not marked pending
-    expect(await data.scholarships.list()).toHaveLength(2); // persisted despite enqueue failure
+    expect(saved[0]?.hydrationStatus).toBeUndefined();
+    expect(await data.scholarships.list()).toHaveLength(2);
   });
 
   it('enqueues per item and marks pending when hydrate=true and the queue is up', async () => {
     const res = await h.bulkAdd(ctx({ body: { hydrate: true, scholarships: [{ name: 'One' }, { name: 'Two' }] } }));
     expect(enqueued).toHaveLength(2);
-    expect(enqueued[0]).toMatchObject({ type: 'scholarship-hydrate', name: 'One' });
     expect((res.body as { scholarships: Scholarship[] }).scholarships[0]?.hydrationStatus).toBe('pending');
   });
 
@@ -166,19 +157,12 @@ describe('bulkAdd (POST /scholarships/bulk-add)', () => {
 });
 
 describe('hydrate (POST /scholarships/:id/hydrate)', () => {
-  it('enqueues and marks the scholarship pending (202)', async () => {
-    const id = await seed({ name: 'Refresh me', provider: 'ANA' });
+  it('hydrates inline and returns the updated record with a terminal status (200)', async () => {
+    const id = await seed({ name: 'Refresh me' });
     const res = await h.hydrate(ctx({ params: { id } }));
-    expect(res.status).toBe(202);
-    expect((res.body as Scholarship).hydrationStatus).toBe('pending');
-    expect(enqueued[0]).toMatchObject({ scholarshipId: id, name: 'Refresh me', provider: 'ANA' });
-  });
-
-  it('does NOT mutate when the queue is unavailable (enqueue throws first)', async () => {
-    const id = await seed();
-    enqueueImpl = () => Promise.reject(Object.assign(new Error('unavailable'), { status: 503 }));
-    await expectStatus(h.hydrate(ctx({ params: { id } })), 503);
-    expect((await data.scholarships.get(id))?.hydrationStatus).toBeUndefined();
+    expect(res.status).toBe(200);
+    expect((res.body as Scholarship).hydrationStatus).toBe('complete');
+    expect((res.body as Scholarship).provider).toBe('Hydrated Co');
   });
 
   it('404 when missing', async () => {

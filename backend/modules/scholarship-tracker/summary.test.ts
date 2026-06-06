@@ -23,7 +23,7 @@ describe('summarize', () => {
       null,
     );
     expect(s.totalTracked).toBe(5);
-    expect(s.totalPotential).toBe(6000); // 1000 + 2000 + 3000 (awarded amount still "in play")
+    expect(s.totalPotential).toBe(3000); // 1000 + 2000 only; awarded excluded (counted in totalAwarded)
     expect(s.totalAwarded).toBe(2500);
     expect(s.countsByStatus).toMatchObject({ discovered: 1, applied: 1, awarded: 1, denied: 1, expired: 1 });
   });

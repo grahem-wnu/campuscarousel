@@ -1,13 +1,8 @@
-// AI scholarship discovery for POST /scholarships/discover.
-//
-// Discovery needs Bedrock + WEB SEARCH and (per specs/foundational/api.md) runs on the 300s async
-// worker, not the routing Lambda — so it is injected (the `ScholarshipDiscoverer` interface) like the
-// data client. The prompt builder and result parser below are pure + unit-tested. The production
-// binding is gated on the async hydration/discovery infra that does not exist yet (no module
-// hydration-handler registration, and no @aws-sdk/client-sqs in the backend bundle) — raised on
-// .agent-bus/checkpoints/scholarship-tracker.md. Until it lands, discovery returns a clean 503.
+// Pure prompt builder + result parser for AI scholarship discovery (POST /scholarships/discover).
+// The synchronous Bedrock binding that uses these lives in ai.ts (`makeBedrockDiscoverer`); keeping
+// the prompt/parse here pure makes them unit-testable with no AWS. The `ScholarshipDiscoverer`
+// interface is the injection seam the handlers consume.
 
-import { ApiError } from '../../shared/api/index.js';
 import { TYPES, type DiscoverInput } from './schema.js';
 
 /** One AI-discovered scholarship candidate — a strict subset of the createable shape so a selected
@@ -101,20 +96,3 @@ export function parseDiscoverResults(raw: string, limit = 20): DiscoveredScholar
   }
   return out;
 }
-
-/**
- * Placeholder until the async discovery/hydration infra exists (the 300s worker that runs Bedrock +
- * web search, plus the SQS plumbing to reach it). Returns a clean 503 so the UI says "try again
- * later / add manually" rather than 500ing. Swapped for the real discoverer once the infra lands.
- */
-export const unavailableDiscoverer: ScholarshipDiscoverer = {
-  discover() {
-    return Promise.reject(
-      new ApiError(
-        503,
-        'unavailable',
-        'AI scholarship discovery is not yet enabled (pending async web-search hydration infra). You can still add scholarships manually.',
-      ),
-    );
-  },
-};

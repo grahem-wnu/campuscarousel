@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 import type { Data } from '../../shared/data/index.js';
 import { buildRoutes, makeHandlers } from './handlers.js';
 import type { ScholarshipDiscoverer } from './discover.js';
-import type { HydrationEnqueuer } from './hydration.js';
+import type { HydrationEnqueuer, InlineDispatcher } from './hydration.js';
 import { routes as manifestRoutes } from './routes.manifest.js';
 
 const sig = (r: { method: string; path: string }) => `${r.method} ${r.path}`;
@@ -14,7 +14,12 @@ const sig = (r: { method: string; path: string }) => `${r.method} ${r.path}`;
 describe('routes.manifest ↔ buildRoutes', () => {
   it('register the identical method+path set', () => {
     const built = buildRoutes(
-      makeHandlers(() => ({}) as Data, () => ({}) as ScholarshipDiscoverer, () => ({}) as HydrationEnqueuer),
+      makeHandlers(
+        () => ({}) as Data,
+        () => ({}) as ScholarshipDiscoverer,
+        () => ({}) as unknown as InlineDispatcher,
+        () => ({}) as HydrationEnqueuer,
+      ),
     )
       .map(sig)
       .sort();

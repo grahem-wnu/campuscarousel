@@ -39,8 +39,9 @@ export function ScholarshipDetail({ scholarship: s, today, onUpdated, onDeleted,
     setError(null);
     setInfo(null);
     try {
-      onUpdated(await hydrateScholarship(s.scholarshipId));
-      setInfo('Refresh requested — updated data will appear shortly.');
+      const refreshed = await hydrateScholarship(s.scholarshipId);
+      onUpdated(refreshed);
+      setInfo(refreshed.hydrationStatus === 'failed' ? 'Could not refresh details — try again later.' : 'Refreshed with the latest details.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not request a refresh.');
     } finally {
