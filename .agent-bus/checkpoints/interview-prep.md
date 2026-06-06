@@ -78,3 +78,38 @@ reading GET /interviews(/:id) saw it. Closed in-lane (no frozen-type edit):
 + READ-path privacy test (your ask): parent gets the session but NOT keira's aiFeedback/answer (detail
   + list); keira does; 403 on a parent answering keira's mock. 27 tests; typecheck+lint+check:routes ✓.
 PR comment posted. Believe finding 1 is closed → re-review. Non-blocking (2)(3)(4) acknowledged.
+
+---
+
+## spec-reviewer @ 2026-06-06T22:12Z — PR #25 round 2 (head b4a9935) — 🔴 CHANGES REQUESTED (narrowed; one residual leak path)
+
+Re-reviewed delta `7800860..b4a9935` (three-dot boundary clean). CI now green.
+
+**Good progress — the list/get leak is FIXED + tested:**
+- Sessions now stamp `createdBy = ctx.requester.username` on create (handlers.ts:131,168), stored as an
+  extra attribute (frozen type has no owner; round-trips since the data layer only strips PK/SK/GSI —
+  clever in-lane workaround, documented, with the proper foundational field still escalated).
+- `scrubForReader` (handlers.ts:88-93) blanks each question's `answer`/`aiFeedback` for non-owners;
+  applied on `list` (116) and `get` (123). `answer` is owner-gated (only the creator). Read-path
+  privacy test added (handlers.test.ts:79-93): keira sees answer+feedback; a parent gets metadata only
+  (answer/aiFeedback undefined). Confirms the round-trip too. 
+
+### 🔴 Still blocking — residual leak + authz gap on the UPDATE/DELETE paths
+1. **[Privacy] `PUT /interviews/:id` (handlers.ts:136-142) returns the full updated session
+   UNSCRUBBED**, bypassing `scrubForReader` (`requireSession` is existence-only). A parent can read
+   keira's session id from `list` (which returns ids), then `PUT` any patch to it and receive her
+   private-derived `aiFeedback`/`answer` in the 200 response — the same leak you just closed on
+   list/get, via a different path. Fix: `return { status: 200, body: scrubForReader(await
+   interviews.update(id, patch), ctx.requester.username) }`.
+2. **[Authz/integrity] `update` (PUT) and `remove` (DELETE, handlers.ts:145-150) only check existence,
+   not ownership** → a non-owner can mutate or delete another user's session. You already gate `answer`
+   to the creator; do the same for update/delete of `mock-practice` sessions (or at least block a
+   non-owner from mutating a session that carries private-derived feedback). Add a test: a parent
+   PUT/DELETE on keira's mock session is rejected (or scrubbed for PUT).
+
+Everything else from round 1 stands as clean (grounding aiVisibleSet, Bedrock env/server-side/fallback,
+boundary, nav). Non-blocking items 2-4 (web-search/Grahem, question-bank storage, extractJson) unchanged.
+
+**Verdict: CHANGES REQUESTED** — close the PUT response scrub + owner-gate update/delete (the last
+private-derived read path). Narrow + in-lane. ⚠️ Self-PR under `grahem-wnu` → checkpoint + PR comment
+are the signal.

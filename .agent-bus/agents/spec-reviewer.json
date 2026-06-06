@@ -1,25 +1,46 @@
 {
   "agentId": "spec-reviewer",
   "role": "spec-reviewer",
-  "updatedAt": "2026-06-06T21:58:00Z",
-  "currentTask": "Wave-3 review begun. This pass: #25 interview-prep CHANGES-REQUESTED (privacy hard-fail: private-derived aiFeedback persisted on family-readable sessions → leaks to parent). #19/#21/#24 merged. #18 course-planner is now the SOLE unmerged wave-2 module.",
+  "updatedAt": "2026-06-06T22:18:00Z",
+  "currentTask": "Wave-3 review. This pass: #25 interview-prep round 2 \u2014 list/get privacy leak FIXED (createdBy stamp + scrubForReader, tested), but residual leak on PUT (returns unscrubbed) + update/delete not owner-gated \u2192 narrowed CHANGES-REQUESTED. #18 still sole unmerged wave-2 module. #26 demonstrated-interest-contacts draft.",
   "status": "idle",
   "branch": "agent-bus",
   "pr": null,
   "blockers": [],
-  "needs": "FOR SUPERVISOR — (A) MERGE #18 course-planner to CLOSE M3: it's the only wave-2 module not yet merged (APPROVED; everything else in wave-2 is merged). mergeable shows UNKNOWN (GitHub recompute after the big merges) — if it's actually behind dev, nudge the worker to rebase; otherwise merge. (B) NEW FOUNDATIONAL ESCALATION (blocks #25 interview-prep): the frozen `Interview` type (backend/shared/data/types.ts) has NO owner/visibility field, so interview sessions can't be owner-scoped — and #25 persists private-derived AI feedback (grounded on keira's private why-nursing/clinical/activity entries) onto family-readable sessions, leaking private content to a parent via GET /interviews (violates interview-prep.md:47 + the privacy model). FIX needs an owner (createdBy) + optional visibility field added to the frozen `Interview` type (foundational, out of the module's lane) so the worker can scope list/get off the JWT; OR an interim in-module response-strip. Please decide/provide. MERGED this run: #19 college-hub, #21 scholarship-tracker, #24 ai-assistant (all wave-2 done except #18; ai-assistant is wave-3). WAVE-3 now eligible (deps merged): application-central (college-hub+scholarship-tracker ✓), campus-visit-planner + demonstrated-interest-contacts (college-hub ✓), interview-prep #25 (changes-requested). CONSOLIDATED GRAHEM DECISION (spans 5 AI modules now incl. interview-prep): web-search tool prompted but NOT wired — wire a shared web-search capability or formally accept general-knowledge AI + amend specs. RECURRING: all PRs under grahem-wnu → merge gate reads checkpoint+PR-comment, not reviewDecision. (Reviewer note: post PR verdicts via gh --body-file, not inline --body with backticks — bash command-substitutes them.)",
+  "needs": "FOR SUPERVISOR \u2014 (A) MERGE #18 course-planner: now MERGEABLE/CLEAN (no conflict), APPROVED, the SOLE unmerged wave-2 module \u2014 merging it closes M3. Sitting ~4 passes; please merge. (B) #25 interview-prep round 2: the main privacy leak (list/get) is fixed in-lane (worker stamps createdBy as an extra attribute + scrubForReader, tested); remaining is a narrow residual \u2014 PUT /interviews/:id returns the session UNSCRUBBED + update/delete arent owner-gated (non-owner can read private-derived feedback via the PUT response, or mutate/delete others sessions). Worker to fix (scrub the PUT response + owner-gate update/delete). (C) FOUNDATIONAL (still open, lower urgency now that #25 has an in-lane interim): a proper owner/visibility field on the frozen Interview type would let sessions be cleanly owner-scoped instead of the extra-attribute workaround. CONSOLIDATED GRAHEM DECISION (spans 5 AI modules): web-search tool prompted but not wired \u2014 wire a shared web-search capability or accept general-knowledge AI + amend specs. WAVE-3 eligible/open: interview-prep #25 (changes), demonstrated-interest-contacts #26 (draft); application-central + campus-visit-planner still to open. RECURRING: all PRs under grahem-wnu \u2192 merge gate reads checkpoint+PR-comment, not reviewDecision.",
   "lastPass": {
-    "at": "2026-06-06T21:58:00Z",
-    "openPrsAgainstDev": 2,
+    "at": "2026-06-06T22:18:00Z",
+    "openPrsAgainstDev": 3,
     "reviewed": [
-      { "pr": 25, "branch": "feat/interview-prep", "headSha": "7800860", "round": 1, "verdict": "CHANGES-REQUESTED", "ci": "green", "note": "PRIVACY hard-fail: grounding correct (aiVisibleSet) but private-derived aiFeedback/answer persisted on unowned family-readable sessions → parent GET /interviews leaks keira's private content (violates interview-prep.md:47). Fix needs foundational owner/visibility field on frozen Interview type (escalated) + JWT-scoped list/get. +web-search (Grahem)." }
+      {
+        "pr": 25,
+        "branch": "feat/interview-prep",
+        "headSha": "b4a9935",
+        "round": 2,
+        "verdict": "CHANGES-REQUESTED",
+        "ci": "green",
+        "note": "list/get leak fixed (createdBy + scrubForReader, tested); residual: PUT returns unscrubbed + update/delete not owner-gated"
+      }
     ],
     "approvedAwaitingMerge": [
-      { "pr": 18, "branch": "feat/course-planner", "note": "SOLE unmerged wave-2 module — merge to close M3" }
+      {
+        "pr": 18,
+        "branch": "feat/course-planner",
+        "note": "MERGEABLE/CLEAN; sole unmerged wave-2 module \u2014 close M3"
+      }
     ],
-    "merged": [19, 21, 24],
+    "skippedDraft": [
+      {
+        "pr": 26,
+        "branch": "feat/demonstrated-interest-contacts"
+      }
+    ],
+    "merged": [],
     "stalls": [
-      { "pr": 18, "reason": "APPROVED; sole wave-2 module not yet merged across several passes — blocks M3" }
+      {
+        "pr": 18,
+        "reason": "APPROVED + MERGEABLE/CLEAN ~4 passes, not merged \u2014 blocks M3"
+      }
     ]
   }
 }
