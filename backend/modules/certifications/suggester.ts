@@ -1,15 +1,17 @@
 // Certification suggestions for POST /certifications/suggest.
 //
-// The spec calls for Bedrock ("general knowledge → relevant certs for the career goal"). The shared
-// backend bundle does not yet ship a Bedrock client (`@aws-sdk/client-bedrock-runtime` is not a
-// backend dependency, and adding it means editing a frozen shared file — raised for the supervisor
-// on .agent-bus/checkpoints/certifications.md). So this module ships the suggestion logic behind an
-// injectable seam: a deterministic, career-goal-aware CURATED suggester is the default, and a
-// Bedrock-backed `Suggester` can be dropped into the manifest later without touching handlers/tests.
+// The spec calls for Bedrock ("general knowledge → relevant certs for the career goal"). The
+// suggestion logic sits behind an injectable `Suggester` seam with two implementations:
+//   • makeBedrockSuggester — calls Bedrock (model/inference-profile from the BEDROCK_MODEL_ID env
+//     var the Lambda role already injects; never hardcoded) and parses the model's JSON. This is
+//     what production wires in routes.manifest.ts.
+//   • curatedSuggester    — a deterministic, career-goal-aware curated list grounded in the spec's
+//     named baseline (CNA, BLS/CPR, First Aid, Stop the Bleed) plus ICU/critical-care additions.
+//     It is the graceful FALLBACK the Bedrock suggester returns on any error/timeout/empty parse,
+//     and the default the handlers use when no suggester is injected (tests).
 //
-// The curated list is grounded in the spec's named baseline (CNA, BLS/CPR, First Aid, Stop the
-// Bleed) plus ICU/critical-care additions tailored to the stated goal. Already-held certs are
-// filtered out by the caller-supplied `existingNames`.
+// Either way, certs Keira already holds (`existingNames`) are filtered out via precise token/alias
+// matching (not substrings).
 
 export interface CertSuggestion {
   name: string;
@@ -173,3 +175,117 @@ export const curatedSuggester: Suggester = async ({ careerGoal, existingNames })
   });
   return fresh.sort((a, b) => a.priority - b.priority).map(toSuggestion);
 };
+
+// ---------------------------------------------------------------------------
+// Bedrock-backed suggester (production). Imports the SDK directly in-module; the model/inference-
+// profile id comes from BEDROCK_MODEL_ID (injected by CDK from SSM — never hardcoded). Any
+// error/timeout/empty-or-malformed response falls back to the curated suggester, so /suggest is
+// always useful even when Bedrock is throttled or unconfigured.
+// ---------------------------------------------------------------------------
+
+/** Minimal structural type of the Bedrock client we use (just `send`) — keeps tests injectable
+ *  without depending on the SDK's concrete class. */
+export interface BedrockInvoker {
+  send(command: unknown): Promise<{ body?: Uint8Array }>;
+}
+
+export interface BedrockSuggesterOptions {
+  /** Model / inference-profile id. Defaults to `process.env.BEDROCK_MODEL_ID`. */
+  modelId?: string;
+  /** Injectable client (tests). Defaults to a real `BedrockRuntimeClient`. */
+  client?: BedrockInvoker;
+  /** Fallback used on any failure. Defaults to the curated suggester. */
+  fallback?: Suggester;
+}
+
+/** Drop a held cert that the model re-suggested anyway (defense-in-depth on top of the prompt). */
+function notAlreadyHeld(name: string, heldTokenSets: Set<string>[]): boolean {
+  const keys = tokenSet(name);
+  return !heldTokenSets.some((held) => sameCert(held, keys));
+}
+
+/** Coerce one parsed object into a CertSuggestion, or null if it lacks the required fields. */
+function toValidatedSuggestion(raw: unknown, index: number): CertSuggestion | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const o = raw as Record<string, unknown>;
+  const name = typeof o.name === 'string' ? o.name.trim() : '';
+  const why = typeof o.why === 'string' ? o.why.trim() : '';
+  if (!name || !why) return null;
+  return {
+    name,
+    why,
+    issuingOrganization: typeof o.issuingOrganization === 'string' ? o.issuingOrganization : undefined,
+    typicalCost: typeof o.typicalCost === 'number' && o.typicalCost >= 0 ? o.typicalCost : undefined,
+    renewalFrequency: typeof o.renewalFrequency === 'string' ? o.renewalFrequency : undefined,
+    priority: typeof o.priority === 'number' ? o.priority : index + 1,
+  };
+}
+
+/** Extract the assistant text from a Bedrock Anthropic Messages response and parse the JSON array
+ *  of suggestions out of it (tolerating ```json fences / surrounding prose). Throws on no array. */
+function parseModelSuggestions(decoded: unknown): CertSuggestion[] {
+  const content = (decoded as { content?: Array<{ type?: string; text?: string }> })?.content;
+  const text = Array.isArray(content)
+    ? content.map((c) => (typeof c?.text === 'string' ? c.text : '')).join('\n')
+    : '';
+  const start = text.indexOf('[');
+  const end = text.lastIndexOf(']');
+  if (start === -1 || end <= start) throw new Error('no JSON array in model output');
+  const arr = JSON.parse(text.slice(start, end + 1)) as unknown;
+  if (!Array.isArray(arr)) throw new Error('model output is not an array');
+  return arr.map(toValidatedSuggestion).filter((s): s is CertSuggestion => s !== null);
+}
+
+/** Build the prompt instructing the model to return ONLY a JSON array, excluding held certs. */
+function buildPrompt(careerGoal: string, existingNames: string[]): string {
+  const held = existingNames.length ? existingNames.join(', ') : '(none yet)';
+  return [
+    `A high-school student is working toward a BSN nursing program. Their stated goal: "${careerGoal}".`,
+    `They already hold or track these certifications: ${held}.`,
+    'Suggest 4–8 healthcare certifications relevant to that goal that they do NOT already have.',
+    'Respond with ONLY a JSON array (no prose, no code fences) where each element is:',
+    '{"name": string, "issuingOrganization": string, "why": string (one sentence),',
+    '"typicalCost": number (USD, 0 if free), "renewalFrequency": string, "priority": number (1 = do first)}.',
+  ].join('\n');
+}
+
+/**
+ * Production suggester: ask Bedrock, validate + dedupe the result, and gracefully fall back to the
+ * curated list on any problem. Never throws — `/suggest` always returns something useful.
+ */
+export function makeBedrockSuggester(options: BedrockSuggesterOptions = {}): Suggester {
+  const fallback = options.fallback ?? curatedSuggester;
+  return async ({ careerGoal, existingNames }) => {
+    const modelId = options.modelId ?? process.env.BEDROCK_MODEL_ID;
+    if (!modelId) return fallback({ careerGoal, existingNames });
+    try {
+      // Lazy-require so importing this module (e.g. the route manifest at cold start) never forces
+      // the SDK to load until a suggestion is actually requested.
+      const { BedrockRuntimeClient, InvokeModelCommand } = await import('@aws-sdk/client-bedrock-runtime');
+      const client: BedrockInvoker =
+        options.client ?? (new BedrockRuntimeClient({}) as unknown as BedrockInvoker);
+      const command = new InvokeModelCommand({
+        modelId,
+        contentType: 'application/json',
+        accept: 'application/json',
+        body: new TextEncoder().encode(
+          JSON.stringify({
+            anthropic_version: 'bedrock-2023-05-31',
+            max_tokens: 1024,
+            messages: [{ role: 'user', content: buildPrompt(careerGoal, existingNames) }],
+          }),
+        ),
+      });
+      const res = await client.send(command);
+      if (!res.body) return fallback({ careerGoal, existingNames });
+      const decoded = JSON.parse(new TextDecoder().decode(res.body)) as unknown;
+      const heldTokenSets = existingNames.map(tokenSet);
+      const suggestions = parseModelSuggestions(decoded)
+        .filter((s) => notAlreadyHeld(s.name, heldTokenSets))
+        .sort((a, b) => a.priority - b.priority);
+      return suggestions.length > 0 ? suggestions : fallback({ careerGoal, existingNames });
+    } catch {
+      return fallback({ careerGoal, existingNames });
+    }
+  };
+}

@@ -7,15 +7,20 @@
 // never drift apart.
 //
 // The data client is resolved lazily (first request) so importing this manifest never requires
-// TABLE_NAME — only a live invocation does. The suggester defaults to the deterministic curated one
-// (see suggester.ts for why a Bedrock-backed suggester is not wired here yet).
+// TABLE_NAME — only a live invocation does. `/suggest` is wired to the Bedrock-backed suggester
+// (model id from BEDROCK_MODEL_ID env, never hardcoded); it falls back to the curated list on any
+// Bedrock error/timeout, so the endpoint is always useful.
 
 import type { RouteDef } from '../../shared/api/index.js';
 import { dataFromEnv, type Data } from '../../shared/data/index.js';
 import { makeHandlers } from './handlers.js';
+import { makeBedrockSuggester } from './suggester.js';
 
 let cached: Data | undefined;
-const handlers = makeHandlers({ getData: (): Data => (cached ??= dataFromEnv()) });
+const handlers = makeHandlers({
+  getData: (): Data => (cached ??= dataFromEnv()),
+  suggester: makeBedrockSuggester(),
+});
 
 export const routes: RouteDef[] = [
   { method: 'GET', path: '/certifications/expiring', handler: handlers.expiring },
