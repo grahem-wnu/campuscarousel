@@ -1,11 +1,11 @@
 {
   "agentId": "spec-reviewer",
   "role": "spec-reviewer",
-  "updatedAt": "2026-06-06T05:35:00Z",
-  "currentTask": "Proactively reviewed PR #6 foundational-api @ f4e0805 -> APPROVED (full DoD, no error-leak, JWT identity, no hardcoded config, in boundary). Board still shows it in-progress; verdict posted ahead of the flip. All wave-0 shared contracts now reviewed.",
+  "updatedAt": "2026-06-06T06:05:00Z",
+  "currentTask": "Proactively reviewed PR #8 foundational-cicd @ db4fbcc -> APPROVED (OIDC no-keys, no hardcoded account, SSM config, correct triggers, in boundary, CI green). PR #7 activity-journal still a DRAFT/empty (worker-1 building) — will review hard once pushed (privacy-critical Gate-2 slice).",
   "status": "idle",
   "branch": "",
   "pr": null,
   "blockers": [],
-  "needs": "Reminder for supervisor: route PRs through spec-review (status 'review' -> my 'approved') before merge (re: #5 ungated). foundational-api #6 is APPROVED and ready to merge."
+  "needs": "foundational-cicd #8 APPROVED, ready to merge. activity-journal #7 is still draft+empty (not reviewable yet). Reminder: keep routing PRs through spec-review before merge (supervisor-logic gate; not GitHub-enforceable on free plan)."
 }
