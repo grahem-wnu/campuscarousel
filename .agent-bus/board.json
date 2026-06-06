@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-06-06T21:00:00Z-wave2-6of9",
+  "updatedAt": "2026-06-06T21:40:00Z-w2-8of9",
   "writer": "supervisor",
   "phase": "fanout",
   "note": "FANOUT OPEN. Grahem authorized proceeding without his live Gate-2 UI walkthrough (privacy already proven via tests + the infra agent's live direct-invoke: keira sees private, kate 403 on real Lambda+DynamoDB). slice-gate sentinel stripped from all modules -> wave 2 eligible. DEFERRED: Grahem's own SPA click-through of private-entry visibility is folded into M6 final QA + must pass before Gate 3 (prod). Supervisor merges APPROVED+green PRs into dev only.",
@@ -342,7 +342,7 @@
         "foundational-design-system",
         "college-hub"
       ],
-      "blockedReason": "Grahem 2026-06-06: full courses\u00d7target-colleges prereq matrix REQUIRED (not the interim single-college checker) -> now depends on college-hub for college data. PR #18 may address item-1 (nav) now, but final approval/merge waits until college-hub merges + the matrix is wired."
+      "blockedReason": "college-hub MERGED (dep satisfied). Remaining: worker must wire the FULL courses\u00d7colleges prereq matrix (Grahem ruling) replacing the single-college checker, using college-hub data. Then reviewer re-APPROVE -> merge."
     },
     {
       "id": "teas-prep",
@@ -370,16 +370,17 @@
       "spec": "specs/modules/scholarship-tracker.md",
       "owner": null,
       "worktree": "",
-      "branch": "",
-      "pr": null,
-      "status": "todo",
+      "branch": "feat/scholarship-tracker",
+      "pr": 21,
+      "status": "merged",
       "dependsOn": [
         "foundational-data-layer",
         "foundational-auth",
         "foundational-api",
         "foundational-design-system"
       ],
-      "blockedReason": ""
+      "blockedReason": "",
+      "note": "MERGED (#21)."
     },
     {
       "id": "college-hub",
@@ -390,7 +391,7 @@
       "worktree": "",
       "branch": "feat/college-hub",
       "pr": 19,
-      "status": "review",
+      "status": "merged",
       "dependsOn": [
         "foundational-data-layer",
         "foundational-auth",
@@ -398,7 +399,8 @@
         "foundational-design-system",
         "foundational-hydration-bundle"
       ],
-      "blockedReason": "async hydration blocked until foundational-hydration-bundle lands (build-script glob + registry); then worker flips inline->makeSqsEnqueuer (1 line). Dedup item already fixed."
+      "blockedReason": "",
+      "note": "MERGED (#19)."
     },
     {
       "id": "peer-benchmark",
@@ -484,9 +486,9 @@
       "spec": "specs/modules/interview-prep.md",
       "owner": null,
       "worktree": "",
-      "branch": "",
-      "pr": null,
-      "status": "todo",
+      "branch": "feat/interview-prep",
+      "pr": 25,
+      "status": "review",
       "dependsOn": [
         "foundational-data-layer",
         "foundational-auth",
@@ -504,9 +506,9 @@
       "spec": "specs/modules/ai-assistant.md",
       "owner": null,
       "worktree": "",
-      "branch": "",
-      "pr": null,
-      "status": "todo",
+      "branch": "feat/ai-assistant",
+      "pr": 24,
+      "status": "merged",
       "dependsOn": [
         "foundational-data-layer",
         "foundational-auth",
@@ -515,7 +517,8 @@
         "activity-journal",
         "why-nursing"
       ],
-      "blockedReason": ""
+      "blockedReason": "",
+      "note": "MERGED (#24)."
     },
     {
       "id": "dashboard",
