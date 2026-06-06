@@ -72,22 +72,17 @@ async function loadCustomQuestions(data: Data, username: string): Promise<BankQu
   return Array.isArray(list) ? (list as BankQuestion[]) : [];
 }
 
-/** A session carries an owner (`createdBy`) stamped at create. The Interview type is frozen and has
- *  no owner field, so it's stored as an extra attribute (it round-trips: stripInternal only drops
- *  PK/SK/GSI). A foundational owner/visibility field is escalated; until it lands this is the owner. */
-type OwnedInterview = Interview & { createdBy?: string };
-const ownerOf = (s: Interview): string | undefined => (s as OwnedInterview).createdBy;
-
 /**
  * PRIVACY (read path): a `mock-practice` session's per-question `aiFeedback`/`answer` are derived from
  * the AI grounding, which includes keira's PRIVATE entries when she is the caller — so that content
  * must never reach another caller through the family-readable session. Strip those fields unless the
- * caller is the session's creator. Session metadata + the question text stay family-visible (spec);
- * `real-interview` logs carry no AI-grounded content and are untouched.
+ * caller is the session's owner (`Interview.createdBy`, the foundational field stamped at create).
+ * Session metadata + the question text stay family-visible (spec); `real-interview` logs carry no
+ * AI-grounded content and are untouched.
  */
 function scrubForReader(session: Interview, username: string): Interview {
   if (session.type !== 'mock-practice') return session;
-  if (ownerOf(session) === username) return session;
+  if (session.createdBy === username) return session;
   return {
     ...session,
     questions: (session.questions ?? []).map((q) => ({ ...q, answer: undefined, aiFeedback: undefined })),
@@ -178,8 +173,7 @@ export function makeHandlers(deps: InterviewDeps): InterviewHandlers {
       const { questionIndex, answer } = validateBody(answerSchema, ctx);
       const data = getData();
       const session = await requireSession(sessionId);
-      const owner = ownerOf(session);
-      if (owner && owner !== ctx.requester.username) {
+      if (session.createdBy !== ctx.requester.username) {
         throw Errors.forbidden('Only the person who started this mock can answer its questions');
       }
       const questions = session.questions ?? [];
