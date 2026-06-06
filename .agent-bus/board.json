@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-06-06T04:10:00Z",
+  "updatedAt": "2026-06-06T04:16:00Z",
   "writer": "supervisor",
   "phase": "infra",
   "gates": {
@@ -78,21 +78,21 @@
       "owner": "infrastructure",
       "worktree": ".worktrees/infra",
       "branch": "feat/infra",
-      "pr": null,
+      "pr": 2,
       "status": "in-progress",
       "dependsOn": [],
-      "blockedReason": ""
+      "blockedReason": "deploy+domain pending infra-agent retry; ~/.aws wnu creds now work via --profile wnu (earlier run lacked them). MUST use --profile wnu; bare aws = forbidden 791321067225."
     },
     {
       "id": "foundational-scaffold",
       "kind": "foundational",
       "wave": 0,
       "spec": "specs/foundational/cicd.md",
-      "owner": "worker",
+      "owner": "worker-1",
       "worktree": "",
       "branch": "feat/foundational-scaffold",
       "pr": 1,
-      "status": "review",
+      "status": "merged",
       "dependsOn": [],
       "blockedReason": "",
       "note": "root package.json (glob workspaces), tsconfig/eslint base, check:routes guard, test runner, conventions doc"
