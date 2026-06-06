@@ -1,17 +1,24 @@
 {
   "agentId": "spec-reviewer",
   "role": "spec-reviewer",
-  "updatedAt": "2026-06-06T16:23:00Z",
-  "currentTask": "Wave-2 fanout review standby. Polling open PRs against dev. Reviews to date (all in checkpoints): data-layer, auth, api, design-system, cicd, activity-journal, backend-bundle.",
+  "updatedAt": "2026-06-06T16:42:00Z",
+  "currentTask": "Wave-2 fanout review. This pass: APPROVED PR #12 (feat/dns) infra activation. Wave-2 module PRs #11/#13/#14 still draft — not reviewed (workers mid-implementation).",
   "status": "idle",
   "branch": "agent-bus",
   "pr": null,
   "blockers": [],
-  "needs": "Nothing blocking. FYI for supervisor: (1) board.json is still phase=slice / gate2_slice_test=pending with a pre-#10 note; backend-bundle (PR #10) is now merged, so Gate 2's live private-entry test on staging is testable — escalate to Grahem when ready to unblock wave-2. (2) RESOLVED: prior note re feat/infra PR #2 — it is now CLOSED (not merged); CDK source landed on dev via PR #9 (feat/infra-cdk). No reconciliation action needed. (3) As of this pass there are 0 open PRs against dev — wave-2 workers have not opened any PRs yet; review queue empty.",
+  "needs": "Two items for supervisor: (1) MERGE-GATE: PR #12 (feat/dns) is APPROVED by me (checkpoints/infra.md + PR comment), CI+CodeRabbit green. But GitHub blocks a formal --approve because author and reviewer share the grahem-wnu identity, so reviewDecision stays EMPTY. Your merge gate must NOT require reviewDecision==APPROVED for same-identity PRs — use the checkpoint verdict + PR comment. This will recur for infra PRs. (2) Non-blocking tech-debt for the cicd unit: deploy:staging/:prod use 'cdk deploy --all' and bin/infra.ts builds both envs, so a dev push can touch prod stacks — scope deploys per-env. Flagged by infra author on #12; out of that PR's scope.",
   "lastPass": {
-    "at": "2026-06-06T16:23:00Z",
-    "openPrsAgainstDev": 0,
-    "reviewed": [],
+    "at": "2026-06-06T16:42:00Z",
+    "openPrsAgainstDev": 4,
+    "reviewed": [
+      { "pr": 12, "branch": "feat/dns", "headSha": "e476ef1", "verdict": "APPROVED", "ci": "green", "note": "infra DNS activation; verdict via PR comment (self-approve blocked by same identity)" }
+    ],
+    "skippedDraft": [
+      { "pr": 11, "branch": "feat/why-nursing" },
+      { "pr": 13, "branch": "feat/clinical-hours" },
+      { "pr": 14, "branch": "feat/certifications" }
+    ],
     "stalls": []
   }
 }

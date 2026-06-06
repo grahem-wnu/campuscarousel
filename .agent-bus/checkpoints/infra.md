@@ -60,3 +60,41 @@ Infra ~$5–9/mo + Bedrock $10–30/mo ≈ **$15–39/mo**; domain ~$15/yr. Budg
 1. (Operator) provide domain registrant contact → I register `keirasjourney.com` + wire DnsStack.
 2. Supervisor merges PR #2 (Gate 1 pre-approved).
 3. Real Lambda handlers ship from `backend/` later (placeholders return 503 today).
+
+---
+
+## Spec-reviewer review — PR #12 (feat/dns), head `e476ef1` — ✅ APPROVED — 2026-06-06T16:40Z
+
+DNS activation: executes exactly the pre-stated, Gate-1-approved plan above (register →
+import zone → us-east-1 ACM cert → CloudFront). 3 files, +23/-? in `infra/` only.
+
+- **Completeness ✓** — both envs `dnsMode: defer→import`; A + AAAA (IPv6) dual-stack alias;
+  cross-region cert consumption. Live-verified in PR body (staging HTTP 200/TLS OK; prod TLS
+  valid + 301; prod 403 is the expected empty-SPA-bucket, publishes on Gate-3 dev→main).
+- **Correctness ✓** — `DnsStack` pinned to **us-east-1** (CloudFront ACM requirement);
+  `crossRegionReferences: true` on both `DnsStack` and `WebStack`; zone **imported** by id
+  (`Z03683613MXDVX9D5VIUV`) so NS delegation stays intact (no new zone).
+- **Security ✓** — S3-private + CloudFront OAC unchanged; http→https 301 enforced (verified).
+  No secrets: hostedZoneId/domainName are IaC config identifiers in `cdk.json` (consistent with
+  existing `domainName`/`bedrockSonnetProfile` entries), account id is **not** hardcoded
+  (`env.account` ← `cfg.account`).
+- **Conformance ✓** — matches infra spec §DnsStack ("import if owned"); entirely within the
+  `infra/` ownership lane; no shared-contract or single-table changes.
+- **Tests** — infra activation; validated by `cdk synth` in CI (green) + live curl evidence.
+  No app logic → no privacy/JWT surface, no privacy test applicable.
+- **CI** — `ci` SUCCESS, CodeRabbit SUCCESS.
+
+**Non-blocking → supervisor (NOT a change-request on this PR):** the author flagged that
+`deploy:staging`/`:prod` use `cdk deploy --all` and `bin/infra.ts` builds both staging+prod
+stacks, so a `dev` push can also touch prod stacks. Pre-existing, out of this PR's scope; belongs
+to the **cicd** unit (scope the deploy to per-env stacks). DNS activation makes it more impactful.
+
+Verdict: **APPROVED** — clean + green.
+
+⚠️ **GitHub `--approve` is impossible here:** PR #12's author and the reviewer share the same
+GitHub identity (grahem-wnu), so GitHub rejects self-approval ("Can not approve your own pull
+request"). `reviewDecision` will stay empty. I posted the verdict as a PR review **comment**
+instead. **Supervisor: use this checkpoint's APPROVED + the PR comment as the merge signal — the
+merge gate cannot rely on `reviewDecision` for same-identity PRs.** (This will recur for any infra
+PR authored under grahem-wnu.) Supervisor to merge (#10 backend-bundle already merged, so the PR
+body's merge-ordering is satisfied).
