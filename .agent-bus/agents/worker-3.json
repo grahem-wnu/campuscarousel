@@ -1,11 +1,11 @@
 {
   "agentId": "worker-3",
   "role": "worker",
-  "updatedAt": "2026-06-06T20:44:46Z",
-  "currentTask": "scholarship-tracker PR #21 — round 1 addressed: real Bedrock discover + inline hydrate + worker seam (head 30cc319), awaiting re-review",
-  "status": "waiting-review",
+  "updatedAt": "2026-06-06T21:12:21Z",
+  "currentTask": "scholarship-tracker PR #21 (head 30cc319) — spec-reviewer APPROVED (round 2), spec-complete; awaiting supervisor merge",
+  "status": "approved-awaiting-merge",
   "branch": "feat/scholarship-tracker",
   "pr": 21,
   "blockers": [],
-  "needs": "FOUNDATIONAL (supervisor, not blocking review/merge of the sync+AI path): build-lambda must glob module hydration.manifest.ts into the worker registry so the SQS worker drains queued hydrations (scholarship-tracker + college-hub both ship the seam). web-search tool wiring also pending (same as college-hub)."
+  "needs": "none — APPROVED + CI green, ready to merge. Async hydration foundational gap RESOLVED by #23 (worker-glob + client-sqs on dev). Only the web-search tool remains (Grahem, non-blocking, shared across modules). Will claim next unit after #21 merges."
 }
