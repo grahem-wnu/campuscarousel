@@ -49,11 +49,12 @@ export function bestTeasScore(teas: readonly Teas[]): number | undefined {
   return scores.length ? Math.max(...scores) : undefined;
 }
 
-/** A certification "counts" once it is earned: an explicit earned/active/renewed status, or a
- *  recorded dateEarned. Planned/in-progress certs don't count toward the competitive comparison. */
+/** A certification "counts" once it is earned and still valid: an active/renewed/expiring-soon
+ *  status, or a recorded dateEarned. Planned/in-progress/expired certs don't count toward the
+ *  competitive comparison (an expired CNA isn't a current edge, even with a dateEarned). */
 export function isEarnedCert(cert: Certification): boolean {
-  if (cert.status === 'active' || cert.status === 'renewed') return true;
-  if (cert.status === 'planned' || cert.status === 'in-progress') return false;
+  if (cert.status === 'active' || cert.status === 'renewed' || cert.status === 'expiring-soon') return true;
+  if (cert.status === 'planned' || cert.status === 'in-progress' || cert.status === 'expired') return false;
   return Boolean(cert.dateEarned);
 }
 

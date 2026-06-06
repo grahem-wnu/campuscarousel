@@ -155,10 +155,11 @@ export function parseGaps(raw: string): GapsAnalysis {
 }
 
 /**
- * Compose a researcher from a model invoker. `research` returns `{}` on any invocation/parse
- * failure (a bad model day surfaces as "no new data", never a 500). `analyzeGaps` rejects with a
- * clean 503 on failure so the gaps view can say "try again" rather than rendering an empty analysis
- * as if it were real.
+ * Compose a researcher from a model invoker. `research` is an explicit user action (the Refresh
+ * button), so an invocation failure SURFACES as a clean 502 rather than silently persisting an
+ * empty benchmark and stamping lastDataRefresh as if it succeeded. Unparseable model output is
+ * still tolerated (`parseResearch` returns `{}` without throwing). `analyzeGaps` likewise rejects
+ * on failure so the gaps view says "try again" instead of rendering an empty analysis as real.
  */
 export function makeResearcher(invoke: ModelInvoker): BenchmarkResearcher {
   return {
@@ -166,8 +167,9 @@ export function makeResearcher(invoke: ModelInvoker): BenchmarkResearcher {
       try {
         return parseResearch(await invoke(buildResearchPrompt(college, focus)));
       } catch (err) {
+        if (err instanceof ApiError) throw err; // a configured-but-unavailable 503 must propagate
         console.error('peer-benchmark: AI research failed', err);
-        return {};
+        throw new ApiError(502, 'internal', 'Benchmark research could not be completed right now. Please try again.');
       }
     },
     async analyzeGaps(stats, rows) {

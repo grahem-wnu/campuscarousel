@@ -87,11 +87,16 @@ export function makeHandlers(getData: () => Data, getResearcher: () => Benchmark
       const college = await data.colleges.get(id);
       if (!college) throw Errors.notFound('College not found');
 
-      const profile = await getResearcher().research(college, input.focus);
-      const merged = await data.benchmarks.mergePreservingUserEdits(id, profile);
-      const keira = await gatherStats(data, ctx.requester);
-      const comparison = compareToBenchmark(keira, merged);
-      const saved = await data.benchmarks.mergePreservingUserEdits(id, { keirasComparison: comparison });
+      const [existing, profile, keira] = await Promise.all([
+        data.benchmarks.get(id),
+        getResearcher().research(college, input.focus),
+        gatherStats(data, ctx.requester),
+      ]);
+      // Compute the comparison against what will actually be persisted (existing values with the AI
+      // profile applied), then write once so lastDataRefresh is stamped a single time.
+      const preview = { ...(existing ?? { collegeId: id }), ...profile } as Benchmark;
+      const comparison = compareToBenchmark(keira, preview);
+      const saved = await data.benchmarks.mergePreservingUserEdits(id, { ...profile, keirasComparison: comparison });
 
       return {
         status: 200,
