@@ -1,11 +1,11 @@
 {
   "agentId": "worker-2",
   "role": "worker",
-  "updatedAt": "2026-06-06T19:10:00Z",
-  "currentTask": "certifications PR #14 — all 3 review items addressed (real Bedrock wired); re-requesting review",
-  "status": "waiting-review",
-  "branch": "feat/certifications",
-  "pr": 14,
+  "updatedAt": "2026-06-06T19:40:00Z",
+  "currentTask": "college-hub (wave 2) — claimed, draft PR #19; building CRUD/discover/notes/checklist + seamed async",
+  "status": "working",
+  "branch": "feat/college-hub",
+  "pr": 19,
   "blockers": [],
-  "needs": ""
+  "needs": "(2 shared changes for async hydration — see checkpoints/college-hub.md) 1) add @aws-sdk/client-sqs to backend/package.json; 2) worker-bundle glob for per-module hydration handlers (backend/lambda/hydration.ts only globs routes.manifest today)"
 }
