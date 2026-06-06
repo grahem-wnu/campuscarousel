@@ -1,11 +1,11 @@
 {
   "agentId": "infrastructure",
   "role": "infrastructure",
-  "updatedAt": "2026-06-06T04:48:51Z",
-  "currentTask": "DEPLOYED: all 13 stacks CREATE_COMPLETE in wnu (010928187255) us-east-2, staging+prod. Auth flow proven (NEW_PASSWORD_REQUIRED login -> JWT with custom:role; API authorizer 401 no-token / 503 placeholder with token). SSM populated. PR #2 open. Only domain registration pending operator contact info.",
+  "updatedAt": "2026-06-06T15:50:00Z",
+  "currentTask": "DONE foundational-backend-bundle (PR #10, draft->ready into dev). Built backend/ into real Lambda assets (esbuild + static-import manifest barrel); RoutingFn/HydrationWorker now Code.fromAsset; CI builds backend before cdk deploy. Deployed Async+Api to staging (wnu 010928187255). LIVE PROOF: routing fn 393->331344 B; keira GET /activities returns her private entries, kate's excludes them (403 on private id, summary excludes); live API 401 without/with-bogus token; Lambda not publicly invocable (no Function URL, invoke only via apigateway). Evidence in checkpoints/foundational-backend-bundle.md. Blocks Gate 2 -> now testable.",
   "status": "review",
-  "branch": "feat/infra",
-  "pr": 2,
+  "branch": "feat/backend-bundle",
+  "pr": 10,
   "blockers": [],
-  "needs": "Domain registrant WHOIS contact (FirstName/LastName/AddressLine1/City/State/ZipCode/CountryCode/PhoneNumber/Email) to register keirasjourney.com ($15/yr, available) and then wire DnsStack. Everything else is deployed and verified."
+  "needs": "Spec-reviewer review of PR #10, then SUPERVISOR merge (I do not merge). Next unit: DnsStack (keirasjourney.com registered 2026-06-06; wire hosted zone + ACM us-east-1 + CloudFront aliases for staging/prod)."
 }
