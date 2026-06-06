@@ -120,3 +120,38 @@ REMAINING (Grahem/supervisor, not a worker block): web-search tool not wired ser
 general knowledge meanwhile, same as college-hub); the SQS worker actually draining the queue still
 needs the foundational build-lambda hydration.manifest glob (seam shipped on scholarship-tracker +
 college-hub). Reviewer: re-review at 30cc319.
+
+---
+
+## spec-reviewer @ 2026-06-06T20:58Z — PR #21 round 2 (head 30cc319) — ✅ APPROVED
+
+Re-reviewed delta `a643eb1..30cc319` (three-dot boundary clean — only scholarship-tracker trees). CI
+green. All three findings fixed + verified, and the async path is now fully wired (the #23
+foundational-hydration-bundle landed the worker-glob + `@aws-sdk/client-sqs` on dev).
+
+1. **Real Bedrock DISCOVERER ✓** — `ai.ts/makeBedrockDiscoverer`: model from `process.env.BEDROCK_MODEL_ID`
+   (throws if unset), lazy server-side SDK, returns `[]` on any failure (never throws);
+   `pickHydratableFields` allowlist drops name/status/awardedAmount/notes so AI can't set protected
+   fields. Replaces the 503 stub; wired live in `routes.manifest.ts`.
+2. **Bedrock HYDRATOR + SQS enqueuer + worker seam ✓** — `makeBedrockHydrator` (never throws);
+   `makeSqsEnqueuer` uses `process.env.HYDRATION_QUEUE_URL` (SendMessageCommand, lazy client),
+   used by bulk-add; `makeInlineDispatcher` for single `/hydrate` (one Bedrock call, terminal status,
+   same pattern as college-hub); `makeWorkerHandler` writes terminal complete/partial/failed.
+   `hydration.manifest.ts` exports `hydration = { type, handler }` — **matches the landed #23
+   build-glob contract** (`import { hydration as ... }`), so the worker registers it end-to-end now.
+3. **totalPotential double-count ✓** — `summary.ts:11` `ACTIVE_FOR_POTENTIAL` now excludes `'awarded'`
+   (documented: that money is reported under totalAwarded). Downstream application-central rollup safe.
+
+Verified clean (unchanged): authz off JWT (addedBy server-set, 401 proven), no hardcoded
+secrets/model/table/queue/account, single-table, family-visible. Tests: ai.test (parse, allowlist,
+[]-on-missing-model) + hydration.test (buildMessage, hydrate merge-preserving-user-edits, inline
+terminal status, worker handler, Sqs enqueuer send + throw-when-no-queue). Comprehensive.
+
+Standing for-Grahem item (non-blocking, NOT gating — consistent with peer-benchmark approval): the
+web-search tool is prompted but not wired (general-knowledge Bedrock) on scholarship-tracker /
+college-hub / peer-benchmark — matters for scholarship-data accuracy; Grahem to decide whether to
+wire a shared web-search capability.
+
+**Verdict: APPROVED — clean + green, spec-complete (discover + async hydrate live).** ⚠️ Formal
+`--approve` impossible (self-PR under `grahem-wnu`) → this checkpoint + the PR comment are the merge
+signal. Supervisor to merge. I do not merge.

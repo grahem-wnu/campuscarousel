@@ -1,28 +1,27 @@
 {
   "agentId": "spec-reviewer",
   "role": "spec-reviewer",
-  "updatedAt": "2026-06-06T20:45:00Z",
-  "currentTask": "Wave-2 review. This pass: #22 peer-benchmark APPROVED (privacy-filtered cross-module aggregation verified). #19 rebase-only (still async-blocked). #18/#20 approved awaiting merge. #21 changes (not re-pushed). foundational-hydration-bundle spec landed (infra scoping the worker-glob).",
+  "updatedAt": "2026-06-06T21:05:00Z",
+  "currentTask": "Wave-2 review. This pass: #21 scholarship-tracker APPROVED (real Bedrock discoverer+hydrator+SQS worker seam, all 3 findings fixed; async now wired post-#23). #20/#22/#23 merged. #19 college-hub now UNBLOCKED (worker-glob landed) but worker hasn't flipped yet. #18 mergeable/clean awaiting merge.",
   "status": "idle",
   "branch": "agent-bus",
   "pr": null,
   "blockers": [],
-  "needs": "FOR SUPERVISOR — READY TO MERGE (3 approved, not yet merged): #18 course-planner, #20 teas-prep, #22 peer-benchmark. All APPROVED + CI-green; use checkpoint+PR-comment as the gate (self-PR under grahem-wnu → reviewDecision empty). Please merge so wave-2 (M3) can close. PROGRESS on the async escalation: specs/foundational/hydration-bundle.md now exists on dev (foundational-hydration-bundle, owner=infrastructure) scoping exactly the 2 pieces I raised — (1) @aws-sdk/client-sqs (LANDED), (2) build-lambda.mjs glob of module hydration.manifest.ts into the worker hydrationRegistry (STILL PENDING). Once #2 lands: #19 college-hub flips inline→SQS (1 line, seam ready) → approvable; #21 scholarship-tracker can wire its worker handler. STILL OPEN: #19 college-hub (async-blocked on the worker-glob; rebase-only this pass), #21 scholarship-tracker (CHANGES — AI entirely stubbed, in-lane work: real Bedrock discoverer + hydrator + worker seam + totalPotential double-count; not re-pushed yet). PENDING GRAHEM: web-search tool not wired on college-hub/scholarship-tracker/peer-benchmark (benchmark+discovery data accuracy); #18 prereq matrix (gated on #19); certifications training-progress field. RECURRING: all PRs under grahem-wnu → merge gate reads checkpoint+PR-comment, not reviewDecision.",
+  "needs": "FOR SUPERVISOR — READY TO MERGE (2 approved + clean): #18 course-planner (MERGEABLE/CLEAN — the earlier UNKNOWN was transient GitHub lag, NOT a conflict; please merge) and #21 scholarship-tracker (APPROVED this pass, MERGEABLE/CLEAN). Use checkpoint+PR-comment as the gate (self-PR under grahem-wnu → reviewDecision empty). MERGED since last: #20 teas-prep, #22 peer-benchmark, #23 hydration-bundle. ASYNC ESCALATION RESOLVED: #23 foundational-hydration-bundle landed both pieces on dev (@aws-sdk/client-sqs + build-lambda glob of module hydration.manifest.ts → worker registry). #19 college-hub is now FULLY UNBLOCKED — its SQS seam is ready; the worker just needs to flip routes.manifest inline→makeSqsEnqueuer (1 line) and re-push, then it's approvable. (Worker #19/supervisor: please nudge the flip — it's the last wave-2 module not approved.) WAVE-2 STATUS: 9 modules — merged: why-nursing, clinical-hours, goal-tracker, certifications, teas-prep, peer-benchmark (6); approved-awaiting-merge: course-planner #18, scholarship-tracker #21 (2); needs the 1-line async flip: college-hub #19 (1). Once those 3 land, M3 (all wave-2 merged) closes → wave-3 unblocks. PENDING GRAHEM (non-blocking): web-search tool not wired on college-hub/scholarship-tracker/peer-benchmark (data accuracy); #18 prereq matrix (gated on #19 merge); certifications training-progress field. RECURRING: all PRs under grahem-wnu → merge gate reads checkpoint+PR-comment, not reviewDecision.",
   "lastPass": {
-    "at": "2026-06-06T20:45:00Z",
-    "openPrsAgainstDev": 5,
+    "at": "2026-06-06T21:05:00Z",
+    "openPrsAgainstDev": 3,
     "reviewed": [
-      { "pr": 22, "branch": "feat/peer-benchmark", "headSha": "cfc753e", "round": 1, "verdict": "APPROVED", "ci": "green", "note": "privacy-filtered cross-module aggregation verified (filterForRequester off JWT before aggregating clinical/activities); comparison math tested; no cross-module imports; nav secondary; 65 tests" }
+      { "pr": 21, "branch": "feat/scholarship-tracker", "headSha": "30cc319", "round": 2, "verdict": "APPROVED", "ci": "green", "note": "real Bedrock discoverer+hydrator (env model, fallback, allowlist) + SQS enqueuer (HYDRATION_QUEUE_URL) + worker seam matching landed #23 build-glob + totalPotential fixed; comprehensive tests; spec-complete" }
     ],
     "approvedAwaitingMerge": [
-      { "pr": 18, "branch": "feat/course-planner" },
-      { "pr": 20, "branch": "feat/teas-prep" },
-      { "pr": 22, "branch": "feat/peer-benchmark" }
+      { "pr": 18, "branch": "feat/course-planner", "mergeable": "CLEAN" },
+      { "pr": 21, "branch": "feat/scholarship-tracker", "mergeable": "CLEAN" }
     ],
-    "skippedNotRepushed": [
-      { "pr": 19, "branch": "feat/college-hub", "headSha": "a4dc3ce", "note": "rebase-only; async-blocked on worker-glob (still pending on dev); round-2 verdict stands" },
-      { "pr": 21, "branch": "feat/scholarship-tracker", "headSha": "a643eb1", "note": "CHANGES (AI stubbed, in-lane work + totalPotential); not re-pushed" }
+    "unblockedAwaitingWorker": [
+      { "pr": 19, "branch": "feat/college-hub", "headSha": "a4dc3ce", "note": "worker-glob landed (#23); flip routes.manifest inline→makeSqsEnqueuer (1 line) + re-push → approvable" }
     ],
+    "merged": [20, 22, 23],
     "stalls": []
   }
 }
