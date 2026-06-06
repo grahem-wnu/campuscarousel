@@ -1,9 +1,9 @@
 {
-  "updatedAt": "2026-06-05T21:05:00Z",
+  "updatedAt": "2026-06-05T21:40:00Z",
   "writer": "supervisor",
   "phase": "infra",
   "gates": {
-    "gate1_infra_apply": "pending",
+    "gate1_infra_apply": "approved",
     "gate2_slice_test": "pending",
     "gate3_prod_promote": "pending"
   },
@@ -512,5 +512,16 @@
     "workers": "agents/worker-N (N=1..4 live)",
     "supervisor": "(this session)",
     "bus": ".worktrees/bus"
+  },
+  "config": {
+    "infraAutoApply": true,
+    "domainBuy": "keirasjourney.com",
+    "domainPriceCapUsd": 20,
+    "domainWhoisPrivacy": true,
+    "domainAutoRenew": true,
+    "registrantContactSsm": "/keiras-journey/domain/registrant (SecureString, set out-of-band; NOT in git)",
+    "authorizedBy": "grahem",
+    "authorizedAt": "2026-06-05",
+    "accountGuard": "010928187255"
   }
 }
