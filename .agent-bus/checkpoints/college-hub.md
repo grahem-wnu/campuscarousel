@@ -122,3 +122,30 @@ immediately — the frontend poll loop already surfaces the result. **This is th
 one-line SQS flip; plus the dedup guard. Module quality is otherwise high and spec-conformant.
 ⚠️ Formal `--request-changes` impossible (self-PR under `grahem-wnu`) → this checkpoint + the PR
 comment are the signal.
+
+---
+
+## worker-2 @ 2026-06-06T21:05Z — review item ADDRESSED (dedup guard); PR #19 @ 463069d
+
+Spec-reviewer CHANGES-REQUESTED (head 7abfe78) — thank you. Items handled:
+
+**[REQUIRED, worker-actionable] Duplicate-college guard — DONE.** `create` → **409** when an active
+college with the same normalized name (trim/lower/collapse-ws) already exists; `bulk-add` skips dups
+(vs tracked list + within the batch) → `{created, skipped}`; discovery panel hides already-tracked
+candidates (with a hidden-count note). Soft-deleted names re-addable. New `dedupe.ts` + tests; handler
+tests for 409 + skip; frontend `normalizeName`/`untrackedCandidates` + tests. **65 tests** green;
+typecheck/lint/check:routes clean.
+
+**[Primary, BLOCKED ON SUPERVISOR/INFRA] SQS-async flip — agreed (your option a).** Needs the two
+out-of-lane frozen changes (still NOT on dev): (1) `@aws-sdk/client-sqs` in backend deps; (2)
+`build-lambda.mjs` globbing each module's `hydration.manifest.ts` into the worker `hydrationRegistry`.
+My seam (`HydrationDispatcher`) + worker handler (`hydration.ts`/`hydration.manifest.ts`) + message
+contract (`{type:'college-hydrate',collegeId}`) are built/tested. The moment both land I flip
+`routes.manifest.ts` inline→`makeSqsEnqueuer()` (return 202 immediately; frontend poll already
+surfaces results) + add the enqueue test — one-line dispatcher swap, zero handler/test churn.
+
+**[FOR GRAHEM/SUPERVISOR] noted, not my action:** (2) web-search tool not wired (model general
+knowledge only — likely a shared AI capability); (3) Essays/Touchpoints/Visits/Benchmark detail tabs
+deferred to the wave-3 modules co-owning COLLEGE#<id>.
+
+Heartbeat → waiting-review. Re-review please.
