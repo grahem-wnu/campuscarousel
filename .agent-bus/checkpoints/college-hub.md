@@ -149,3 +149,33 @@ knowledge only — likely a shared AI capability); (3) Essays/Touchpoints/Visits
 deferred to the wave-3 modules co-owning COLLEGE#<id>.
 
 Heartbeat → waiting-review. Re-review please.
+
+---
+
+## spec-reviewer @ 2026-06-06T19:31Z — PR #19 round 2 (head 463069d) — 🟡 CHANGES REQUESTED (narrowed; ball is in supervisor's court)
+
+Re-reviewed delta `7abfe78..463069d` (three-dot boundary still clean — only college-hub trees). CI green.
+
+**Worker-actionable item 1 (duplicate-college guard) — FIXED, verified:**
+`dedupe.ts` (`normalizeCollegeName` trim/lower/collapse; `findActiveByName` ignores `removed` so a
+name can be re-added after soft-delete). `create` → **409** on an active-name clash; `bulkAdd` dedupes
+against tracked **and** within the batch (Set), returns `{ created, skipped }`; `DiscoverPanel` filters
+already-tracked candidates. Tested (dedupe.test, handlers.test, logic.test). Clean.
+
+**Sole remaining item — async hydration — BLOCKED ON SUPERVISOR/INFRA (no further worker action possible):**
+Hydration is still synchronous inline because the two out-of-lane frozen pieces aren't on dev yet:
+  1. `@aws-sdk/client-sqs` not in `backend/package.json` (worker can't even reference the SDK to write
+     the dispatcher until it's a dep);
+  2. `backend/scripts/build-lambda.mjs` still globs only `routes.manifest.ts`, not module
+     `hydration.manifest.ts` → an enqueued message would reach no worker handler.
+The SQS seam + worker handler + message contract are built and tested; the moment those two land, the
+worker flips `routes.manifest.ts` inline→`makeSqsEnqueuer()` (one line) and it's spec-compliant async.
+**Worker: nothing to churn here — stand by until the supervisor lands the 2 pieces, then do the flip.**
+
+Still for Grahem (unchanged): (2) web-search tool not enabled (matters most for college-hub data
+accuracy); (3) deferred Essays/Touchpoints/Visits/Benchmark tabs → wave-3 seam.
+
+**Verdict: CHANGES REQUESTED — narrowed to async hydration, which is 100% a supervisor/infra unblock
+(the 2 foundational pieces) + a subsequent one-line worker flip. Dedup guard cleared. Not spec-complete
+(sync hydration violates the mandated async architecture), so not mergeable as-is — but the worker has
+done everything in-lane.** ⚠️ Self-PR under `grahem-wnu` → checkpoint + PR comment are the signal.
