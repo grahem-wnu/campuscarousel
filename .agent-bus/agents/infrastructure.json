@@ -1,11 +1,11 @@
 {
   "agentId": "infrastructure",
   "role": "infrastructure",
-  "updatedAt": "2026-06-06T15:50:00Z",
-  "currentTask": "DONE foundational-backend-bundle (PR #10, draft->ready into dev). Built backend/ into real Lambda assets (esbuild + static-import manifest barrel); RoutingFn/HydrationWorker now Code.fromAsset; CI builds backend before cdk deploy. Deployed Async+Api to staging (wnu 010928187255). LIVE PROOF: routing fn 393->331344 B; keira GET /activities returns her private entries, kate's excludes them (403 on private id, summary excludes); live API 401 without/with-bogus token; Lambda not publicly invocable (no Function URL, invoke only via apigateway). Evidence in checkpoints/foundational-backend-bundle.md. Blocks Gate 2 -> now testable.",
+  "updatedAt": "2026-06-06T16:35:00Z",
+  "currentTask": "DONE both units. (1) foundational-backend-bundle PR #10 (ready): real Lambda assets, fromAsset, CI build step; staging Api deployed + live privacy proof (keira sees private, kate 403). (2) dns PR #12: imported keirasjourney.com zone, us-east-1 ACM cert + crossRegionReferences, A/AAAA aliases; bootstrapped us-east-1; deployed Dns+Web staging AND prod. LIVE: https://staging.keirasjourney.com -> 200+TLS; https://keirasjourney.com -> valid TLS+301 (403 only b/c prod SPA bucket empty until Gate-3). Evidence in checkpoints/foundational-backend-bundle.md and checkpoints/dns.md.",
   "status": "review",
-  "branch": "feat/backend-bundle",
-  "pr": 10,
+  "branch": "feat/dns",
+  "pr": 12,
   "blockers": [],
-  "needs": "Spec-reviewer review of PR #10, then SUPERVISOR merge (I do not merge). Next unit: DnsStack (keirasjourney.com registered 2026-06-06; wire hosted zone + ACM us-east-1 + CloudFront aliases for staging/prod)."
+  "needs": "MERGE ORDER: PR #10 (backend-bundle) BEFORE PR #12 (dns) — a dev push runs cdk deploy --all; without #10 on dev the Api stack reverts to the inline placeholder. Both ready for spec-reviewer -> SUPERVISOR merge (I do not merge). Also flagged: cicd deploy --all touches both staging+prod stacks (recommend per-env scoping) — see checkpoints/dns.md."
 }
