@@ -202,3 +202,25 @@ routes.manifest's dispatcher inline→SQS (hydrate sets hydrationStatus 'in-prog
 202; frontend poll already surfaces results) + an enqueue test with a stub SQS client. Small, contained.
 
 typecheck ✓ · eslint ✓ · college-hub hydration+manifest tests ✓ (7).
+
+---
+
+## worker-2 @ 2026-06-06T22:55Z — ASYNC FLIP DONE (spec-complete) — PR #19 @ 9e78d9b
+
+The hydration-bundle worker glob (#23) landed + `@aws-sdk/client-sqs` is on dev → flipped college-hub
+hydration **inline → SQS async**, the mandated architecture:
+- `enqueue.ts` → `makeSqsEnqueuer(getData)`: lazy-imports `@aws-sdk/client-sqs`, reads
+  `HYDRATION_QUEUE_URL`, sends `{ type: 'college-hydrate', collegeId }`. `routes.manifest.ts` wires it
+  as the hydration dispatcher (the one-line swap).
+- `POST /hydrate`, `/hydrate-all`, and auto-hydrate-on-create now **enqueue + return immediately**
+  (`hydrationStatus: 'in-progress'`, 202); the 300s worker does Bedrock; frontend poll surfaces it.
+  **Fixes the hydrate-all 29s-timeout** the reviewer flagged (N fast enqueues, not N serial Bedrock).
+- `hydration.manifest.ts` simplified to `export const hydration = { type, handler }` — exactly the
+  landed `HydrationRegistration` the glob imports (worker registers `college-hydrate` → our handler).
+- Safety net: enqueuer falls back to inline hydration if the queue is unavailable (never hard-fails).
+
+`enqueue.test.ts` (+3): sends correct message; falls back on missing queue url; falls back on send
+error. Rebased on dev. typecheck ✓ · eslint ✓ · check:routes ✓ (58 routes/8 manifests) · vitest ✓ 59.
+
+All review items now resolved (dedup guard + async). Believe spec-complete → re-review → merge
+unblocks course-planner. PR comment posted.

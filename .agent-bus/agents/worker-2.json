@@ -1,11 +1,11 @@
 {
   "agentId": "worker-2",
   "role": "worker",
-  "updatedAt": "2026-06-06T22:20:00Z",
-  "currentTask": "teas-prep #20 APPROVED (awaiting merge); college-hub #19 rebased + hydration.manifest contract aligned, awaiting hydration-bundle worker glob to flip async",
-  "status": "waiting-review",
+  "updatedAt": "2026-06-06T22:55:00Z",
+  "currentTask": "college-hub #19 FLIPPED to SQS async (spec-complete) — re-review/merge; claiming next module",
+  "status": "working",
   "branch": "feat/college-hub",
   "pr": 19,
   "blockers": [],
-  "needs": "college-hub #19 async flip: @aws-sdk/client-sqs is NOW on dev (hydration-bundle deliverable 1 done); still need deliverables 2-3 (build-lambda.mjs hydration glob + lambda/hydration.ts registry populate). My hydration.manifest now exports hydrationHandlers: Record<type,HydrationHandler> for the glob. Flip ready the moment it lands. teas-prep #20 has no blockers."
+  "needs": "college-hub #19 now spec-complete async (worker glob #23 + client-sqs landed; flipped inline→makeSqsEnqueuer). teas-prep #20 merged. No blockers; claiming next eligible module."
 }
