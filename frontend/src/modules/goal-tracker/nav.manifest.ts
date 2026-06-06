@@ -6,9 +6,11 @@ import type { NavEntry } from '../../shared/shell';
 
 export const nav: NavEntry[] = [
   {
+    // Secondary nav: the design-system spec fixes the 5 primary tabs (Dashboard, Journal, Colleges,
+    // Scholarships, Timeline); everything else lives in the secondary dropdown/overflow.
     id: 'goals',
     label: 'Goals',
-    group: 'primary',
+    group: 'secondary',
     order: 30,
     route: '/goals',
     icon: 'goal',

@@ -59,9 +59,22 @@ describe('create (POST /goals)', () => {
     await expectStatus(h.create(ctx({ body: { title: 'x', createdBy: 'someone-else' } })), 422);
   });
 
-  it('persists a valid progress value', async () => {
+  it('persists a manual progress value when there are no milestones', async () => {
     const res = await h.create(ctx({ body: { title: 'g', progress: 100 } }));
     expect((res.body as Goal).progress).toBe(100);
+  });
+
+  it('derives progress from milestones server-side, overriding any sent progress', async () => {
+    const res = await h.create(
+      ctx({
+        body: {
+          title: 'g',
+          progress: 5, // ignored: milestones drive progress
+          milestones: [{ label: 'a', completed: true }, { label: 'b' }],
+        },
+      }),
+    );
+    expect((res.body as Goal).progress).toBe(50);
   });
 
   it('stamps milestone ids and completedDate', async () => {
@@ -146,11 +159,34 @@ describe('update (PUT /goals/:id)', () => {
     await expectStatus(h.update(ctx({ params: { id }, body: { progress: 150 } })), 422);
   });
 
-  it('re-stamps milestone completion on toggle', async () => {
+  it('re-stamps milestone completion on toggle and derives progress server-side', async () => {
     const id = await seedGoal();
-    const res = await h.update(ctx({ params: { id }, body: { milestones: [{ id: 'm1', label: 'a', completed: true }] } }));
-    const ms = (res.body as Goal).milestones ?? [];
-    expect(ms[0]?.completedDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    const res = await h.update(
+      ctx({
+        params: { id },
+        body: {
+          milestones: [
+            { id: 'm1', label: 'a', completed: true },
+            { id: 'm2', label: 'b', completed: false },
+          ],
+        },
+      }),
+    );
+    const goal = res.body as Goal;
+    expect(goal.milestones?.[0]?.completedDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(goal.progress).toBe(50);
+  });
+
+  it('keeps progress milestone-derived even when a manual value is also sent', async () => {
+    const id = await seedGoal({ milestones: [{ id: 'm1', label: 'a', completed: true }] });
+    const res = await h.update(ctx({ params: { id }, body: { progress: 0 } }));
+    expect((res.body as Goal).progress).toBe(100); // milestones win over the manual 0
+  });
+
+  it('persists a manual progress value when the goal has no milestones', async () => {
+    const id = await seedGoal();
+    const res = await h.update(ctx({ params: { id }, body: { progress: 60 } }));
+    expect((res.body as Goal).progress).toBe(60);
   });
 
   it('404 when missing', async () => {

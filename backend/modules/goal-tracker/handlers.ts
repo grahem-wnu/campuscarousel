@@ -13,7 +13,7 @@ import {
   type RouteDef,
 } from '../../shared/api/index.js';
 import { isoNow, newId, type Data, type Goal } from '../../shared/data/index.js';
-import { normaliseMilestones } from './progress.js';
+import { normaliseMilestones, progressFromMilestones } from './progress.js';
 import { createSchema, idParamSchema, listQuerySchema, suggestSchema, updateSchema } from './schema.js';
 import type { GoalSuggester } from './suggester.js';
 
@@ -55,10 +55,15 @@ export function makeHandlers(getData: () => Data, getSuggester: () => GoalSugges
     // (the client posts an accepted/edited suggestion here like any other goal).
     create: async (ctx) => {
       const input = validateBody(createSchema, ctx);
+      const milestones = normaliseMilestones(input.milestones, newId, today());
       const created = await getData().goals.create({
         ...input,
         status: input.status ?? 'not-started',
-        milestones: normaliseMilestones(input.milestones, newId, today()),
+        milestones,
+        // Server owns progress: milestone completion drives it when milestones exist, otherwise the
+        // manually-set value. So a non-UI consumer (e.g. the dashboard widget) reads a correct
+        // Goal.progress, not a stale client value.
+        progress: progressFromMilestones(milestones) ?? input.progress,
         createdBy: ctx.requester.username,
       });
       return { status: 201, body: created };
@@ -74,9 +79,18 @@ export function makeHandlers(getData: () => Data, getSuggester: () => GoalSugges
 
       const { milestones, ...rest } = patch;
       const normalised: Partial<Goal> = { ...rest };
+      // The milestones the goal will have after this patch (unchanged if the patch omits them).
+      let effectiveMilestones = existing.milestones;
       if (milestones !== undefined) {
         normalised.milestones = normaliseMilestones(milestones, newId, today());
+        effectiveMilestones = normalised.milestones;
       }
+      // Keep persisted progress authoritative: derive from the resulting milestones when any exist
+      // (so toggling a milestone updates Goal.progress server-side), else honour an explicit manual
+      // value. Untouched when the patch has neither milestones nor progress.
+      const derived = progressFromMilestones(effectiveMilestones);
+      if (derived !== null) normalised.progress = derived;
+      else if (patch.progress !== undefined) normalised.progress = patch.progress;
       const updated = await data.goals.update(id, normalised);
       return { status: 200, body: updated };
     },
