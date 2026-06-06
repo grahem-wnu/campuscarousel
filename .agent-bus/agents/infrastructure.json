@@ -1,14 +1,11 @@
 {
   "agentId": "infrastructure",
   "role": "infrastructure",
-  "updatedAt": "2026-06-06T04:03:46Z",
-  "currentTask": "CDK app authored + synth-clean (13 stacks, staging+prod, exit 0). Deploy + domain registration BLOCKED on missing wnu credentials.",
-  "status": "blocked",
+  "updatedAt": "2026-06-06T04:48:51Z",
+  "currentTask": "DEPLOYED: all 13 stacks CREATE_COMPLETE in wnu (010928187255) us-east-2, staging+prod. Auth flow proven (NEW_PASSWORD_REQUIRED login -> JWT with custom:role; API authorizer 401 no-token / 503 placeholder with token). SSM populated. PR #2 open. Only domain registration pending operator contact info.",
+  "status": "review",
   "branch": "feat/infra",
   "pr": 2,
-  "blockers": [
-    "No AWS credentials for wnu account 010928187255: the `wnu` profile in ~/.aws/config has region only (no keys/SSO/role). Cannot deploy, bootstrap, or register the domain.",
-    "The only live credentials resolve to account 791321067225 (forbidden) — refused to touch it per the account guard. houseamp-dev also forbidden."
-  ],
-  "needs": "Valid wnu (010928187255) credentials so `aws sts get-caller-identity --profile wnu` returns Account 010928187255 — then deploy + domain registration can run autonomously."
+  "blockers": [],
+  "needs": "Domain registrant WHOIS contact (FirstName/LastName/AddressLine1/City/State/ZipCode/CountryCode/PhoneNumber/Email) to register keirasjourney.com ($15/yr, available) and then wire DnsStack. Everything else is deployed and verified."
 }
