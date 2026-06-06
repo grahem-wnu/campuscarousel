@@ -66,12 +66,14 @@ export class AuthStack extends Stack {
       customAttributes: {
         role: new StringAttribute({ minLen: 1, maxLen: 16, mutable: true }),
       },
+      // Private 3-person family app — minimal password policy (Grahem's call). Cognito's floor
+      // is 6 chars and length can't be disabled; all character-class requirements are off.
       passwordPolicy: {
-        minLength: 12,
-        requireLowercase: true,
-        requireUppercase: true,
-        requireDigits: true,
-        requireSymbols: true,
+        minLength: 6,
+        requireLowercase: false,
+        requireUppercase: false,
+        requireDigits: false,
+        requireSymbols: false,
       },
       // Admin-only recovery: no email/SMS forgot-password flow.
       accountRecovery: AccountRecovery.NONE,
