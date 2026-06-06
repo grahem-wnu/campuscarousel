@@ -1,0 +1,225 @@
+// College Hub handlers. College data is family-visible (specs/modules/college-hub.md) — no private
+// filtering — but identity comes from the JWT (ctx.requester) and the router 401s unauthenticated
+// callers. Handlers are built from injectable deps so tests supply an in-memory data client, a stub
+// discoverer, and a stub hydration dispatcher; production injects the real ones (lazily, see
+// routes.manifest.ts). Hydration runs through the `dispatch` seam (inline today; SQS once wired).
+
+import {
+  Errors,
+  validateBody,
+  validateParams,
+  validateQuery,
+  type Handler,
+} from '../../shared/api/index.js';
+import type { College, Data } from '../../shared/data/index.js';
+import {
+  bulkAddSchema,
+  checklistSchema,
+  createSchema,
+  discoverSchema,
+  idParamSchema,
+  listQuerySchema,
+  noteSchema,
+  topPickSchema,
+  updateSchema,
+} from './schema.js';
+import { queryColleges } from './query.js';
+import { makeBedrockDiscoverer, type Discoverer } from './ai.js';
+import { makeInlineDispatcher, type HydrationDispatcher } from './hydration.js';
+
+export interface CollegeHandlers {
+  list: Handler;
+  detail: Handler;
+  create: Handler;
+  update: Handler;
+  remove: Handler;
+  topPick: Handler;
+  hydrate: Handler;
+  hydrateAll: Handler;
+  discover: Handler;
+  bulkAdd: Handler;
+  listNotes: Handler;
+  addNote: Handler;
+  putChecklist: Handler;
+}
+
+export interface CollegeDeps {
+  getData: () => Data;
+  /** Discovery source for /discover; defaults to the Bedrock discoverer (→ [] on failure). */
+  discoverer?: Discoverer;
+  /** Hydration trigger; defaults to the inline dispatcher (SQS enqueue once the worker is wired). */
+  dispatch?: HydrationDispatcher;
+}
+
+export function makeHandlers(deps: CollegeDeps): CollegeHandlers {
+  const { getData } = deps;
+  const discoverer = deps.discoverer ?? makeBedrockDiscoverer();
+  const dispatch = deps.dispatch ?? makeInlineDispatcher(getData);
+
+  /** Fetch a college or throw 404. */
+  async function requireCollege(id: string): Promise<College> {
+    const c = await getData().colleges.get(id);
+    if (!c) throw Errors.notFound('College not found');
+    return c;
+  }
+
+  return {
+    // GET /colleges — filter + search + sort (removed hidden unless includeRemoved=true).
+    list: async (ctx) => {
+      const q = validateQuery(listQuerySchema, ctx);
+      const items = await getData().colleges.list();
+      return { status: 200, body: { colleges: queryColleges(items, q) } };
+    },
+
+    // GET /colleges/:id.
+    detail: async (ctx) => {
+      const { id } = validateParams(idParamSchema, ctx);
+      return { status: 200, body: await requireCollege(id) };
+    },
+
+    // POST /colleges — create from (at minimum) a name, mark caller-supplied fields as userEdited so
+    // auto-hydration never overwrites them, then kick off hydration. Returns the created college
+    // (already hydrated when the dispatcher is inline; still 'in-progress' when it's async).
+    create: async (ctx) => {
+      const input = validateBody(createSchema, ctx);
+      const data = getData();
+      const userEdited = Object.keys(input); // everything the user typed is theirs to keep
+      const created = await data.colleges.create({
+        ...input,
+        status: input.status ?? 'researching',
+        addedBy: 'manual',
+        userEdited,
+        hydrationStatus: 'in-progress',
+      } as Parameters<Data['colleges']['create']>[0]);
+      await dispatch(created.collegeId);
+      const after = await data.colleges.get(created.collegeId);
+      return { status: 201, body: after ?? created };
+    },
+
+    // PUT /colleges/:id — edit; the hydratable repo records changed fields in userEdited[].
+    update: async (ctx) => {
+      const { id } = validateParams(idParamSchema, ctx);
+      const patch = validateBody(updateSchema, ctx);
+      await requireCollege(id);
+      const updated = await getData().colleges.update(id, patch);
+      return { status: 200, body: updated };
+    },
+
+    // DELETE /colleges/:id — soft delete: status → removed (restorable via PUT). Returns the college.
+    remove: async (ctx) => {
+      const { id } = validateParams(idParamSchema, ctx);
+      await requireCollege(id);
+      const removed = await getData().colleges.update(id, { status: 'removed' });
+      return { status: 200, body: removed };
+    },
+
+    // PATCH /colleges/:id/top-pick.
+    topPick: async (ctx) => {
+      const { id } = validateParams(idParamSchema, ctx);
+      const { isTopPick } = validateBody(topPickSchema, ctx);
+      await requireCollege(id);
+      const updated = await getData().colleges.update(id, { isTopPick });
+      return { status: 200, body: updated };
+    },
+
+    // POST /colleges/:id/hydrate — (re)hydrate one college. 202; poll GET /colleges/:id for status.
+    hydrate: async (ctx) => {
+      const { id } = validateParams(idParamSchema, ctx);
+      const data = getData();
+      await requireCollege(id);
+      await data.colleges.update(id, { hydrationStatus: 'in-progress' });
+      await dispatch(id);
+      const after = await data.colleges.get(id);
+      return { status: 202, body: after };
+    },
+
+    // POST /colleges/hydrate-all — refresh every non-removed college. 202 with a count.
+    hydrateAll: async (ctx) => {
+      void ctx;
+      const data = getData();
+      const targets = (await data.colleges.list()).filter((c) => c.status !== 'removed');
+      for (const c of targets) {
+        await data.colleges.update(c.collegeId, { hydrationStatus: 'in-progress' });
+        await dispatch(c.collegeId);
+      }
+      return { status: 202, body: { requested: targets.length } };
+    },
+
+    // POST /colleges/discover — AI candidates for the filters; adds nothing.
+    discover: async (ctx) => {
+      const input = validateBody(discoverSchema, ctx);
+      const candidates = await discoverer(input);
+      return { status: 200, body: { candidates } };
+    },
+
+    // POST /colleges/bulk-add — add several discovered colleges at once (no auto-hydrate; they carry
+    // discovery data already and can be refreshed later).
+    bulkAdd: async (ctx) => {
+      const { colleges } = validateBody(bulkAddSchema, ctx);
+      const data = getData();
+      const created: College[] = [];
+      for (const c of colleges) {
+        created.push(
+          await data.colleges.create({
+            ...c,
+            status: c.status ?? 'researching',
+            addedBy: 'ai-discovered',
+            hydrationStatus: 'partial',
+          } as Parameters<Data['colleges']['create']>[0]),
+        );
+      }
+      return { status: 201, body: { created } };
+    },
+
+    // GET /colleges/:id/notes.
+    listNotes: async (ctx) => {
+      const { id } = validateParams(idParamSchema, ctx);
+      await requireCollege(id);
+      const notes = await getData().collegeNotes.list(id);
+      return { status: 200, body: { notes } };
+    },
+
+    // POST /colleges/:id/notes — author defaults to the JWT username.
+    addNote: async (ctx) => {
+      const { id } = validateParams(idParamSchema, ctx);
+      const input = validateBody(noteSchema, ctx);
+      const data = getData();
+      await requireCollege(id);
+      const note = await data.collegeNotes.add(id, {
+        author: input.author ?? ctx.requester.username,
+        content: input.content,
+        noteType: input.noteType,
+      });
+      return { status: 201, body: note };
+    },
+
+    // PUT /colleges/:id/checklist — replace the whole checklist.
+    putChecklist: async (ctx) => {
+      const { id } = validateParams(idParamSchema, ctx);
+      const { items } = validateBody(checklistSchema, ctx);
+      await requireCollege(id);
+      const checklist = await getData().collegeChecklist.put(id, items);
+      return { status: 200, body: checklist };
+    },
+  };
+}
+
+/** Single source of truth for the route table (shared by the manifest + the router test). Static
+ *  segments are listed before the `:id` routes; the router also prefers higher static specificity. */
+export function buildRoutes(h: CollegeHandlers) {
+  return [
+    { method: 'GET' as const, path: '/colleges', handler: h.list },
+    { method: 'POST' as const, path: '/colleges', handler: h.create },
+    { method: 'POST' as const, path: '/colleges/discover', handler: h.discover },
+    { method: 'POST' as const, path: '/colleges/hydrate-all', handler: h.hydrateAll },
+    { method: 'POST' as const, path: '/colleges/bulk-add', handler: h.bulkAdd },
+    { method: 'GET' as const, path: '/colleges/:id', handler: h.detail },
+    { method: 'PUT' as const, path: '/colleges/:id', handler: h.update },
+    { method: 'DELETE' as const, path: '/colleges/:id', handler: h.remove },
+    { method: 'PATCH' as const, path: '/colleges/:id/top-pick', handler: h.topPick },
+    { method: 'POST' as const, path: '/colleges/:id/hydrate', handler: h.hydrate },
+    { method: 'GET' as const, path: '/colleges/:id/notes', handler: h.listNotes },
+    { method: 'POST' as const, path: '/colleges/:id/notes', handler: h.addNote },
+    { method: 'PUT' as const, path: '/colleges/:id/checklist', handler: h.putChecklist },
+  ];
+}
