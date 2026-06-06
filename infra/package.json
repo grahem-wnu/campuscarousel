@@ -9,11 +9,16 @@
   "scripts": {
     "build": "tsc",
     "watch": "tsc -w",
+    "presynth": "npm run build:backend",
     "synth": "cdk synth",
+    "presynth:all": "npm run build:backend",
     "synth:all": "cdk synth --all",
     "diff": "cdk diff",
     "cdk": "cdk",
+    "build:backend": "cd .. && npm run -w backend build:lambda",
+    "predeploy:staging": "npm run build:backend",
     "deploy:staging": "cdk deploy --all --require-approval never --context env=staging",
+    "predeploy:prod": "npm run build:backend",
     "deploy:prod": "cdk deploy --all --require-approval never --context env=prod"
   },
   "devDependencies": {

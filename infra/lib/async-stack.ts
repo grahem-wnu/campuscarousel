@@ -1,3 +1,4 @@
+import { join } from "node:path";
 import { CfnOutput, Duration, Stack, type StackProps } from "aws-cdk-lib";
 import type { Table } from "aws-cdk-lib/aws-dynamodb";
 import { Code, Function as LambdaFunction, Runtime } from "aws-cdk-lib/aws-lambda";
@@ -8,7 +9,6 @@ import type { Construct } from "constructs";
 import type { EnvConfig } from "./config";
 import { putOutput } from "./ssm";
 import { bedrockInvokeStatement } from "./policies";
-import { PLACEHOLDER_HANDLER } from "./placeholder-handler";
 
 export interface AsyncStackProps extends StackProps {
   readonly config: EnvConfig;
@@ -22,9 +22,9 @@ export interface AsyncStackProps extends StackProps {
  * (batchSize 1) for Bedrock throttle safety, with a 300s timeout (hydration is
  * long-running). Failures after maxReceiveCount land in the DLQ.
  *
- * The worker handler is a synth-time placeholder; the real handler is deployed from
- * backend/ later. The role grants DynamoDB CRUD on the table + Bedrock invoke on the
- * cross-region Sonnet inference profile.
+ * The worker handler is the real code built from backend/lambda/hydration.ts (bundled to
+ * backend/dist/hydration by `build:lambda`). The role grants DynamoDB CRUD on the table +
+ * Bedrock invoke on the cross-region Sonnet inference profile.
  */
 export class AsyncStack extends Stack {
   public readonly hydrationQueue: Queue;
@@ -54,7 +54,9 @@ export class AsyncStack extends Stack {
       functionName: `${config.namePrefix}-hydration-worker`,
       runtime: Runtime.NODEJS_20_X,
       handler: "index.handler",
-      code: Code.fromInline(PLACEHOLDER_HANDLER),
+      // Real worker asset built by `npm run -w backend build:lambda` (CI builds it before
+      // deploy). fromAsset on a missing dir fails synth loudly — no silent placeholder ships.
+      code: Code.fromAsset(join(__dirname, "../../backend/dist/hydration")),
       timeout: Duration.seconds(300),
       memorySize: 512,
       logRetention: RetentionDays.ONE_MONTH,

@@ -1,3 +1,4 @@
+import { join } from "node:path";
 import { CfnOutput, Duration, Stack, type StackProps } from "aws-cdk-lib";
 import { HttpApi, HttpMethod, CorsHttpMethod } from "aws-cdk-lib/aws-apigatewayv2";
 import { HttpUserPoolAuthorizer } from "aws-cdk-lib/aws-apigatewayv2-authorizers";
@@ -13,7 +14,6 @@ import type { EnvConfig } from "./config";
 import { envHostname } from "./config";
 import { putOutput } from "./ssm";
 import { bedrockInvokeStatement } from "./policies";
-import { PLACEHOLDER_HANDLER } from "./placeholder-handler";
 
 export interface ApiStackProps extends StackProps {
   readonly config: EnvConfig;
@@ -50,7 +50,9 @@ export class ApiStack extends Stack {
       functionName: `${config.namePrefix}-api-routing`,
       runtime: Runtime.NODEJS_20_X,
       handler: "index.handler",
-      code: Code.fromInline(PLACEHOLDER_HANDLER),
+      // Real backend asset built by `npm run -w backend build:lambda` (CI builds it before
+      // deploy). fromAsset on a missing dir fails synth loudly — no silent placeholder ships.
+      code: Code.fromAsset(join(__dirname, "../../backend/dist/api")),
       // CRUD default timeout — hydration is offloaded to the SQS worker.
       timeout: Duration.seconds(30),
       memorySize: 512,
