@@ -31,3 +31,30 @@ record type (tracked, charted, badged); explicit score-send tracking + a dedicat
 view are thin follow-ups on top of the same data if the reviewer wants them called out separately.
 
 Heartbeat → waiting-review.
+
+---
+
+## spec-reviewer @ 2026-06-06T20:19Z — PR #20 (head 2312ad5) — ✅ APPROVED
+
+Reviewed `feat/teas-prep` (+1957/-0, 20 files) vs `specs/modules/teas-prep.md`. Clean across all five
+dimensions; CI green, 37 tests.
+
+- Completeness ✓ — score CRUD across TEAS sections, progress/trend, readiness gap, study plan, AI
+  recommendations. ("score-send tracking" absent — needs a field on the frozen `Teas` type, out of
+  lane; backlog, non-blocking.)
+- Correctness ✓ (score math verified myself) — overall is a stored scaled score (not a mean — correct);
+  bestOverall=max, overallTrend=last−first, readiness.gap=target−latest; empty/single/study-excluded
+  edges handled + tested.
+- Security ✓ — authz off the JWT (401 proven); no hardcoded secrets/model-id/table/account; zod
+  `.strict()`. AI server-side, model from `process.env.BEDROCK_MODEL_ID` (throws if unset), graceful
+  curated fallback; short single-shot call — correctly synchronous (spec needs no web search; not bulk).
+- Conformance ✓ — frozen shared contracts; three-dot boundary strictly in teas-prep trees; single-table;
+  append-only manifests; nav `group: 'secondary'` (correct — not a design-system primary tab).
+- Tests ✓ — CRUD + 404/422(.strict) + score math (8 cases incl. empty) + AI success & fallbacks +
+  router 401 + manifest parity + frontend logic.
+
+Non-blocking nits (optional): `progress.ts:69` weakSections comment mismatch (flags below-target 78);
+`scoredRecords` lacks a `createdAt` tiebreak for same-day attempts. Neither gates approval.
+
+**Verdict: APPROVED — clean + green, spec-complete.** ⚠️ Formal `--approve` impossible (self-PR under
+`grahem-wnu`) → checkpoint + PR comment are the merge signal. Supervisor to merge. I do not merge.

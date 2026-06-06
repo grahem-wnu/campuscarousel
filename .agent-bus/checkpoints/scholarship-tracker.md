@@ -55,3 +55,51 @@ Frontend landed (e5ac2d4) + a self-review fix (a643eb1). PR #21 is now non-draft
 UNCHANGED ASK — the async foundational gap above (client-sqs dep + module hydration-handler
 registration glob) still blocks the live /discover + /:id/hydrate; they 503 cleanly until it lands.
 Reviewer: ready for a full pass. (Aside: goal-tracker PR #15 merged at 2026-06-06T19:59Z — done.)
+
+---
+
+## spec-reviewer @ 2026-06-06T20:19Z — PR #21 (head a643eb1) — 🔴 CHANGES REQUESTED
+
+Reviewed `feat/scholarship-tracker` (+2296/-0, 23 files) vs `specs/modules/scholarship-tracker.md`.
+Clean/secure/in-boundary/conformant, BUT materially incomplete on the AI path — and meaningfully
+behind the college-hub analog you were meant to mirror.
+
+**No hard fails:** three-dot boundary clean (only scholarship-tracker trees); no shared-contract
+edits; authz off the JWT (401 proven; `addedBy` server-set); no hardcoded secrets/model-id/table/
+queue/account; single-table; deadline date-math + amount totals tested; producer side honors async
+(no synchronous Bedrock in the request). Strong sync-path tests (CRUD/filters/summary/enqueue-failure).
+Downstream contract (application-central) stable except finding 3.
+
+### Required — worker-actionable NOW (NOT blocked; the deps are on dev)
+Your comments say `/discover` + `/:id/hydrate` "503 until the async foundational gap lands." That's
+over-broad — most of this is in-lane work you can do today (college-hub is the proven template):
+1. **[Completeness — acceptance L43] Implement the real Bedrock DISCOVERER.** `/discover` is a
+   **synchronous** Bedrock call (return candidates) — it does NOT need SQS or the worker-glob, and
+   `@aws-sdk/client-bedrock-runtime` has been on dev for a while. You ship only `unavailableDiscoverer`
+   (503, `discover.ts:110`) wired in `routes.manifest.ts:21`. Add a real discoverer (model from
+   `BEDROCK_MODEL_ID` env, server-side, graceful fallback) mirroring `college-hub/ai.ts` — your prompt
+   builder + parser already exist; just wire the invoke.
+2. **[Completeness/Conformance] Implement the Bedrock HYDRATOR + ship the worker consumer seam.** You
+   ship neither `hydration.manifest.ts` nor a `makeWorkerHandler` (college-hub ships both), so even
+   when the supervisor's worker-glob lands, scholarship-tracker has nothing to register. `@aws-sdk/
+   client-sqs` is **now on dev**, so implement `makeSqsEnqueuer` (replace `unavailableEnqueuer`,
+   `hydration.ts:45`) AND a `makeWorkerHandler` that hydrates via Bedrock and writes terminal
+   `complete`/`partial`/`failed` (today nothing ever leaves `pending`). Mirror college-hub exactly;
+   ship `hydration.manifest.ts` in the same shape. (The worker actually *running* still waits on the
+   supervisor's build-lambda worker-glob — escalated below — but ship the seam now so it activates.)
+3. **[Correctness] `summary.ts:7` `ACTIVE_FOR_POTENTIAL` includes `'awarded'`** → an awarded
+   scholarship's `amount` feeds `totalPotential` AND its `awardedAmount` feeds `totalAwarded`, so the
+   budget header (and application-central's rollup) double-counts that money. Drop `'awarded'` from the
+   potential set (potential = not-yet-decided) or relabel the figure. Lock this before wave-3 builds on it.
+
+### For Grahem / supervisor
+- **Web-search tool prompted but NOT wired** (`discover.ts:40` instructs web search; no tool config) —
+  same gap as college-hub; matters for scholarship-data accuracy. Wire the web-search capability (likely
+  shared) or accept general-knowledge for now.
+- **Shared worker-glob still pending** (escalated via college-hub): `build-lambda.mjs` must glob module
+  `hydration.manifest.ts` into the worker `hydrationRegistry` (empty on dev). Needed for live hydration
+  on BOTH college-hub and scholarship-tracker.
+
+**Verdict: CHANGES REQUESTED** — items 1-3 are in-lane and doable now (Bedrock + sqs deps on dev;
+college-hub is the template). Module is otherwise high quality. ⚠️ Formal `--request-changes` impossible
+(self-PR under `grahem-wnu`) → this checkpoint + the PR comment are the signal.
