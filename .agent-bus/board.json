@@ -1,14 +1,14 @@
 {
-  "updatedAt": "2026-06-05T20:15:00Z",
+  "updatedAt": "2026-06-05T20:25:00Z",
   "writer": "supervisor",
-  "phase": "bootstrap",
+  "phase": "infra",
   "gates": {
     "gate1_infra_apply": "pending",
     "gate2_slice_test": "pending",
     "gate3_prod_promote": "pending"
   },
   "milestones": [
-    { "id": "M0", "title": "repo-init complete", "gate": null, "status": "pending",
+    { "id": "M0", "title": "repo-init complete", "gate": null, "status": "done",
       "criteria": "dev is default with the kit; agent-bus branch live with seeded board; 8 lanes push-smoke-tested" },
     { "id": "M1", "title": "infra applied", "gate": "gate1_infra_apply", "status": "pending",
       "criteria": "CDK applied to wnu 010928187255/us-east-2; outputs in SSM; /infra PR merged + green" },
@@ -30,7 +30,7 @@
     "free": ["worker-1", "worker-2", "worker-3", "worker-4", "worker-5", "worker-6", "worker-7", "worker-8"]
   },
   "modules": [
-    { "id": "foundational-infra", "kind": "foundational", "wave": 0, "spec": "specs/foundational/infra.md", "owner": "infrastructure", "worktree": "", "branch": "feat/infra", "pr": null, "status": "todo", "dependsOn": [], "blockedReason": "" },
+    { "id": "foundational-infra", "kind": "foundational", "wave": 0, "spec": "specs/foundational/infra.md", "owner": "infrastructure", "worktree": ".worktrees/infra", "branch": "feat/infra", "pr": null, "status": "in-progress", "dependsOn": [], "blockedReason": "" },
     { "id": "foundational-data-layer", "kind": "foundational", "wave": 0, "spec": "specs/foundational/data-layer.md", "owner": null, "worktree": "", "branch": "", "pr": null, "status": "todo", "dependsOn": ["foundational-infra"], "blockedReason": "" },
     { "id": "foundational-auth", "kind": "foundational", "wave": 0, "spec": "specs/foundational/auth.md", "owner": null, "worktree": "", "branch": "", "pr": null, "status": "todo", "dependsOn": ["foundational-infra"], "blockedReason": "" },
     { "id": "foundational-api", "kind": "foundational", "wave": 0, "spec": "specs/foundational/api.md", "owner": null, "worktree": "", "branch": "", "pr": null, "status": "todo", "dependsOn": ["foundational-data-layer", "foundational-auth"], "blockedReason": "" },
