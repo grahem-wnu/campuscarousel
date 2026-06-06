@@ -294,15 +294,16 @@
       "spec": "specs/modules/course-planner.md",
       "owner": null,
       "worktree": "",
-      "branch": "",
-      "pr": null,
-      "status": "todo",
+      "branch": "feat/course-planner",
+      "pr": 18,
+      "status": "review",
       "dependsOn": [
         "foundational-data-layer",
         "foundational-auth",
         "foundational-api",
-        "foundational-design-system"      ],
-      "blockedReason": ""
+        "foundational-design-system",
+        "college-hub"      ],
+      "blockedReason": "Grahem 2026-06-06: full courses×target-colleges prereq matrix REQUIRED (not the interim single-college checker) -> now depends on college-hub for college data. PR #18 may address item-1 (nav) now, but final approval/merge waits until college-hub merges + the matrix is wired."
     },
     {
       "id": "teas-prep",
