@@ -173,3 +173,40 @@ Item 4 done in-lane (Bedrock dep landed on dev bc27686; rebased to pick it up):
 Items 1-2 already cleared. **Item 3 is Grahem's** (milestone- vs linked-activity-derived progress;
 one-line spec edit if accepted). Reviewer: re-review at bba7b08. Supervisor: should be spec-complete
 now (no 503 stub in deployed env) — mergeable on reviewer approve, modulo Grahem's item-3 wording call.
+
+---
+
+## spec-reviewer @ 2026-06-06T18:31Z — PR #15 round 3 (head bba7b08) — ✅ APPROVED (worker-complete); ⛔ MERGE-GATED on Grahem item-3 ruling
+
+Re-reviewed the Bedrock wiring (`bedrock.ts`, `suggester.ts`, `routes.manifest.ts`) myself. Three-dot
+boundary clean (only goal-tracker trees). CI green; 60 tests.
+
+**Item 4 (Bedrock) — DONE, verified correct & secure:**
+- `bedrock.ts/makeBedrockInvoker`: model/inference-profile from `process.env.BEDROCK_MODEL_ID` —
+  never hardcoded; throws if unset (caller decides fallback). Lazy server-side client; Anthropic
+  Messages invoke; decodes content blocks.
+- `bedrockSuggester`: per-call env check → real Bedrock when `BEDROCK_MODEL_ID` is set (the deployed
+  Lambda, per infra/api-stack), clean 503 locally/unconfigured. So the **deployed env serves real AI**.
+- `suggester.ts/makeSuggester`: try/catch → **falls back to `[]` on any invocation error** (logs, no
+  500); `parseSuggestions` returns `[]` on unparseable output. Graceful all the way down.
+- Tests cover: makeSuggester success/fallback/limit; invoker command-shape + decode + unset-model
+  throw; bedrockSuggester 503; parse drops bad/unknown-category entries + `[]` on garbage. Solid.
+
+Round-2 items 1 (nav→secondary) + 2 (server-authoritative progress) remain in place. The worker has
+now addressed **everything in their lane** (items 1, 2, 4). High-quality module.
+
+**Sole remaining gate — item 3 (Grahem's, escalated; NOT a worker change):** progress auto-derives
+from MILESTONE completion, while spec L42/L26 say "auto from **linked activities**." This has survived
+all 3 rounds as a documented, defensible interpretation (milestones are the completable units; the
+frozen `Goal` type has no progress-mode field; true activity-driven progress needs the cross-module
+activity→goal linking that isn't wired). Per the convergence rule I'm **escalating to the supervisor
+for Grahem's ruling** rather than looping the worker:
+  - If Grahem accepts milestone-derived progress → update `goal-tracker.md` (behavior change starts in
+    the spec, per CLAUDE.md) and merge. **(recommended — it's a sound UX and unblocks wave-2.)**
+  - If Grahem wants literal activity-driven progress → that's a follow-up PR (and likely depends on the
+    activity→goal linking UX), not a defect in this PR's quality.
+
+**Verdict: APPROVED on all worker-controllable + AI dimensions — no further worker action required.
+Supervisor: do NOT merge until Grahem rules on item 3; then merge (no code change needed if he accepts
+the interpretation — just a one-line spec edit).** ⚠️ Formal `--approve` impossible (self-PR under
+`grahem-wnu`) → this checkpoint + the PR comment are the signal.
