@@ -1,9 +1,9 @@
 {
   "agentId": "worker-2",
   "role": "worker",
-  "updatedAt": "2026-06-06T17:05:00Z",
-  "currentTask": "certifications module — backend landed; tests + frontend in progress",
-  "status": "working",
+  "updatedAt": "2026-06-06T18:05:00Z",
+  "currentTask": "certifications module — PR #14 ready for review",
+  "status": "waiting-review",
   "branch": "feat/certifications",
   "pr": 14,
   "blockers": [],
