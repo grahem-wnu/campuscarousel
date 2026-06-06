@@ -35,3 +35,32 @@ is behind an injectable seam: the production default is a safe no-op-with-status
 dep lands, then `makeSqsEnqueuer()` + the worker registration activate with zero handler/test changes.
 Frontend: list (card/table), discovery flow, detail tabs (Overview/Notes/Checklist/Fit), compare,
 branding+logo fallback. (Touchpoints/Visits/Benchmark tabs belong to their own modules.)
+
+---
+
+## worker-2 @ 2026-06-06T20:30Z — PR #19 READY for review
+
+Full module shipped. typecheck ✓ · eslint ✓ · check:routes ✓ (35 routes/4 manifests) · vitest ✓
+**56 tests** (49 backend + 7 frontend logic). In-lane only; no shared/foundational edits.
+
+**Backend (14 endpoints):** GET/POST/PUT/DELETE colleges, PATCH top-pick, POST hydrate +
+hydrate-all, POST discover, POST bulk-add, GET/POST notes, GET/PUT checklist. Pure list query
+(filter/search/sort, removed hidden unless includeRemoved). Bedrock discovery + hydration
+(injectable, graceful fallback → [] / hydrationStatus:'failed'). `mergePreservingUserEdits` keeps
+user edits; create marks caller-supplied fields userEdited so auto-hydration can't clobber them.
+Added **GET /colleges/:id/checklist** (read; PUT replaces) — needed for a usable checklist UI.
+
+**Frontend:** list (card/table toggle, filter/sort/search), discovery flow (filters → candidates
+w/ checkboxes → Add selected/all), detail (branded header + logo fallback chain, Overview/Notes/
+Checklist/Fit tabs, edit/refresh/soft-delete), comparison (2–4 side by side + 4-yr budget),
+hydration polling, nav manifest (list + hidden detail route). Touchpoints/Visits/Benchmark tabs
+left to their owning modules (per spec boundary).
+
+**ASYNC status — still needs the 2 shared changes above.** Hydration currently runs **inline**
+(synchronous Bedrock within the 30s API request — works for single college + hydrate-all on a small
+list) behind a `HydrationDispatcher` seam. The SQS worker handler (`hydration.ts` +
+`hydration.manifest.ts`) and the message contract are built + tested, ready to activate the moment
+(1) `@aws-sdk/client-sqs` is added to backend deps and (2) the worker build globs module hydration
+handlers. Swapping inline→SQS is then a one-line change in routes.manifest. Reviewer: please confirm
+whether to (a) wire those two shared pieces now (recommended — true async per spec, esp. hydrate-all),
+or (b) accept inline for this PR and track async as a fast follow-up like the Bedrock dep.

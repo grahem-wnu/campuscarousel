@@ -1,11 +1,11 @@
 {
   "agentId": "worker-2",
   "role": "worker",
-  "updatedAt": "2026-06-06T19:40:00Z",
-  "currentTask": "college-hub (wave 2) — claimed, draft PR #19; building CRUD/discover/notes/checklist + seamed async",
-  "status": "working",
+  "updatedAt": "2026-06-06T20:30:00Z",
+  "currentTask": "college-hub PR #19 ready for review (full CRUD/discover/notes/checklist/compare; async seamed)",
+  "status": "waiting-review",
   "branch": "feat/college-hub",
   "pr": 19,
   "blockers": [],
-  "needs": "(2 shared changes for async hydration — see checkpoints/college-hub.md) 1) add @aws-sdk/client-sqs to backend/package.json; 2) worker-bundle glob for per-module hydration handlers (backend/lambda/hydration.ts only globs routes.manifest today)"
+  "needs": "(2 shared changes for ASYNC hydration — see checkpoints/college-hub.md) 1) add @aws-sdk/client-sqs to backend/package.json; 2) worker-bundle glob for per-module hydration handlers. Until then hydration runs INLINE (works) behind the same seam."
 }
