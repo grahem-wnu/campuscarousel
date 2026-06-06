@@ -1,0 +1,11 @@
+{
+  "agentId": "worker-N",
+  "role": "worker",
+  "updatedAt": "2026-06-05T00:00:00Z",
+  "currentTask": "",
+  "status": "idle",
+  "branch": "",
+  "pr": null,
+  "blockers": [],
+  "needs": ""
+}

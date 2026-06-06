@@ -1,0 +1,37 @@
+# Staged template. The supervisor copies this to .github/workflows/deploy-prod.yml at bootstrap.
+# main is reached ONLY by Grahem's Gate-3 promotion PR, so this = manual prod promotion.
+# Fill OIDC role ARN from CicdStack output (repo variable AWS_DEPLOY_ROLE_PROD).
+name: Deploy Prod
+on:
+  push:
+    branches: [main]
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: prod
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_PROD }}
+          aws-region: us-east-2
+      - run: npm ci
+      - name: Deploy backend (CDK)
+        run: npm run -w infra deploy -- --context env=prod --require-approval never
+      - name: Build frontend (prod config from SSM)
+        run: npm run -w frontend build -- --mode prod
+      - name: Sync to S3 + invalidate CloudFront
+        run: npm run -w infra publish-web -- --context env=prod

@@ -1,0 +1,36 @@
+# Staged template. The supervisor copies this to .github/workflows/deploy-staging.yml at bootstrap.
+# Fill OIDC role ARN from CicdStack output (repo variable AWS_DEPLOY_ROLE_STAGING).
+name: Deploy Staging
+on:
+  push:
+    branches: [dev]
+
+permissions:
+  id-token: write   # for GitHub OIDC
+  contents: read
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_STAGING }}
+          aws-region: us-east-2
+      - run: npm ci
+      - name: Deploy backend (CDK)
+        run: npm run -w infra deploy -- --context env=staging --require-approval never
+      - name: Build frontend (staging config from SSM)
+        run: npm run -w frontend build -- --mode staging
+      - name: Sync to S3 + invalidate CloudFront
+        run: npm run -w infra publish-web -- --context env=staging

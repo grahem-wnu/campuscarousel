@@ -1,0 +1,61 @@
+{
+  "updatedAt": "2026-06-05T20:15:00Z",
+  "writer": "supervisor",
+  "phase": "bootstrap",
+  "gates": {
+    "gate1_infra_apply": "pending",
+    "gate2_slice_test": "pending",
+    "gate3_prod_promote": "pending"
+  },
+  "milestones": [
+    { "id": "M0", "title": "repo-init complete", "gate": null, "status": "pending",
+      "criteria": "dev is default with the kit; agent-bus branch live with seeded board; 8 lanes push-smoke-tested" },
+    { "id": "M1", "title": "infra applied", "gate": "gate1_infra_apply", "status": "pending",
+      "criteria": "CDK applied to wnu 010928187255/us-east-2; outputs in SSM; /infra PR merged + green" },
+    { "id": "M2", "title": "vertical slice live", "gate": "gate2_slice_test", "status": "pending",
+      "criteria": "activity-journal merged; staging green; Grahem confirms login + private-entry visibility" },
+    { "id": "M3", "title": "wave 2 merged", "gate": null, "status": "pending",
+      "criteria": "all wave-2 modules merged" },
+    { "id": "M4", "title": "wave 3 merged", "gate": null, "status": "pending",
+      "criteria": "all wave-3 modules merged" },
+    { "id": "M5", "title": "wave 4 merged (all 17)", "gate": null, "status": "pending",
+      "criteria": "all wave-4 modules merged" },
+    { "id": "M6", "title": "integration + QA clean", "gate": null, "status": "pending",
+      "criteria": "integration pass merged; full staging QA sweep clean" },
+    { "id": "M7", "title": "prod promoted", "gate": "gate3_prod_promote", "status": "pending",
+      "criteria": "dev to main merged; prod deploy to keirasjourney.com verified" }
+  ],
+  "lanes": {
+    "count": 8,
+    "free": ["worker-1", "worker-2", "worker-3", "worker-4", "worker-5", "worker-6", "worker-7", "worker-8"]
+  },
+  "modules": [
+    { "id": "foundational-infra", "kind": "foundational", "wave": 0, "spec": "specs/foundational/infra.md", "owner": "infrastructure", "worktree": "", "branch": "feat/infra", "pr": null, "status": "todo", "dependsOn": [], "blockedReason": "" },
+    { "id": "foundational-data-layer", "kind": "foundational", "wave": 0, "spec": "specs/foundational/data-layer.md", "owner": null, "worktree": "", "branch": "", "pr": null, "status": "todo", "dependsOn": ["foundational-infra"], "blockedReason": "" },
+    { "id": "foundational-auth", "kind": "foundational", "wave": 0, "spec": "specs/foundational/auth.md", "owner": null, "worktree": "", "branch": "", "pr": null, "status": "todo", "dependsOn": ["foundational-infra"], "blockedReason": "" },
+    { "id": "foundational-api", "kind": "foundational", "wave": 0, "spec": "specs/foundational/api.md", "owner": null, "worktree": "", "branch": "", "pr": null, "status": "todo", "dependsOn": ["foundational-data-layer", "foundational-auth"], "blockedReason": "" },
+    { "id": "foundational-design-system", "kind": "foundational", "wave": 0, "spec": "specs/foundational/design-system.md", "owner": null, "worktree": "", "branch": "", "pr": null, "status": "todo", "dependsOn": [], "blockedReason": "" },
+    { "id": "foundational-cicd", "kind": "foundational", "wave": 0, "spec": "specs/foundational/cicd.md", "owner": null, "worktree": "", "branch": "", "pr": null, "status": "todo", "dependsOn": ["foundational-infra"], "blockedReason": "" },
+
+    { "id": "activity-journal", "kind": "module", "wave": 1, "spec": "specs/modules/activity-journal.md", "owner": null, "worktree": "", "branch": "", "pr": null, "status": "todo", "dependsOn": ["foundational-data-layer", "foundational-auth", "foundational-api", "foundational-design-system"], "blockedReason": "" },
+
+    { "id": "why-nursing", "kind": "module", "wave": 2, "spec": "specs/modules/why-nursing.md", "owner": null, "worktree": "", "branch": "", "pr": null, "status": "todo", "dependsOn": ["foundational-data-layer", "foundational-auth", "foundational-api", "foundational-design-system"], "blockedReason": "" },
+    { "id": "clinical-hours", "kind": "module", "wave": 2, "spec": "specs/modules/clinical-hours.md", "owner": null, "worktree": "", "branch": "", "pr": null, "status": "todo", "dependsOn": ["foundational-data-layer", "foundational-auth", "foundational-api", "foundational-design-system"], "blockedReason": "" },
+    { "id": "goal-tracker", "kind": "module", "wave": 2, "spec": "specs/modules/goal-tracker.md", "owner": null, "worktree": "", "branch": "", "pr": null, "status": "todo", "dependsOn": ["foundational-data-layer", "foundational-auth", "foundational-api", "foundational-design-system"], "blockedReason": "" },
+    { "id": "certifications", "kind": "module", "wave": 2, "spec": "specs/modules/certifications.md", "owner": null, "worktree": "", "branch": "", "pr": null, "status": "todo", "dependsOn": ["foundational-data-layer", "foundational-auth", "foundational-api", "foundational-design-system"], "blockedReason": "" },
+    { "id": "course-planner", "kind": "module", "wave": 2, "spec": "specs/modules/course-planner.md", "owner": null, "worktree": "", "branch": "", "pr": null, "status": "todo", "dependsOn": ["foundational-data-layer", "foundational-auth", "foundational-api", "foundational-design-system"], "blockedReason": "" },
+    { "id": "teas-prep", "kind": "module", "wave": 2, "spec": "specs/modules/teas-prep.md", "owner": null, "worktree": "", "branch": "", "pr": null, "status": "todo", "dependsOn": ["foundational-data-layer", "foundational-auth", "foundational-api", "foundational-design-system"], "blockedReason": "" },
+    { "id": "scholarship-tracker", "kind": "module", "wave": 2, "spec": "specs/modules/scholarship-tracker.md", "owner": null, "worktree": "", "branch": "", "pr": null, "status": "todo", "dependsOn": ["foundational-data-layer", "foundational-auth", "foundational-api", "foundational-design-system"], "blockedReason": "" },
+    { "id": "college-hub", "kind": "module", "wave": 2, "spec": "specs/modules/college-hub.md", "owner": null, "worktree": "", "branch": "", "pr": null, "status": "todo", "dependsOn": ["foundational-data-layer", "foundational-auth", "foundational-api", "foundational-design-system"], "blockedReason": "" },
+    { "id": "peer-benchmark", "kind": "module", "wave": 2, "spec": "specs/modules/peer-benchmark.md", "owner": null, "worktree": "", "branch": "", "pr": null, "status": "todo", "dependsOn": ["foundational-data-layer", "foundational-auth", "foundational-api", "foundational-design-system"], "blockedReason": "" },
+
+    { "id": "application-central", "kind": "module", "wave": 3, "spec": "specs/modules/application-central.md", "owner": null, "worktree": "", "branch": "", "pr": null, "status": "todo", "dependsOn": ["foundational-data-layer", "foundational-auth", "foundational-api", "foundational-design-system", "college-hub", "scholarship-tracker"], "blockedReason": "" },
+    { "id": "campus-visit-planner", "kind": "module", "wave": 3, "spec": "specs/modules/campus-visit-planner.md", "owner": null, "worktree": "", "branch": "", "pr": null, "status": "todo", "dependsOn": ["foundational-data-layer", "foundational-auth", "foundational-api", "foundational-design-system", "college-hub"], "blockedReason": "" },
+    { "id": "demonstrated-interest-contacts", "kind": "module", "wave": 3, "spec": "specs/modules/demonstrated-interest-contacts.md", "owner": null, "worktree": "", "branch": "", "pr": null, "status": "todo", "dependsOn": ["foundational-data-layer", "foundational-auth", "foundational-api", "foundational-design-system", "college-hub"], "blockedReason": "" },
+    { "id": "interview-prep", "kind": "module", "wave": 3, "spec": "specs/modules/interview-prep.md", "owner": null, "worktree": "", "branch": "", "pr": null, "status": "todo", "dependsOn": ["foundational-data-layer", "foundational-auth", "foundational-api", "foundational-design-system", "why-nursing", "activity-journal"], "blockedReason": "" },
+    { "id": "ai-assistant", "kind": "module", "wave": 3, "spec": "specs/modules/ai-assistant.md", "owner": null, "worktree": "", "branch": "", "pr": null, "status": "todo", "dependsOn": ["foundational-data-layer", "foundational-auth", "foundational-api", "foundational-design-system", "activity-journal", "why-nursing"], "blockedReason": "" },
+
+    { "id": "dashboard", "kind": "module", "wave": 4, "spec": "specs/modules/dashboard.md", "owner": null, "worktree": "", "branch": "", "pr": null, "status": "todo", "dependsOn": ["foundational-data-layer", "foundational-auth", "foundational-api", "foundational-design-system", "activity-journal", "clinical-hours", "goal-tracker", "scholarship-tracker", "application-central", "college-hub", "certifications", "teas-prep"], "blockedReason": "" },
+    { "id": "master-timeline", "kind": "module", "wave": 4, "spec": "specs/modules/master-timeline.md", "owner": null, "worktree": "", "branch": "", "pr": null, "status": "todo", "dependsOn": ["foundational-data-layer", "foundational-auth", "foundational-api", "foundational-design-system", "activity-journal", "clinical-hours", "application-central", "scholarship-tracker", "campus-visit-planner", "course-planner", "certifications", "teas-prep", "interview-prep"], "blockedReason": "" }
+  ]
+}
