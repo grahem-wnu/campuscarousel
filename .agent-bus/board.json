@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-06-05T20:45:00Z",
+  "updatedAt": "2026-06-05T21:05:00Z",
   "writer": "supervisor",
   "phase": "infra",
   "gates": {
@@ -66,13 +66,8 @@
     }
   ],
   "lanes": {
-    "count": 8,
-    "free": [
-      "worker-5",
-      "worker-6",
-      "worker-7",
-      "worker-8"
-    ]
+    "model": "self-claim",
+    "note": "workers derive id from their worktree dir name and claim the next eligible unclaimed unit"
   },
   "modules": [
     {
@@ -89,16 +84,32 @@
       "blockedReason": ""
     },
     {
+      "id": "foundational-scaffold",
+      "kind": "foundational",
+      "wave": 0,
+      "spec": "specs/foundational/cicd.md",
+      "owner": null,
+      "worktree": "",
+      "branch": "",
+      "pr": null,
+      "status": "todo",
+      "dependsOn": [],
+      "blockedReason": "",
+      "note": "root package.json (glob workspaces), tsconfig/eslint base, check:routes guard, test runner, conventions doc"
+    },
+    {
       "id": "foundational-data-layer",
       "kind": "foundational",
       "wave": 0,
       "spec": "specs/foundational/data-layer.md",
-      "owner": "worker-1",
-      "worktree": ".worktrees/worker-1",
-      "branch": "feat/data-layer",
+      "owner": null,
+      "worktree": "",
+      "branch": "",
       "pr": null,
-      "status": "in-progress",
-      "dependsOn": [],
+      "status": "todo",
+      "dependsOn": [
+        "foundational-scaffold"
+      ],
       "blockedReason": ""
     },
     {
@@ -106,12 +117,14 @@
       "kind": "foundational",
       "wave": 0,
       "spec": "specs/foundational/auth.md",
-      "owner": "worker-2",
-      "worktree": ".worktrees/worker-2",
-      "branch": "feat/auth",
+      "owner": null,
+      "worktree": "",
+      "branch": "",
       "pr": null,
-      "status": "in-progress",
-      "dependsOn": [],
+      "status": "todo",
+      "dependsOn": [
+        "foundational-scaffold"
+      ],
       "blockedReason": ""
     },
     {
@@ -119,12 +132,13 @@
       "kind": "foundational",
       "wave": 0,
       "spec": "specs/foundational/api.md",
-      "owner": "worker-4",
-      "worktree": ".worktrees/worker-4",
-      "branch": "feat/api",
+      "owner": null,
+      "worktree": "",
+      "branch": "",
       "pr": null,
-      "status": "in-progress",
+      "status": "todo",
       "dependsOn": [
+        "foundational-scaffold",
         "foundational-data-layer",
         "foundational-auth"
       ],
@@ -135,12 +149,14 @@
       "kind": "foundational",
       "wave": 0,
       "spec": "specs/foundational/design-system.md",
-      "owner": "worker-3",
-      "worktree": ".worktrees/worker-3",
-      "branch": "feat/design-system",
+      "owner": null,
+      "worktree": "",
+      "branch": "",
       "pr": null,
-      "status": "in-progress",
-      "dependsOn": [],
+      "status": "todo",
+      "dependsOn": [
+        "foundational-scaffold"
+      ],
       "blockedReason": ""
     },
     {
@@ -148,7 +164,7 @@
       "kind": "foundational",
       "wave": 0,
       "spec": "specs/foundational/cicd.md",
-      "owner": null,
+      "owner": "supervisor",
       "worktree": "",
       "branch": "",
       "pr": null,
@@ -491,8 +507,9 @@
     }
   ],
   "agents": {
-    "infrastructure": ".worktrees/infra",
-    "spec-reviewer": ".worktrees/reviewer",
+    "infrastructure": "agents/infra",
+    "spec-reviewer": "agents/reviewer",
+    "workers": "agents/worker-N (N=1..4 live)",
     "supervisor": "(this session)",
     "bus": ".worktrees/bus"
   }
