@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-06-05T21:40:00Z",
+  "updatedAt": "2026-06-06T04:10:00Z",
   "writer": "supervisor",
   "phase": "infra",
   "gates": {
@@ -88,11 +88,11 @@
       "kind": "foundational",
       "wave": 0,
       "spec": "specs/foundational/cicd.md",
-      "owner": null,
+      "owner": "worker",
       "worktree": "",
-      "branch": "",
-      "pr": null,
-      "status": "todo",
+      "branch": "feat/foundational-scaffold",
+      "pr": 1,
+      "status": "review",
       "dependsOn": [],
       "blockedReason": "",
       "note": "root package.json (glob workspaces), tsconfig/eslint base, check:routes guard, test runner, conventions doc"
