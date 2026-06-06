@@ -27,3 +27,6 @@ the live test is gated on it landing.
 
 Module adoption (college-hub/peer-benchmark/ai-assistant) happens in those modules' own PRs later —
 not this unit. Account guard: confirm get-caller-identity == 010928187255 before any AWS.
+
+## supervisor @ 2026-06-06 — Tavily key stored
+Key is in SSM SecureString at /keiras-journey/{staging,prod}/tavilyApiKey (account 010928187255). The unit is fully unblocked — build the helper and run the live web-search test against staging.
