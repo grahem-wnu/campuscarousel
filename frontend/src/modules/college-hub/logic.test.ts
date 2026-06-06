@@ -8,6 +8,8 @@ import {
   fitBand,
   hydrationMeta,
   logoSrc,
+  normalizeName,
+  untrackedCandidates,
 } from './logic';
 import type { College } from './types';
 
@@ -72,6 +74,18 @@ describe('fitBand', () => {
     expect(fitBand(45)?.tone).toBe('warn');
     expect(fitBand(20)?.tone).toBe('error');
     expect(fitBand(undefined)).toBeNull();
+  });
+});
+
+describe('normalizeName / untrackedCandidates', () => {
+  it('normalizes consistently with the server', () => {
+    expect(normalizeName('  Ohio   State ')).toBe('ohio state');
+  });
+
+  it('drops candidates already tracked (case/space-insensitive)', () => {
+    const candidates = [{ name: 'Ohio State' }, { name: 'Purdue' }, { name: 'indiana university' }];
+    const out = untrackedCandidates(candidates, ['ohio   state', 'Indiana University']);
+    expect(out.map((c) => c.name)).toEqual(['Purdue']);
   });
 });
 

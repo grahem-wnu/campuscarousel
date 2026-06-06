@@ -67,6 +67,18 @@ describe('create (POST /colleges)', () => {
     await expectStatus(h.create(ctx({ body: {} })), 422);
     await expectStatus(h.create(ctx({ body: { name: 'X', bogus: 1 } })), 422);
   });
+
+  it('409s when the same college (normalized name) is already tracked', async () => {
+    await create({ name: 'Ohio State University' });
+    await expectStatus(h.create(ctx({ body: { name: '  ohio state   university ' } })), 409);
+  });
+
+  it('allows re-adding a name after the prior one was soft-deleted', async () => {
+    const c = await create({ name: 'Purdue' });
+    await h.remove(ctx({ params: { id: c.collegeId } }));
+    const again = await h.create(ctx({ body: { name: 'Purdue' } }));
+    expect(again.status).toBe(201);
+  });
 });
 
 describe('list (GET /colleges)', () => {
@@ -161,6 +173,16 @@ describe('discover / bulk-add', () => {
     expect(res.status).toBe(201);
     expect((res.body as { created: unknown[] }).created).toHaveLength(2);
     expect((await data.colleges.list())).toHaveLength(2);
+  });
+
+  it('bulk-add skips colleges already tracked or duplicated within the batch', async () => {
+    await create({ name: 'Existing U' });
+    const res = await h.bulkAdd(
+      ctx({ body: { colleges: [{ name: 'existing u' }, { name: 'New U' }, { name: 'new u' }] } }),
+    );
+    const body = res.body as { created: { name: string }[]; skipped: string[] };
+    expect(body.created.map((c) => c.name)).toEqual(['New U']);
+    expect(body.skipped).toEqual(['existing u', 'new u']);
   });
 
   it('422s on an empty bulk-add', async () => {

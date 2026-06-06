@@ -183,7 +183,13 @@ export default function CollegeHubPage() {
         </div>
       </header>
 
-      {showDiscover ? <DiscoverPanel onAdd={addCandidates} onClose={() => setShowDiscover(false)} /> : null}
+      {showDiscover ? (
+        <DiscoverPanel
+          trackedNames={colleges.map((c) => c.name)}
+          onAdd={addCandidates}
+          onClose={() => setShowDiscover(false)}
+        />
+      ) : null}
 
       {colleges.length > 0 || hasFilters ? (
         <Card flush className="p-3">

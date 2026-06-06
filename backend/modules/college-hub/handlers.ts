@@ -24,6 +24,7 @@ import {
   updateSchema,
 } from './schema.js';
 import { queryColleges } from './query.js';
+import { findActiveByName, normalizeCollegeName } from './dedupe.js';
 import { makeBedrockDiscoverer, type Discoverer } from './ai.js';
 import { makeInlineDispatcher, type HydrationDispatcher } from './hydration.js';
 
@@ -84,6 +85,10 @@ export function makeHandlers(deps: CollegeDeps): CollegeHandlers {
     create: async (ctx) => {
       const input = validateBody(createSchema, ctx);
       const data = getData();
+      const dup = findActiveByName(await data.colleges.list(), input.name);
+      if (dup) {
+        throw Errors.conflict(`"${dup.name}" is already in your college list (id ${dup.collegeId}).`);
+      }
       const userEdited = Object.keys(input); // everything the user typed is theirs to keep
       const created = await data.colleges.create({
         ...input,
@@ -158,8 +163,17 @@ export function makeHandlers(deps: CollegeDeps): CollegeHandlers {
     bulkAdd: async (ctx) => {
       const { colleges } = validateBody(bulkAddSchema, ctx);
       const data = getData();
+      // Dedupe against what's already tracked AND within the batch (normalized name).
+      const seen = new Set((await data.colleges.list()).filter((c) => c.status !== 'removed').map((c) => normalizeCollegeName(c.name)));
       const created: College[] = [];
+      const skipped: string[] = [];
       for (const c of colleges) {
+        const key = normalizeCollegeName(c.name);
+        if (seen.has(key)) {
+          skipped.push(c.name);
+          continue;
+        }
+        seen.add(key);
         created.push(
           await data.colleges.create({
             ...c,
@@ -169,7 +183,7 @@ export function makeHandlers(deps: CollegeDeps): CollegeHandlers {
           } as Parameters<Data['colleges']['create']>[0]),
         );
       }
-      return { status: 201, body: { created } };
+      return { status: 201, body: { created, skipped } };
     },
 
     // GET /colleges/:id/notes.

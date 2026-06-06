@@ -112,6 +112,20 @@ export function fitBand(score: number | undefined): { label: string; tone: Badge
   return { label: `Reach · ${score}`, tone: 'error' };
 }
 
+/** Normalize a college name for duplicate detection (mirrors the server's dedupe rule). */
+export function normalizeName(name: string): string {
+  return name.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+/** Discovery candidates not already in the tracked list (by normalized name). */
+export function untrackedCandidates<T extends { name: string }>(
+  candidates: readonly T[],
+  trackedNames: readonly string[],
+): T[] {
+  const tracked = new Set(trackedNames.map(normalizeName));
+  return candidates.filter((c) => !tracked.has(normalizeName(c.name)));
+}
+
 /** Checklist completion percentage (0–100), or null when there are no items. */
 export function checklistPct(items: { completed: boolean }[]): number | null {
   if (items.length === 0) return null;

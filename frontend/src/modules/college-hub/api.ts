@@ -64,9 +64,8 @@ export async function discoverColleges(filters: DiscoverFilters): Promise<Colleg
   return res.candidates;
 }
 
-export async function bulkAddColleges(colleges: CollegeInput[]): Promise<College[]> {
-  const res = await api.post<{ created: College[] }>('/colleges/bulk-add', { colleges });
-  return res.created;
+export function bulkAddColleges(colleges: CollegeInput[]): Promise<{ created: College[]; skipped: string[] }> {
+  return api.post<{ created: College[]; skipped: string[] }>('/colleges/bulk-add', { colleges });
 }
 
 export async function listNotes(id: string): Promise<CollegeNote[]> {
