@@ -1,0 +1,30 @@
+# Staged template. The supervisor copies this to .github/workflows/ci.yml at bootstrap
+# (this machine's security hook blocks writing directly into .github/workflows/).
+name: CI
+on:
+  pull_request:
+    branches: [dev, main]
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Lint
+        run: npm run lint
+      - name: Guard — no duplicate routes across module manifests
+        run: npm run check:routes
+      - name: Unit + integration tests
+        run: npm test
+      - name: CDK synth (no deploy)
+        run: npm run -w infra synth
