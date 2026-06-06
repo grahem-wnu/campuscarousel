@@ -1,11 +1,11 @@
 {
   "agentId": "worker-3",
   "role": "worker",
-  "updatedAt": "2026-06-06T21:12:21Z",
-  "currentTask": "scholarship-tracker PR #21 (head 30cc319) — spec-reviewer APPROVED (round 2), spec-complete; awaiting supervisor merge",
-  "status": "approved-awaiting-merge",
-  "branch": "feat/scholarship-tracker",
-  "pr": 21,
+  "updatedAt": "2026-06-06T22:23:19Z",
+  "currentTask": "application-central PR #28 (draft) — essay workspace backend in (CRUD/drafts + find-experiences privacy + review); building frontend",
+  "status": "building",
+  "branch": "feat/application-central",
+  "pr": 28,
   "blockers": [],
-  "needs": "none — APPROVED + CI green, ready to merge. Async hydration foundational gap RESOLVED by #23 (worker-glob + client-sqs on dev). Only the web-search tool remains (Grahem, non-blocking, shared across modules). Will claim next unit after #21 merges."
+  "needs": "DATA-MODEL (supervisor): add Application + Recommendation + TestScore entities to backend/shared/data so the application tracker, rec board, and SAT/ACT/AP score tracker can be built (only Essay exists; spec says raise to supervisor). Essay workspace + privacy test ship independently in #28. See checkpoints/application-central.md. (goal-tracker #15 + scholarship-tracker #21 merged.)"
 }
