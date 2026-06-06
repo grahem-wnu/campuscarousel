@@ -79,6 +79,40 @@ export class CicdStack extends Stack {
         }),
       );
 
+      // Frontend publish: the deploy workflow reads this env's runtime config from SSM,
+      // syncs the built SPA to its web bucket, and invalidates its CloudFront distribution.
+      // (cdk deploy itself goes through the bootstrap cfn-exec role above; these are for the
+      // workflow's own direct AWS calls.)
+      role.addToPolicy(
+        new PolicyStatement({
+          sid: "ReadEnvConfigFromSsm",
+          effect: Effect.ALLOW,
+          actions: ["ssm:GetParameter", "ssm:GetParameters", "ssm:GetParametersByPath"],
+          resources: [
+            `arn:aws:ssm:${this.region}:${this.account}:parameter/${config.project}/${target.stage}/*`,
+          ],
+        }),
+      );
+      role.addToPolicy(
+        new PolicyStatement({
+          sid: "PublishWebBucket",
+          effect: Effect.ALLOW,
+          actions: ["s3:ListBucket", "s3:GetObject", "s3:PutObject", "s3:DeleteObject"],
+          resources: [
+            `arn:aws:s3:::${config.project}-${target.stage}-web-${this.account}`,
+            `arn:aws:s3:::${config.project}-${target.stage}-web-${this.account}/*`,
+          ],
+        }),
+      );
+      role.addToPolicy(
+        new PolicyStatement({
+          sid: "InvalidateCloudFront",
+          effect: Effect.ALLOW,
+          actions: ["cloudfront:CreateInvalidation", "cloudfront:GetInvalidation"],
+          resources: [`arn:aws:cloudfront::${this.account}:distribution/*`],
+        }),
+      );
+
       putOutput(
         this,
         config,
