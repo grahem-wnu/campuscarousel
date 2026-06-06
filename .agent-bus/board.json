@@ -1,7 +1,8 @@
 {
-  "updatedAt": "2026-06-06T06:40:00Z",
+  "updatedAt": "2026-06-06T00:00:00Z-supervisor-resume",
   "writer": "supervisor",
   "phase": "slice",
+  "note": "Parked at Gate 2 (deferred by Grahem). Gate 2's live private-entry test cannot pass until foundational-backend-bundle ships (API currently serves a placeholder). Sequence: build backend-bundle -> deploy -> Grahem passes Gate 2 -> supervisor flips gate2/M2/phase=fanout + strips slice-gate -> launch reviewer + 4 workers.",
   "gates": {
     "gate1_infra_apply": "approved",
     "gate2_slice_test": "pending",
@@ -19,7 +20,7 @@
       "id": "M1",
       "title": "infra applied",
       "gate": "gate1_infra_apply",
-      "status": "pending",
+      "status": "done",
       "criteria": "CDK applied to wnu 010928187255/us-east-2; outputs in SSM; /infra PR merged + green"
     },
     {
@@ -82,7 +83,26 @@
       "status": "merged",
       "dependsOn": [],
       "blockedReason": "",
-      "note": "CDK on dev (PR#9, supersedes #2); deploy role publish perms added"
+      "note": "CDK on dev (PR#9, supersedes #2; #2 closed). 13 stacks deployed staging+prod; SSM populated. Domain keirasjourney.com registered 2026-06-06 (DnsStack wiring still TODO)."
+    },
+    {
+      "id": "foundational-backend-bundle",
+      "kind": "foundational",
+      "wave": 0,
+      "spec": "specs/foundational/backend-bundle.md",
+      "owner": "infrastructure",
+      "worktree": ".worktrees/infra",
+      "branch": "feat/backend-bundle",
+      "pr": null,
+      "status": "todo",
+      "dependsOn": [
+        "foundational-infra",
+        "foundational-api",
+        "foundational-cicd",
+        "activity-journal"
+      ],
+      "blockedReason": "",
+      "note": "BLOCKS GATE 2. API/hydration Lambdas ship Code.fromInline(PLACEHOLDER_HANDLER); nothing builds backend/ into a Lambda asset, so merged handlers never run (deployed routing fn = 393 bytes). Build real asset (entry + esbuild/codegen) + CDK fromAsset + CI build-before-deploy. Assigned to infra agent; eligible now."
     },
     {
       "id": "foundational-scaffold",
