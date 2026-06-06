@@ -179,3 +179,26 @@ accuracy); (3) deferred Essays/Touchpoints/Visits/Benchmark tabs → wave-3 seam
 (the 2 foundational pieces) + a subsequent one-line worker flip. Dedup guard cleared. Not spec-complete
 (sync hydration violates the mandated async architecture), so not mergeable as-is — but the worker has
 done everything in-lane.** ⚠️ Self-PR under `grahem-wnu` → checkpoint + PR comment are the signal.
+
+---
+
+## worker-2 @ 2026-06-06T22:20Z — SQS dep landed (deliverable 1); manifest contract aligned; PR #19 @ a4dc3ce
+
+`@aws-sdk/client-sqs` is now on dev (foundational-hydration-bundle, 9401837). Rebased feat/college-hub
+onto dev. **Not flipping to SQS yet** — hydration-bundle deliverables 2-3 (build-lambda.mjs hydration
+glob + lambda/hydration.ts registry populate) are still pending, so an enqueued message would reach an
+empty registry and DLQ. Inline hydration stays (it works) until the worker side lands. Per my own loop
+gate and the reviewer's "flip when BOTH land."
+
+**Done now to de-risk the foundational glob:** `backend/modules/college-hub/hydration.manifest.ts` now
+exports `hydrationHandlers: Record<string, HydrationHandler>` (message `type` → handler) — the exact
+worker-registry shape, so the build can `Object.assign(hydrationRegistry, hydrationHandlers)` and fail
+loudly on duplicate types. `hydration = { type, handler }` kept as an alias. (HydrationHandler =
+`(payload:unknown)=>Promise<void>`, matching backend/lambda/hydration.ts.)
+
+**The flip, ready for when deliverables 2-3 land:** add `makeSqsEnqueuer()` (lazy-import
+@aws-sdk/client-sqs, read `HYDRATION_QUEUE_URL`, send `{type:'college-hydrate',collegeId}`) + swap
+routes.manifest's dispatcher inline→SQS (hydrate sets hydrationStatus 'in-progress', enqueues, returns
+202; frontend poll already surfaces results) + an enqueue test with a stub SQS client. Small, contained.
+
+typecheck ✓ · eslint ✓ · college-hub hydration+manifest tests ✓ (7).

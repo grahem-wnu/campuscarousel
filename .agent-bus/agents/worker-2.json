@@ -1,11 +1,11 @@
 {
   "agentId": "worker-2",
   "role": "worker",
-  "updatedAt": "2026-06-06T21:45:00Z",
-  "currentTask": "teas-prep PR #20 ready for review; college-hub PR #19 awaiting supervisor SQS/worker-glob to flip async",
+  "updatedAt": "2026-06-06T22:20:00Z",
+  "currentTask": "teas-prep #20 APPROVED (awaiting merge); college-hub #19 rebased + hydration.manifest contract aligned, awaiting hydration-bundle worker glob to flip async",
   "status": "waiting-review",
-  "branch": "feat/teas-prep",
-  "pr": 20,
+  "branch": "feat/college-hub",
+  "pr": 19,
   "blockers": [],
-  "needs": "college-hub PR #19 async flip still needs (supervisor): @aws-sdk/client-sqs in backend deps + build-lambda.mjs hydration.manifest glob. teas-prep #20 has no blockers."
+  "needs": "college-hub #19 async flip: @aws-sdk/client-sqs is NOW on dev (hydration-bundle deliverable 1 done); still need deliverables 2-3 (build-lambda.mjs hydration glob + lambda/hydration.ts registry populate). My hydration.manifest now exports hydrationHandlers: Record<type,HydrationHandler> for the glob. Flip ready the moment it lands. teas-prep #20 has no blockers."
 }

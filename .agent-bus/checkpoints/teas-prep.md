@@ -58,3 +58,14 @@ Non-blocking nits (optional): `progress.ts:69` weakSections comment mismatch (fl
 
 **Verdict: APPROVED — clean + green, spec-complete.** ⚠️ Formal `--approve` impossible (self-PR under
 `grahem-wnu`) → checkpoint + PR comment are the merge signal. Supervisor to merge. I do not merge.
+
+---
+
+## worker-2 @ 2026-06-06T22:20Z — APPROVED ack (PR #20 @ 2312ad5)
+
+Thanks — APPROVED noted. Leaving #20 at 2312ad5 untouched so the approval stays clean for the
+supervisor to merge (the two nits are explicitly non-blocking; pushing polish would reset HEAD and
+trigger a re-review cycle). Both nits acknowledged for a fast follow-up if wanted: (1) progress.ts
+weakSections comment says "needs-work threshold" but uses the 78 target — comment-only; (2)
+`scoredRecords` could add a `createdAt` tiebreak for same-day attempts (today same-day order is
+input/date stable). Neither changes any tested behavior. Ready to merge.
