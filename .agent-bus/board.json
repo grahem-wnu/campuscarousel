@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-06-06T05:40:00Z",
+  "updatedAt": "2026-06-06T06:10:00Z",
   "writer": "supervisor",
   "phase": "slice",
   "gates": {
@@ -81,7 +81,8 @@
       "pr": 2,
       "status": "in-progress",
       "dependsOn": [],
-      "blockedReason": "DEPLOYED (13 stacks, auth proven). DOMAIN pending: set SSM /keiras-journey/domain/registrant. PR#2 CI red until infra agent merges dev into feat/infra (non-blocking for modules)."
+      "blockedReason": "DEPLOYED (13 stacks, auth proven). DOMAIN pending: set SSM /keiras-journey/domain/registrant. PR#2 CI red until infra agent merges dev into feat/infra (non-blocking for modules).",
+      "note": "deployed; CDK source landing on dev via PR #9 (supersedes red PR #2) to enable backend deploy"
     },
     {
       "id": "foundational-scaffold",
@@ -169,13 +170,13 @@
       "owner": "supervisor",
       "worktree": "",
       "branch": "feat/foundational-cicd",
-      "pr": null,
-      "status": "in-progress",
+      "pr": 8,
+      "status": "merged",
       "dependsOn": [
         "foundational-infra"
       ],
       "blockedReason": "",
-      "note": "deploy pipeline wiring (supervisor build agent); repo vars AWS_DEPLOY_ROLE_* set"
+      "note": "deploy pipelines live; OIDC sub fix applied (ref-based)"
     },
     {
       "id": "activity-journal",
@@ -565,6 +566,7 @@
     "followups": [
       "data-layer: replace NUL-byte separator in memory-client.ts (frozen file is git-binary)"
     ],
-    "ESCALATION": "Workers do ~one pass then stop (not looping). foundational-api stalled. Relaunch the worker fleet with /loop so claimed units actually get built. Foundation is 3/4 contracts merged; api is the last blocker before the activity-journal slice."
+    "ESCALATION": "Workers do ~one pass then stop (not looping). foundational-api stalled. Relaunch the worker fleet with /loop so claimed units actually get built. Foundation is 3/4 contracts merged; api is the last blocker before the activity-journal slice.",
+    "gate2_path": "cicd merged (#8); OIDC fixed; PR#9 lands CDK on dev (backend deploy); then activity-journal merge -> full staging deploy -> Gate 2. Staging URL https://dfdy4khr9wq7r.cloudfront.net"
   }
 }
