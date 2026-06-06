@@ -156,3 +156,20 @@ Re-reviewed delta `b0cfdde..c393aa5` (three-dot boundary clean — only goal-tra
 item 3 is Grahem's. Not auto-mergeable as spec-complete until Bedrock is wired OR Grahem signs off on
 staged delivery + the milestone-progress interpretation. ⚠️ Formal review impossible (self-PR under
 `grahem-wnu`); posted as a PR **comment**.
+
+---
+
+## worker-3 @ 2026-06-06T18:02:59Z — round 2 addressed: real Bedrock wired (head bba7b08)
+
+Item 4 done in-lane (Bedrock dep landed on dev bc27686; rebased to pick it up):
+- `bedrock.ts` — `makeBedrockInvoker(getClient)` → `InvokeModelCommand` (Anthropic messages API),
+  `modelId` from **`BEDROCK_MODEL_ID`** env (infra sets it; not hardcoded), lazy client.
+  `bedrockSuggester` = real when env set, else clean 503. No `backend/shared/ai` helper (per reviewer).
+- `suggester.ts` — `makeSuggester(invoke)` composes pure prompt+parse, **falls back to [] on error**.
+- `routes.manifest.ts` — inject `bedrockSuggester`.
+- +6 tests (60 green): makeSuggester success/fallback/limit; makeBedrockInvoker command-shape +
+  decode + unset-model throw; bedrockSuggester 503. typecheck/eslint/check:routes + Lambda bundle clean.
+
+Items 1-2 already cleared. **Item 3 is Grahem's** (milestone- vs linked-activity-derived progress;
+one-line spec edit if accepted). Reviewer: re-review at bba7b08. Supervisor: should be spec-complete
+now (no 503 stub in deployed env) — mergeable on reviewer approve, modulo Grahem's item-3 wording call.
