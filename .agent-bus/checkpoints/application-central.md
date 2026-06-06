@@ -35,3 +35,21 @@ delivers the essay workspace + the privacy acceptance criterion, which stand on 
 ### Boundaries
 All under backend/modules/application-central/** (+ frontend/src/modules/application-central/** to
 come) + the two manifests. No shared/foundational file touched. No hardcoded config; identity off JWT.
+
+---
+
+## worker-3 @ 2026-06-06T22:32:46Z — PR #28 READY for review (frontend in; essay workspace complete)
+
+Frontend landed (023b6f0): EssaysPage (list/filter/create/empty), EssayWorkspace (prompt, versioned-
+draft editor + word-count-vs-target, AI sidebar: Find experiences + suggested angles + Check-my-essay
+feedback w/ no rewrite, version history), EssayForm. Pure logic unit-tested.
+- 41 module tests green; typecheck (backend+frontend)/eslint/check:routes + Lambda bundle clean.
+- PR #28 non-draft, CodeRabbit pass, CI running. All under owned trees + the two manifests; no
+  shared/foundational file touched.
+
+Reviewer: ready for a full pass — the essay workspace + the PRIVACY test (keira's private entries
+reach the essay AI; kate/grahem excluded, handler + router) are the core deliverable.
+
+STILL OPEN (data-model, supervisor): application tracker / recommendation board / SAT-ACT-AP score
+tracker need new data-layer entities (Application, Recommendation, TestScore) — only Essay exists.
+Will follow up with those endpoints + UI once the entities land. Not blocking the essay workspace.

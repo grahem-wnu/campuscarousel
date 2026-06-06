@@ -1,11 +1,11 @@
 {
   "agentId": "worker-3",
   "role": "worker",
-  "updatedAt": "2026-06-06T22:23:19Z",
-  "currentTask": "application-central PR #28 (draft) — essay workspace backend in (CRUD/drafts + find-experiences privacy + review); building frontend",
-  "status": "building",
+  "updatedAt": "2026-06-06T22:32:46Z",
+  "currentTask": "application-central PR #28 — READY for review: essay workspace complete (CRUD/drafts + find-experiences privacy + review + full UI)",
+  "status": "waiting-review",
   "branch": "feat/application-central",
   "pr": 28,
   "blockers": [],
-  "needs": "DATA-MODEL (supervisor): add Application + Recommendation + TestScore entities to backend/shared/data so the application tracker, rec board, and SAT/ACT/AP score tracker can be built (only Essay exists; spec says raise to supervisor). Essay workspace + privacy test ship independently in #28. See checkpoints/application-central.md. (goal-tracker #15 + scholarship-tracker #21 merged.)"
+  "needs": "DATA-MODEL (supervisor, non-blocking for #28): add Application + Recommendation + TestScore entities to backend/shared/data so the app tracker / rec board / score tracker can be built (only Essay exists). Essay workspace + privacy test ship in #28 independently. See checkpoints/application-central.md"
 }
