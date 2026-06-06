@@ -135,7 +135,7 @@ describe('discover (POST /scholarships/discover)', () => {
 });
 
 describe('bulkAdd (POST /scholarships/bulk-add)', () => {
-  it('creates all as ai-discovered and saves even when hydration enqueue fails', async () => {
+  it('saves all as ai-discovered even when hydration enqueue fails (no false pending)', async () => {
     enqueueImpl = () => Promise.reject(new Error('queue down'));
     const res = await h.bulkAdd(
       ctx({ body: { hydrate: true, scholarships: [{ name: 'One' }, { name: 'Two' }] } }),
@@ -143,14 +143,16 @@ describe('bulkAdd (POST /scholarships/bulk-add)', () => {
     expect(res.status).toBe(201);
     const saved = (res.body as { scholarships: Scholarship[] }).scholarships;
     expect(saved).toHaveLength(2);
-    expect(saved[0]).toMatchObject({ addedBy: 'ai-discovered', hydrationStatus: 'pending' });
+    expect(saved[0]).toMatchObject({ addedBy: 'ai-discovered' });
+    expect(saved[0]?.hydrationStatus).toBeUndefined(); // enqueue failed → not marked pending
     expect(await data.scholarships.list()).toHaveLength(2); // persisted despite enqueue failure
   });
 
-  it('enqueues a hydration message per item when hydrate=true and the queue is up', async () => {
-    await h.bulkAdd(ctx({ body: { hydrate: true, scholarships: [{ name: 'One' }, { name: 'Two' }] } }));
+  it('enqueues per item and marks pending when hydrate=true and the queue is up', async () => {
+    const res = await h.bulkAdd(ctx({ body: { hydrate: true, scholarships: [{ name: 'One' }, { name: 'Two' }] } }));
     expect(enqueued).toHaveLength(2);
     expect(enqueued[0]).toMatchObject({ type: 'scholarship-hydrate', name: 'One' });
+    expect((res.body as { scholarships: Scholarship[] }).scholarships[0]?.hydrationStatus).toBe('pending');
   });
 
   it('does not enqueue when hydrate is omitted', async () => {

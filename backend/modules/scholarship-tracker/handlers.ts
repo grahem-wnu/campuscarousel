@@ -126,22 +126,22 @@ export function makeHandlers(
       const created: Scholarship[] = [];
       for (const s of input.scholarships) {
         created.push(
-          await data.scholarships.create({
-            ...s,
-            status: s.status ?? 'discovered',
-            addedBy: 'ai-discovered',
-            ...(input.hydrate ? { hydrationStatus: 'pending' } : {}),
-          }),
+          await data.scholarships.create({ ...s, status: s.status ?? 'discovered', addedBy: 'ai-discovered' }),
         );
       }
       if (input.hydrate) {
         const enqueuer = getEnqueuer();
+        // Mark `pending` only after a successful enqueue, so a record never shows "Refreshing…"
+        // forever when the (currently-gated) queue is unavailable — it's still saved either way.
         await Promise.all(
-          created.map((s) =>
-            enqueuer
-              .enqueue(buildHydrationMessage(s))
-              .catch((err) => console.error('bulk-add: hydration enqueue failed (saved anyway)', s.scholarshipId, err)),
-          ),
+          created.map(async (s, i) => {
+            try {
+              await enqueuer.enqueue(buildHydrationMessage(s));
+              created[i] = await data.scholarships.update(s.scholarshipId, { hydrationStatus: 'pending' });
+            } catch (err) {
+              console.error('bulk-add: hydration enqueue failed (saved anyway)', s.scholarshipId, err);
+            }
+          }),
         );
       }
       return { status: 201, body: { scholarships: created } };
