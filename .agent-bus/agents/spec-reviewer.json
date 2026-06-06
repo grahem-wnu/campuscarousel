@@ -1,28 +1,25 @@
 {
   "agentId": "spec-reviewer",
   "role": "spec-reviewer",
-  "updatedAt": "2026-06-06T21:32:00Z",
-  "currentTask": "Wave-2 fully reviewed. This pass: #19 college-hub APPROVED (async flip verified, CI green) — the LAST wave-2 module; #24 ai-assistant (wave 3) APPROVED (privacy model verified myself: aiVisibleSet off JWT, 2-direction privacy test). All 9 wave-2 modules now merged-or-approved.",
+  "updatedAt": "2026-06-06T21:58:00Z",
+  "currentTask": "Wave-3 review begun. This pass: #25 interview-prep CHANGES-REQUESTED (privacy hard-fail: private-derived aiFeedback persisted on family-readable sessions → leaks to parent). #19/#21/#24 merged. #18 course-planner is now the SOLE unmerged wave-2 module.",
   "status": "idle",
   "branch": "agent-bus",
   "pr": null,
   "blockers": [],
-  "needs": "FOR SUPERVISOR — MERGE 3 TO CLOSE M3: #18 course-planner, #19 college-hub, #21 scholarship-tracker are ALL APPROVED + CI-green + MERGEABLE/CLEAN. Merging them completes wave-2 (M3: all 9 wave-2 modules merged). #18 + #21 have been approved-awaiting-merge for ~3 passes — please merge (use checkpoint+PR-comment as the gate; self-PR under grahem-wnu → reviewDecision stays empty). Wave-2 modules: merged (6): why-nursing, clinical-hours, goal-tracker, certifications, teas-prep, peer-benchmark; approved-awaiting-merge (3): course-planner #18, college-hub #19, scholarship-tracker #21. WAVE-3 STARTED: #24 ai-assistant APPROVED this pass (privacy-correct). Remaining wave-3 (deps now mostly merged): application-central (needs college-hub+scholarship-tracker merged), campus-visit-planner + demonstrated-interest-contacts (need college-hub merged), interview-prep (needs why-nursing+activity-journal — merged). CONSOLIDATED GRAHEM DECISION (now spans 4 modules — please rule once): web-search tool is prompted but NOT wired on college-hub, scholarship-tracker, peer-benchmark, ai-assistant — all use general-knowledge Bedrock. Either wire a shared web-search capability (affects discovery/hydration/benchmark/citation accuracy) or formally accept general-knowledge AI and amend those specs. Other pending Grahem: #18 prereq matrix (gated on #19 merge); certifications training-progress field. RECURRING: all PRs under grahem-wnu → merge gate reads checkpoint+PR-comment, not reviewDecision.",
+  "needs": "FOR SUPERVISOR — (A) MERGE #18 course-planner to CLOSE M3: it's the only wave-2 module not yet merged (APPROVED; everything else in wave-2 is merged). mergeable shows UNKNOWN (GitHub recompute after the big merges) — if it's actually behind dev, nudge the worker to rebase; otherwise merge. (B) NEW FOUNDATIONAL ESCALATION (blocks #25 interview-prep): the frozen `Interview` type (backend/shared/data/types.ts) has NO owner/visibility field, so interview sessions can't be owner-scoped — and #25 persists private-derived AI feedback (grounded on keira's private why-nursing/clinical/activity entries) onto family-readable sessions, leaking private content to a parent via GET /interviews (violates interview-prep.md:47 + the privacy model). FIX needs an owner (createdBy) + optional visibility field added to the frozen `Interview` type (foundational, out of the module's lane) so the worker can scope list/get off the JWT; OR an interim in-module response-strip. Please decide/provide. MERGED this run: #19 college-hub, #21 scholarship-tracker, #24 ai-assistant (all wave-2 done except #18; ai-assistant is wave-3). WAVE-3 now eligible (deps merged): application-central (college-hub+scholarship-tracker ✓), campus-visit-planner + demonstrated-interest-contacts (college-hub ✓), interview-prep #25 (changes-requested). CONSOLIDATED GRAHEM DECISION (spans 5 AI modules now incl. interview-prep): web-search tool prompted but NOT wired — wire a shared web-search capability or formally accept general-knowledge AI + amend specs. RECURRING: all PRs under grahem-wnu → merge gate reads checkpoint+PR-comment, not reviewDecision. (Reviewer note: post PR verdicts via gh --body-file, not inline --body with backticks — bash command-substitutes them.)",
   "lastPass": {
-    "at": "2026-06-06T21:32:00Z",
-    "openPrsAgainstDev": 4,
+    "at": "2026-06-06T21:58:00Z",
+    "openPrsAgainstDev": 2,
     "reviewed": [
-      { "pr": 19, "branch": "feat/college-hub", "headSha": "9e78d9b", "round": 3, "verdict": "APPROVED", "ci": "green", "note": "async flip verified (makeSqsEnqueuer w/ HYDRATION_QUEUE_URL + inline fallback; hydration.manifest matches landed #23 build-glob); last wave-2 module" },
-      { "pr": 24, "branch": "feat/ai-assistant", "headSha": "ac23b6f", "round": 1, "verdict": "APPROVED", "ci": "green", "note": "privacy verified myself: aiVisibleSet off JWT for clinical/activities/whyNursing (includes private for keira, excludes for parent), 2-direction privacy test; Bedrock server-side/env/fallback; boundary clean; web-search deferred (Grahem)" }
+      { "pr": 25, "branch": "feat/interview-prep", "headSha": "7800860", "round": 1, "verdict": "CHANGES-REQUESTED", "ci": "green", "note": "PRIVACY hard-fail: grounding correct (aiVisibleSet) but private-derived aiFeedback/answer persisted on unowned family-readable sessions → parent GET /interviews leaks keira's private content (violates interview-prep.md:47). Fix needs foundational owner/visibility field on frozen Interview type (escalated) + JWT-scoped list/get. +web-search (Grahem)." }
     ],
     "approvedAwaitingMerge": [
-      { "pr": 18, "branch": "feat/course-planner" },
-      { "pr": 19, "branch": "feat/college-hub" },
-      { "pr": 21, "branch": "feat/scholarship-tracker" }
+      { "pr": 18, "branch": "feat/course-planner", "note": "SOLE unmerged wave-2 module — merge to close M3" }
     ],
-    "merged": [],
+    "merged": [19, 21, 24],
     "stalls": [
-      { "prs": [18, 21], "reason": "APPROVED + MERGEABLE/CLEAN for ~3 passes, not yet merged — supervisor merge-lag; blocks M3" }
+      { "pr": 18, "reason": "APPROVED; sole wave-2 module not yet merged across several passes — blocks M3" }
     ]
   }
 }
