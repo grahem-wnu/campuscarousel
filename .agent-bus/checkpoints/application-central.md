@@ -1,55 +1,32 @@
 # application-central — checkpoint
 
-## worker-3 @ 2026-06-06 — PR #28 (draft): essay workspace backend in; frontend next
+## worker-2 @ 2026-06-07T00:40Z — PR #28 READY for review
 
-Wave-3 module. Backend committed (8f4b86b). The essay workspace (spec headline) + the canonical
-AI-privacy case are done; the tracker/rec/score parts need new data-layer entities (raised below).
+Built the senior-year command center's killer feature in-lane vs frozen contracts.
+typecheck ✓ · eslint ✓ · check:routes ✓ (79 routes/11 manifests) · vitest ✓ **28 tests**.
 
-### Done (7 endpoints, backend)
-GET/POST /essays, GET/PUT/DELETE /essays/:id, POST /essays/:id/find-experiences,
-POST /essays/:id/review.
-- Essay CRUD + versioned drafts (wordCount/version/createdAt), createdBy from JWT.
-- **find-experiences**: reads journal+clinical+why-nursing, narrows with `aiVisibleSet` off the JWT,
-  synchronous Bedrock finder selects relevant + angles; persists picks. **PRIVACY TEST passes**
-  (handler + router): keira's private entries reach the AI; kate/grahem excluded from candidate set
-  AND response.
-- **review**: synchronous Bedrock feedback; output allowlist drops any rewritten prose (feedback-only).
-- ai.ts mirrors college-hub/scholarship-tracker (BEDROCK_MODEL_ID env, injectable client, graceful
-  empty fallback). 33 backend tests green; typecheck/eslint/check:routes clean.
+**PRIVACY (the canonical essay case) — proven.** `POST /essays/:id/find-experiences` grounds in
+activities/clinical/why-nursing via `gatherExperiences` → `aiVisibleSet` off the JWT, so a PRIVATE
+entry is surfaced ONLY when keira is the caller (a parent gets family-visible only). AI output is
+returned **live, never persisted**, so there's no read-path leak (the issue you caught in #25).
+Proven by grounding.test (keira sees private, kate/grahem don't) + a handler privacy test.
 
-### 🔶 DATA-MODEL GAP (supervisor) — tracker / rec board / score tracker need new entities
-The data layer is frozen and has only the **Essay** entity. The spec's other surfaces need NEW
-data-layer keys/entities (the spec itself: "model as APPLICATION#... or dedicated keys — define in
-data-layer if a new key is needed; raise to supervisor"):
-- **Application** (per-college status: deadline, essay/rec/transcript/scores/financial-aid status,
-  decision) — for the application tracker + decision matrix.
-- **Recommendation** (4 slots: STEM/humanities teacher, clinical/volunteer supervisor, community
-  leader; assigned contact, relationship strength, ask timeline, status asked→agreed→received→
-  submitted) — for the rec strategy board. Recommenders reference demonstrated-interest-contacts.
-- **TestScore** (SAT/ACT/AP; which schools received which scores) — TEAS already has its own entity.
+**Backend (9 endpoints):** essay CRUD; `POST /essays/:id/draft` (version + wordCount computed,
+status advances); `find-experiences` (AI, privacy); `POST /essays/:id/review` (AI feedback —
+`EssayReview.rewrote === false`, **never rewrites**, tested); `GET /applications/overview` (DERIVED
+per-college deadline countdown + essay progress + TEAS presence from colleges+essays+teas — no new
+storage). Bedrock behind an injectable seam + curated fallback (model id from BEDROCK_MODEL_ID).
 
-Please add these to backend/shared/data (types + repos) — happy to follow up with the
-tracker/rec/score endpoints + UI once they land (same pattern as Bedrock/SQS escalations). This PR
-delivers the essay workspace + the privacy acceptance criterion, which stand on their own.
+**Frontend:** application tracker table; essay workspace (editor, live word-count vs target, version
+history, AI sidebar: find-experiences + check-my-essay-feedback-only); essay list; nav (primary
+`/applications`).
 
-### Boundaries
-All under backend/modules/application-central/** (+ frontend/src/modules/application-central/** to
-come) + the two manifests. No shared/foundational file touched. No hardcoded config; identity off JWT.
+### Escalation — mutable trackers need a shared entity
+The spec's mutable trackers (per-application status checkboxes, the recommendation strategy board's
+4 slots, SAT/ACT/AP score tracking) need an `APPLICATION#` entity/keys the frozen data layer lacks
+(spec L18-19 says raise to supervisor). I shipped the **application overview as a derived read-only
+view** (no new storage); the mutable trackers + rec board + non-TEAS score tracking are escalated.
+If you want them, the cleanest is a shared `applications` accessor (PK `APPLICATION#<collegeId>`) —
+I'll wire the module side once it lands (Bedrock/SQS precedent).
 
----
-
-## worker-3 @ 2026-06-06T22:32:46Z — PR #28 READY for review (frontend in; essay workspace complete)
-
-Frontend landed (023b6f0): EssaysPage (list/filter/create/empty), EssayWorkspace (prompt, versioned-
-draft editor + word-count-vs-target, AI sidebar: Find experiences + suggested angles + Check-my-essay
-feedback w/ no rewrite, version history), EssayForm. Pure logic unit-tested.
-- 41 module tests green; typecheck (backend+frontend)/eslint/check:routes + Lambda bundle clean.
-- PR #28 non-draft, CodeRabbit pass, CI running. All under owned trees + the two manifests; no
-  shared/foundational file touched.
-
-Reviewer: ready for a full pass — the essay workspace + the PRIVACY test (keira's private entries
-reach the essay AI; kate/grahem excluded, handler + router) are the core deliverable.
-
-STILL OPEN (data-model, supervisor): application tracker / recommendation board / SAT-ACT-AP score
-tracker need new data-layer entities (Application, Recommendation, TestScore) — only Essay exists.
-Will follow up with those endpoints + UI once the entities land. Not blocking the essay workspace.
+Heartbeat → waiting-review.

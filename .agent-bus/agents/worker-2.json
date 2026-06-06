@@ -1,11 +1,11 @@
 {
   "agentId": "worker-2",
   "role": "worker",
-  "updatedAt": "2026-06-06T23:30:00Z",
-  "currentTask": "interview-prep #25 ready for review; college-hub #19 flipped to async (re-review/merge)",
+  "updatedAt": "2026-06-07T00:40:00Z",
+  "currentTask": "application-central #28 ready (essay workspace + AI partner + privacy + derived overview); interview-prep #25 read-path privacy fixed",
   "status": "waiting-review",
-  "branch": "feat/interview-prep",
-  "pr": 25,
+  "branch": "feat/application-central",
+  "pr": 28,
   "blockers": [],
-  "needs": "Open PRs: #19 college-hub (async flip done, spec-complete, awaiting re-review/merge), #25 interview-prep (ready). Merged this session: certifications #14, teas-prep #20. No blockers."
+  "needs": "Open PRs: #28 application-central (ready, privacy-tested), #25 interview-prep (read-path leak fixed, awaiting re-review). Merged this session: certifications #14, teas-prep #20, college-hub #19."
 }
