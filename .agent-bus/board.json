@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-06-06T04:28:00Z",
+  "updatedAt": "2026-06-06T05:00:00Z",
   "writer": "supervisor",
   "phase": "infra",
   "gates": {
@@ -106,11 +106,11 @@
       "worktree": "",
       "branch": "feat/foundational-data-layer",
       "pr": 3,
-      "status": "changes-requested",
+      "status": "merged",
       "dependsOn": [
         "foundational-scaffold"
       ],
-      "blockedReason": "reviewer: PR #3 empty WIP \u2014 worker-1 to implement",
+      "blockedReason": "",
       "note": "draft PR, CI green, building"
     },
     {
@@ -122,7 +122,7 @@
       "worktree": "",
       "branch": "feat/foundational-auth",
       "pr": 4,
-      "status": "review",
+      "status": "merged",
       "dependsOn": [
         "foundational-scaffold"
       ],
@@ -143,7 +143,8 @@
         "foundational-data-layer",
         "foundational-auth"
       ],
-      "blockedReason": ""
+      "blockedReason": "",
+      "note": "ELIGIBLE now (data-layer+auth merged) \u2014 awaiting worker claim"
     },
     {
       "id": "foundational-design-system",
@@ -153,8 +154,8 @@
       "owner": null,
       "worktree": "",
       "branch": "feat/foundational-design-system",
-      "pr": null,
-      "status": "in-progress",
+      "pr": 5,
+      "status": "merged",
       "dependsOn": [
         "foundational-scaffold"
       ],
