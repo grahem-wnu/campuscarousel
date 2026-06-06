@@ -37,15 +37,24 @@ export class CicdStack extends Stack {
     super(scope, id, props);
     const { config, deployTargets } = props;
 
-    const provider = new OpenIdConnectProvider(this, "GithubOidc", {
-      url: GITHUB_OIDC_URL,
-      clientIds: [GITHUB_OIDC_AUDIENCE],
-    });
+    // GitHub's OIDC provider is account-global. Import it if it already exists
+    // (the wnu account already has one); only create when context says to.
+    const createOidc = this.node.tryGetContext("createGithubOidc") === true;
+    const providerArn = createOidc
+      ? new OpenIdConnectProvider(this, "GithubOidc", {
+          url: GITHUB_OIDC_URL,
+          clientIds: [GITHUB_OIDC_AUDIENCE],
+        }).openIdConnectProviderArn
+      : OpenIdConnectProvider.fromOpenIdConnectProviderArn(
+          this,
+          "GithubOidc",
+          `arn:aws:iam::${this.account}:oidc-provider/token.actions.githubusercontent.com`,
+        ).openIdConnectProviderArn;
 
     const repoSub = `repo:${config.githubOrg}/${config.githubRepo}`;
 
     for (const target of deployTargets) {
-      const principal = new WebIdentityPrincipal(provider.openIdConnectProviderArn, {
+      const principal = new WebIdentityPrincipal(providerArn, {
         StringEquals: {
           "token.actions.githubusercontent.com:aud": GITHUB_OIDC_AUDIENCE,
         },
@@ -124,9 +133,9 @@ export class CicdStack extends Stack {
       ],
     });
 
-    putOutput(this, config, "cicd/githubOidcArn", provider.openIdConnectProviderArn, "GitHub OIDC provider ARN");
+    putOutput(this, config, "cicd/githubOidcArn", providerArn, "GitHub OIDC provider ARN");
     putOutput(this, config, "cicd/budgetTopicArn", budgetTopic.topicArn, "Budget alarm SNS topic");
 
-    new CfnOutput(this, "GithubOidcArn", { value: provider.openIdConnectProviderArn });
+    new CfnOutput(this, "GithubOidcArn", { value: providerArn });
   }
 }

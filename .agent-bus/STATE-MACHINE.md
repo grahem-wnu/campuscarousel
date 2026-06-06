@@ -71,56 +71,56 @@ written to be checkable from the repo/PR/SSM state, not from vibes.
 
 ---
 
-## Per-role loops — GitHub IS the queue
+## Per-role loops (poll → act → write-back → push)
 
-Operating model: **GitHub is the work queue, the lock, and the message bus.** Agents are launched
-with the `/loop` skill so each pass re-checks state and acts (a bare prompt does one pass then
-waits). `board.json` is the **supervisor-maintained** dependency graph + merged-status that workers
-**read** to compute eligibility; workers never write it. Coordination primitives:
-- **Claim = atomic branch-ref create.** `gh api -X POST repos/<repo>/git/refs -f ref=refs/heads/feat/<id> -f sha=<dev-sha>`. Succeeds once; returns **HTTP 422** to everyone else → no double-claim, no lock file, no board write.
-- **State = PRs.** Draft PR = claimed/in-progress. Ready PR = up for review. Review decision + CI `statusCheckRollup` = the gate. Merge = done.
+All loops share the bus write protocol from `README.md`:
+`git fetch origin agent-bus && git rebase origin/agent-bus` → write **only your own files** →
+commit → `git push origin HEAD:agent-bus` (retry on race; owner-partitioned files don't collide).
 
-### Worker (identical; id = `basename $PWD`)
-1. `git fetch`; read `board.json` via `git show origin/agent-bus:.agent-bus/board.json`. Eligible =
-   not `foundational-infra`/`foundational-cicd`, board status ≠ `merged`, all `dependsOn` `merged`.
-2. Claim the lowest-wave eligible unit via the atomic ref-create (422 → try the next).
-3. Checkout `feat/<id>`, open a **draft PR** (claim is now visible), implement in owned paths only
-   (`backend/modules/<m>/`, `frontend/src/modules/<m>/`, append-only route/nav manifests; for a
-   foundational unit, only its package). Tests incl. the privacy test. `gh pr ready` when green locally.
-4. Address reviewer `request-changes` rounds; push; let it re-review. Never merge.
-5. After merge, loop to 1. Comms are GitHub only (commits, PRs, PR comments).
+### Worker (each of 8 lanes)
+1. Read `board.json`. Find the module assigned to me (`owner == me`, `status in {todo, changes-requested}`).
+   If none, write heartbeat `idle` and sleep.
+2. Claim: heartbeat `working`; (supervisor sets module `in-progress` on assignment).
+3. Implement within my paths only (`backend/modules/<m>/`, `frontend/src/modules/<m>/`,
+   `specs/<m>.md`, append-only manifest). Run `plan-eng-review` + `code-review` skills.
+4. Open/refresh PR into `dev`. Heartbeat `waiting-review`, set `pr`. Append to
+   `checkpoints/<m>.md`: "PR #N ready, summary …".
+5. On `changes-requested`: address reviewer notes, push, heartbeat `working` → `waiting-review`.
+6. Heartbeat at: task start, each meaningful step, on block, PR open, after addressing review.
+   Stuck → heartbeat `blocked` + `needs:` text; supervisor resolves or reassigns.
 
 ### Spec-reviewer (loop, own worktree)
-1. `gh pr list --base dev --state open` → for each non-draft PR unreviewed at its head SHA:
-2. Review diff vs spec: conformance, correctness, security, **privacy** (server-side off JWT),
-   ownership boundaries, tests, no hardcoded config. Confirm CI green via `statusCheckRollup`.
-3. Post inline findings; submit `gh pr review --approve` (clean + green) or `--request-changes`.
-   The reviewer signals **through the PR review**; it never writes `board.json` and never merges.
+1. Read `board.json`. For each module `status: review` with an open PR I haven't reviewed at HEAD:
+2. Run `spec-review` + `qa-review` against the PR diff and the module spec.
+3. Post findings as **inline PR comments** + append verdict to `checkpoints/<m>.md`.
+4. Submit a PR review: approve → tell supervisor (checkpoint) to flip `review → approved`;
+   else request changes → supervisor flips `review → changes-requested`.
+   (Reviewer signals via checkpoint/PR; **only the supervisor mutates `board.json`**.)
+5. Heartbeat each pass. Idle when nothing in `review`.
 
-### Supervisor (loop; the ONLY merger + the ONLY board writer)
-1. `git fetch`; `gh pr list --base dev --state open --json number,headRefName,isDraft,reviewDecision,statusCheckRollup`.
-2. **Merge** any non-draft PR that is `APPROVED` + CI-green + whose unit is not gate-blocked:
-   `gh pr merge <n> --squash`. (`foundational-infra` waits for Gate 1; never merge to `main`.)
-3. **Maintain `board.json`** on `agent-bus`: set merged units `merged`, reflect open PRs' owner/pr,
-   flip milestones whose criteria hold, advance `phase`. Push `agent-bus`. This is what unlocks the
-   next eligible units for the workers — so it must run every pass.
-4. **Stall check:** a `feat/*` branch/PR with no commit/activity > ~15 min and not in review →
-   comment a nudge; persistent → escalate to Grahem.
-5. **Gates:** at any `gate*: pending`, do not advance — surface to Grahem and wait; resume on `approved`.
+### Supervisor (the only board writer + only merger)
+1. `git fetch`; read `board.json` + all heartbeats + open PRs.
+2. **Merge:** any module `approved` + CI-green → squash-merge PR to `dev` (fires staging deploy),
+   set `merged`, free its lane.
+3. **Assign:** for each free lane, pick the lowest-wave **eligible** module (`dependsOn` all
+   `merged`), set `owner`/`branch`/`worktree`/`status: in-progress`, notify via checkpoint.
+4. **Reviewer signals:** apply approve/changes-requested verdicts to module `status`.
+5. **Unblock:** resolve `blocked` modules (answer `needs`, land their dependency, or reassign).
+6. **Stall:** heartbeat >15 min `working` → inspect/nudge; 2nd miss → reassign. Retry cap 3 → escalate.
+7. **Milestones/phase:** when a milestone's criteria hold, flip it `done`; advance `phase` per the
+   table above. At any `gate*: pending`, **stop and escalate to Grahem**; resume on `approved`.
+8. Write `board.json`, push. Sleep, loop.
 
 ### Infrastructure agent (one pass, gated)
-1. `cdk synth` clean; open a **draft** `/infra` PR whose body is the Gate-1 plan (resources +
-   itemized cost + domain question). **Stop at Gate 1.** No deploy.
-2. On Grahem's approval (told directly, or `gates.gate1_infra_apply == approved`): `cdk deploy`
-   staging→prod, write outputs to SSM, mark the PR ready. Supervisor then merges it.
+1. Synthesize CDK (`cdk synth`), open `/infra` PR. Heartbeat `waiting-review`, append plan +
+   cost summary + the domain question to `checkpoints/foundational-infra.md`. **Stop at Gate 1.**
+2. On `gates.gate1_infra_apply == approved`: `cdk deploy`, write outputs to SSM, heartbeat `done`.
 
 ---
 
 ## Invariants (do not violate)
-- **`board.json` is supervisor-written only.** Workers/reviewer read it; they never write it.
-- **Claim is the atomic ref-create.** One winner per `feat/<id>`; 422 means already taken.
-- **Eligibility gates work**, not wave numbers. Never claim a unit whose `dependsOn` aren't `merged`.
-- **Only the supervisor merges**, and only `APPROVED` + CI-green units, only into `dev`.
+- **One writer per file.** `board.json` = supervisor only. Heartbeats/checkpoints = their owner.
+- **Eligibility gates work**, not wave numbers. Never assign a module whose `dependsOn` aren't `merged`.
 - **Gates are Grahem's.** No auto-advance past a `pending` gate; no auto-merge to `main`.
 - **wnu only.** Every AWS action targets `010928187255` / us-east-2. Never `791321067225`.
-- **Stay in your lane.** Edit only your unit's owned paths; raise shared-file needs in the PR.
+- **Bus churn stays on `agent-bus`**, never on `dev`/`main`.

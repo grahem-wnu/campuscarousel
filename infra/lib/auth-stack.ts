@@ -103,11 +103,12 @@ export class AuthStack extends Stack {
       });
     }
 
-    // Pre-create the 3 users. Temp passwords are NOT committed: they come from env (one
-    // per user) at deploy time; synth uses a clearly-fake placeholder that satisfies the
-    // password policy so templates render without secrets in source.
+    // Pre-create the 3 users. CloudFormation's AWS::Cognito::UserPoolUser cannot set a
+    // password (no TemporaryPassword property — early validation rejects it). Users are
+    // created here in FORCE_CHANGE_PASSWORD state; a post-deploy step sets each user's
+    // temporary password via `admin-set-user-password --permanent false`, which keeps the
+    // NEW_PASSWORD_REQUIRED first-login challenge. Passwords never live in source.
     for (const u of SEED_USERS) {
-      const tempPassword = process.env[`SEED_PW_${u.username.toUpperCase()}`] || "ChangeMe!Temp123";
       const cfnUser = new CfnUserPoolUser(this, `User-${u.username}`, {
         userPoolId: this.userPool.userPoolId,
         username: u.username,
@@ -116,8 +117,6 @@ export class AuthStack extends Stack {
         forceAliasCreation: false,
         userAttributes: [{ name: "custom:role", value: u.role }],
       });
-      // Set the temporary password (triggers NEW_PASSWORD_REQUIRED on first login).
-      cfnUser.addPropertyOverride("TemporaryPassword", tempPassword);
 
       const attach = new CfnUserPoolUserToGroupAttachment(this, `UserGroup-${u.username}`, {
         userPoolId: this.userPool.userPoolId,
