@@ -30,3 +30,45 @@ If you want them, the cleanest is a shared `applications` accessor (PK `APPLICAT
 I'll wire the module side once it lands (Bedrock/SQS precedent).
 
 Heartbeat → waiting-review.
+
+---
+
+## spec-reviewer @ 2026-06-06T22:47Z — PR #28 (head 38d1660) — 🔴 CHANGES REQUESTED
+
+Reviewed `feat/application-central` (+1571/-0, 20 files) vs `specs/modules/application-central.md`.
+Privacy is correct (verified myself) and the shipped scope is solid — but a nav conformance fix + a
+spec-acceptance gap (blocked on a foundational entity) keep it from spec-complete.
+
+- **PRIVACY ✓ (verified — the essay workspace is the key AI/private surface):** AI context built via
+  `aiVisibleSet(..., requester)` off the JWT for activities/clinical/whyNursing (`grounding.ts`,
+  `gatherExperiences(data, ctx.requester)` at handlers.ts:135) — keira-includes / parent-excludes,
+  tested. **Crucially (the PR #25 lesson): AI output is returned LIVE, never persisted** —
+  findExperiences/review return it in `body` only, never `essays.update`; `updateSchema =
+  createSchema.partial()` excludes the AI-suggested fields so a client PUT can't write them either
+  (non-persistence test handlers.test.ts:82-84). Essays are family-visible but store only keira's own
+  typed draft/prompt/notes — no private-derived content on the record → no leak. (This is why no
+  owner-scoping is needed here, unlike interview-prep #25.)
+- **Clean:** authz off JWT (401 proven), `createdBy` server-set; no hardcoded model-id/table/account
+  (`BEDROCK_MODEL_ID` env, `dataFromEnv()`); Bedrock server-side + curated fallback + FEEDBACK-ONLY
+  (rewrote:false) enforced; three-dot boundary strictly in module trees; no cross-module imports
+  (reads colleges/scholarships/activities/clinical/whyNursing via shared accessors); single-table.
+
+### Required — worker-actionable (in your lane)
+1. **[Conformance] `frontend/src/modules/application-central/nav.manifest.ts:10` — `group: 'primary'`**
+   registers a 6th primary tab (and collides at `order:40` with scholarship-tracker). design-system.md
+   fixes the 5 primary tabs (Dashboard/Journal/Colleges/Scholarships/Timeline). Fix: `group: 'secondary'`.
+
+### Blocked on foundational entity (ESCALATED — not your fault)
+2. **[Completeness — acceptance] Recommendation-strategy board, test-score tracker (CRUD), and decision
+   matrix are not implemented** (spec §Frontend/§Acceptance require all three). Only essay CRUD/drafts +
+   AI find/review + a derived read-only overview shipped. These need a dedicated mutable `APPLICATION#`
+   entity/accessor on the **frozen data layer** (out of the module's lane) — you correctly escalated
+   this (overview.ts:1-5). ESCALATED to supervisor: add the `APPLICATION#` entity (+ per-college
+   test-score routing, not the current single `hasTeasScore` boolean), then wire rec-board/score/matrix.
+   Grahem/supervisor: decide staged-merge (ship the essay core now, features follow) vs hold.
+
+Non-blocking: slow fallback test (ai.test awaits the real SDK import before the injected throw — optional).
+
+**Verdict: CHANGES REQUESTED** — fix nav (item 1) now; item 2 is a foundational escalation + Grahem
+staged-merge decision. Privacy/boundary/authz/Bedrock all verified clean. ⚠️ Self-PR under `grahem-wnu`
+→ checkpoint + PR comment are the signal.
