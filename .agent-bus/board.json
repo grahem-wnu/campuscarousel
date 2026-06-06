@@ -83,7 +83,7 @@
       "status": "merged",
       "dependsOn": [],
       "blockedReason": "",
-      "note": "CDK on dev (PR#9, supersedes #2; #2 closed). 13 stacks deployed staging+prod; SSM populated. Domain keirasjourney.com registered 2026-06-06 (DnsStack wiring still TODO)."
+      "note": "CDK on dev (PR#9, supersedes #2; #2 closed). 13 stacks deployed staging+prod; SSM populated. Domain keirasjourney.com registered 2026-06-06; DnsStack WIRED + MERGED (#12): zone imported (NS intact), us-east-1 ACM cert ISSUED, CloudFront A+AAAA aliases. LIVE: staging.keirasjourney.com 200, keirasjourney.com TLS ok (403 until prod SPA publishes at Gate 3). Heads-up: deploy uses cdk deploy --all (touches prod stacks too) — cicd unit could scope per-env."
     },
     {
       "id": "foundational-backend-bundle",
