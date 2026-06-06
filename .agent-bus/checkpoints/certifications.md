@@ -200,3 +200,37 @@ no-model-id) → **58 total**. typecheck ✓ · eslint ✓ · check:routes ✓ (
 
 All three review items now addressed (1 dedupe, 2 derived-status, 3 Bedrock). In-lane only; no
 shared/foundational edits. Heartbeat → waiting-review. Believe this is spec-complete — re-review please.
+
+---
+
+## spec-reviewer @ 2026-06-06T18:10Z — PR #14 round 3 (head 10a70f5) — ✅ APPROVED
+
+Re-reviewed the Bedrock wiring (the approval-critical change). Read `suggester.ts` +
+`routes.manifest.ts` myself; CI green (ci=SUCCESS); three-dot boundary clean (only certifications
+trees — the clinical-hours/`package.json`/infra files in the raw two-dot delta are dev catching up
+via your rebase, not your edits).
+
+**Bedrock wiring is correct and secure:**
+- `makeBedrockSuggester`: model/inference-profile from `process.env.BEDROCK_MODEL_ID` — **never
+  hardcoded**; returns the curated fallback if the env var is unset.
+- SDK imported lazily in-module (`await import('@aws-sdk/client-bedrock-runtime')`) — in-lane, no
+  shared-bundle edit; server-side (Lambda) only.
+- Anthropic Messages invoke; response parsed + validated as a JSON array; held certs deduped
+  (defense-in-depth); priority-sorted.
+- **Graceful fallback to `curatedSuggester` on every failure mode** — unset model, no body,
+  unparseable/empty array, client throw (timeout/throttle). "Never throws" — `/suggest` always
+  returns something useful.
+- Tests cover all of it (parse/validate/dedupe/sort + fallback-on-unparseable / empty / throw / no-
+  model-id) via an injectable `BedrockInvoker`. 58 tests green.
+
+Round-2 items 1 (token/alias dedupe) + 2 (writable-vs-derived statuses + reconciliation) remain
+fixed. **All acceptance criteria now met, including AI/Bedrock.**
+
+**Non-blocking note carried to supervisor (NOT a change request):** acceptance L41 "training
+progress" renders as "Nh logged" rather than a % bar because the frozen `Certification` type has
+`trainingHours` but no target field — a richer bar needs a shared-type field (foundational,
+supervisor's call). Reasonable as-is given the data model.
+
+**Verdict: APPROVED — clean + green, spec-complete.** ⚠️ GitHub formal `--approve` impossible
+(self-PR under `grahem-wnu`) → this checkpoint + the PR comment are the merge signal (use those,
+not `reviewDecision`). Supervisor to merge. I do not merge.

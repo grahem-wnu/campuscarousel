@@ -1,24 +1,24 @@
 {
   "agentId": "spec-reviewer",
   "role": "spec-reviewer",
-  "updatedAt": "2026-06-06T17:43:00Z",
-  "currentTask": "Wave-2 review, round 2. Re-reviewed #14 + #15 (re-pushed): both worker-actionable item sets FIXED+tested; narrowed to the now-unblocked Bedrock wiring. #11 not re-pushed (prior changes-requested stands). #13 merged.",
+  "updatedAt": "2026-06-06T18:11:00Z",
+  "currentTask": "Wave-2 review. This pass: #14 certifications APPROVED (Bedrock wired correctly, spec-complete); #18 course-planner CHANGES-REQUESTED (nav group only — GPA/boundary/authz verified clean). #11 (linking) and #15 (Bedrock) not re-pushed since last review.",
   "status": "idle",
   "branch": "agent-bus",
   "pr": null,
   "blockers": [],
-  "needs": "1) BEDROCK DEP HAS LANDED: @aws-sdk/client-bedrock-runtime ^3.700.0 is now on dev's backend/package.json (infra's response to my escalation — thanks). So the AI modules are NO LONGER blocked: a module can wire a real Bedrock suggester IN-LANE (import the SDK directly, model id from BEDROCK_MODEL_ID env, fall back on error) — a shared backend/shared/ai helper is a nicety, not a prerequisite. Both worker-2 (#14) and worker-3 (#15) currently believe they are still blocked ('no shared AI client'); I've corrected that in their checkpoints + PR comments and narrowed each verdict to 'wire Bedrock now'. 2) GRAHEM PRODUCT CALL still stands as an override: accept staged AI delivery (merge #14/#15 with curated/503 now, wire Bedrock as fast follow-up) OR require Bedrock pre-merge. cert's curated default already satisfies the spec's named first-visit baseline (L27) as a graceful fallback; goal-tracker is a hard 503. 3) GRAHEM also owns goal-tracker item 3: progress derives from milestones, not 'linked activities' per spec L42 wording (reasonable interpretation; needs spec edit if accepted). 4) Recurring: all PRs authored under grahem-wnu → no formal --approve/--request-changes possible; merge gate MUST read checkpoint verdict + PR comment, not reviewDecision. 5) FYI: #16 (cicd-scope-deploys) merged — resolves the per-env deploy-scoping FYI I raised on #12. #17 (bedrock dep) shows CLOSED in gh but the dep IS present on dev (squash-merge reporting quirk).",
+  "needs": "FOR SUPERVISOR: (1) #14 certifications is APPROVED + spec-complete (Bedrock suggester wired in-lane: model id from BEDROCK_MODEL_ID env, server-side, graceful curated fallback on all failures, 58 tests) — merge it (use checkpoint+PR comment, not reviewDecision; self-PR under grahem-wnu). This is the FIRST proof that the in-lane Bedrock pattern works — point worker-3 (#15 goal-tracker) at #14's suggester.ts as the template; the same 'wait for shared client' misconception is blocking them and the dep is already on dev. (2) #18 course-planner needs only a 1-line nav fix (primary→secondary) then it's an approve. FOR GRAHEM (product calls, accumulating): (a) staged-AI vs full-AI is now moot for #14 (full AI shipped); for #15 the worker can do the same in-lane wiring. (b) goal-tracker progress: milestones-derived vs spec's 'auto from linked-activities'. (c) course-planner prereqs: single-college checker vs spec's full courses×colleges matrix (gated on college-hub not merged). (d) certifications 'training progress' bar needs a trainingHoursRequired field on the frozen Certification type (foundational) if a % bar is wanted vs 'Nh logged'. (e) RECURRING: all PRs authored under grahem-wnu → no formal --approve/--request-changes; merge gate MUST read checkpoint verdict + PR comment.",
   "lastPass": {
-    "at": "2026-06-06T17:43:00Z",
-    "openPrsAgainstDev": 3,
+    "at": "2026-06-06T18:11:00Z",
+    "openPrsAgainstDev": 4,
     "reviewed": [
-      { "pr": 14, "branch": "feat/certifications", "headSha": "51c874c", "round": 2, "verdict": "CHANGES-REQUESTED", "ci": "green", "note": "items 1-2 (dedupe, writable statuses) FIXED+tested; narrowed to Bedrock wiring (now unblocked, dep on dev)" },
-      { "pr": 15, "branch": "feat/goal-tracker", "headSha": "c393aa5", "round": 2, "verdict": "CHANGES-REQUESTED", "ci": "green", "note": "items 1-2 (nav secondary, server-side progress) FIXED+tested; narrowed to Bedrock wiring; item 3 (linked-activities deviation) for Grahem" }
+      { "pr": 14, "branch": "feat/certifications", "headSha": "10a70f5", "round": 3, "verdict": "APPROVED", "ci": "green", "note": "Bedrock wired in-lane correctly (env model id, server-side, curated fallback, 58 tests); spec-complete" },
+      { "pr": 18, "branch": "feat/course-planner", "headSha": "55b825b", "round": 1, "verdict": "CHANGES-REQUESTED", "ci": "green", "note": "GPA/boundary/authz/config verified clean; single blocking item = nav group primary→secondary; prereq-matrix scope for Grahem" }
     ],
     "skippedNotRepushed": [
-      { "pr": 11, "branch": "feat/why-nursing", "headSha": "71c33af", "note": "no new commit since round-1 changes-requested (linking UI); prior verdict stands" }
+      { "pr": 11, "branch": "feat/why-nursing", "headSha": "71c33af", "note": "linking UI change-request still open" },
+      { "pr": 15, "branch": "feat/goal-tracker", "headSha": "c393aa5", "note": "Bedrock wiring change-request still open (point at #14 as template)" }
     ],
-    "merged": [13, 12, 16],
     "stalls": []
   }
 }
