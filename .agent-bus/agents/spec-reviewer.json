@@ -1,26 +1,27 @@
 {
   "agentId": "spec-reviewer",
   "role": "spec-reviewer",
-  "updatedAt": "2026-06-06T18:49:00Z",
-  "currentTask": "Wave-2 review. Idle pass — no new review work: open non-draft PRs (#11, #15, #18) are all at SHAs already reviewed; #19 college-hub is draft. Awaiting worker re-pushes (#11, #18) and Grahem's #15 item-3 ruling.",
+  "updatedAt": "2026-06-06T19:14:00Z",
+  "currentTask": "Wave-2 review. This pass: #19 college-hub CHANGES-REQUESTED (sync hydration vs mandated SQS-async — blocked on 2 foundational pieces, escalated; + dedup guard). #11/#15/#18 unchanged (no re-push).",
   "status": "idle",
   "branch": "agent-bus",
   "pr": null,
   "blockers": [],
-  "needs": "FOR SUPERVISOR — (A) POSSIBLE STALL / nudge needed: #11 why-nursing (changes-requested: add linking-UI to EntryForm, ~3 rounds open, head unchanged at 71c33af) and #18 course-planner (changes-requested: 1-line nav group primary→secondary, head unchanged at 55b825b) have NOT been re-pushed and no worker heartbeat currently owns them (worker-2 moved to #19 college-hub; worker-3 waiting-review on #15). Please confirm a worker is assigned to each, or reassign — both are quick fixes and they block M3 (all wave-2 merged). #18 is a literal one-liner away from approval (GPA/boundary/authz already verified). (B) GRAHEM DECISIONS still pending: (1) #15 goal-tracker item 3 — accept milestone-derived progress (one-line spec edit, recommended) vs spec's 'auto-from-linked-activities'; this is the SOLE gate on merging an otherwise-complete, AI-wired #15. (2) #18 course-planner prereqs single-college vs full courses×colleges matrix (gated on college-hub #19, still draft). (3) certifications 'training progress' bar needs trainingHoursRequired on the frozen Certification type if wanted (#14 already merged with 'Nh logged'). (C) RECURRING: all PRs authored under grahem-wnu → no formal --approve/--request-changes; merge gate MUST read checkpoint verdict + PR comment, not reviewDecision.",
+  "needs": "FOR SUPERVISOR/INFRA — NEW ESCALATION (async hydration, blocks #19 college-hub from spec-compliance; same Bedrock-dep pattern, worker raised both): (1) add @aws-sdk/client-sqs@^3.700.0 to backend/package.json; (2) extend backend/scripts/build-lambda.mjs to glob each module's hydration.manifest.ts into the worker bundle's hydrationRegistry (today only routes.manifest.ts is globbed, so an enqueued hydration message reaches no handler → DLQ). The SQS infra (queue/DLQ/300s worker/HYDRATION_QUEUE_URL/SendMessages grant) is ALREADY deployed on dev — these 2 frozen-file changes are the only missing pieces. Once landed, #19 flips inline→makeSqsEnqueuer() in one line (seam+worker handler+contract built & tested) and hydration becomes true async-per-spec. Acute reason it matters: #19 currently hydrates SYNCHRONOUSLY inline; hydrate-all does N serial Bedrock calls = API Gateway 29s timeout for >2-3 colleges. PENDING GRAHEM PRODUCT CALLS (accumulating): (a) #15 goal-tracker item 3 (milestone- vs linked-activity progress) — sole gate on merging #15; (b) #19 web-search tool NOT enabled — discovery/hydration use model general-knowledge, not live web search; matters most for college-hub data accuracy — wire web search (shared capability) or accept? (c) #19 deferred detail tabs (Essays/Touchpoints/Visits/Benchmark) to wave-3 — confirm seam; (d) #18 course-planner prereqs single-college vs full matrix (gated on #19 college-hub); (e) certifications training-progress field (#14 merged with 'Nh logged'). POSSIBLE STALLS: #11 why-nursing (linking UI) + #18 course-planner (1-line nav) — changes-requested, NOT re-pushed, no active worker heartbeat owns them; nudge/reassign. RECURRING: all PRs under grahem-wnu → merge gate reads checkpoint+PR-comment, not reviewDecision.",
   "lastPass": {
-    "at": "2026-06-06T18:49:00Z",
+    "at": "2026-06-06T19:14:00Z",
     "openPrsAgainstDev": 4,
-    "reviewed": [],
-    "skippedNotRepushed": [
-      { "pr": 11, "branch": "feat/why-nursing", "headSha": "71c33af", "note": "linking-UI change-request open; not re-pushed" },
-      { "pr": 15, "branch": "feat/goal-tracker", "headSha": "bba7b08", "note": "worker-complete; merge-gated on Grahem item-3" },
-      { "pr": 18, "branch": "feat/course-planner", "headSha": "55b825b", "note": "nav change-request open; not re-pushed; otherwise an approve" }
+    "reviewed": [
+      { "pr": 19, "branch": "feat/college-hub", "headSha": "7abfe78", "round": 1, "verdict": "CHANGES-REQUESTED", "ci": "green", "note": "sync hydration vs mandated SQS-async — blocked on 2 foundational pieces (client-sqs dep + build-lambda hydration glob), escalated; worker built SQS seam + poll loop; +dedup guard; web-search-disabled + deferred tabs for Grahem" }
     ],
-    "skippedDraft": [ { "pr": 19, "branch": "feat/college-hub" } ],
+    "skippedNotRepushed": [
+      { "pr": 11, "branch": "feat/why-nursing", "headSha": "71c33af", "note": "linking UI change-request open; possible stall" },
+      { "pr": 15, "branch": "feat/goal-tracker", "headSha": "bba7b08", "note": "worker-complete; gated on Grahem item-3" },
+      { "pr": 18, "branch": "feat/course-planner", "headSha": "55b825b", "note": "1-line nav change-request open; possible stall" }
+    ],
     "possibleStalls": [
       { "pr": 11, "reason": "changes-requested, no re-push, no active worker heartbeat" },
-      { "pr": 18, "reason": "changes-requested (1-line), no re-push, no active worker heartbeat" }
+      { "pr": 18, "reason": "changes-requested (1-line nav), no re-push, no active worker heartbeat" }
     ]
   }
 }

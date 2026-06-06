@@ -64,3 +64,61 @@ list) behind a `HydrationDispatcher` seam. The SQS worker handler (`hydration.ts
 handlers. Swapping inline→SQS is then a one-line change in routes.manifest. Reviewer: please confirm
 whether to (a) wire those two shared pieces now (recommended — true async per spec, esp. hydrate-all),
 or (b) accept inline for this PR and track async as a fast follow-up like the Bedrock dep.
+
+---
+
+## spec-reviewer @ 2026-06-06T19:14Z — PR #19 (head 7abfe78) — 🔴 CHANGES REQUESTED
+
+Reviewed `feat/college-hub` (+3020/-0, 26 files — largest module yet) against
+`specs/modules/college-hub.md`. Excellent, thorough module; one mandated-architecture gap that is
+blocked on two foundational pieces you correctly escalated. Answering your (a)/(b) question: **(a)** —
+the spec + CLAUDE.md mandate SQS-async hydration, so we wire the two shared pieces and flip, rather
+than merge inline.
+
+**No boundary/security/contract hard fails (verified myself):**
+- Three-dot boundary strictly within `backend/modules/college-hub/**` + `frontend/src/modules/college-hub/**`.
+- Authz off the JWT on every route (401 proven); `addedBy`/note `author` server-set (note: `noteSchema`
+  lets a client override `author` — harmless family-visible, but consider dropping it).
+- Bedrock fully server-side; model/inference-profile from `process.env.BEDROCK_MODEL_ID` (throws if
+  unset — never hardcoded; `ai.ts:46`); graceful fallback (discover→[], hydrate→`failed`);
+  `pickHydratableFields` allowlist means AI can't set `status`/`isTopPick`/`collegeId`/`userEdited`
+  (tested). No secrets/queue-url/table/account hardcoded. Single-table only; `College` type is the
+  frozen shared one; sub-entities under `COLLEGE#<id>` — stable downstream contract. Nav `primary` is
+  CORRECT here (Colleges is one of the 5 design-system primary tabs). Frontend HAS a poll-until-
+  terminal loop (`CollegeHubPage.tsx:81-85`, `setTimeout(refresh,4000)` while `anyHydrating`). Strong tests.
+
+### BLOCKED ON SUPERVISOR/INFRA — async hydration (the mandated architecture; ESCALATED)
+Hydration currently runs **synchronously inline** (Bedrock within the API request): `create`/`hydrate`
+`await dispatch` one model call; **`hydrate-all` loops `await dispatch` per college (handlers.ts:143-144)
+= N serial Bedrock calls → will exceed the API Gateway 29s timeout for more than ~2-3 colleges.** Spec
+("AI behavior": async via SQS, return job id, poll status) + CLAUDE.md require SQS-async. The async
+infra is already deployed on dev (`async-stack.ts` queue+DLQ+300s/batchSize-1 worker; `api-stack.ts:62,74`
+injects `HYDRATION_QUEUE_URL` + grants SendMessages), BUT the enqueue + worker paths need two
+**out-of-lane frozen** changes you correctly raised (Bedrock-dep precedent), which I'm escalating:
+  1. Add **`@aws-sdk/client-sqs@^3.700.0`** to `backend/package.json` (you can't even reference the SDK until then).
+  2. Extend **`backend/scripts/build-lambda.mjs`** to glob each module's `hydration.manifest.ts` into
+     the worker bundle's `hydrationRegistry` (today it only globs `routes.manifest.ts`, so an enqueued
+     `college-hydrate` message reaches no handler → DLQ).
+Once both land, flip `routes.manifest.ts` inline→`makeSqsEnqueuer()` (your seam + worker handler +
+message contract are built and tested) and `create`/`hydrate`/`hydrate-all` enqueue + return 202
+immediately — the frontend poll loop already surfaces the result. **This is the path to spec-compliance.**
+
+### Required — worker-actionable (in your lane, do alongside the flip)
+1. **[Completeness] No duplicate-college guard** — `handlers.ts` `create` (~84-96) and `bulkAdd`
+   (~155-170) create a new `COLLEGE#<id>` even if the same school (by normalized name) is already
+   tracked; `DiscoverPanel` can re-add an already-tracked candidate. Fix: skip/merge on normalized-name
+   match (or 409), and filter discovered candidates already tracked before pre-selecting.
+
+### For Grahem / supervisor (product decisions)
+2. **Web-search tool is NOT enabled** — `invokeText` sends a plain Messages call with no `tools`, so
+   discovery/hydration rely on model general knowledge, not live web search (documented gap, parallel to
+   certifications). **This matters more here**: college-hub's whole value is fetching real, current
+   college data — general-knowledge hydration risks stale/inaccurate facts. Decide whether to wire the
+   web-search tool (likely a shared AI capability) before this module is relied upon, or accept it for now.
+3. **Deferred detail tabs** (Essays/Touchpoints/Visits/Benchmark) are left to the wave-3 modules
+   co-owning `COLLEGE#<id>` — confirm this is the intended seam, not a silent drop.
+
+**Verdict: CHANGES REQUESTED.** Primary unblock is the supervisor/infra (2 pieces above) → then your
+one-line SQS flip; plus the dedup guard. Module quality is otherwise high and spec-conformant.
+⚠️ Formal `--request-changes` impossible (self-PR under `grahem-wnu`) → this checkpoint + the PR
+comment are the signal.
