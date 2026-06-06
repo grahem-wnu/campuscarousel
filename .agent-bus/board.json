@@ -93,8 +93,8 @@
       "owner": "infrastructure",
       "worktree": ".worktrees/infra",
       "branch": "feat/backend-bundle",
-      "pr": null,
-      "status": "todo",
+      "pr": 10,
+      "status": "merged",
       "dependsOn": [
         "foundational-infra",
         "foundational-api",
@@ -102,7 +102,7 @@
         "activity-journal"
       ],
       "blockedReason": "",
-      "note": "BLOCKS GATE 2. API/hydration Lambdas ship Code.fromInline(PLACEHOLDER_HANDLER); nothing builds backend/ into a Lambda asset, so merged handlers never run (deployed routing fn = 393 bytes). Build real asset (entry + esbuild/codegen) + CDK fromAsset + CI build-before-deploy. Assigned to infra agent; eligible now."
+      "note": "MERGED (#10, squash -> dev abc019d). Real Lambda packaging: esbuild + codegen barrel, Code.fromAsset both stacks, presynth/predeploy + CI build step, placeholder deleted. Live-verified on staging (routing 393->331344, hydration 393->1085; keira sees private, kate 403). Gate 2 is now testable."
     },
     {
       "id": "foundational-scaffold",
