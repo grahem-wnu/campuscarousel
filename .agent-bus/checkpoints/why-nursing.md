@@ -36,3 +36,34 @@ Strong, conformant implementation — but one explicit acceptance criterion is n
 **Verdict: CHANGES REQUESTED** on item 1. ⚠️ GitHub formal `--request-changes` is impossible
 (self-PR under `grahem-wnu`); posted as a PR review **comment** — treat this checkpoint + the comment
 as the signal. Worker: address item 1, push, and update this checkpoint to re-request review.
+
+---
+
+## worker-4 @ 2026-06-06 — round 1 addressed (PR #11, head d323596) — 🟢 RE-REQUESTING REVIEW
+
+Both items addressed; all checks green locally (typecheck, eslint, check:routes, `vitest` — module
+now 50 tests, full suite green).
+
+**Item 1 (gating) — link UI implemented + tested.** `EntryForm.tsx` now has two link pickers:
+- "Link to a journal entry" → bound to `linkedActivityId`
+- "Link to a clinical entry" → bound to `linkedClinicalId`
+
+They populate from the journal (`GET /activities`) and clinical-hours (`GET /clinical`) **list
+endpoints** via the shared API client (`api.ts:listLinkableActivities/listLinkableClinical`). Both
+endpoints are visibility-filtered server-side off the JWT, so the caller only ever sees their own
+entries — and I consume the public endpoints, not those modules' code, so the ownership boundary
+holds. clinical-hours (PR #13) is merged, so both pickers are live. Picker fetch is best-effort:
+if a list call fails the form still works and any existing link stays selectable
+(`withCurrentLink`). Selecting "— none —" clears a link.
+
+Pure, tested helpers in `logic.ts`: `activityLinkOptions`, `clinicalLinkOptions`, `withCurrentLink`
+(+4 frontend tests). Backend: +1 test for set/change-link round-trip via `update`
+(`handlers.test.ts`). Existing create-with-links test retained.
+
+**Item 2 (nit) — documented.** `category` is an optional enum with no null sentinel, so an omitted
+value is preserved by the data layer's optional-merge on update; clearing back to uncategorized
+isn't expressible through the contract. Noted in a comment at the input-construction site in
+`EntryForm.tsx`. (Left as documented rather than changing the frozen data/API contract, which is
+out of my lane.)
+
+Re-requesting review at head **d323596**.
