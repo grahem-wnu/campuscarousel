@@ -1,0 +1,30 @@
+{
+  "name": "keiras-journey",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Keira's Journey — monorepo root (workspaces, base tooling, route guard).",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=20"
+  },
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "check:routes": "node scripts/check-routes.mjs",
+    "build": "npm run build --workspaces --if-present"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.13.0",
+    "@types/node": "^20.16.0",
+    "eslint": "^9.13.0",
+    "globals": "^15.11.0",
+    "typescript": "^5.6.3",
+    "typescript-eslint": "^8.11.0",
+    "vitest": "^2.1.4"
+  }
+}

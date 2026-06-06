@@ -1,5 +1,4 @@
-# Staged template. The supervisor copies this to .github/workflows/ci.yml at bootstrap
-# (this machine's security hook blocks writing directly into .github/workflows/).
+# Copied to .github/workflows/ at bootstrap (this box's hook blocks direct writes here).
 name: CI
 on:
   pull_request:
@@ -17,14 +16,21 @@ jobs:
         with:
           node-version: 20
           cache: npm
-      - run: npm ci
+      - name: Install
+        run: |
+          if [ -f package-lock.json ]; then npm ci; else npm install; fi
       - name: Typecheck
-        run: npm run typecheck
+        run: npm run typecheck --if-present
       - name: Lint
-        run: npm run lint
+        run: npm run lint --if-present
       - name: Guard — no duplicate routes across module manifests
-        run: npm run check:routes
+        run: npm run check:routes --if-present
       - name: Unit + integration tests
-        run: npm test
-      - name: CDK synth (no deploy)
-        run: npm run -w infra synth
+        run: npm test --if-present
+      - name: CDK synth (self-contained; only when the infra app exists)
+        run: |
+          if [ -f infra/package.json ]; then
+            (cd infra && npm install --no-audit --no-fund && npm run synth)
+          else
+            echo "infra app not present yet — skipping synth"
+          fi
