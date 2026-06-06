@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-06-06T20:25:00Z-hydration-unit",
+  "updatedAt": "2026-06-06T20:35:00Z-ai-search",
   "writer": "supervisor",
   "phase": "fanout",
   "note": "FANOUT OPEN. Grahem authorized proceeding without his live Gate-2 UI walkthrough (privacy already proven via tests + the infra agent's live direct-invoke: keira sees private, kate 403 on real Lambda+DynamoDB). slice-gate sentinel stripped from all modules -> wave 2 eligible. DEFERRED: Grahem's own SPA click-through of private-entry visibility is folded into M6 final QA + must pass before Gate 3 (prod). Supervisor merges APPROVED+green PRs into dev only.",
@@ -119,6 +119,22 @@
       ],
       "blockedReason": "",
       "note": "Async SQS worker wiring. SQS dep already on dev (9401837). REMAINING for infra: build-lambda.mjs must glob module hydration.manifest.ts + populate hydrationRegistry (mirror routes barrel) + hydration.ts import. Unblocks college-hub async -> course-planner. Convention set by college-hub."
+    },
+    {
+      "id": "foundational-ai-search",
+      "kind": "foundational",
+      "wave": 0,
+      "spec": "specs/foundational/ai-search.md",
+      "owner": "infrastructure",
+      "worktree": ".worktrees/infra",
+      "branch": "feat/ai-search",
+      "pr": null,
+      "status": "todo",
+      "dependsOn": [
+        "foundational-backend-bundle"
+      ],
+      "blockedReason": "needs Tavily API key in SSM /keiras-journey/<env>/tavilyApiKey (Grahem creating). Helper can be built before key lands; live test gated on key.",
+      "note": "Enhancement, NOT critical path. Bedrock has no native web search -> Tavily (Grahem) as a custom tool via shared backend/shared/ai helper + Bedrock tool-use loop. Used by college-hub/peer-benchmark/ai-assistant for discovery/hydration/benchmark research."
     },
     {
       "id": "foundational-scaffold",
