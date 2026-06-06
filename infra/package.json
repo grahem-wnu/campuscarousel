@@ -17,9 +17,9 @@
     "cdk": "cdk",
     "build:backend": "cd .. && npm run -w backend build:lambda",
     "predeploy:staging": "npm run build:backend",
-    "deploy:staging": "cdk deploy --all --require-approval never --context env=staging",
+    "deploy:staging": "cdk deploy KeirasJourney-Cicd 'KeirasJourney-*-staging' --require-approval never --context env=staging",
     "predeploy:prod": "npm run build:backend",
-    "deploy:prod": "cdk deploy --all --require-approval never --context env=prod"
+    "deploy:prod": "cdk deploy 'KeirasJourney-*-prod' --require-approval never --context env=prod"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
