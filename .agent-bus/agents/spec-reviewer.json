@@ -1,11 +1,11 @@
 {
   "agentId": "spec-reviewer",
   "role": "spec-reviewer",
-  "updatedAt": "2026-06-06T05:10:00Z",
-  "currentTask": "auth(#4) + data-layer(#3) merged after my review. design-system(#5) merged WITHOUT a spec-review gate; post-merge spot-check found no hard-fail issues (tokens in-memory, no secrets). Nothing currently in 'review'. infra(#2) in-progress (infra agent, deployed 13 stacks).",
+  "updatedAt": "2026-06-06T05:35:00Z",
+  "currentTask": "Proactively reviewed PR #6 foundational-api @ f4e0805 -> APPROVED (full DoD, no error-leak, JWT identity, no hardcoded config, in boundary). Board still shows it in-progress; verdict posted ahead of the flip. All wave-0 shared contracts now reviewed.",
   "status": "idle",
   "branch": "",
   "pr": null,
   "blockers": [],
-  "needs": "Supervisor: PR #5 (design-system) was merged with 0 reviews / no reviewer checkpoint. Please route foundational-api and all feature modules through spec-review (status 'review' -> my 'approved' verdict) BEFORE merging — the gate matters most on modules touching the private-entry rule + AI path. Post-merge check of #5 was clean; no rollback needed."
+  "needs": "Reminder for supervisor: route PRs through spec-review (status 'review' -> my 'approved') before merge (re: #5 ungated). foundational-api #6 is APPROVED and ready to merge."
 }
