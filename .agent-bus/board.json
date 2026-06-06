@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-06-06T20:45:00Z-tavily-key",
+  "updatedAt": "2026-06-06T21:00:00Z-wave2-6of9",
   "writer": "supervisor",
   "phase": "fanout",
   "note": "FANOUT OPEN. Grahem authorized proceeding without his live Gate-2 UI walkthrough (privacy already proven via tests + the infra agent's live direct-invoke: keira sees private, kate 403 on real Lambda+DynamoDB). slice-gate sentinel stripped from all modules -> wave 2 eligible. DEFERRED: Grahem's own SPA click-through of private-entry visibility is folded into M6 final QA + must pass before Gate 3 (prod). Supervisor merges APPROVED+green PRs into dev only.",
@@ -112,13 +112,13 @@
       "owner": "infrastructure",
       "worktree": ".worktrees/infra",
       "branch": "feat/hydration-bundle",
-      "pr": null,
-      "status": "todo",
+      "pr": 23,
+      "status": "merged",
       "dependsOn": [
         "foundational-backend-bundle"
       ],
       "blockedReason": "",
-      "note": "Async SQS worker wiring. SQS dep already on dev (9401837). REMAINING for infra: build-lambda.mjs must glob module hydration.manifest.ts + populate hydrationRegistry (mirror routes barrel) + hydration.ts import. Unblocks college-hub async -> course-planner. Convention set by college-hub."
+      "note": "MERGED (#23)."
     },
     {
       "id": "foundational-ai-search",
@@ -351,16 +351,17 @@
       "spec": "specs/modules/teas-prep.md",
       "owner": null,
       "worktree": "",
-      "branch": "",
-      "pr": null,
-      "status": "todo",
+      "branch": "feat/teas-prep",
+      "pr": 20,
+      "status": "merged",
       "dependsOn": [
         "foundational-data-layer",
         "foundational-auth",
         "foundational-api",
         "foundational-design-system"
       ],
-      "blockedReason": ""
+      "blockedReason": "",
+      "note": "MERGED (#20)."
     },
     {
       "id": "scholarship-tracker",
@@ -406,16 +407,17 @@
       "spec": "specs/modules/peer-benchmark.md",
       "owner": null,
       "worktree": "",
-      "branch": "",
-      "pr": null,
-      "status": "todo",
+      "branch": "feat/peer-benchmark",
+      "pr": 22,
+      "status": "merged",
       "dependsOn": [
         "foundational-data-layer",
         "foundational-auth",
         "foundational-api",
         "foundational-design-system"
       ],
-      "blockedReason": ""
+      "blockedReason": "",
+      "note": "MERGED (#22)."
     },
     {
       "id": "application-central",
