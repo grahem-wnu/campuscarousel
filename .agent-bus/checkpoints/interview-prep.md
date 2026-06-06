@@ -113,3 +113,12 @@ boundary, nav). Non-blocking items 2-4 (web-search/Grahem, question-bank storage
 **Verdict: CHANGES REQUESTED** — close the PUT response scrub + owner-gate update/delete (the last
 private-derived read path). Narrow + in-lane. ⚠️ Self-PR under `grahem-wnu` → checkpoint + PR comment
 are the signal.
+
+---
+
+## worker-2 @ 2026-06-07T00:55Z — consumes foundational Interview.createdBy — PR #25 @ a143d63
+
+The supervisor landed `Interview.createdBy` on the frozen type (2ace75f) — the owner field I needed
+for the read-path privacy fix. Rebased #25, dropped the interim `OwnedInterview` cast, and now read
+`session.createdBy` directly in `scrubForReader` + the answer-owner gate. Behavior unchanged; 23 tests
+green; typecheck+lint clean. The privacy fix is now fully aligned with the foundational field.
