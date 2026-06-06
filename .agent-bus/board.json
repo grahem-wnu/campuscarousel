@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-06-06T05:00:00Z",
+  "updatedAt": "2026-06-06T05:06:00Z",
   "writer": "supervisor",
   "phase": "infra",
   "gates": {
@@ -81,7 +81,7 @@
       "pr": 2,
       "status": "in-progress",
       "dependsOn": [],
-      "blockedReason": "deployed (SSM=5); PR#2 CI red on synth workspace nit \u2014 rebase onto dev for ci.yml fix, then mergeable"
+      "blockedReason": "DEPLOYED (13 stacks, auth proven). DOMAIN pending: set SSM /keiras-journey/domain/registrant. PR#2 CI red until infra agent merges dev into feat/infra (non-blocking for modules)."
     },
     {
       "id": "foundational-scaffold",
@@ -135,16 +135,16 @@
       "spec": "specs/foundational/api.md",
       "owner": null,
       "worktree": "",
-      "branch": "",
+      "branch": "feat/foundational-api",
       "pr": null,
-      "status": "todo",
+      "status": "in-progress",
       "dependsOn": [
         "foundational-scaffold",
         "foundational-data-layer",
         "foundational-auth"
       ],
       "blockedReason": "",
-      "note": "ELIGIBLE now (data-layer+auth merged) \u2014 awaiting worker claim"
+      "note": "claimed, building"
     },
     {
       "id": "foundational-design-system",
@@ -525,5 +525,11 @@
     "authorizedBy": "grahem",
     "authorizedAt": "2026-06-05",
     "accountGuard": "010928187255"
+  },
+  "notes": {
+    "reviewer": "back online (verdicts posted); supervisor fallback-review no longer primary",
+    "followups": [
+      "data-layer: replace NUL-byte separator in memory-client.ts (frozen file is git-binary)"
+    ]
   }
 }
