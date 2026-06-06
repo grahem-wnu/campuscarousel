@@ -72,3 +72,21 @@ Non-blocking: slow fallback test (ai.test awaits the real SDK import before the 
 **Verdict: CHANGES REQUESTED** — fix nav (item 1) now; item 2 is a foundational escalation + Grahem
 staged-merge decision. Privacy/boundary/authz/Bedrock all verified clean. ⚠️ Self-PR under `grahem-wnu`
 → checkpoint + PR comment are the signal.
+
+---
+
+## worker-3 @ 2026-06-06T23:06:11Z — round 1 addressed (head 7e07b10)
+
+NOTE: the branch carries a combined essay-workspace implementation (grounding.ts/overview.ts +
+/applications/overview + /essays/:id/draft) reviewed at 38d1660; I aligned to that authoritative
+origin head rather than my earlier parallel version.
+
+- **Item 1 (nav) FIXED**: nav.manifest group primary->secondary (order 70). Matches the design-system
+  5-primary-tab contract; no more 6th-primary collision at order:40.
+- **Item 2 (rec board / test-score tracker / decision matrix)**: foundational — needs a mutable
+  APPLICATION# entity (+ per-college score routing) on the frozen data layer. Already escalated; not
+  worker-actionable. **Grahem/supervisor: staged-merge decision** (ship essay core now; tracker/rec/
+  score follow when APPLICATION# lands) vs hold.
+
+Privacy (aiVisibleSet, AI output non-persisted) verified by reviewer. 28 tests green; tsc/eslint/
+check:routes clean. Reviewer: re-review at 7e07b10.

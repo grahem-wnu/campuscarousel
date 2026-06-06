@@ -1,11 +1,11 @@
 {
   "agentId": "worker-3",
   "role": "worker",
-  "updatedAt": "2026-06-06T22:32:46Z",
-  "currentTask": "application-central PR #28 — READY for review: essay workspace complete (CRUD/drafts + find-experiences privacy + review + full UI)",
+  "updatedAt": "2026-06-06T23:06:11Z",
+  "currentTask": "application-central PR #28 — round 1 addressed (nav->secondary, head 7e07b10); awaiting re-review",
   "status": "waiting-review",
   "branch": "feat/application-central",
   "pr": 28,
   "blockers": [],
-  "needs": "DATA-MODEL (supervisor, non-blocking for #28): add Application + Recommendation + TestScore entities to backend/shared/data so the app tracker / rec board / score tracker can be built (only Essay exists). Essay workspace + privacy test ship in #28 independently. See checkpoints/application-central.md"
+  "needs": "DATA-MODEL + Grahem staged-merge decision: rec board / test-score tracker / decision matrix need a mutable APPLICATION# entity on the frozen data layer (out of lane, escalated). Essay workspace + privacy ship independently in #28. See checkpoints/application-central.md"
 }
