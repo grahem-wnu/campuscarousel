@@ -1,27 +1,28 @@
 {
   "agentId": "spec-reviewer",
   "role": "spec-reviewer",
-  "updatedAt": "2026-06-06T21:05:00Z",
-  "currentTask": "Wave-2 review. This pass: #21 scholarship-tracker APPROVED (real Bedrock discoverer+hydrator+SQS worker seam, all 3 findings fixed; async now wired post-#23). #20/#22/#23 merged. #19 college-hub now UNBLOCKED (worker-glob landed) but worker hasn't flipped yet. #18 mergeable/clean awaiting merge.",
+  "updatedAt": "2026-06-06T21:32:00Z",
+  "currentTask": "Wave-2 fully reviewed. This pass: #19 college-hub APPROVED (async flip verified, CI green) — the LAST wave-2 module; #24 ai-assistant (wave 3) APPROVED (privacy model verified myself: aiVisibleSet off JWT, 2-direction privacy test). All 9 wave-2 modules now merged-or-approved.",
   "status": "idle",
   "branch": "agent-bus",
   "pr": null,
   "blockers": [],
-  "needs": "FOR SUPERVISOR — READY TO MERGE (2 approved + clean): #18 course-planner (MERGEABLE/CLEAN — the earlier UNKNOWN was transient GitHub lag, NOT a conflict; please merge) and #21 scholarship-tracker (APPROVED this pass, MERGEABLE/CLEAN). Use checkpoint+PR-comment as the gate (self-PR under grahem-wnu → reviewDecision empty). MERGED since last: #20 teas-prep, #22 peer-benchmark, #23 hydration-bundle. ASYNC ESCALATION RESOLVED: #23 foundational-hydration-bundle landed both pieces on dev (@aws-sdk/client-sqs + build-lambda glob of module hydration.manifest.ts → worker registry). #19 college-hub is now FULLY UNBLOCKED — its SQS seam is ready; the worker just needs to flip routes.manifest inline→makeSqsEnqueuer (1 line) and re-push, then it's approvable. (Worker #19/supervisor: please nudge the flip — it's the last wave-2 module not approved.) WAVE-2 STATUS: 9 modules — merged: why-nursing, clinical-hours, goal-tracker, certifications, teas-prep, peer-benchmark (6); approved-awaiting-merge: course-planner #18, scholarship-tracker #21 (2); needs the 1-line async flip: college-hub #19 (1). Once those 3 land, M3 (all wave-2 merged) closes → wave-3 unblocks. PENDING GRAHEM (non-blocking): web-search tool not wired on college-hub/scholarship-tracker/peer-benchmark (data accuracy); #18 prereq matrix (gated on #19 merge); certifications training-progress field. RECURRING: all PRs under grahem-wnu → merge gate reads checkpoint+PR-comment, not reviewDecision.",
+  "needs": "FOR SUPERVISOR — MERGE 3 TO CLOSE M3: #18 course-planner, #19 college-hub, #21 scholarship-tracker are ALL APPROVED + CI-green + MERGEABLE/CLEAN. Merging them completes wave-2 (M3: all 9 wave-2 modules merged). #18 + #21 have been approved-awaiting-merge for ~3 passes — please merge (use checkpoint+PR-comment as the gate; self-PR under grahem-wnu → reviewDecision stays empty). Wave-2 modules: merged (6): why-nursing, clinical-hours, goal-tracker, certifications, teas-prep, peer-benchmark; approved-awaiting-merge (3): course-planner #18, college-hub #19, scholarship-tracker #21. WAVE-3 STARTED: #24 ai-assistant APPROVED this pass (privacy-correct). Remaining wave-3 (deps now mostly merged): application-central (needs college-hub+scholarship-tracker merged), campus-visit-planner + demonstrated-interest-contacts (need college-hub merged), interview-prep (needs why-nursing+activity-journal — merged). CONSOLIDATED GRAHEM DECISION (now spans 4 modules — please rule once): web-search tool is prompted but NOT wired on college-hub, scholarship-tracker, peer-benchmark, ai-assistant — all use general-knowledge Bedrock. Either wire a shared web-search capability (affects discovery/hydration/benchmark/citation accuracy) or formally accept general-knowledge AI and amend those specs. Other pending Grahem: #18 prereq matrix (gated on #19 merge); certifications training-progress field. RECURRING: all PRs under grahem-wnu → merge gate reads checkpoint+PR-comment, not reviewDecision.",
   "lastPass": {
-    "at": "2026-06-06T21:05:00Z",
-    "openPrsAgainstDev": 3,
+    "at": "2026-06-06T21:32:00Z",
+    "openPrsAgainstDev": 4,
     "reviewed": [
-      { "pr": 21, "branch": "feat/scholarship-tracker", "headSha": "30cc319", "round": 2, "verdict": "APPROVED", "ci": "green", "note": "real Bedrock discoverer+hydrator (env model, fallback, allowlist) + SQS enqueuer (HYDRATION_QUEUE_URL) + worker seam matching landed #23 build-glob + totalPotential fixed; comprehensive tests; spec-complete" }
+      { "pr": 19, "branch": "feat/college-hub", "headSha": "9e78d9b", "round": 3, "verdict": "APPROVED", "ci": "green", "note": "async flip verified (makeSqsEnqueuer w/ HYDRATION_QUEUE_URL + inline fallback; hydration.manifest matches landed #23 build-glob); last wave-2 module" },
+      { "pr": 24, "branch": "feat/ai-assistant", "headSha": "ac23b6f", "round": 1, "verdict": "APPROVED", "ci": "green", "note": "privacy verified myself: aiVisibleSet off JWT for clinical/activities/whyNursing (includes private for keira, excludes for parent), 2-direction privacy test; Bedrock server-side/env/fallback; boundary clean; web-search deferred (Grahem)" }
     ],
     "approvedAwaitingMerge": [
-      { "pr": 18, "branch": "feat/course-planner", "mergeable": "CLEAN" },
-      { "pr": 21, "branch": "feat/scholarship-tracker", "mergeable": "CLEAN" }
+      { "pr": 18, "branch": "feat/course-planner" },
+      { "pr": 19, "branch": "feat/college-hub" },
+      { "pr": 21, "branch": "feat/scholarship-tracker" }
     ],
-    "unblockedAwaitingWorker": [
-      { "pr": 19, "branch": "feat/college-hub", "headSha": "a4dc3ce", "note": "worker-glob landed (#23); flip routes.manifest inline→makeSqsEnqueuer (1 line) + re-push → approvable" }
-    ],
-    "merged": [20, 22, 23],
-    "stalls": []
+    "merged": [],
+    "stalls": [
+      { "prs": [18, 21], "reason": "APPROVED + MERGEABLE/CLEAN for ~3 passes, not yet merged — supervisor merge-lag; blocks M3" }
+    ]
   }
 }

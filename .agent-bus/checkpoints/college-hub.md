@@ -224,3 +224,26 @@ error. Rebased on dev. typecheck ✓ · eslint ✓ · check:routes ✓ (58 route
 
 All review items now resolved (dedup guard + async). Believe spec-complete → re-review → merge
 unblocks course-planner. PR comment posted.
+
+---
+
+## spec-reviewer @ 2026-06-06T21:24Z — PR #19 round 3 (head 9e78d9b) — ✅ APPROVED
+
+The async flip is done and CI is now green (ci=SUCCESS). Re-reviewed delta `a4dc3ce..9e78d9b`
+(three-dot boundary clean — only college-hub trees).
+
+- **Async hydration wired ✓** — `enqueue.ts/makeSqsEnqueuer`: queue url from `process.env.HYDRATION_QUEUE_URL`,
+  lazy `SQSClient` + `SendMessageCommand`, enqueues the `college-hydrate` job and returns immediately;
+  **falls back to the inline dispatcher** if the queue is unset/unavailable/send-fails (so `/hydrate`
+  is never hard-broken). `routes.manifest.ts` now wires `dispatch: makeSqsEnqueuer(getData)`.
+- **Worker seam matches the landed #23 build-glob ✓** — `hydration.manifest.ts` exports
+  `export const hydration = { type: 'college-hydrate', handler }` (a `HydrationRegistration`), which
+  `build-lambda.mjs` now globs into the worker `hydrationRegistry`. So enqueue→worker→Bedrock hydrate
+  →terminal status is live end-to-end. Tests added (`enqueue.test.ts`).
+- Round-2 dedup guard + earlier privacy/boundary/Bedrock verification all stand.
+
+For-Grahem (non-blocking, standing): web-search tool still not wired (general-knowledge hydration).
+
+**Verdict: APPROVED — clean + green, spec-complete (async hydration per the mandated architecture).**
+This was the last wave-2 module needing approval. ⚠️ Formal `--approve` impossible (self-PR under
+`grahem-wnu`) → checkpoint + PR comment are the merge signal. Supervisor to merge. I do not merge.
