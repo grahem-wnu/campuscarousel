@@ -1,0 +1,27 @@
+{
+  "name": "@keiras-journey/infra",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Keira's Journey — AWS infrastructure (AWS CDK, TypeScript)",
+  "bin": {
+    "infra": "bin/infra.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "synth": "cdk synth",
+    "synth:all": "cdk synth --all",
+    "diff": "cdk diff",
+    "cdk": "cdk"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "aws-cdk": "2.1126.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.5.0"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "2.258.0",
+    "constructs": "^10.3.0"
+  }
+}
