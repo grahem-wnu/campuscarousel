@@ -1,11 +1,11 @@
 {
   "agentId": "infrastructure",
   "role": "infrastructure",
-  "updatedAt": "2026-06-06T17:20:00Z",
-  "currentTask": "All infra units DONE + merged except one ready PR. (1) backend-bundle #10 MERGED — real Lambdas live staging+prod. (2) dns #12 MERGED — keirasjourney.com live (staging 200+TLS; prod TLS+301, 403 only b/c prod SPA bucket empty until Gate-3). (3) cicd per-env deploy scoping PR #16 OPEN, CI GREEN, mergeable CLEAN — fixes `cdk deploy --all` deploying prod from a dev push.",
+  "updatedAt": "2026-06-06T17:40:00Z",
+  "currentTask": "Infra MERGED: backend-bundle #10 (real Lambdas live staging+prod), dns #12 (keirasjourney.com live — staging 200+TLS, prod TLS+301/403-until-Gate3). Two ready PRs awaiting SUPERVISOR merge: #16 (per-env deploy scoping — stops dev pushes deploying prod) and #17 (add @aws-sdk/client-bedrock-runtime to backend deps — unblocks AI /suggest seams: goal-tracker, certifications, why-nursing, interview-prep, ai-assistant). Both CI green.",
   "status": "review",
-  "branch": "feat/cicd-scope-deploys",
-  "pr": 16,
+  "branch": "feat/backend-bedrock-dep",
+  "pr": 17,
   "blockers": [],
-  "needs": "SUPERVISOR: please merge PR #16 (squash). I'm blocked from merging (orchestration boundary). It's the last infra fix: dev currently still has `cdk deploy --all`, so every worker dev-push redeploys BOTH staging AND prod stacks (prod-from-dev = branching violation). #16 scopes deploy:staging -> Cicd + *-staging, deploy:prod -> *-prod. CI green, no conflicts. After merge, dev pushes touch staging only; prod updates only via the Gate-3 dev->main promotion."
+  "needs": "SUPERVISOR merge (squash) of #16 then #17 (I'm blocked from merging — orchestration boundary). #16: scopes deploy:staging->Cicd+*-staging, deploy:prod->*-prod (dev currently still --all, deploying prod from dev). #17: Bedrock SDK dep so AI modules can ship real /suggest. No conflicts; both off current dev."
 }
