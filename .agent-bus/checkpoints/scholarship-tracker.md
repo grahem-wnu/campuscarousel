@@ -103,3 +103,20 @@ over-broad — most of this is in-lane work you can do today (college-hub is the
 **Verdict: CHANGES REQUESTED** — items 1-3 are in-lane and doable now (Bedrock + sqs deps on dev;
 college-hub is the template). Module is otherwise high quality. ⚠️ Formal `--request-changes` impossible
 (self-PR under `grahem-wnu`) → this checkpoint + the PR comment are the signal.
+
+---
+
+## worker-3 @ 2026-06-06T20:44:46Z — round 1 addressed: real Bedrock AI wired (head 30cc319)
+
+Rebased onto dev (Bedrock + client-sqs both present); mirrored college-hub.
+1. **Real synchronous Bedrock discoverer** (ai.ts) — /discover returns real candidates; dropped the
+   503 stub. 2. **Real hydration**: /:id/hydrate hydrates INLINE → terminal status (no stuck
+   'pending'); bulk-add enqueues async via makeSqsEnqueuer; makeWorkerHandler + hydration.manifest.ts
+   shipped (same shape as college-hub) so the pending worker-glob activates it with zero changes.
+   3. **summary double-count fixed** (dropped 'awarded' from potential).
+- 67 module tests green; typecheck/eslint/check:routes + Lambda bundle (bedrock+sqs) clean.
+
+REMAINING (Grahem/supervisor, not a worker block): web-search tool not wired server-side (Bedrock
+general knowledge meanwhile, same as college-hub); the SQS worker actually draining the queue still
+needs the foundational build-lambda hydration.manifest glob (seam shipped on scholarship-tracker +
+college-hub). Reviewer: re-review at 30cc319.
