@@ -15,10 +15,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
       - name: Install
         run: |
-          if [ -f package-lock.json ]; then npm ci; else npm install; fi
+          if [ -f package-lock.json ]; then npm ci; else npm install --no-audit --no-fund; fi
       - name: Typecheck
         run: npm run typecheck --if-present
       - name: Lint
@@ -27,6 +26,10 @@ jobs:
         run: npm run check:routes --if-present
       - name: Unit + integration tests
         run: npm test --if-present
-      - name: CDK synth (only when the infra workspace exists)
+      - name: CDK synth (self-contained; only when the infra app exists)
         run: |
-          if [ -f infra/package.json ]; then npm run -w infra synth; else echo "infra workspace not present yet — skipping synth"; fi
+          if [ -f infra/package.json ]; then
+            (cd infra && npm install --no-audit --no-fund && npm run synth)
+          else
+            echo "infra app not present yet — skipping synth"
+          fi
