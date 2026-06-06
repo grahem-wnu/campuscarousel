@@ -8,7 +8,9 @@ export const nav: NavEntry[] = [
   {
     id: 'course-planner',
     label: 'Courses',
-    group: 'primary',
+    // 'secondary': the design system fixes the 5 primary tabs (Dashboard/Journal/Colleges/
+    // Scholarships/Timeline); Course Planner lives in the secondary menu (see design-system.md).
+    group: 'secondary',
     order: 40,
     route: '/courses',
     icon: 'course',
