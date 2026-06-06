@@ -102,7 +102,11 @@ export function makeHandlers(getData: () => Data, getAssistant: () => Assistant)
       };
     },
 
-    // GET /ai/conversations — only the caller's own conversations.
+    // GET /ai/conversations — only the caller's own conversations. The frozen ConversationRepo
+    // indexes all conversations under a single GSI1 partition, so we read and filter by the
+    // JWT-derived username here (no `limit` is passed, so the filter can't silently truncate a
+    // user's set). A per-user GSI partition would let the data layer scope this at query time —
+    // that's a foundational follow-up (shared/data is frozen and out of this module's lane).
     listConversations: async (ctx) => {
       const all = await getData().conversations.list();
       const conversations = all.filter((c) => c.userId === ctx.requester.username);
