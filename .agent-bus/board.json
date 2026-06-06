@@ -1,11 +1,11 @@
 {
-  "updatedAt": "2026-06-06T00:00:00Z-supervisor-resume",
+  "updatedAt": "2026-06-06T16:20:00Z-fanout-open",
   "writer": "supervisor",
-  "phase": "slice",
-  "note": "Parked at Gate 2 (deferred by Grahem). Gate 2's live private-entry test cannot pass until foundational-backend-bundle ships (API currently serves a placeholder). Sequence: build backend-bundle -> deploy -> Grahem passes Gate 2 -> supervisor flips gate2/M2/phase=fanout + strips slice-gate -> launch reviewer + 4 workers.",
+  "phase": "fanout",
+  "note": "FANOUT OPEN. Grahem authorized proceeding without his live Gate-2 UI walkthrough (privacy already proven via tests + the infra agent's live direct-invoke: keira sees private, kate 403 on real Lambda+DynamoDB). slice-gate sentinel stripped from all modules -> wave 2 eligible. DEFERRED: Grahem's own SPA click-through of private-entry visibility is folded into M6 final QA + must pass before Gate 3 (prod). Supervisor merges APPROVED+green PRs into dev only.",
   "gates": {
     "gate1_infra_apply": "approved",
-    "gate2_slice_test": "pending",
+    "gate2_slice_test": "approved-proceed-live-ui-deferred-to-final-qa",
     "gate3_prod_promote": "pending"
   },
   "milestones": [
@@ -27,8 +27,8 @@
       "id": "M2",
       "title": "vertical slice live",
       "gate": "gate2_slice_test",
-      "status": "pending",
-      "criteria": "activity-journal merged; staging green; Grahem confirms login + private-entry visibility"
+      "status": "done",
+      "criteria": "activity-journal merged; staging green; privacy proven (tests + live direct-invoke). NOTE: Grahem's live SPA walkthrough deferred to M6 final QA by his choice — required before Gate 3/prod."
     },
     {
       "id": "M3",
@@ -56,7 +56,7 @@
       "title": "integration + QA clean",
       "gate": null,
       "status": "pending",
-      "criteria": "integration pass merged; full staging QA sweep clean"
+      "criteria": "integration pass merged; full staging QA sweep clean; INCLUDES Grahem's deferred Gate-2 live SPA walkthrough (keira marks private, kate cannot see it) — must pass before Gate 3"
     },
     {
       "id": "M7",
@@ -231,9 +231,7 @@
         "foundational-data-layer",
         "foundational-auth",
         "foundational-api",
-        "foundational-design-system",
-        "slice-gate"
-      ],
+        "foundational-design-system"      ],
       "blockedReason": ""
     },
     {
@@ -250,9 +248,7 @@
         "foundational-data-layer",
         "foundational-auth",
         "foundational-api",
-        "foundational-design-system",
-        "slice-gate"
-      ],
+        "foundational-design-system"      ],
       "blockedReason": ""
     },
     {
@@ -269,9 +265,7 @@
         "foundational-data-layer",
         "foundational-auth",
         "foundational-api",
-        "foundational-design-system",
-        "slice-gate"
-      ],
+        "foundational-design-system"      ],
       "blockedReason": ""
     },
     {
@@ -288,9 +282,7 @@
         "foundational-data-layer",
         "foundational-auth",
         "foundational-api",
-        "foundational-design-system",
-        "slice-gate"
-      ],
+        "foundational-design-system"      ],
       "blockedReason": ""
     },
     {
@@ -307,9 +299,7 @@
         "foundational-data-layer",
         "foundational-auth",
         "foundational-api",
-        "foundational-design-system",
-        "slice-gate"
-      ],
+        "foundational-design-system"      ],
       "blockedReason": ""
     },
     {
@@ -326,9 +316,7 @@
         "foundational-data-layer",
         "foundational-auth",
         "foundational-api",
-        "foundational-design-system",
-        "slice-gate"
-      ],
+        "foundational-design-system"      ],
       "blockedReason": ""
     },
     {
@@ -345,9 +333,7 @@
         "foundational-data-layer",
         "foundational-auth",
         "foundational-api",
-        "foundational-design-system",
-        "slice-gate"
-      ],
+        "foundational-design-system"      ],
       "blockedReason": ""
     },
     {
@@ -364,9 +350,7 @@
         "foundational-data-layer",
         "foundational-auth",
         "foundational-api",
-        "foundational-design-system",
-        "slice-gate"
-      ],
+        "foundational-design-system"      ],
       "blockedReason": ""
     },
     {
@@ -383,9 +367,7 @@
         "foundational-data-layer",
         "foundational-auth",
         "foundational-api",
-        "foundational-design-system",
-        "slice-gate"
-      ],
+        "foundational-design-system"      ],
       "blockedReason": ""
     },
     {
@@ -404,9 +386,7 @@
         "foundational-api",
         "foundational-design-system",
         "college-hub",
-        "scholarship-tracker",
-        "slice-gate"
-      ],
+        "scholarship-tracker"      ],
       "blockedReason": ""
     },
     {
@@ -424,9 +404,7 @@
         "foundational-auth",
         "foundational-api",
         "foundational-design-system",
-        "college-hub",
-        "slice-gate"
-      ],
+        "college-hub"      ],
       "blockedReason": ""
     },
     {
@@ -444,9 +422,7 @@
         "foundational-auth",
         "foundational-api",
         "foundational-design-system",
-        "college-hub",
-        "slice-gate"
-      ],
+        "college-hub"      ],
       "blockedReason": ""
     },
     {
@@ -465,9 +441,7 @@
         "foundational-api",
         "foundational-design-system",
         "why-nursing",
-        "activity-journal",
-        "slice-gate"
-      ],
+        "activity-journal"      ],
       "blockedReason": ""
     },
     {
@@ -486,9 +460,7 @@
         "foundational-api",
         "foundational-design-system",
         "activity-journal",
-        "why-nursing",
-        "slice-gate"
-      ],
+        "why-nursing"      ],
       "blockedReason": ""
     },
     {
@@ -513,9 +485,7 @@
         "application-central",
         "college-hub",
         "certifications",
-        "teas-prep",
-        "slice-gate"
-      ],
+        "teas-prep"      ],
       "blockedReason": ""
     },
     {
@@ -541,9 +511,7 @@
         "course-planner",
         "certifications",
         "teas-prep",
-        "interview-prep",
-        "slice-gate"
-      ],
+        "interview-prep"      ],
       "blockedReason": ""
     },
     {
@@ -555,12 +523,12 @@
       "worktree": "",
       "branch": "",
       "pr": null,
-      "status": "todo",
+      "status": "merged",
       "dependsOn": [
         "activity-journal"
       ],
       "blockedReason": "",
-      "note": "Supervisor marks this merged ONLY after Gate 2 (Grahem tests the live staging slice). Gates fan-out."
+      "note": "SATISFIED 2026-06-06. Grahem authorized proceeding to fanout; privacy proven via tests + live direct-invoke. His live SPA walkthrough deferred to M6 final QA (required before Gate 3). Dep stripped from downstream modules."
     }
   ],
   "agents": {
