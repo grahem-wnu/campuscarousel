@@ -50,7 +50,7 @@ jobs:
       - name: Deploy backend (CDK)
         run: |
           if [ -f infra/package.json ]; then
-            (cd infra && npm install --no-audit --no-fund && npm run deploy)
+            (cd infra && npm install --no-audit --no-fund && npm run deploy:prod)
           else
             echo "infra CDK app not present on this ref yet — skipping backend deploy."
             echo "Frontend deploy below still runs against the already-deployed infra (SSM is populated)."
