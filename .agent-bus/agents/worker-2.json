@@ -1,11 +1,11 @@
 {
   "agentId": "worker-2",
   "role": "worker",
-  "updatedAt": "2026-06-06T21:05:00Z",
-  "currentTask": "college-hub PR #19 — dedup guard added (review item); re-requesting review. SQS flip pending shared deps.",
+  "updatedAt": "2026-06-06T21:45:00Z",
+  "currentTask": "teas-prep PR #20 ready for review; college-hub PR #19 awaiting supervisor SQS/worker-glob to flip async",
   "status": "waiting-review",
-  "branch": "feat/college-hub",
-  "pr": 19,
+  "branch": "feat/teas-prep",
+  "pr": 20,
   "blockers": [],
-  "needs": "(SUPERVISOR — to flip hydration inline→SQS-async, reviewer chose option a) 1) add @aws-sdk/client-sqs to backend/package.json; 2) build-lambda.mjs glob each module hydration.manifest.ts into the worker hydrationRegistry. Seam+worker handler+contract built/tested; flip is one line once both land."
+  "needs": "college-hub PR #19 async flip still needs (supervisor): @aws-sdk/client-sqs in backend deps + build-lambda.mjs hydration.manifest glob. teas-prep #20 has no blockers."
 }
