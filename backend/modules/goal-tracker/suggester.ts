@@ -26,6 +26,29 @@ export interface GoalSuggester {
   suggest(input: SuggestInput): Promise<SuggestedGoal[]>;
 }
 
+/** Raw model invocation: prompt in, completion text out. Keeps the AWS SDK out of the pure
+ *  prompt/parse path so `makeSuggester` is unit-testable with a fake invoker. */
+export type ModelInvoker = (prompt: string) => Promise<string>;
+
+/**
+ * Compose a suggester from a model invoker: build the prompt, invoke, parse. Falls back cleanly to
+ * an empty list on any invocation error (a bad model day surfaces to the user as "no suggestions",
+ * never a 500). `parseSuggestions` already tolerates unparseable output the same way.
+ */
+export function makeSuggester(invoke: ModelInvoker): GoalSuggester {
+  return {
+    async suggest(input) {
+      try {
+        const raw = await invoke(buildSuggestPrompt(input));
+        return parseSuggestions(raw, input.count ?? 12);
+      } catch (err) {
+        console.error('goal-tracker: AI suggestion failed', err);
+        return [];
+      }
+    },
+  };
+}
+
 const isCategory = (v: unknown): v is SuggestedGoal['category'] =>
   typeof v === 'string' && (CATEGORIES as readonly string[]).includes(v);
 
@@ -99,11 +122,10 @@ export function parseSuggestions(raw: string, limit = 12): SuggestedGoal[] {
 }
 
 /**
- * Production placeholder until the shared Bedrock client exists. Adding
- * `@aws-sdk/client-bedrock-runtime` to backend/package.json is a foundational change a module may
- * not make on its own (file-ownership rule), so it is raised on the checkpoint. Returns a clean 503
- * — every other endpoint, the whole suggest pipeline (prompt + parse), and the frontend flow work
- * today; only the live model call is gated on the dependency.
+ * Fallback for environments without Bedrock configured (local dev, or a Lambda missing
+ * BEDROCK_MODEL_ID): returns a clean 503 so the UI says "add a goal manually" rather than 500ing.
+ * The deployed routing Lambda has BEDROCK_MODEL_ID set, so production uses the real Bedrock
+ * suggester (see bedrock.ts) — this is only the safety net.
  */
 export const unavailableSuggester: GoalSuggester = {
   suggest() {

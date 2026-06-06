@@ -7,18 +7,19 @@
 // never drift apart.
 //
 // The data client is resolved lazily (first request) so importing this manifest never requires
-// TABLE_NAME — only a live invocation does. The AI suggester is likewise injected; until the shared
-// Bedrock client exists (raised on .agent-bus/checkpoints/goal-tracker.md) it returns a clean 503.
+// TABLE_NAME — only a live invocation does. The AI suggester is likewise injected: the production
+// binding (bedrock.ts) calls Bedrock when BEDROCK_MODEL_ID is set, and degrades to a clean 503
+// locally/unconfigured. The Bedrock client itself is constructed lazily on first suggest.
 
 import type { RouteDef } from '../../shared/api/index.js';
 import { dataFromEnv, type Data } from '../../shared/data/index.js';
+import { bedrockSuggester } from './bedrock.js';
 import { makeHandlers } from './handlers.js';
-import { unavailableSuggester } from './suggester.js';
 
 let cached: Data | undefined;
 const handlers = makeHandlers(
   (): Data => (cached ??= dataFromEnv()),
-  () => unavailableSuggester,
+  () => bedrockSuggester,
 );
 
 export const routes: RouteDef[] = [

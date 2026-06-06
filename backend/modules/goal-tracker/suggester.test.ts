@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { buildSuggestPrompt, parseSuggestions, unavailableSuggester } from './suggester.js';
+import { describe, expect, it, vi } from 'vitest';
+import { buildSuggestPrompt, makeSuggester, parseSuggestions, unavailableSuggester } from './suggester.js';
 
 describe('buildSuggestPrompt', () => {
   it('weaves in the profile context and the default count', () => {
@@ -55,8 +55,33 @@ describe('parseSuggestions', () => {
   });
 });
 
+describe('makeSuggester', () => {
+  it('builds the prompt, invokes, and parses the model output', async () => {
+    const invoke = vi.fn(async (prompt: string) => {
+      expect(prompt).toContain('Suggest 2'); // count threaded into the prompt
+      return '[{"title":"Shadow a nurse","category":"clinical"}]';
+    });
+    const out = await makeSuggester(invoke).suggest({ count: 2 });
+    expect(out).toEqual([{ title: 'Shadow a nurse', category: 'clinical' }]);
+    expect(invoke).toHaveBeenCalledOnce();
+  });
+
+  it('falls back to [] when the model invocation throws (no 500)', async () => {
+    const invoke = vi.fn(async () => {
+      throw new Error('Bedrock throttled');
+    });
+    await expect(makeSuggester(invoke).suggest({})).resolves.toEqual([]);
+  });
+
+  it('honours the requested count as the parse limit', async () => {
+    const many = JSON.stringify(Array.from({ length: 10 }, (_, i) => ({ title: `g${i}` })));
+    const out = await makeSuggester(async () => many).suggest({ count: 3 });
+    expect(out).toHaveLength(3);
+  });
+});
+
 describe('unavailableSuggester', () => {
-  it('rejects with a 503 until the shared Bedrock client lands', async () => {
+  it('rejects with a 503 when Bedrock is not configured', async () => {
     await expect(unavailableSuggester.suggest({})).rejects.toMatchObject({ status: 503 });
   });
 });
