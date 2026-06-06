@@ -274,17 +274,18 @@
       "kind": "module",
       "wave": 2,
       "spec": "specs/modules/certifications.md",
-      "owner": null,
+      "owner": "worker-2",
       "worktree": "",
-      "branch": "",
-      "pr": null,
-      "status": "todo",
+      "branch": "feat/certifications",
+      "pr": 14,
+      "status": "merged",
       "dependsOn": [
         "foundational-data-layer",
         "foundational-auth",
         "foundational-api",
         "foundational-design-system"      ],
-      "blockedReason": ""
+      "blockedReason": "",
+      "note": "MERGED (#14, round 3 APPROVED). CRUD, status lifecycle, expiry alerts, AI suggestions."
     },
     {
       "id": "course-planner",
