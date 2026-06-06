@@ -181,11 +181,15 @@ describe('notes / checklist', () => {
     await expectStatus(h.addNote(ctx({ params: { id: 'ghost' }, body: { content: 'x' } })), 404);
   });
 
-  it('puts a checklist', async () => {
+  it('puts then gets a checklist (empty shell before first save)', async () => {
     const c = await create({ name: 'Ohio State' });
-    const res = await h.putChecklist(
+    const empty = await h.getChecklist(ctx({ params: { id: c.collegeId } }));
+    expect((empty.body as { items: unknown[] }).items).toHaveLength(0);
+
+    await h.putChecklist(
       ctx({ params: { id: c.collegeId }, body: { items: [{ id: 'app', label: 'Apply', completed: false }] } }),
     );
-    expect((res.body as { items: unknown[] }).items).toHaveLength(1);
+    const got = await h.getChecklist(ctx({ params: { id: c.collegeId } }));
+    expect((got.body as { items: { label: string }[] }).items.map((i) => i.label)).toEqual(['Apply']);
   });
 });

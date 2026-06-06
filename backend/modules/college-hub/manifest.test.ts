@@ -14,12 +14,13 @@ describe('routes.manifest ↔ buildRoutes', () => {
     expect(manifestRoutes.map(sig).sort()).toEqual(built);
   });
 
-  it('expose all thirteen College Hub endpoints', () => {
+  it('expose all fourteen College Hub endpoints', () => {
     expect(manifestRoutes.map(sig).sort()).toEqual(
       [
         'DELETE /colleges/:id',
         'GET /colleges',
         'GET /colleges/:id',
+        'GET /colleges/:id/checklist',
         'GET /colleges/:id/notes',
         'PATCH /colleges/:id/top-pick',
         'POST /colleges',

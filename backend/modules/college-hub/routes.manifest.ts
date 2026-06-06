@@ -29,5 +29,6 @@ export const routes: RouteDef[] = [
   { method: 'POST', path: '/colleges/:id/hydrate', handler: handlers.hydrate },
   { method: 'GET', path: '/colleges/:id/notes', handler: handlers.listNotes },
   { method: 'POST', path: '/colleges/:id/notes', handler: handlers.addNote },
+  { method: 'GET', path: '/colleges/:id/checklist', handler: handlers.getChecklist },
   { method: 'PUT', path: '/colleges/:id/checklist', handler: handlers.putChecklist },
 ];

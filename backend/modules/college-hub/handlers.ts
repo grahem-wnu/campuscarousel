@@ -40,6 +40,7 @@ export interface CollegeHandlers {
   bulkAdd: Handler;
   listNotes: Handler;
   addNote: Handler;
+  getChecklist: Handler;
   putChecklist: Handler;
 }
 
@@ -193,6 +194,14 @@ export function makeHandlers(deps: CollegeDeps): CollegeHandlers {
       return { status: 201, body: note };
     },
 
+    // GET /colleges/:id/checklist — the checklist (empty shell if none saved yet).
+    getChecklist: async (ctx) => {
+      const { id } = validateParams(idParamSchema, ctx);
+      await requireCollege(id);
+      const checklist = await getData().collegeChecklist.get(id);
+      return { status: 200, body: checklist ?? { collegeId: id, items: [] } };
+    },
+
     // PUT /colleges/:id/checklist — replace the whole checklist.
     putChecklist: async (ctx) => {
       const { id } = validateParams(idParamSchema, ctx);
@@ -220,6 +229,7 @@ export function buildRoutes(h: CollegeHandlers) {
     { method: 'POST' as const, path: '/colleges/:id/hydrate', handler: h.hydrate },
     { method: 'GET' as const, path: '/colleges/:id/notes', handler: h.listNotes },
     { method: 'POST' as const, path: '/colleges/:id/notes', handler: h.addNote },
+    { method: 'GET' as const, path: '/colleges/:id/checklist', handler: h.getChecklist },
     { method: 'PUT' as const, path: '/colleges/:id/checklist', handler: h.putChecklist },
   ];
 }
