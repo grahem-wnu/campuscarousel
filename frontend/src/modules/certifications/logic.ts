@@ -21,6 +21,7 @@ export const STATUS_META: Record<CertStatus, StatusMeta> = {
   renewed: { label: 'Renewed', tone: 'success', icon: 'check' },
 };
 
+/** All statuses — for the list FILTER, which matches the read-time effective status. */
 export const STATUS_OPTIONS: CertStatus[] = [
   'planned',
   'in-progress',
@@ -29,6 +30,10 @@ export const STATUS_OPTIONS: CertStatus[] = [
   'expired',
   'renewed',
 ];
+
+/** Statuses a user may SET. `expiring-soon` / `expired` are derived server-side from the expiration
+ *  date (the API rejects writing them), so they never appear in the create/edit form. */
+export const WRITABLE_STATUS_OPTIONS: CertStatus[] = ['planned', 'in-progress', 'active', 'renewed'];
 
 /** The spec's expiration-alert horizon. */
 export const EXPIRING_SOON_DAYS = 90;

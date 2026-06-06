@@ -31,8 +31,14 @@ export type Suggester = (input: {
 /** Default career goal when neither the request nor the profile supplies one. */
 export const DEFAULT_CAREER_GOAL = 'aspiring BSN nursing student aiming for ICU / critical care';
 
+/** A curated entry carries `aliases` — canonical short identifiers used ONLY for held-cert dedupe
+ *  (e.g. "BLS" matches "BLS/CPR Certification"). Aliases are internal and never returned to the API. */
+interface CuratedEntry extends CertSuggestion {
+  aliases?: string[];
+}
+
 /** Foundational certs every aspiring nursing student benefits from (the spec's named baseline). */
-const BASELINE: CertSuggestion[] = [
+const BASELINE: CuratedEntry[] = [
   {
     name: 'BLS/CPR Certification',
     issuingOrganization: 'American Heart Association',
@@ -40,6 +46,7 @@ const BASELINE: CertSuggestion[] = [
     typicalCost: 90,
     renewalFrequency: 'Every 2 years',
     priority: 1,
+    aliases: ['bls', 'cpr'],
   },
   {
     name: 'Certified Nursing Assistant (CNA)',
@@ -48,6 +55,7 @@ const BASELINE: CertSuggestion[] = [
     typicalCost: 1200,
     renewalFrequency: 'Every 2 years',
     priority: 2,
+    aliases: ['cna'],
   },
   {
     name: 'First Aid Certification',
@@ -64,11 +72,12 @@ const BASELINE: CertSuggestion[] = [
     typicalCost: 0,
     renewalFrequency: 'No formal expiration',
     priority: 4,
+    aliases: ['stb'],
   },
 ];
 
 /** Certs tied to ICU / critical-care / acute goals — surfaced when the goal mentions them. */
-const ICU_TRACK: CertSuggestion[] = [
+const ICU_TRACK: CuratedEntry[] = [
   {
     name: 'Advanced Cardiovascular Life Support (ACLS)',
     issuingOrganization: 'American Heart Association',
@@ -76,6 +85,7 @@ const ICU_TRACK: CertSuggestion[] = [
     typicalCost: 250,
     renewalFrequency: 'Every 2 years',
     priority: 5,
+    aliases: ['acls'],
   },
   {
     name: 'Pediatric Advanced Life Support (PALS)',
@@ -84,29 +94,82 @@ const ICU_TRACK: CertSuggestion[] = [
     typicalCost: 250,
     renewalFrequency: 'Every 2 years',
     priority: 6,
+    aliases: ['pals'],
   },
 ];
 
 const norm = (s: string): string => s.trim().toLowerCase();
 
+/** Generic words that carry no identifying signal — excluded so they never drive a dedupe match. */
+const STOPWORDS = new Set([
+  'certification',
+  'certificate',
+  'cert',
+  'certified',
+  'license',
+  'licensure',
+  'training',
+  'course',
+  'program',
+  'the',
+  'of',
+  'in',
+  'for',
+  'and',
+  'a',
+  'an',
+]);
+
+/** Significant tokens of a name (lowercased words ≥2 chars, minus stopwords). */
+function tokenSet(name: string): Set<string> {
+  return new Set(
+    norm(name)
+      .split(/[^a-z0-9]+/)
+      .filter((t) => t.length >= 2 && !STOPWORDS.has(t)),
+  );
+}
+
+/** The dedupe keys for a curated entry: significant tokens of its name plus its aliases. */
+function keysFor(entry: CuratedEntry): Set<string> {
+  const keys = tokenSet(entry.name);
+  for (const a of entry.aliases ?? []) keys.add(norm(a));
+  return keys;
+}
+
+/**
+ * Whether a held cert (its significant token set) refers to the same cert as a curated entry.
+ * Match iff one non-empty token set is a subset of the other — so "CNA" ↔ "Certified Nursing
+ * Assistant (CNA)" match on the shared `cna`, while "BLS/CPR" never matches "ACLS". An empty held
+ * set (e.g. a blank or all-stopword name) matches nothing, fixing the prior substring over-filter.
+ */
+function sameCert(heldTokens: Set<string>, keys: Set<string>): boolean {
+  if (heldTokens.size === 0 || keys.size === 0) return false;
+  const [small, big] = heldTokens.size <= keys.size ? [heldTokens, keys] : [keys, heldTokens];
+  for (const t of small) if (!big.has(t)) return false;
+  return true;
+}
+
 /** Career-goal keywords that unlock the ICU/critical-care track. */
 function wantsIcuTrack(careerGoal: string): boolean {
   const g = norm(careerGoal);
-  return ['icu', 'critical', 'acute', 'emergency', 'trauma', 'er', 'intensive'].some((k) =>
-    g.includes(k),
-  );
+  return ['icu', 'critical', 'acute', 'emergency', 'trauma', 'intensive'].some((k) => g.includes(k));
+}
+
+/** Strip internal-only fields before returning to the API. */
+function toSuggestion({ aliases: _aliases, ...rest }: CuratedEntry): CertSuggestion {
+  return rest;
 }
 
 /**
  * The deterministic curated suggester. No network, no clock — safe in tests and as a production
- * fallback. Filters out anything Keira already has (case-insensitive, substring-tolerant).
+ * fallback. Filters out certs Keira already holds via precise token/alias matching (not substrings).
  */
 export const curatedSuggester: Suggester = async ({ careerGoal, existingNames }) => {
-  const have = existingNames.map(norm);
+  const heldTokenSets = existingNames.map(tokenSet);
   const pool = wantsIcuTrack(careerGoal) ? [...BASELINE, ...ICU_TRACK] : [...BASELINE];
-  const fresh = pool.filter((s) => {
-    const name = norm(s.name);
-    return !have.some((h) => h.includes(name) || name.includes(h));
+  const fresh = pool.filter((entry) => {
+    const keys = keysFor(entry);
+    return !heldTokenSets.some((held) => sameCert(held, keys));
   });
-  return fresh.sort((a, b) => a.priority - b.priority);
+  return fresh.sort((a, b) => a.priority - b.priority).map(toSuggestion);
 };

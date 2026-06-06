@@ -69,6 +69,11 @@ describe('create (POST /certifications)', () => {
     await expectStatus(h.create(ctx({ body: { name: 'x', documentUrl: 'not-a-url' } })), 422);
     await expectStatus(h.create(ctx({ body: { name: 'x', bogus: 1 } })), 422);
   });
+
+  it('422s when writing a DERIVED status (expiring-soon / expired are read-only)', async () => {
+    await expectStatus(h.create(ctx({ body: { name: 'x', status: 'expired' } })), 422);
+    await expectStatus(h.create(ctx({ body: { name: 'x', status: 'expiring-soon' } })), 422);
+  });
 });
 
 describe('list (GET /certifications)', () => {

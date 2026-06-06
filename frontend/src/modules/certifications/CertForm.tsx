@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { Button, DateField, Field, Input, Select, Textarea } from '../../shared/ui';
-import { STATUS_META, STATUS_OPTIONS } from './logic';
+import { STATUS_META, WRITABLE_STATUS_OPTIONS } from './logic';
 import type { Certification, CertificationInput, CertStatus } from './types';
 
 interface Props {
@@ -71,7 +71,7 @@ export function CertForm({ initial, busy, error, onSubmit, onCancel, onDelete }:
         </Field>
         <Field label="Status">
           <Select value={status} onChange={(e) => setStatus(e.target.value as CertStatus)}>
-            {STATUS_OPTIONS.map((s) => (
+            {WRITABLE_STATUS_OPTIONS.map((s) => (
               <option key={s} value={s}>
                 {STATUS_META[s].label}
               </option>

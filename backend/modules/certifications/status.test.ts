@@ -53,6 +53,17 @@ describe('effectiveStatus', () => {
     expect(effectiveStatus(cert({ status: 'active' }), TODAY)).toBe('active');
   });
 
+  it('reconciles a stale stored expired/expiring-soon from the expiration date', () => {
+    // stored 'expired' but renewed far into the future → recovers to active
+    expect(effectiveStatus(cert({ status: 'expired', expirationDate: '2027-12-31' }), TODAY)).toBe('active');
+    // stored 'expiring-soon' but actually long-valid → active
+    expect(effectiveStatus(cert({ status: 'expiring-soon', expirationDate: '2027-12-31' }), TODAY)).toBe('active');
+    // stored 'expired' with no expiration date → healthy base (active)
+    expect(effectiveStatus(cert({ status: 'expired', expirationDate: null }), TODAY)).toBe('active');
+    // stored 'active' genuinely past → expired
+    expect(effectiveStatus(cert({ status: 'active', expirationDate: '2026-06-05' }), TODAY)).toBe('expired');
+  });
+
   it('defaults to active when earned, planned otherwise', () => {
     expect(effectiveStatus(cert({ status: undefined, dateEarned: '2026-01-10' }), TODAY)).toBe('active');
     expect(effectiveStatus(cert({ status: undefined }), TODAY)).toBe('planned');

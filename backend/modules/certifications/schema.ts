@@ -3,9 +3,8 @@
 
 import { z } from '../../shared/api/index.js';
 
-/** Certification lifecycle states (mirrors the data-layer `Certification['status']` union).
- *  `expiring-soon` / `expired` are normally DERIVED from the expiration date at read time, but are
- *  accepted on write so an imported record can carry an explicit state. */
+/** All certification lifecycle states (mirrors the data-layer `Certification['status']` union).
+ *  Used for the list FILTER, which matches on the read-time effective status. */
 export const CERT_STATUSES = [
   'planned',
   'in-progress',
@@ -14,6 +13,11 @@ export const CERT_STATUSES = [
   'expired',
   'renewed',
 ] as const;
+
+/** States a caller may WRITE. `expiring-soon` / `expired` are purely DERIVED from the expiration
+ *  date at read time (see status.ts), so accepting them on write would let a stored value go stale
+ *  and never reconcile — they are intentionally excluded from create/update. */
+export const WRITABLE_CERT_STATUSES = ['planned', 'in-progress', 'active', 'renewed'] as const;
 
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'must be an ISO date (YYYY-MM-DD)');
 
@@ -29,7 +33,7 @@ export const createSchema = z
     renewalRequired: z.boolean().optional(),
     renewalFrequency: z.string().max(120).optional(),
     renewalRequirements: z.string().max(5000).optional(),
-    status: z.enum(CERT_STATUSES).optional(),
+    status: z.enum(WRITABLE_CERT_STATUSES).optional(),
     trainingProgram: z.string().max(200).optional(),
     trainingHours: z.number().nonnegative().max(100000).optional(),
     cost: z.number().nonnegative().max(1000000).optional(),

@@ -22,20 +22,27 @@ export function daysUntil(dateIso: string, todayIso: string): number | null {
   return Math.round((target - today) / MS_PER_DAY);
 }
 
+/** Stored states whose DISPLAY value is (re)derived from the expiration date. `expiring-soon` and
+ *  `expired` are included so a stale stored value (or an imported one) always reconciles to reality
+ *  — a renewed-but-still-marked-`expired` cert recovers, and an `active` one ages into expiry. */
+const EXPIRY_DERIVED = new Set(['active', 'renewed', 'expiring-soon', 'expired']);
+
 /**
- * The status to DISPLAY for a cert, given today's date. Expiration overrides only the "active" and
- * "renewed" states; planned / in-progress are left untouched (a planned cert isn't "expired" just
- * because some date passed). A cert with no expiration date keeps its stored status.
+ * The status to DISPLAY for a cert, given today's date. `planned` / `in-progress` are left untouched
+ * (a planned cert isn't "expired" just because a date passed). For the expiry-derived states the
+ * display value is computed fresh from `expirationDate`: past → `expired`, within the horizon →
+ * `expiring-soon`, otherwise the healthy base (`renewed` if stored renewed, else `active`).
  */
 export function effectiveStatus(cert: Certification, todayIso: string): NonNullable<Certification['status']> {
   const stored = cert.status ?? (cert.dateEarned ? 'active' : 'planned');
-  if (stored !== 'active' && stored !== 'renewed') return stored;
-  if (!cert.expirationDate) return stored;
+  if (!EXPIRY_DERIVED.has(stored)) return stored;
+  const base = stored === 'renewed' ? 'renewed' : 'active';
+  if (!cert.expirationDate) return base;
   const remaining = daysUntil(cert.expirationDate, todayIso);
-  if (remaining === null) return stored;
+  if (remaining === null) return base;
   if (remaining < 0) return 'expired';
   if (remaining <= EXPIRING_SOON_DAYS) return 'expiring-soon';
-  return stored;
+  return base;
 }
 
 /** A certification decorated for the client: effective status + days-until-expiration countdown. */
