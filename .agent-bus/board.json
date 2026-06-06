@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-06-06T20:10:00Z-wave2",
+  "updatedAt": "2026-06-06T20:25:00Z-hydration-unit",
   "writer": "supervisor",
   "phase": "fanout",
   "note": "FANOUT OPEN. Grahem authorized proceeding without his live Gate-2 UI walkthrough (privacy already proven via tests + the infra agent's live direct-invoke: keira sees private, kate 403 on real Lambda+DynamoDB). slice-gate sentinel stripped from all modules -> wave 2 eligible. DEFERRED: Grahem's own SPA click-through of private-entry visibility is folded into M6 final QA + must pass before Gate 3 (prod). Supervisor merges APPROVED+green PRs into dev only.",
@@ -103,6 +103,22 @@
       ],
       "blockedReason": "",
       "note": "MERGED (#10, squash -> dev abc019d). Real Lambda packaging: esbuild + codegen barrel, Code.fromAsset both stacks, presynth/predeploy + CI build step, placeholder deleted. Live-verified on staging (routing 393->331344, hydration 393->1085; keira sees private, kate 403). Gate 2 is now testable."
+    },
+    {
+      "id": "foundational-hydration-bundle",
+      "kind": "foundational",
+      "wave": 0,
+      "spec": "specs/foundational/hydration-bundle.md",
+      "owner": "infrastructure",
+      "worktree": ".worktrees/infra",
+      "branch": "feat/hydration-bundle",
+      "pr": null,
+      "status": "todo",
+      "dependsOn": [
+        "foundational-backend-bundle"
+      ],
+      "blockedReason": "",
+      "note": "Async SQS worker wiring. SQS dep already on dev (9401837). REMAINING for infra: build-lambda.mjs must glob module hydration.manifest.ts + populate hydrationRegistry (mirror routes barrel) + hydration.ts import. Unblocks college-hub async -> course-planner. Convention set by college-hub."
     },
     {
       "id": "foundational-scaffold",
@@ -355,16 +371,17 @@
       "spec": "specs/modules/college-hub.md",
       "owner": null,
       "worktree": "",
-      "branch": "",
-      "pr": null,
-      "status": "todo",
+      "branch": "feat/college-hub",
+      "pr": 19,
+      "status": "review",
       "dependsOn": [
         "foundational-data-layer",
         "foundational-auth",
         "foundational-api",
-        "foundational-design-system"
+        "foundational-design-system",
+        "foundational-hydration-bundle"
       ],
-      "blockedReason": ""
+      "blockedReason": "async hydration blocked until foundational-hydration-bundle lands (build-script glob + registry); then worker flips inline->makeSqsEnqueuer (1 line). Dedup item already fixed."
     },
     {
       "id": "peer-benchmark",
