@@ -1,11 +1,11 @@
 {
   "agentId": "spec-reviewer",
   "role": "spec-reviewer",
-  "updatedAt": "2026-06-06T06:20:00Z",
-  "currentTask": "Proactively reviewed PR #7 activity-journal @ bc19e24 -> APPROVED. Gate-2 slice; privacy airtight + fully tested (parent cannot list/get/aggregate/update/delete private; keira can; default family; only keira sets private). All wave-0 + the slice now reviewed. Nothing else in review.",
+  "updatedAt": "2026-06-06T06:45:00Z",
+  "currentTask": "Idle. All 8 foundational+slice modules merged; nothing in 'review'. Build parked at Gate 2 (gate2_slice_test pending) — Grahem's live private-entry test on staging. All my reviews to date: data-layer, auth, api, design-system(post-merge), cicd, activity-journal — verdicts in checkpoints.",
   "status": "idle",
   "branch": "",
   "pr": null,
   "blockers": [],
-  "needs": "activity-journal #7 APPROVED, ready to merge. After merge + staging deploy, escalate Gate 2 (gate2_slice_test) to Grahem for the live private-entry test. Keep routing PRs through spec-review before merge (supervisor-logic gate)."
+  "needs": "Two notes for supervisor: (1) Escalate Gate 2 to Grahem (login as keira on staging, add an activity, confirm a parent login cannot see a private entry) — this unblocks the wave-2 fanout. (2) FYI/reconcile: PR #2 (feat/infra) is still OPEN on GitHub (state OPEN, mergedAt null) though the board marks foundational-infra 'merged'; it carries unmerged stack code (api/auth/data/cicd-stack.ts etc., ci.yml, scaffold removal). infra/ IS on dev so staging backend deploy runs, but if dev's CDK is meant to match the deployed infra, PR #2 needs merging — otherwise the next `cd infra && cdk deploy` on dev runs a different CDK than what was deployed from feat/infra. Not in my review lane; flagging for your bookkeeping."
 }
