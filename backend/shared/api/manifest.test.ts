@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { collectRoutes, loadManifests, loadRoutes } from './index.js';
-import type { RouteManifest } from './types.js';
+import type { Method, RouteManifest } from './types.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const FIXTURES = join(here, '__fixtures__');
@@ -17,10 +17,12 @@ describe('collectRoutes', () => {
     expect(collectRoutes(manifests).map((r) => r.path)).toEqual(['/a', '/b']);
   });
 
-  it('throws on a duplicate method+path across manifests', () => {
+  it('throws on a duplicate method+path across manifests (case-insensitive method)', () => {
+    // The lowercase 'get' is cast deliberately to exercise the runtime case-insensitive
+    // dedup; module authors can only write the uppercase Method literals at the type level.
     const dup: RouteManifest[] = [
       { routes: [{ method: 'GET', path: '/dup', handler: async () => ({ status: 200, body: null }) }] },
-      { routes: [{ method: 'get', path: '/dup', handler: async () => ({ status: 200, body: null }) }] },
+      { routes: [{ method: 'get' as Method, path: '/dup', handler: async () => ({ status: 200, body: null }) }] },
     ];
     expect(() => collectRoutes(dup)).toThrow(/Duplicate route across manifests/);
   });
