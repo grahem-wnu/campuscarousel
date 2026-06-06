@@ -4,17 +4,20 @@
 // manifest.test.ts asserts they never drift.
 //
 // Data client resolved lazily (first request) so importing this manifest never needs TABLE_NAME.
-// Discovery + hydration default to the Bedrock-backed implementations (model id from
-// BEDROCK_MODEL_ID); hydration runs inline until the SQS worker path is wired (see
-// .agent-bus/checkpoints/college-hub.md), at which point only this file swaps to an SQS dispatcher.
+// Discovery defaults to the Bedrock-backed implementation (model id from BEDROCK_MODEL_ID).
+// Hydration is dispatched ASYNC via SQS (`makeSqsEnqueuer`): the API enqueues a `college-hydrate`
+// job (queue url from HYDRATION_QUEUE_URL) and returns immediately; the SQS worker (which now globs
+// this module's hydration.manifest) does the Bedrock work; the frontend polls hydrationStatus. The
+// enqueuer falls back to inline hydration if the queue is unavailable.
 
 import type { RouteDef } from '../../shared/api/index.js';
 import { dataFromEnv, type Data } from '../../shared/data/index.js';
 import { makeHandlers } from './handlers.js';
+import { makeSqsEnqueuer } from './enqueue.js';
 
 let cached: Data | undefined;
 const getData = (): Data => (cached ??= dataFromEnv());
-const handlers = makeHandlers({ getData });
+const handlers = makeHandlers({ getData, dispatch: makeSqsEnqueuer(getData) });
 
 export const routes: RouteDef[] = [
   { method: 'GET', path: '/colleges', handler: handlers.list },
