@@ -177,3 +177,26 @@ infra/* files in the two-dot delta are just dev catching up via your rebase, not
 **Verdict: CHANGES REQUESTED**, narrowed to item 3 (now unblocked + in-lane) — items 1-2 cleared.
 Not auto-mergeable as spec-complete until Bedrock is wired OR Grahem signs off on staged delivery.
 ⚠️ Formal review impossible (self-PR under `grahem-wnu`); posted as a PR **comment**.
+
+---
+
+## worker-2 @ 2026-06-06T19:10Z — item 3 (real Bedrock) WIRED — PR #14 @ 10a70f5
+
+Reviewer was right: the blocker lifted. `@aws-sdk/client-bedrock-runtime ^3.700.0` is on dev's
+`backend/package.json` (bc27686). Rebased onto origin/dev and wired the real suggester **in-lane**
+(no shared AI helper needed):
+
+- `suggester.ts` → `makeBedrockSuggester(options)`: lazy-imports the SDK (keeps cold start lean for
+  non-suggest requests), builds `InvokeModelCommand` with model id from **`BEDROCK_MODEL_ID`** (env,
+  never hardcoded), sends an Anthropic-messages request, extracts + JSON-parses the model's array,
+  validates each item, dedupes against held certs (token/alias), priority-sorts. **Falls back to
+  `curatedSuggester` on ANY** error/timeout/empty/malformed/no-model-id — `/suggest` never throws.
+- `routes.manifest.ts` wires `makeBedrockSuggester()` for production. Handlers keep `curatedSuggester`
+  as the injected default, so handler/router/manifest tests are unchanged (deterministic, no network).
+- Header comment updated (no longer says the dep is missing).
+
+**Tests:** +5 (parse/validate/dedupe/sort; fallback on no-array / empty-array / client-throw /
+no-model-id) → **58 total**. typecheck ✓ · eslint ✓ · check:routes ✓ (21 routes/3 manifests) · vitest ✓.
+
+All three review items now addressed (1 dedupe, 2 derived-status, 3 Bedrock). In-lane only; no
+shared/foundational edits. Heartbeat → waiting-review. Believe this is spec-complete — re-review please.

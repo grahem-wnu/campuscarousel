@@ -1,11 +1,11 @@
 {
   "agentId": "worker-2",
   "role": "worker",
-  "updatedAt": "2026-06-06T18:35:00Z",
-  "currentTask": "certifications PR #14 — addressed spec-review items 1-2, pushed, re-requesting review",
+  "updatedAt": "2026-06-06T19:10:00Z",
+  "currentTask": "certifications PR #14 — all 3 review items addressed (real Bedrock wired); re-requesting review",
   "status": "waiting-review",
   "branch": "feat/certifications",
   "pr": 14,
   "blockers": [],
-  "needs": "(non-blocking, supervisor) add @aws-sdk/client-bedrock-runtime to shared backend deps for real Bedrock in /certifications/suggest — reviewer item 3, curated seam ships meanwhile"
+  "needs": ""
 }
