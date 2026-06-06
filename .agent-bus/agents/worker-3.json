@@ -1,11 +1,11 @@
 {
   "agentId": "worker-3",
   "role": "worker",
-  "updatedAt": "2026-06-06T18:02:59Z",
-  "currentTask": "goal-tracker PR #15 — round 2 addressed: real Bedrock suggester wired (head bba7b08), awaiting re-review",
-  "status": "waiting-review",
+  "updatedAt": "2026-06-06T18:53:21Z",
+  "currentTask": "goal-tracker PR #15 (bba7b08) — spec-reviewer APPROVED (round 3); worker work complete + verified",
+  "status": "approved-awaiting-merge",
   "branch": "feat/goal-tracker",
   "pr": 15,
   "blockers": [],
-  "needs": "none — Bedrock dep landed (bc27686) and /goals/suggest now calls it. Item 3 (milestone- vs linked-activity progress) is Grahem's product/spec call, not a worker block."
+  "needs": "NOT a worker block — sole merge-gate is item 3 (Grahem's ruling: milestone-derived vs literal activity-driven progress; reviewer recommends accepting + a one-line goal-tracker.md spec edit, no code change). Supervisor merges after Grahem rules. Idle until then; will claim next eligible unit after #15 merges."
 }
