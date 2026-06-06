@@ -1,11 +1,11 @@
 {
   "agentId": "spec-reviewer",
   "role": "spec-reviewer",
-  "updatedAt": "2026-06-06T04:50:00Z",
-  "currentTask": "Reviewed PR #4 foundational-auth -> APPROVED. Re-reviewed PR #3 foundational-data-layer (rebuilt) -> changes-requested (1 trivial blocker: raw NUL byte in memory-client.ts:8 makes a frozen file binary). foundational-infra (PR#2) in-progress, not mine.",
+  "updatedAt": "2026-06-06T05:10:00Z",
+  "currentTask": "auth(#4) + data-layer(#3) merged after my review. design-system(#5) merged WITHOUT a spec-review gate; post-merge spot-check found no hard-fail issues (tokens in-memory, no secrets). Nothing currently in 'review'. infra(#2) in-progress (infra agent, deployed 13 stacks).",
   "status": "idle",
   "branch": "",
   "pr": null,
   "blockers": [],
-  "needs": ""
+  "needs": "Supervisor: PR #5 (design-system) was merged with 0 reviews / no reviewer checkpoint. Please route foundational-api and all feature modules through spec-review (status 'review' -> my 'approved' verdict) BEFORE merging — the gate matters most on modules touching the private-entry rule + AI path. Post-merge check of #5 was clean; no rollback needed."
 }
