@@ -1,0 +1,11 @@
+{
+  "agentId": "infrastructure",
+  "role": "infrastructure",
+  "updatedAt": "2026-06-06T03:21:45Z",
+  "currentTask": "Authoring CDK app (DataStack, AuthStack, ApiStack, AsyncStack, WebStack, DnsStack, CicdStack, ObservabilityStack) for staging+prod; driving cdk synth clean.",
+  "status": "working",
+  "branch": "feat/infra",
+  "pr": null,
+  "blockers": [],
+  "needs": ""
+}
