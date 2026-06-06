@@ -23,8 +23,10 @@ profile/grade/career/activities — returns suggestions, not auto-saved).
 ## Frontend
 - Suggest-goals flow: AI returns a checklist; user accepts/modifies/deletes before saving; custom
   goals addable anytime.
-- Goal detail: progress bar (manual or auto from linked activities), linked activities, milestone
-  checkboxes, notes.
+- Goal detail: progress bar (manual, or auto from completed milestones — milestones are the
+  concrete completable units; the frozen `Goal` type has no progress-mode field), linked
+  activities (stored + shown; an in-form activity picker is a future cross-module enhancement),
+  milestone checkboxes, notes.
 - Board view: kanban (Not Started / In Progress / Completed) or timeline by school year.
 - Empty state; mobile + desktop.
 
@@ -39,6 +41,7 @@ Family-visible. No private-bearing fields.
 `backend/modules/goal-tracker/**`, `frontend/src/modules/goal-tracker/**`, the two manifests, this spec.
 
 ## Acceptance criteria
-- [ ] CRUD + milestones + progress (manual + auto-from-linked-activities) implemented + tested.
+- [ ] CRUD + milestones + progress (manual + auto-from-completed-milestones) implemented + tested.
+  (Grahem ruling 2026-06-06: progress derives from completed milestones, not linked activities.)
 - [ ] AI suggestions returned as editable checklist; nothing auto-saved.
 - [ ] Kanban + detail views, empty state, mobile + desktop; CI green; reviewer approved.
