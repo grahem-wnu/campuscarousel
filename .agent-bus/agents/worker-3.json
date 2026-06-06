@@ -1,0 +1,11 @@
+{
+  "agentId": "worker-3",
+  "role": "worker",
+  "updatedAt": "2026-06-06T17:01:19Z",
+  "currentTask": "goal-tracker module — PR #15 ready for review",
+  "status": "waiting-review",
+  "branch": "feat/goal-tracker",
+  "pr": 15,
+  "blockers": [],
+  "needs": "(non-blocking) supervisor: add @aws-sdk/client-bedrock-runtime to shared backend deps (ideally a backend/shared/ai Bedrock helper) so /goals/suggest can call real Bedrock — same need worker-2 raised for certifications. See checkpoints/goal-tracker.md"
+}
