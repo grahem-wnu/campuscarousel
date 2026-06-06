@@ -13,7 +13,7 @@ import {
   type Handler,
   type RouteDef,
 } from '../../shared/api/index.js';
-import { filterForRequester } from '../../shared/auth/index.js';
+import { aiVisibleSet } from '../../shared/auth/index.js';
 import type { Data } from '../../shared/data/index.js';
 import type { Briefer } from './briefs.js';
 import { coverageGaps, groupRecommenders, isPendingFollowUp, sortFollowUps } from './logic.js';
@@ -70,6 +70,7 @@ export function makeHandlers(getData: () => Data, getBriefer: () => Briefer): Di
     updateTouchpoint: async (ctx) => {
       const { id, tid } = validateParams(touchpointParamSchema, ctx);
       const patch = validateBody(touchpointUpdateSchema, ctx);
+      await requireCollege(id);
       const data = getData();
       if (!(await data.touchpoints.get(id, tid))) throw Errors.notFound('Touchpoint not found');
       const updated = await data.touchpoints.update(id, tid, patch);
@@ -79,6 +80,7 @@ export function makeHandlers(getData: () => Data, getBriefer: () => Briefer): Di
     // DELETE /colleges/:id/touchpoints/:tid.
     deleteTouchpoint: async (ctx) => {
       const { id, tid } = validateParams(touchpointParamSchema, ctx);
+      await requireCollege(id);
       const data = getData();
       if (!(await data.touchpoints.get(id, tid))) throw Errors.notFound('Touchpoint not found');
       await data.touchpoints.delete(id, tid);
@@ -156,7 +158,9 @@ export function makeHandlers(getData: () => Data, getBriefer: () => Briefer): Di
       const contact = await data.contacts.get(id);
       if (!contact) throw Errors.notFound('Contact not found');
       const [activitiesRaw, goals] = await Promise.all([data.activities.list(), data.goals.list()]);
-      const activities = filterForRequester(activitiesRaw, ctx.requester);
+      // AI grounding path → use aiVisibleSet (the project's AI-path visibility helper): keira's own
+      // private activities are available to her brief; a parent/admin never sees private content.
+      const activities = aiVisibleSet(activitiesRaw, ctx.requester);
       const brief = await getBriefer().brief(contact, { activities, goals }, input.focus);
       return { status: 200, body: { contactId: id, brief } };
     },
