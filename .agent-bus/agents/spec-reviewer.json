@@ -1,0 +1,11 @@
+{
+  "agentId": "spec-reviewer",
+  "role": "spec-reviewer",
+  "updatedAt": "2026-06-06T03:33:23Z",
+  "currentTask": "Polling board.json for modules in status 'review' with open PRs. None yet — foundational modules still in-progress.",
+  "status": "idle",
+  "branch": "",
+  "pr": null,
+  "blockers": [],
+  "needs": ""
+}
