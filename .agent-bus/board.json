@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-06-06T04:20:00Z",
+  "updatedAt": "2026-06-06T04:28:00Z",
   "writer": "supervisor",
   "phase": "infra",
   "gates": {
@@ -81,7 +81,7 @@
       "pr": 2,
       "status": "in-progress",
       "dependsOn": [],
-      "blockedReason": "deploy+domain pending infra-agent retry; ~/.aws wnu creds now work via --profile wnu (earlier run lacked them). MUST use --profile wnu; bare aws = forbidden 791321067225."
+      "blockedReason": "deployed (SSM=5); PR#2 CI red on synth workspace nit \u2014 rebase onto dev for ci.yml fix, then mergeable"
     },
     {
       "id": "foundational-scaffold",
@@ -106,11 +106,11 @@
       "worktree": "",
       "branch": "feat/foundational-data-layer",
       "pr": 3,
-      "status": "review",
+      "status": "changes-requested",
       "dependsOn": [
         "foundational-scaffold"
       ],
-      "blockedReason": "",
+      "blockedReason": "reviewer: PR #3 empty WIP \u2014 worker-1 to implement",
       "note": "draft PR, CI green, building"
     },
     {
@@ -121,8 +121,8 @@
       "owner": null,
       "worktree": "",
       "branch": "feat/foundational-auth",
-      "pr": null,
-      "status": "in-progress",
+      "pr": 4,
+      "status": "review",
       "dependsOn": [
         "foundational-scaffold"
       ],
