@@ -18,7 +18,7 @@
     "githubOrg": "grahem-wnu",
     "githubRepo": "keiras-journey",
     "domainName": "keirasjourney.com",
-    "bedrockSonnetProfile": "us.anthropic.claude-sonnet-4-20250514-v1:0",
+    "bedrockSonnetProfile": "us.anthropic.claude-sonnet-4-6",
     "monthlyBudgetUsd": 75,
     "envs": {
       "staging": {
