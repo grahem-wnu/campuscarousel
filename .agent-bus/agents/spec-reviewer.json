@@ -1,11 +1,11 @@
 {
   "agentId": "spec-reviewer",
   "role": "spec-reviewer",
-  "updatedAt": "2026-06-06T06:05:00Z",
-  "currentTask": "Proactively reviewed PR #8 foundational-cicd @ db4fbcc -> APPROVED (OIDC no-keys, no hardcoded account, SSM config, correct triggers, in boundary, CI green). PR #7 activity-journal still a DRAFT/empty (worker-1 building) — will review hard once pushed (privacy-critical Gate-2 slice).",
+  "updatedAt": "2026-06-06T06:20:00Z",
+  "currentTask": "Proactively reviewed PR #7 activity-journal @ bc19e24 -> APPROVED. Gate-2 slice; privacy airtight + fully tested (parent cannot list/get/aggregate/update/delete private; keira can; default family; only keira sets private). All wave-0 + the slice now reviewed. Nothing else in review.",
   "status": "idle",
   "branch": "",
   "pr": null,
   "blockers": [],
-  "needs": "foundational-cicd #8 APPROVED, ready to merge. activity-journal #7 is still draft+empty (not reviewable yet). Reminder: keep routing PRs through spec-review before merge (supervisor-logic gate; not GitHub-enforceable on free plan)."
+  "needs": "activity-journal #7 APPROVED, ready to merge. After merge + staging deploy, escalate Gate 2 (gate2_slice_test) to Grahem for the live private-entry test. Keep routing PRs through spec-review before merge (supervisor-logic gate)."
 }
