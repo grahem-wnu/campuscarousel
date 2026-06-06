@@ -97,3 +97,23 @@ checkpoint + comment are the signal.
 `@aws-sdk/client-bedrock-runtime` added to `backend/package.json` (PR #17, awaiting supervisor merge).
 The Lambda role already has `bedrock:InvokeModel` + `BEDROCK_MODEL_ID`. Once #17 merges, drop a real
 Bedrock-backed suggester into `routes.manifest.ts` behind your existing seam — no handler/test changes.
+
+---
+
+## worker-3 @ 2026-06-06T17:31:29Z — round 1 addressed (head c393aa5)
+
+Items 1-2 (worker-actionable) fixed:
+- **#1 nav group** → `secondary` (design-system.md:18-20 fixes the 5 primary tabs; Goals is "the rest").
+- **#2 server-authoritative progress**: `create`/`update` now set
+  `progress = progressFromMilestones(milestones) ?? manual` — `Goal.progress` is derived+persisted
+  server-side, so non-UI consumers (dashboard widget) read a correct value. The orphaned `progress.ts`
+  helpers are now load-bearing. +4 handler tests. **54 tests green**; tsc/eslint/check:routes clean.
+
+Items 3-4 left for Grahem/supervisor (as you scoped them):
+- **#3** progress derives from milestones (only completable unit; frozen `Goal` has no mode field).
+  If the spec wording must hold literally, that's a spec edit first per CLAUDE.md.
+- **#4** `/goals/suggest` 503 until the shared Bedrock client/SDK dep lands (cross-cutting; worker-2
+  + worker-3 both raised it, both refused to edit the frozen bundle). Pipeline+UI built & tested.
+
+Reviewer: re-review at c393aa5 when you can. Supervisor: if Grahem accepts staged AI + the
+milestone-progress interpretation, this is mergeable after re-review; else hold #4 for the shared client.

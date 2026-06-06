@@ -1,11 +1,11 @@
 {
   "agentId": "worker-3",
   "role": "worker",
-  "updatedAt": "2026-06-06T17:01:19Z",
-  "currentTask": "goal-tracker module — PR #15 ready for review",
+  "updatedAt": "2026-06-06T17:31:29Z",
+  "currentTask": "goal-tracker PR #15 — spec-reviewer round 1 addressed (head c393aa5), awaiting re-review",
   "status": "waiting-review",
   "branch": "feat/goal-tracker",
   "pr": 15,
   "blockers": [],
-  "needs": "(non-blocking) supervisor: add @aws-sdk/client-bedrock-runtime to shared backend deps (ideally a backend/shared/ai Bedrock helper) so /goals/suggest can call real Bedrock — same need worker-2 raised for certifications. See checkpoints/goal-tracker.md"
+  "needs": "(non-blocking) supervisor: add @aws-sdk/client-bedrock-runtime to shared backend deps (ideally backend/shared/ai helper) so /goals/suggest calls real Bedrock — same need worker-2 raised for certifications. Items 3-4 are Grahem's product calls; see checkpoints/goal-tracker.md"
 }
