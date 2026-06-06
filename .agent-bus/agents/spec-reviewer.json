@@ -1,22 +1,24 @@
 {
   "agentId": "spec-reviewer",
   "role": "spec-reviewer",
-  "updatedAt": "2026-06-06T17:20:00Z",
-  "currentTask": "Wave-2 fanout review. Reviewed 4 module PRs this pass: #13 clinical-hours APPROVED; #11 why-nursing, #14 certifications, #15 goal-tracker CHANGES-REQUESTED. Verdicts in checkpoints + PR comments.",
+  "updatedAt": "2026-06-06T17:43:00Z",
+  "currentTask": "Wave-2 review, round 2. Re-reviewed #14 + #15 (re-pushed): both worker-actionable item sets FIXED+tested; narrowed to the now-unblocked Bedrock wiring. #11 not re-pushed (prior changes-requested stands). #13 merged.",
   "status": "idle",
   "branch": "agent-bus",
   "pr": null,
   "blockers": [],
-  "needs": "ESCALATION (cross-cutting, HIGH LEVERAGE) — provision a shared Bedrock client. Both AI modules (#14 certifications, #15 goal-tracker) cannot meet their AI acceptance criteria: @aws-sdk/client-bedrock-runtime is NOT in backend/package.json and there is no shared backend/shared/ai helper. Both workers correctly refused to edit the frozen bundle and shipped injectable seams (cert: curated fallback; goal-tracker: clean 503) + escalated. The Lambda role already has bedrock:InvokeModel + BEDROCK_MODEL_ID env. ACTION: supervisor land a small foundational unit adding the SDK dep + a backend/shared/ai Bedrock client (model id from env/SSM); then the AI modules wire their real suggesters (a few lines, seams already in place). This also unblocks future AI modules (why-nursing AI consumers, interview-prep, ai-assistant). PRODUCT CALL FOR GRAHEM: accept staged AI delivery (merge #14/#15 with stub once their worker-actionable nits are fixed, wire Bedrock as follow-up) OR hold #14/#15 for the shared client. Spec wins unless Grahem says otherwise. ALSO (recurring): all module/infra PRs are authored under grahem-wnu, so I cannot post formal --approve/--request-changes (GitHub self-PR block) — reviewDecision stays EMPTY; your merge gate MUST use checkpoint verdict + PR comment, not reviewDecision.",
+  "needs": "1) BEDROCK DEP HAS LANDED: @aws-sdk/client-bedrock-runtime ^3.700.0 is now on dev's backend/package.json (infra's response to my escalation — thanks). So the AI modules are NO LONGER blocked: a module can wire a real Bedrock suggester IN-LANE (import the SDK directly, model id from BEDROCK_MODEL_ID env, fall back on error) — a shared backend/shared/ai helper is a nicety, not a prerequisite. Both worker-2 (#14) and worker-3 (#15) currently believe they are still blocked ('no shared AI client'); I've corrected that in their checkpoints + PR comments and narrowed each verdict to 'wire Bedrock now'. 2) GRAHEM PRODUCT CALL still stands as an override: accept staged AI delivery (merge #14/#15 with curated/503 now, wire Bedrock as fast follow-up) OR require Bedrock pre-merge. cert's curated default already satisfies the spec's named first-visit baseline (L27) as a graceful fallback; goal-tracker is a hard 503. 3) GRAHEM also owns goal-tracker item 3: progress derives from milestones, not 'linked activities' per spec L42 wording (reasonable interpretation; needs spec edit if accepted). 4) Recurring: all PRs authored under grahem-wnu → no formal --approve/--request-changes possible; merge gate MUST read checkpoint verdict + PR comment, not reviewDecision. 5) FYI: #16 (cicd-scope-deploys) merged — resolves the per-env deploy-scoping FYI I raised on #12. #17 (bedrock dep) shows CLOSED in gh but the dep IS present on dev (squash-merge reporting quirk).",
   "lastPass": {
-    "at": "2026-06-06T17:20:00Z",
-    "openPrsAgainstDev": 4,
+    "at": "2026-06-06T17:43:00Z",
+    "openPrsAgainstDev": 3,
     "reviewed": [
-      { "pr": 13, "branch": "feat/clinical-hours", "headSha": "89e7bfa", "verdict": "APPROVED", "ci": "green", "note": "privacy enforced across list/detail/summary/supervisors/PDF; all acceptance met" },
-      { "pr": 11, "branch": "feat/why-nursing", "headSha": "71c33af", "verdict": "CHANGES-REQUESTED", "ci": "green", "note": "privacy ✓; linking acceptance criterion (L43) unmet — no link create-UI in EntryForm" },
-      { "pr": 14, "branch": "feat/certifications", "headSha": "d56012f", "verdict": "CHANGES-REQUESTED", "ci": "green", "note": "worker-actionable: dedupe over-filter + writable-derived statuses; Bedrock blocked on shared client (escalated)" },
-      { "pr": 15, "branch": "feat/goal-tracker", "headSha": "b0cfdde", "verdict": "CHANGES-REQUESTED", "ci": "green", "note": "worker-actionable: nav primary→secondary + server-side progress derivation; auto-from-linked-activities deviation (Grahem) + AI 503 (shared client)" }
+      { "pr": 14, "branch": "feat/certifications", "headSha": "51c874c", "round": 2, "verdict": "CHANGES-REQUESTED", "ci": "green", "note": "items 1-2 (dedupe, writable statuses) FIXED+tested; narrowed to Bedrock wiring (now unblocked, dep on dev)" },
+      { "pr": 15, "branch": "feat/goal-tracker", "headSha": "c393aa5", "round": 2, "verdict": "CHANGES-REQUESTED", "ci": "green", "note": "items 1-2 (nav secondary, server-side progress) FIXED+tested; narrowed to Bedrock wiring; item 3 (linked-activities deviation) for Grahem" }
     ],
+    "skippedNotRepushed": [
+      { "pr": 11, "branch": "feat/why-nursing", "headSha": "71c33af", "note": "no new commit since round-1 changes-requested (linking UI); prior verdict stands" }
+    ],
+    "merged": [13, 12, 16],
     "stalls": []
   }
 }

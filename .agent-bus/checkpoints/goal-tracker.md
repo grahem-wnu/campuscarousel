@@ -117,3 +117,42 @@ Items 3-4 left for Grahem/supervisor (as you scoped them):
 
 Reviewer: re-review at c393aa5 when you can. Supervisor: if Grahem accepts staged AI + the
 milestone-progress interpretation, this is mergeable after re-review; else hold #4 for the shared client.
+
+---
+
+## spec-reviewer @ 2026-06-06T17:42Z — PR #15 round 2 (head c393aa5) — 🟡 CHANGES REQUESTED (narrowed)
+
+Re-reviewed delta `b0cfdde..c393aa5` (three-dot boundary clean — only goal-tracker trees). CI green.
+
+**Both worker-actionable items: FIXED — verified. Nice work.**
+1. **Nav group ✓** — `group: 'secondary'` with a clear comment. Matches the design-system 5-primary-tab
+   contract.
+2. **Server-authoritative progress ✓** — `create` and `update` derive `progress` from milestones
+   (`progressFromMilestones(...) ?? manual`); update correctly uses `existing.milestones` when the
+   patch omits them, so toggling a milestone recomputes and a non-UI consumer reads a correct value.
+   The previously-orphaned helpers are now load-bearing. Tests added cover: derive-overrides-sent on
+   create, milestone-wins-over-manual + re-stamp on update, manual honored when no milestones.
+
+### Remaining items
+
+4. **[Completeness — acceptance L43] Wire the real Bedrock suggester — the blocker has LIFTED.**
+   Your note (and the infra note above) treat this as "503 until the dep lands." **It landed:**
+   `@aws-sdk/client-bedrock-runtime ^3.700.0` is now on `dev`'s `backend/package.json`. You do NOT
+   need a shared `backend/shared/ai` helper — import the SDK **directly in your module**
+   (`suggester.ts` / `routes.manifest.ts`), build `BedrockRuntimeClient` + `InvokeModelCommand`,
+   take the model/inference-profile from the **`BEDROCK_MODEL_ID` env var** (already on the Lambda
+   role — do NOT hardcode), reuse your existing pure `buildSuggestPrompt`/`parseSuggestions`, and
+   fall back to a clean error on failure. Add a Bedrock-failure test. Your seam makes this the few
+   lines you described. (Grahem/supervisor staged-delivery override applies, same as #14: if Grahem
+   accepts shipping with the 503 now and wiring AI as a fast follow-up, supervisor may merge — say so
+   here if you'd rather wait for that ruling than wire it.)
+
+3. **[Spec deviation — acceptance L42 "auto from linked-activities"] Still for Grahem.** Progress
+   derives from milestones, not linked activities. Reasonable + documented, but diverges from spec
+   wording — per CLAUDE.md a behavior change starts in the spec. Grahem to confirm; if accepted,
+   update `goal-tracker.md` to match. (Not a worker hard-block; carried for the product owner.)
+
+**Verdict: CHANGES REQUESTED**, narrowed to item 4 (now unblocked + in-lane); items 1-2 cleared;
+item 3 is Grahem's. Not auto-mergeable as spec-complete until Bedrock is wired OR Grahem signs off on
+staged delivery + the milestone-progress interpretation. ⚠️ Formal review impossible (self-PR under
+`grahem-wnu`); posted as a PR **comment**.

@@ -136,3 +136,44 @@ items fixed; item 3 (Bedrock) stays supervisor-blocked (still no shared AI clien
 
 **Verification:** typecheck ✓ · eslint ✓ · check:routes ✓ (13 routes) · vitest ✓ **53 tests**
 (48 → 53). In-lane only; no shared/foundational edits. Heartbeat → waiting-review. Re-review please.
+
+---
+
+## spec-reviewer @ 2026-06-06T17:42Z — PR #14 round 2 (head 51c874c) — 🟡 CHANGES REQUESTED (narrowed)
+
+Re-reviewed the delta `d56012f..51c874c` (three-dot boundary clean — only certifications trees; the
+infra/* files in the two-dot delta are just dev catching up via your rebase, not your edits). CI green.
+
+**Both worker-actionable items: FIXED — verified, and better than I asked. Nice work.**
+1. **Dedupe over-filter ✓** — `suggester.ts` now uses significant-token sets + internal aliases with
+   a subset match (`sameCert`), stopwords removed, aliases stripped from the API response. The
+   `name.includes('')` bug is gone; blank/generic/unrelated held names no longer suppress the
+   baseline; "BLS/CPR" no longer cross-matches "ACLS". New tests cover blank/generic/unrelated/cross/
+   alias-leak.
+2. **Writable derived statuses ✓** — belt-and-suspenders: `WRITABLE_CERT_STATUSES` makes create/
+   update 422 a derived status, AND `effectiveStatus` now recomputes every expiry-derived state from
+   `expirationDate` so a stale stored `expired` reconciles. New tests cover both. This even closes
+   the edge I noted (stored `expired` never auto-recovering).
+
+### One remaining item — the blocker has LIFTED (please re-read)
+
+3. **[Completeness — acceptance L41 + §AI L31-32] Wire the real Bedrock suggester — now in-lane.**
+   Your note says item 3 "stays supervisor-blocked (still no shared AI client in dev)." That's no
+   longer accurate: **`@aws-sdk/client-bedrock-runtime ^3.700.0` is now on `dev`'s
+   `backend/package.json`** (the dep landed; PR #17's body confirms "a module can drop a real
+   Bedrock-backed suggester into its `routes.manifest.ts`"). You do NOT need a shared `backend/shared/ai`
+   helper to proceed — import the SDK **directly in your own module** (`suggester.ts` /
+   `routes.manifest.ts`), build a `BedrockRuntimeClient` + `InvokeModelCommand`, take the model/
+   inference-profile from the **`BEDROCK_MODEL_ID` env var** (already set on the Lambda role — do NOT
+   hardcode it), parse the response, and **fall back to `curatedSuggester` on any error/timeout**.
+   Add a Bedrock-failure→fallback test. Also update the now-stale header comment in `suggester.ts`
+   (it still says the dep isn't a backend dependency).
+   - This is the path to meeting the spec; the seam you built makes it the few lines you described.
+   - **Grahem/supervisor override:** if Grahem prefers to ship staged (your curated default already
+     satisfies the spec's named first-visit baseline at L27 as a graceful fallback) and wire Bedrock
+     as a fast follow-up, the supervisor may merge as-is — reviewer is fine with either. If you'd
+     rather wait for that ruling than wire it now, say so here and the supervisor will decide.
+
+**Verdict: CHANGES REQUESTED**, narrowed to item 3 (now unblocked + in-lane) — items 1-2 cleared.
+Not auto-mergeable as spec-complete until Bedrock is wired OR Grahem signs off on staged delivery.
+⚠️ Formal review impossible (self-PR under `grahem-wnu`); posted as a PR **comment**.
