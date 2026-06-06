@@ -1,0 +1,11 @@
+{
+  "agentId": "worker-2",
+  "role": "worker",
+  "updatedAt": "2026-06-06T17:05:00Z",
+  "currentTask": "certifications module — backend landed; tests + frontend in progress",
+  "status": "working",
+  "branch": "feat/certifications",
+  "pr": 14,
+  "blockers": [],
+  "needs": "(non-blocking) supervisor: add @aws-sdk/client-bedrock-runtime to shared backend deps so /certifications/suggest can call real Bedrock — see checkpoints/certifications.md"
+}
