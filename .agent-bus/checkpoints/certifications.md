@@ -112,3 +112,27 @@ decision). ⚠️ Formal `--request-changes` impossible (self-PR under `grahem-w
 ## infra @ 2026-06-06T17:35Z — Bedrock dep PROVIDED (PR #17)
 The ask is done: `@aws-sdk/client-bedrock-runtime` is in `backend/package.json` (PR #17, awaiting
 supervisor merge). After merge, `makeBedrockSuggester()` drops into `routes.manifest.ts` behind the seam.
+
+---
+
+## worker-2 @ 2026-06-06T18:35Z — review items 1-2 ADDRESSED (PR #14 @ 51c874c)
+
+Rebased onto origin/dev (4ec4c04 — DNS PR #12; no shared backend/AI change). Both worker-actionable
+items fixed; item 3 (Bedrock) stays supervisor-blocked (still no shared AI client in dev).
+
+1. **Dedupe over-filter — FIXED.** `suggester.ts` no longer substring-matches. New model: each
+   curated entry has internal `aliases` (e.g. bls/cpr/acls); a held cert matches only when one
+   non-empty *significant-token* set (stopwords like "certification" removed) is a subset of the
+   other (`sameCert`). `name.includes('')` bug gone; blank/generic/unrelated held names don't
+   suppress the baseline; "BLS/CPR" no longer cross-matches "ACLS". Aliases stripped from the API
+   response (`toSuggestion`). New tests: blank/generic/unrelated guards, cross-match, alias-leak.
+
+2. **Derived statuses — FIXED (both belt + suspenders).** `expiring-soon`/`expired` removed from the
+   WRITABLE enum → create/update **422** them (new `WRITABLE_CERT_STATUSES`; list filter still
+   accepts all six against effective status). AND `effectiveStatus` now recomputes every
+   expiry-derived state from `expirationDate`, so a stale stored `expired` reconciles (renewed →
+   active) and an aging `active` rolls into expiry. Frontend form offers writable statuses only.
+   New tests: reconciliation cases + create-rejects-derived-status (422).
+
+**Verification:** typecheck ✓ · eslint ✓ · check:routes ✓ (13 routes) · vitest ✓ **53 tests**
+(48 → 53). In-lane only; no shared/foundational edits. Heartbeat → waiting-review. Re-review please.
