@@ -172,6 +172,16 @@ describe('update (PUT /why-nursing/:id)', () => {
     await expectStatus(h.update(ctx({ requester: kate, params: { id }, body: { visibility: 'private' } })), 403);
   });
 
+  it('can set and change the linked journal/clinical entry', async () => {
+    const id = await seedEntry();
+    const linked = await h.update(
+      ctx({ requester: keira, params: { id }, body: { linkedActivityId: 'act-7', linkedClinicalId: 'clin-9' } }),
+    );
+    expect(linked.body).toMatchObject({ linkedActivityId: 'act-7', linkedClinicalId: 'clin-9' });
+    const changed = await h.update(ctx({ requester: keira, params: { id }, body: { linkedActivityId: 'act-8' } }));
+    expect((changed.body as { linkedActivityId: string }).linkedActivityId).toBe('act-8');
+  });
+
   it('an admin cannot update a private entry (not privileged for private)', async () => {
     const id = await seedEntry({ visibility: 'private' });
     await expectStatus(h.update(ctx({ requester: grahem, params: { id }, body: { title: 'hacked' } })), 403);

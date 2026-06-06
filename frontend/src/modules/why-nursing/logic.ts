@@ -3,7 +3,7 @@
 // unit-tested, the logic is).
 
 import type { BadgeTone, IconName } from '../../shared/ui';
-import type { Category, WhyNursingEntry } from './types';
+import type { Category, LinkOption, WhyNursingEntry } from './types';
 
 export interface CategoryMeta {
   label: string;
@@ -63,4 +63,30 @@ export function previewOf(content: string, max = 240): string {
   const trimmed = content.trim();
   if (trimmed.length <= max) return trimmed;
   return `${trimmed.slice(0, max).trimEnd()}…`;
+}
+
+/** Newest-first by date, for link-picker option lists. */
+function byDateDesc<T extends { date: string }>(items: readonly T[]): T[] {
+  return [...items].sort((a, b) => (a.date === b.date ? 0 : a.date < b.date ? 1 : -1));
+}
+
+/** Build journal-entry link options from the `/activities` list response (id + a date·title label). */
+export function activityLinkOptions(
+  activities: readonly { activityId: string; title: string; date: string }[],
+): LinkOption[] {
+  return byDateDesc(activities).map((a) => ({ id: a.activityId, label: `${a.date} · ${a.title}` }));
+}
+
+/** Build clinical-entry link options from the `/clinical` list response (id + a date·facility label). */
+export function clinicalLinkOptions(
+  entries: readonly { entryId: string; facility: string; date: string }[],
+): LinkOption[] {
+  return byDateDesc(entries).map((e) => ({ id: e.entryId, label: `${e.date} · ${e.facility}` }));
+}
+
+/** Ensure the currently-linked id is always selectable, even if it isn't in the fetched options
+ *  (e.g. the list call failed, or the linked entry falls outside the returned set). */
+export function withCurrentLink(options: readonly LinkOption[], currentId: string | undefined): LinkOption[] {
+  if (!currentId || options.some((o) => o.id === currentId)) return [...options];
+  return [{ id: currentId, label: `Linked entry (${currentId})` }, ...options];
 }

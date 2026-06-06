@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
   CATEGORY_META,
+  activityLinkOptions,
   canSetPrivate,
+  clinicalLinkOptions,
   filterBySearch,
   metaFor,
   previewOf,
   sortByDateDesc,
   visibilityLabel,
+  withCurrentLink,
 } from './logic';
 import { CATEGORIES, type WhyNursingEntry } from './types';
 
@@ -99,5 +102,43 @@ describe('previewOf', () => {
     const out = previewOf(long, 240);
     expect(out.endsWith('…')).toBe(true);
     expect(out.length).toBeLessThanOrEqual(241);
+  });
+});
+
+describe('link pickers (linking to journal/clinical entries)', () => {
+  it('maps activities to {id,label} options, newest first', () => {
+    const opts = activityLinkOptions([
+      { activityId: 'a1', title: 'CHOC volunteering', date: '2026-01-01' },
+      { activityId: 'a2', title: 'Blood drive', date: '2026-03-01' },
+    ]);
+    expect(opts).toEqual([
+      { id: 'a2', label: '2026-03-01 · Blood drive' },
+      { id: 'a1', label: '2026-01-01 · CHOC volunteering' },
+    ]);
+  });
+
+  it('maps clinical entries to {id,label} options, newest first', () => {
+    const opts = clinicalLinkOptions([
+      { entryId: 'c1', facility: 'St. Joseph ICU', date: '2026-02-10' },
+      { entryId: 'c2', facility: 'Hoag ER', date: '2026-04-10' },
+    ]);
+    expect(opts).toEqual([
+      { id: 'c2', label: '2026-04-10 · Hoag ER' },
+      { id: 'c1', label: '2026-02-10 · St. Joseph ICU' },
+    ]);
+  });
+
+  it('keeps the currently-linked id selectable when it is missing from the fetched options', () => {
+    const opts = [{ id: 'a1', label: '2026-01-01 · One' }];
+    const merged = withCurrentLink(opts, 'a9');
+    expect(merged[0]).toEqual({ id: 'a9', label: 'Linked entry (a9)' });
+    expect(merged).toHaveLength(2);
+  });
+
+  it('does not duplicate an id that is already present, and is a no-op for no current link', () => {
+    const opts = [{ id: 'a1', label: '2026-01-01 · One' }];
+    expect(withCurrentLink(opts, 'a1')).toEqual(opts);
+    expect(withCurrentLink(opts, undefined)).toEqual(opts);
+    expect(withCurrentLink(opts, '')).toEqual(opts);
   });
 });

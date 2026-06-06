@@ -1,9 +1,16 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { useAuth } from '../../shared/shell';
 import { Button, DateField, Field, Select, Textarea, TextField, useToast } from '../../shared/ui';
-import { createEntry, updateEntry } from './api';
-import { CATEGORY_META, canSetPrivate } from './logic';
-import { CATEGORIES, type Category, type Visibility, type WhyNursingEntry, type WhyNursingInput } from './types';
+import { createEntry, listLinkableActivities, listLinkableClinical, updateEntry } from './api';
+import { CATEGORY_META, canSetPrivate, withCurrentLink } from './logic';
+import {
+  CATEGORIES,
+  type Category,
+  type LinkOption,
+  type Visibility,
+  type WhyNursingEntry,
+  type WhyNursingInput,
+} from './types';
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
@@ -30,7 +37,26 @@ export function EntryForm({ entry, onSaved, onCancel }: EntryFormProps) {
   const [category, setCategory] = useState<Category | ''>(entry?.category ?? '');
   const [tagsText, setTagsText] = useState((entry?.tags ?? []).join(', '));
   const [visibility, setVisibility] = useState<Visibility>(entry?.visibility ?? 'family');
+  const [linkedActivityId, setLinkedActivityId] = useState(entry?.linkedActivityId ?? '');
+  const [linkedClinicalId, setLinkedClinicalId] = useState(entry?.linkedClinicalId ?? '');
+  const [activityOptions, setActivityOptions] = useState<LinkOption[]>([]);
+  const [clinicalOptions, setClinicalOptions] = useState<LinkOption[]>([]);
   const [saving, setSaving] = useState(false);
+
+  // Populate the link pickers from the journal + clinical-hours list endpoints. Best-effort: if a
+  // list call fails the picker still works (the current link, if any, stays selectable).
+  useEffect(() => {
+    let alive = true;
+    void listLinkableActivities()
+      .then((o) => alive && setActivityOptions(o))
+      .catch(() => undefined);
+    void listLinkableClinical()
+      .then((o) => alive && setClinicalOptions(o))
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   async function handleSubmit(e: FormEvent): Promise<void> {
     e.preventDefault();
@@ -48,11 +74,16 @@ export function EntryForm({ entry, onSaved, onCancel }: EntryFormProps) {
         date,
         title: title.trim(),
         content: content.trim(),
+        // Note: a category can be set or changed, but an omitted (`undefined`) value is preserved
+        // by the data layer's optional-merge on update — so once set it can't be cleared back to
+        // uncategorized through the API contract (`category` is an optional enum, no null sentinel).
         category: category || undefined,
         tags: tagsText
           .split(',')
           .map((t) => t.trim())
           .filter(Boolean),
+        linkedActivityId: linkedActivityId || undefined,
+        linkedClinicalId: linkedClinicalId || undefined,
         visibility: allowPrivate ? visibility : 'family',
       };
       const saved = entry ? await updateEntry(entry.entryId, input) : await createEntry(input);
@@ -99,6 +130,29 @@ export function EntryForm({ entry, onSaved, onCancel }: EntryFormProps) {
         value={tagsText}
         onChange={(e) => setTagsText(e.target.value)}
       />
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <Field label="Link to a journal entry" hint="Optional — connect this to an activity.">
+          <Select value={linkedActivityId} onChange={(e) => setLinkedActivityId(e.target.value)}>
+            <option value="">— none —</option>
+            {withCurrentLink(activityOptions, linkedActivityId).map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.label}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Link to a clinical entry" hint="Optional — connect this to a clinical-hours entry.">
+          <Select value={linkedClinicalId} onChange={(e) => setLinkedClinicalId(e.target.value)}>
+            <option value="">— none —</option>
+            {withCurrentLink(clinicalOptions, linkedClinicalId).map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.label}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      </div>
 
       {allowPrivate ? (
         <Field label="Visibility" hint="Private entries are visible only to you — never to family.">

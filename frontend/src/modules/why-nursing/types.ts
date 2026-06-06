@@ -45,3 +45,9 @@ export interface ListFilters {
   from?: string;
   to?: string;
 }
+
+/** A selectable link target (a journal or clinical entry) for the entry form's link pickers. */
+export interface LinkOption {
+  id: string;
+  label: string;
+}
