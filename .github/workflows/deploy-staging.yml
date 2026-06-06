@@ -1,32 +1,32 @@
-# Deploy to PROD. Trigger: every push to `main`.
-# `main` is reached ONLY via Grahem's Gate-3 promotion PR (dev -> main), so this is
-# effectively the manual production promotion path. Same shape as deploy-staging.yml,
-# pointed at the prod OIDC role + prod SSM config.
+# Deploy to STAGING. Trigger: every push to `dev` (post-merge).
+# Wires continuous deploy so a merge to `dev` lands a live, testable URL (unblocks Gate 2).
 #
-# Auth: GitHub OIDC -> AWS_DEPLOY_ROLE_PROD (no long-lived keys).
-# Config: read from SSM (/keiras-journey/prod/*) at build time; never hardcoded.
-name: Deploy Prod
+# Auth: GitHub OIDC -> the per-stage deploy role (no long-lived AWS keys in CI).
+#   role ARN comes from the repo variable AWS_DEPLOY_ROLE_STAGING (set by CicdStack).
+# Config: never hardcoded. Cognito pool/client + API base URL are read from SSM
+#   (/keiras-journey/staging/*) at build time and injected as VITE_* for the frontend build.
+name: Deploy Staging
 on:
   push:
-    branches: [main]
+    branches: [dev]
 
 permissions:
   id-token: write   # required for GitHub OIDC
   contents: read
 
 concurrency:
-  group: deploy-prod
+  group: deploy-staging
   cancel-in-progress: false
 
 env:
   AWS_REGION: us-east-2
-  APP_ENV: prod
-  SSM_PREFIX: /keiras-journey/prod
+  APP_ENV: staging
+  SSM_PREFIX: /keiras-journey/staging
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment: prod
+    environment: staging
     steps:
       - uses: actions/checkout@v4
 
@@ -38,7 +38,7 @@ jobs:
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_PROD }}
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_STAGING }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Install root workspace deps
@@ -46,16 +46,19 @@ jobs:
           if [ -f package-lock.json ]; then npm ci; else npm install --no-audit --no-fund; fi
 
       # Backend (CDK). Self-contained `cd infra` install + deploy (infra is NOT a root
-      # workspace). Guarded: no-ops until the CDK app lands on `main`. cdk deploy is idempotent.
+      # workspace, so `npm run -w infra` won't work). Guarded: until the CDK app lands on
+      # `dev`, this step no-ops instead of failing the deploy. cdk deploy is idempotent.
       - name: Deploy backend (CDK)
         run: |
           if [ -f infra/package.json ]; then
-            (cd infra && npm install --no-audit --no-fund && npm run deploy)
+            (cd infra && npm install --no-audit --no-fund && npm run deploy:staging)
           else
             echo "infra CDK app not present on this ref yet — skipping backend deploy."
             echo "Frontend deploy below still runs against the already-deployed infra (SSM is populated)."
           fi
 
+      # Read runtime config from SSM and export as VITE_* for the build. These values are
+      # public by design (Cognito app client has no secret) but are still never committed.
       - name: Load frontend runtime config from SSM
         run: |
           set -euo pipefail
