@@ -1,28 +1,28 @@
 {
   "agentId": "spec-reviewer",
   "role": "spec-reviewer",
-  "updatedAt": "2026-06-06T20:19:00Z",
-  "currentTask": "Wave-2 review. This pass: #20 teas-prep APPROVED; #21 scholarship-tracker CHANGES-REQUESTED (AI entirely stubbed 503 — in-lane work, behind college-hub). #11/#15 merged. #18 approved awaiting merge. #19 async-blocked.",
+  "updatedAt": "2026-06-06T20:45:00Z",
+  "currentTask": "Wave-2 review. This pass: #22 peer-benchmark APPROVED (privacy-filtered cross-module aggregation verified). #19 rebase-only (still async-blocked). #18/#20 approved awaiting merge. #21 changes (not re-pushed). foundational-hydration-bundle spec landed (infra scoping the worker-glob).",
   "status": "idle",
   "branch": "agent-bus",
   "pr": null,
   "blockers": [],
-  "needs": "FOR SUPERVISOR — READY TO MERGE: #18 course-planner (APPROVED, awaiting merge) and #20 teas-prep (APPROVED this pass). Use checkpoint+PR-comment as the gate (self-PR under grahem-wnu → reviewDecision empty). MERGED since last: #11, #15. STILL THE KEY SHARED BLOCKER — build-lambda worker-glob: extend backend/scripts/build-lambda.mjs to glob each module's hydration.manifest.ts into backend/lambda/hydration.ts hydrationRegistry (empty on dev). @aws-sdk/client-sqs HAS landed (thanks). The worker-glob blocks LIVE hydration for BOTH #19 college-hub AND #21 scholarship-tracker. CHANGES-REQUESTED this pass: #21 scholarship-tracker — its AI is entirely stubbed (503 discoverer + enqueuer, no ai.ts, no worker seam), which is mostly IN-LANE work now (Bedrock + sqs deps on dev; /discover is synchronous and never needed SQS; college-hub is the template) — asked worker-3 to implement the real discoverer + hydrator + worker seam + fix a totalPotential double-count. PENDING GRAHEM (accumulating): (a) web-search tool not wired on #19 + #21 (matters for college/scholarship data accuracy); (b) #19 deferred detail tabs → wave-3 seam; (c) #18 prereq matrix single-college vs full (gated on #19); (d) certifications training-progress field. INCOMING: #22 peer-benchmark (draft). RECURRING: all PRs under grahem-wnu → merge gate reads checkpoint+PR-comment, not reviewDecision.",
+  "needs": "FOR SUPERVISOR — READY TO MERGE (3 approved, not yet merged): #18 course-planner, #20 teas-prep, #22 peer-benchmark. All APPROVED + CI-green; use checkpoint+PR-comment as the gate (self-PR under grahem-wnu → reviewDecision empty). Please merge so wave-2 (M3) can close. PROGRESS on the async escalation: specs/foundational/hydration-bundle.md now exists on dev (foundational-hydration-bundle, owner=infrastructure) scoping exactly the 2 pieces I raised — (1) @aws-sdk/client-sqs (LANDED), (2) build-lambda.mjs glob of module hydration.manifest.ts into the worker hydrationRegistry (STILL PENDING). Once #2 lands: #19 college-hub flips inline→SQS (1 line, seam ready) → approvable; #21 scholarship-tracker can wire its worker handler. STILL OPEN: #19 college-hub (async-blocked on the worker-glob; rebase-only this pass), #21 scholarship-tracker (CHANGES — AI entirely stubbed, in-lane work: real Bedrock discoverer + hydrator + worker seam + totalPotential double-count; not re-pushed yet). PENDING GRAHEM: web-search tool not wired on college-hub/scholarship-tracker/peer-benchmark (benchmark+discovery data accuracy); #18 prereq matrix (gated on #19); certifications training-progress field. RECURRING: all PRs under grahem-wnu → merge gate reads checkpoint+PR-comment, not reviewDecision.",
   "lastPass": {
-    "at": "2026-06-06T20:19:00Z",
+    "at": "2026-06-06T20:45:00Z",
     "openPrsAgainstDev": 5,
     "reviewed": [
-      { "pr": 20, "branch": "feat/teas-prep", "headSha": "2312ad5", "round": 1, "verdict": "APPROVED", "ci": "green", "note": "score math verified; AI short synchronous Bedrock (env model, fallback); nav secondary; 37 tests" },
-      { "pr": 21, "branch": "feat/scholarship-tracker", "headSha": "a643eb1", "round": 1, "verdict": "CHANGES-REQUESTED", "ci": "green", "note": "AI entirely stubbed 503 (no ai.ts, no worker seam) — in-lane work now (deps on dev, college-hub template); +totalPotential double-count; web-search for Grahem" }
+      { "pr": 22, "branch": "feat/peer-benchmark", "headSha": "cfc753e", "round": 1, "verdict": "APPROVED", "ci": "green", "note": "privacy-filtered cross-module aggregation verified (filterForRequester off JWT before aggregating clinical/activities); comparison math tested; no cross-module imports; nav secondary; 65 tests" }
     ],
     "approvedAwaitingMerge": [
-      { "pr": 18, "branch": "feat/course-planner", "note": "APPROVED last pass" }
+      { "pr": 18, "branch": "feat/course-planner" },
+      { "pr": 20, "branch": "feat/teas-prep" },
+      { "pr": 22, "branch": "feat/peer-benchmark" }
     ],
     "skippedNotRepushed": [
-      { "pr": 19, "branch": "feat/college-hub", "headSha": "8217664", "note": "async hydration: client-sqs landed; worker-glob still pending; round-2 verdict stands" }
+      { "pr": 19, "branch": "feat/college-hub", "headSha": "a4dc3ce", "note": "rebase-only; async-blocked on worker-glob (still pending on dev); round-2 verdict stands" },
+      { "pr": 21, "branch": "feat/scholarship-tracker", "headSha": "a643eb1", "note": "CHANGES (AI stubbed, in-lane work + totalPotential); not re-pushed" }
     ],
-    "skippedDraft": [ { "pr": 22, "branch": "feat/peer-benchmark" } ],
-    "merged": [11, 15],
     "stalls": []
   }
 }
