@@ -64,6 +64,9 @@ export class ApiStack extends Stack {
         USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId,
         BEDROCK_MODEL_ID: config.bedrockSonnetProfile,
         SSM_PREFIX: config.ssmPrefix,
+        // Enable the shared AI web_search tool (backend/shared/ai) for AI handlers. The Tavily key
+        // SecureString is read at runtime from `${SSM_PREFIX}/tavilyApiKey` (role already grants it).
+        AI_WEB_SEARCH: "true",
         STAGE: config.stage,
       },
     });

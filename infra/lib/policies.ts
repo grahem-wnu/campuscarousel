@@ -21,3 +21,22 @@ export function bedrockInvokeStatement(account: string, inferenceProfileId: stri
     ],
   });
 }
+
+/**
+ * Read access to this env's SSM config prefix (e.g. `/keiras-journey/staging/*`) — runtime config
+ * plus the Tavily `tavilyApiKey` SecureString. WithDecryption on a SecureString backed by the
+ * AWS-managed `alias/aws/ssm` key needs only `ssm:GetParameter` (SSM performs the decrypt; no extra
+ * `kms:Decrypt` grant required). If a customer-managed CMK is ever used instead, add a kms:Decrypt
+ * statement scoped to that key.
+ */
+export function ssmReadConfigStatement(
+  region: string,
+  account: string,
+  ssmPrefix: string,
+): PolicyStatement {
+  return new PolicyStatement({
+    sid: "ReadEnvConfig",
+    actions: ["ssm:GetParameter", "ssm:GetParameters", "ssm:GetParametersByPath"],
+    resources: [`arn:aws:ssm:${region}:${account}:parameter${ssmPrefix}/*`],
+  });
+}

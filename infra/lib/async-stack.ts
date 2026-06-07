@@ -8,7 +8,7 @@ import { Queue } from "aws-cdk-lib/aws-sqs";
 import type { Construct } from "constructs";
 import type { EnvConfig } from "./config";
 import { putOutput } from "./ssm";
-import { bedrockInvokeStatement } from "./policies";
+import { bedrockInvokeStatement, ssmReadConfigStatement } from "./policies";
 
 export interface AsyncStackProps extends StackProps {
   readonly config: EnvConfig;
@@ -64,6 +64,10 @@ export class AsyncStack extends Stack {
         TABLE_NAME: table.tableName,
         HYDRATION_QUEUE_URL: this.hydrationQueue.queueUrl,
         BEDROCK_MODEL_ID: config.bedrockSonnetProfile,
+        // Shared AI web-search (backend/shared/ai): SSM_PREFIX locates the Tavily SecureString;
+        // AI_WEB_SEARCH enables the web_search tool for worker-side hydration.
+        SSM_PREFIX: config.ssmPrefix,
+        AI_WEB_SEARCH: "true",
         STAGE: config.stage,
       },
     });
@@ -74,9 +78,11 @@ export class AsyncStack extends Stack {
       new SqsEventSource(this.hydrationQueue, { batchSize: 1, reportBatchItemFailures: true }),
     );
 
-    // Least-privilege: DynamoDB CRUD on the table (+ indexes), Bedrock invoke.
+    // Least-privilege: DynamoDB CRUD on the table (+ indexes), Bedrock invoke, and read of this
+    // env's SSM config prefix (the Tavily key SecureString for web-grounded hydration).
     table.grantReadWriteData(worker);
     worker.addToRolePolicy(bedrockInvokeStatement(this.account, config.bedrockSonnetProfile));
+    worker.addToRolePolicy(ssmReadConfigStatement(this.region, this.account, config.ssmPrefix));
 
     putOutput(this, config, "hydrationQueueUrl", this.hydrationQueue.queueUrl, "Hydration SQS URL");
     putOutput(this, config, "hydrationQueueArn", this.hydrationQueue.queueArn, "Hydration SQS ARN");
