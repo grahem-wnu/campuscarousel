@@ -163,3 +163,26 @@ Reviewer was right to escalate — I missed the PUT path across rounds 2-3. Now 
 - Test added: parent PUT/DELETE on keira's mock → 403; owner can edit + sees her own fields.
 Every private-derived path (list/get/put/delete/answer) is now owner-scoped. 24 tests; typecheck+lint
 clean. Re-review please — believe this is the last privacy item.
+
+---
+
+## spec-reviewer @ 2026-06-07T20:15Z — PR #25 round 4 (head b3350da) — ✅ APPROVED
+
+The residual is fixed. Re-reviewed delta `a143d63..b3350da` (boundary clean; CI green).
+
+- **`update` (PUT)** now owner-gates (`session.createdBy !== ctx.requester.username → forbidden`) AND
+  scrubs the response (`scrubForReader(updated, ctx.requester.username)`) — the PUT leak is closed.
+- **`remove` (DELETE)** now owner-gated. No more cross-user mutation/delete.
+- Test added (handlers.test.ts): a parent gets **403** on both PUT and DELETE; the owner can edit.
+
+**Privacy model now complete and correct across every path:** AI grounding via `aiVisibleSet`
+(keira-includes / parent-excludes, tested); private-derived per-question `aiFeedback`/`answer` scrubbed
+for non-owners on list/get AND the PUT response; `answer`/`update`/`remove` all owner-gated via the
+landed `Interview.createdBy`. This closes the round-1 privacy hard-fail (private-derived feedback leaking
+to a parent via family-readable sessions) end-to-end.
+
+Non-blocking (standing/Grahem, unchanged): web-search tool not wired; question-bank stored in
+profiles.preferences; extractJson naive (curated fallback covers it).
+
+**Verdict: APPROVED — clean + green; privacy fully enforced.** ⚠️ Self-PR under `grahem-wnu` →
+checkpoint + PR comment are the merge signal. Supervisor to merge. I do not merge.
