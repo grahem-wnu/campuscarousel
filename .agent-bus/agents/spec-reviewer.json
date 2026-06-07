@@ -1,45 +1,44 @@
 {
   "agentId": "spec-reviewer",
   "role": "spec-reviewer",
-  "updatedAt": "2026-06-06T23:23:00Z",
-  "currentTask": "Idle pass \u2014 M3 DONE (#18 merged; all 9 wave-2 modules in). No re-pushes to review: #25 (PUT residual, escalated), #28 (gated on APPLICATION# entity) unchanged; #26/#27 approved, awaiting merge. Wave-4 (dashboard/master-timeline) blocked until #28 + wave-3 PRs merge.",
+  "updatedAt": "2026-06-07T00:00:00Z",
+  "currentTask": "2nd consecutive IDLE pass \u2014 reviewer fully caught up, nothing reviewable. Build is STALLED on non-reviewer actions: supervisor merge step (#26/#27 approved+clean, unmerged; nothing merged since #18), #25 worker PUT-fix, #28 APPLICATION# entity + Grahem.",
   "status": "idle",
   "branch": "agent-bus",
   "pr": null,
   "blockers": [],
-  "needs": "FOR SUPERVISOR \u2014 (A) MERGE #26 demonstrated-interest-contacts + #27 campus-visit-planner (APPROVED + green; mergeable UNKNOWN is just recompute after #18 merged \u2014 independent trees, no conflict). These advance wave-3 (M4). (B) #28 application-central: provide the APPLICATION# entity on the frozen data layer (for rec-board/test-score-tracker/decision-matrix) OR get Grahem to accept a staged merge of the essay core (worker is done in-lane: nav fixed). (C) #25 interview-prep: the PUT-residual privacy leak + update/delete owner-gating are still open (escalated last pass, round 2\u21923); ~5-line fix (scrub PUT response + owner-gate update/delete via the now-landed Interview.createdBy) \u2014 nudge the worker. WAVE-4 (dashboard, master-timeline) is NOT eligible yet \u2014 both depend on application-central (#28, not merged) + other wave-3 modules; they unblock once #25/#28 + #26/#27 merge. GOOD: M3 done (wave-2 complete); Interview.createdBy foundational field landed. GRAHEM (standing): web-search tool across AI modules. RECURRING: merge gate reads checkpoint+PR-comment, not reviewDecision.",
+  "needs": "\u26a0\ufe0f BUILD APPEARS STALLED \u2014 all open work is gated on NON-reviewer actions; the spec-reviewer has nothing left to review (2 idle passes). SUPERVISOR ACTION NEEDED: (1) MERGE #26 demonstrated-interest-contacts + #27 campus-visit-planner \u2014 both APPROVED + CI-green + MERGEABLE/CLEAN, sitting unmerged; NOTHING has merged since #18 (~hours). This is the main blocker for wave-3/M4 and (transitively) wave-4 (dashboard/master-timeline, which depend on #28 + these). Run the merge step. (2) Provide the APPLICATION# entity on the frozen data layer for #28 (rec-board/test-score-tracker/decision-matrix), OR get Grahem to accept a staged merge of #28 essay core (worker is done in-lane). WORKER ACTION NEEDED: #25 interview-prep \u2014 apply the ~5-line PUT-residual fix (scrub the PUT response + owner-gate update/delete via Interview.createdBy). Open round 2\u21923, escalated. GRAHEM: web-search tool decision (standing). STATUS: M3 done (wave-2 complete, 9 modules). Wave-3: ai-assistant merged; #26/#27 approved-unmerged; #25/#28 changes-requested. Wave-4 not yet eligible. RECURRING: merge gate reads checkpoint+PR-comment, not reviewDecision (self-PR under grahem-wnu).",
   "lastPass": {
-    "at": "2026-06-06T23:23:00Z",
+    "at": "2026-06-07T00:00:00Z",
     "openPrsAgainstDev": 4,
     "reviewed": [],
-    "milestone": "M3 done \u2014 all 9 wave-2 modules merged (#18 course-planner merged this interval)",
+    "note": "No re-pushes; all 4 open PRs at already-reviewed SHAs. 2nd idle pass.",
     "approvedAwaitingMerge": [
       {
-        "pr": 26,
-        "branch": "feat/demonstrated-interest-contacts"
+        "pr": 26
       },
       {
-        "pr": 27,
-        "branch": "feat/campus-visit-planner"
+        "pr": 27
       }
     ],
     "changesRequestedOpen": [
       {
         "pr": 25,
-        "note": "PUT residual + update/delete owner-gating (escalated)"
+        "note": "PUT residual \u2014 escalated, worker not re-pushed"
       },
       {
         "pr": 28,
-        "note": "gated on APPLICATION# entity + Grahem staged-merge"
+        "note": "APPLICATION# entity (supervisor) + Grahem staged-merge"
       }
-    ],
-    "merged": [
-      18
     ],
     "stalls": [
       {
+        "scope": "supervisor-merge-step",
+        "reason": "#26/#27 approved+green+mergeable, unmerged; nothing merged since #18 (~hours) \u2014 supervisor merge loop appears stalled"
+      },
+      {
         "pr": 25,
-        "reason": "PUT/update/delete privacy residual open round 2\u21923"
+        "reason": "PUT/update/delete privacy residual open round 2\u21923, no re-push"
       }
     ]
   }
