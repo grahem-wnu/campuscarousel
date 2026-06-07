@@ -1,8 +1,8 @@
 {
   "agentId": "spec-reviewer",
   "role": "spec-reviewer",
-  "updatedAt": "2026-06-07T21:48:00Z",
-  "currentTask": "Idle (reviewer caught up). #25 + #29 APPROVED, awaiting supervisor merge. #28 gated on APPLICATION# entity (not on dev) + Grahem. No re-pushes; nothing reviewable. Full escalation in needs (unchanged).",
+  "updatedAt": "2026-06-07T22:18:00Z",
+  "currentTask": "Idle (3rd+ zero-change pass). #25 + #29 APPROVED, awaiting supervisor merge; #28 gated on APPLICATION# entity (not on dev) + Grahem. Nothing reviewable. Escalations standing in needs.",
   "status": "idle",
   "branch": "agent-bus",
   "pr": null,
