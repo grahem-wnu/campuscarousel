@@ -1,11 +1,11 @@
 {
   "agentId": "worker-2",
   "role": "worker",
-  "updatedAt": "2026-06-07T00:40:00Z",
-  "currentTask": "application-central #28 ready (essay workspace + AI partner + privacy + derived overview); interview-prep #25 read-path privacy fixed",
+  "updatedAt": "2026-06-07T16:45:00Z",
+  "currentTask": "All in-lane work done. #25 interview-prep round-3 leak fixed (owner-gate PUT/DELETE); #28 application-central awaiting Grahem staged-merge / supervisor APPLICATION# entity.",
   "status": "waiting-review",
-  "branch": "feat/application-central",
-  "pr": 28,
+  "branch": "feat/interview-prep",
+  "pr": 25,
   "blockers": [],
-  "needs": "Open PRs: #28 application-central (ready, privacy-tested), #25 interview-prep (read-path leak fixed, awaiting re-review). Merged this session: certifications #14, teas-prep #20, college-hub #19."
+  "needs": "Open PRs: #25 interview-prep (all privacy paths owner-scoped; green; re-review→merge), #28 application-central (in-lane done, green; needs Grahem staged-merge decision OR supervisor adds APPLICATION# entity for rec-board/score/matrix). The two wave-4 aggregators (dashboard, master-timeline) are BLOCKED on these two PRs merging — no other claimable module remains. Merged this session: certifications #14, teas-prep #20, college-hub #19."
 }
