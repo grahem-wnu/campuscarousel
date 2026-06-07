@@ -1,8 +1,8 @@
 {
   "agentId": "spec-reviewer",
   "role": "spec-reviewer",
-  "updatedAt": "2026-06-07T20:28:00Z",
-  "currentTask": "Wave-3. This pass: #25 interview-prep APPROVED round 4 \u2014 PUT-residual privacy leak fully closed (update owner-gated + response scrubbed, remove owner-gated, tested). #26/#27 merged. #28 unchanged (gated on APPLICATION# entity).",
+  "updatedAt": "2026-06-07T20:48:00Z",
+  "currentTask": "Idle (reviewer caught up). #25 interview-prep APPROVED, awaiting supervisor merge. #28 application-central remains the sole wave-3 blocker \u2014 gated on the APPLICATION# entity (not on dev) + Grahem staged-merge. No re-pushes; nothing reviewable. (Full escalation in needs, unchanged.)",
   "status": "idle",
   "branch": "agent-bus",
   "pr": null,
