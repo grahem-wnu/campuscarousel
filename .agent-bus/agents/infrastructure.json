@@ -1,11 +1,11 @@
 {
   "agentId": "infrastructure",
   "role": "infrastructure",
-  "updatedAt": "2026-06-06T20:55:00Z",
-  "currentTask": "DONE foundational-hydration-bundle (PR #23, ready). build-lambda.mjs now globs module hydration.manifest.ts into a generated barrel; lambda/hydration.ts builds the type->handler registry at load (fails loudly on duplicate type), makeHandler extracted + 8 tests. LIVE-proven on staging (wnu 010928187255): probe module -> real SQS message DISPATCHED by worker (PROBE-DISPATCHED, not draining), DLQ 0; probe reverted, worker redeployed clean. typecheck/lint/check:routes/377 tests + CI green.",
+  "updatedAt": "2026-06-07T21:15:00Z",
+  "currentTask": "DONE foundational-ai-search (PR #29, ready). Shared backend/shared/ai: Tavily client (key from SSM SecureString, lazy/cached, never logged) + converseWithSearch() Bedrock tool-use loop registering a custom web_search tool. Infra: AI_WEB_SEARCH on routing+worker, worker got SSM_PREFIX env + ssm:GetParameter grant (aws/ssm managed key, no kms grant). 9 tests; 795 total + CI green. LIVE on staging (wnu 010928187255): real routing Lambda did role-based SSM decrypt -> Bedrock web_search -> Tavily -> grounded answer w/ source URLs (rounds 3); no key in logs; probe reverted + redeployed clean.",
   "status": "review",
-  "branch": "feat/hydration-bundle",
-  "pr": 23,
+  "branch": "feat/ai-search",
+  "pr": 29,
   "blockers": [],
-  "needs": "SUPERVISOR merge of PR #23 (I do not merge). Then college-hub (#19) flips enqueue inline->makeSqsEnqueuer() (one line) -> async spec-compliant -> unblocks course-planner. Prior infra PR #17 (bedrock dep) already merged to dev. Note in checkpoint: committed routes barrel manifests.ts is stale (5 modules on dev, barrel lists 1) — harmless (deploy regenerates) but worth a cleanup."
+  "needs": "SUPERVISOR merge of PR #29 (I do not merge). Then AI module owners (college-hub/peer-benchmark/ai-assistant) adopt in their PRs: import converseWithSearch from shared/ai and call with {webSearch:true} (on by default via AI_WEB_SEARCH). Routing + worker lambdas can read the Tavily key + reach the internet. Standing note: committed generated barrels (manifests.ts routes + hydration-manifests.ts) are stale on dev (deploy regenerates them) — worth a cleanup PR."
 }
