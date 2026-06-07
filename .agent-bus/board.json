@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-06-06T22:10:00Z-M3-done",
+  "updatedAt": "2026-06-07T00:00:00Z-wave3-3of5",
   "writer": "supervisor",
   "phase": "fanout",
   "note": "FANOUT OPEN. Grahem authorized proceeding without his live Gate-2 UI walkthrough (privacy already proven via tests + the infra agent's live direct-invoke: keira sees private, kate 403 on real Lambda+DynamoDB). slice-gate sentinel stripped from all modules -> wave 2 eligible. DEFERRED: Grahem's own SPA click-through of private-entry visibility is folded into M6 final QA + must pass before Gate 3 (prod). Supervisor merges APPROVED+green PRs into dev only.",
@@ -429,9 +429,9 @@
       "spec": "specs/modules/application-central.md",
       "owner": null,
       "worktree": "",
-      "branch": "",
-      "pr": null,
-      "status": "todo",
+      "branch": "feat/application-central",
+      "pr": 28,
+      "status": "review",
       "dependsOn": [
         "foundational-data-layer",
         "foundational-auth",
@@ -449,9 +449,9 @@
       "spec": "specs/modules/campus-visit-planner.md",
       "owner": null,
       "worktree": "",
-      "branch": "",
-      "pr": null,
-      "status": "todo",
+      "branch": "feat/campus-visit-planner",
+      "pr": 27,
+      "status": "merged",
       "dependsOn": [
         "foundational-data-layer",
         "foundational-auth",
@@ -459,7 +459,8 @@
         "foundational-design-system",
         "college-hub"
       ],
-      "blockedReason": ""
+      "blockedReason": "",
+      "note": "MERGED (#27)."
     },
     {
       "id": "demonstrated-interest-contacts",
@@ -468,9 +469,9 @@
       "spec": "specs/modules/demonstrated-interest-contacts.md",
       "owner": null,
       "worktree": "",
-      "branch": "",
-      "pr": null,
-      "status": "todo",
+      "branch": "feat/demonstrated-interest-contacts",
+      "pr": 26,
+      "status": "merged",
       "dependsOn": [
         "foundational-data-layer",
         "foundational-auth",
@@ -478,7 +479,8 @@
         "foundational-design-system",
         "college-hub"
       ],
-      "blockedReason": ""
+      "blockedReason": "",
+      "note": "MERGED (#26)."
     },
     {
       "id": "interview-prep",
