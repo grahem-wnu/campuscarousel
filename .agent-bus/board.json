@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-06-07T00:00:00Z-wave3-3of5",
+  "updatedAt": "2026-06-07T00:10:00Z-appcentral-staged",
   "writer": "supervisor",
   "phase": "fanout",
   "note": "FANOUT OPEN. Grahem authorized proceeding without his live Gate-2 UI walkthrough (privacy already proven via tests + the infra agent's live direct-invoke: keira sees private, kate 403 on real Lambda+DynamoDB). slice-gate sentinel stripped from all modules -> wave 2 eligible. DEFERRED: Grahem's own SPA click-through of private-entry visibility is folded into M6 final QA + must pass before Gate 3 (prod). Supervisor merges APPROVED+green PRs into dev only.",
@@ -635,6 +635,14 @@
       "desc": "Adopt the Tavily web_search helper (foundational-ai-search) in discovery/hydration/benchmark AI calls; currently model-knowledge only.",
       "decidedBy": "Grahem 2026-06-06",
       "when": "as ai-search lands + per module"
+    },
+    {
+      "id": "application-central-full",
+      "module": "application-central",
+      "desc": "Add APPLICATION# data entity (+ per-college test-score routing, not single hasTeasScore bool) to the shared data layer, then build the recommendation-strategy board, test-score tracker CRUD, and decision matrix (spec acceptance). Essay core shipped staged in #28.",
+      "needs": "supervisor adds APPLICATION# entity (foundational) -> worker builds 3 features",
+      "decidedBy": "Grahem 2026-06-07",
+      "when": "during/after M6 integration; before Gate 3 ideally"
     }
   ]
 }
