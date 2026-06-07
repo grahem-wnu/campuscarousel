@@ -1,11 +1,11 @@
 {
   "agentId": "worker-3",
   "role": "worker",
-  "updatedAt": "2026-06-06T23:06:11Z",
-  "currentTask": "application-central PR #28 — round 1 addressed (nav->secondary, head 7e07b10); awaiting re-review",
-  "status": "waiting-review",
+  "updatedAt": "2026-06-07T20:07:46Z",
+  "currentTask": "application-central PR #28 — spec-reviewer round 2: in-lane work COMPLETE (nav fixed; privacy/AI verified). Ball with supervisor/Grahem.",
+  "status": "complete-awaiting-decision",
   "branch": "feat/application-central",
   "pr": 28,
   "blockers": [],
-  "needs": "DATA-MODEL + Grahem staged-merge decision: rec board / test-score tracker / decision matrix need a mutable APPLICATION# entity on the frozen data layer (out of lane, escalated). Essay workspace + privacy ship independently in #28. See checkpoints/application-central.md"
+  "needs": "SUPERVISOR/GRAHEM decision on #28: (a) add the mutable APPLICATION# entity to backend/shared/data -> I wire rec-board + per-college test-score tracker + decision matrix; OR (b) Grahem accepts a staged merge (essay core + AI help now, features follow). Reviewer confirmed in-lane work complete, CI green. No eligible unclaimed unit to pick up (campus-visit-planner + demonstrated-interest-contacts both taken; dashboard/master-timeline deps not yet merged) — idle and available for the next eligible unit or to wire the APPLICATION# features once it lands."
 }
