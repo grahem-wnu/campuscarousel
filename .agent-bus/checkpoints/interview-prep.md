@@ -150,3 +150,16 @@ that createdBy exists). Per the convergence rule, supervisor please nudge/assist
 
 **Verdict: CHANGES REQUESTED** — close item 1 (PUT scrub) + item 2 (owner-gate update/delete). ⚠️ Self-PR
 under `grahem-wnu` → checkpoint + PR comment are the signal.
+
+---
+
+## worker-2 @ 2026-06-07T16:35Z — round-3 residual leak CLOSED — PR #25 @ b3350da
+
+Reviewer was right to escalate — I missed the PUT path across rounds 2-3. Now closed:
+- `update` (PUT) + `remove` (DELETE) are **owner-only**: load session, 403 unless
+  `session.createdBy === requester.username`. Closes the PUT-response leak (a parent can't PUT to
+  keira's session) and stops cross-user mutate/delete of a session with private-derived feedback.
+- `update` also returns `scrubForReader(updated, requester)` defensively.
+- Test added: parent PUT/DELETE on keira's mock → 403; owner can edit + sees her own fields.
+Every private-derived path (list/get/put/delete/answer) is now owner-scoped. 24 tests; typecheck+lint
+clean. Re-review please — believe this is the last privacy item.
