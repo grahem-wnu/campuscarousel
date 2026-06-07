@@ -47,6 +47,22 @@ describe('CRUD', () => {
     await expectStatus(h.detail(ctx({ params: { id: 'ghost' } })), 404);
     await expectStatus(h.create(ctx({ body: { type: 'bad', date: '2026-05-01' } })), 422);
   });
+
+  it('owner-gates update/delete; the PUT response is scrubbed; the owner can edit', async () => {
+    await seedPrivateAndFamily();
+    const mock = await h.mock(ctx({ body: { count: 1 } })); // created by keira
+    const sessionId = (mock.body as { session: { sessionId: string } }).session.sessionId;
+    await h.answer(ctx({ params: { sessionId }, body: { questionIndex: 0, answer: 'private-grounded answer' } }));
+
+    // a parent cannot PUT or DELETE keira's session (no cross-user mutation / no leak via PUT)
+    await expectStatus(h.update(ctx({ requester: kate, params: { id: sessionId }, body: { confidenceLevel: 5 } })), 403);
+    await expectStatus(h.remove(ctx({ requester: kate, params: { id: sessionId } })), 403);
+
+    // the owner can edit, and even the owner's PUT response carries her own fields (scrub is a no-op)
+    const ok = await h.update(ctx({ params: { id: sessionId }, body: { confidenceLevel: 4 } }));
+    expect((ok.body as { confidenceLevel: number; questions: { answer?: string }[] }).confidenceLevel).toBe(4);
+    expect((ok.body as { questions: { answer?: string }[] }).questions[0]?.answer).toBe('private-grounded answer');
+  });
 });
 
 describe('mock', () => {

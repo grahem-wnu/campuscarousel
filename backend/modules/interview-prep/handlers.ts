@@ -128,18 +128,26 @@ export function makeHandlers(deps: InterviewDeps): InterviewHandlers {
       return { status: 201, body: created };
     },
 
-    // PUT /interviews/:id.
+    // PUT /interviews/:id — owner-only (a session can carry private-derived feedback); the response
+    // is also scrubbed defensively so no private-derived field can return via this path.
     update: async (ctx) => {
       const { id } = validateParams(idParamSchema, ctx);
       const patch = validateBody(updateSchema, ctx);
-      await requireSession(id);
-      return { status: 200, body: await getData().interviews.update(id, patch) };
+      const session = await requireSession(id);
+      if (session.createdBy !== ctx.requester.username) {
+        throw Errors.forbidden('Only the owner can edit this interview session');
+      }
+      const updated = await getData().interviews.update(id, patch);
+      return { status: 200, body: scrubForReader(updated, ctx.requester.username) };
     },
 
-    // DELETE /interviews/:id.
+    // DELETE /interviews/:id — owner-only (no cross-user deletion of someone's sessions).
     remove: async (ctx) => {
       const { id } = validateParams(idParamSchema, ctx);
-      await requireSession(id);
+      const session = await requireSession(id);
+      if (session.createdBy !== ctx.requester.username) {
+        throw Errors.forbidden('Only the owner can delete this interview session');
+      }
       await getData().interviews.delete(id);
       return { status: 204, body: undefined };
     },
