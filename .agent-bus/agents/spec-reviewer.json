@@ -1,55 +1,45 @@
 {
   "agentId": "spec-reviewer",
   "role": "spec-reviewer",
-  "updatedAt": "2026-06-07T22:18:00Z",
-  "currentTask": "Idle (3rd+ zero-change pass). #25 + #29 APPROVED, awaiting supervisor merge; #28 gated on APPLICATION# entity (not on dev) + Grahem. Nothing reviewable. Escalations standing in needs.",
+  "updatedAt": "2026-06-07T23:18:00Z",
+  "currentTask": "#29 foundational-ai-search MERGED \u2192 converseWithSearch (shared web-search) now on dev. #25 still APPROVED-awaiting-merge; #28 still gated on APPLICATION# entity. No re-pushes to review.",
   "status": "idle",
   "branch": "agent-bus",
   "pr": null,
   "blockers": [],
-  "needs": "FOR SUPERVISOR \u2014 MERGE QUEUE (3 approved, clean, mergeable, unmerged): #25 interview-prep (privacy fully fixed), #29 foundational-ai-search (shared web-search). Merge both. #28 application-central is the SOLE remaining changes-requested module \u2014 gated on the APPLICATION# entity (frozen data layer; provide it OR Grahem accept staged-merge of the essay core; worker done in-lane). WEB-SEARCH ESCALATION RESOLVED: #29 lands the shared converseWithSearch capability (Tavily; gated by AI_WEB_SEARCH env, key in SSM SecureString). Once #29 merges, the AI modules (college-hub, peer-benchmark, scholarship-tracker, ai-assistant, interview-prep) should adopt it in FOLLOW-UP PRs to close the data-accuracy gap I flagged across those reviews \u2014 supervisor: schedule those adoption PRs. STATUS: M3 done. Wave-3: ai-assistant/#26/#27 merged; #25 approved-awaiting-merge; #28 changes (APPLICATION#). Foundational #29 approved-awaiting-merge. Wave-4 (dashboard/master-timeline) not yet eligible (need #28 + remaining wave-3 merged). RECURRING: merge gate reads checkpoint+PR-comment, not reviewDecision (self-PR under grahem-wnu).",
+  "needs": "FOR SUPERVISOR \u2014 (A) MERGE #25 interview-prep: APPROVED + MERGEABLE/CLEAN; you merged #29 but skipped #25 \u2014 please merge it (closes more of wave-3). (B) #28 application-central remains the SOLE changes-requested module: provide the APPLICATION# entity on the frozen data layer (still not on dev) for rec-board/test-score-tracker/decision-matrix, OR get Grahem to accept a staged-merge of the essay core (worker done in-lane). (C) WEB-SEARCH ADOPTION now unblocked: #29 merged, so converseWithSearch is on dev (backend/shared/ai). The AI modules can adopt it in follow-up PRs to close the data-accuracy gap I flagged \u2014 supervisor: schedule/assign these adoption PRs for college-hub (discovery/hydration), scholarship-tracker (discovery/hydration), peer-benchmark (benchmark research), ai-assistant + interview-prep (citations). I will review each. STATUS: M3 done. Wave-3: ai-assistant/#26/#27 merged; #25 approved-awaiting-merge; #28 changes (APPLICATION#). Foundational web-search (#29) merged. Wave-4 (dashboard/master-timeline) needs #28 + #25 merged. RECURRING: merge gate reads checkpoint+PR-comment, not reviewDecision (self-PR under grahem-wnu).",
   "lastPass": {
-    "at": "2026-06-07T21:24:00Z",
-    "openPrsAgainstDev": 3,
-    "reviewed": [
-      {
-        "pr": 29,
-        "branch": "feat/ai-search",
-        "headSha": "0ddf30b",
-        "verdict": "APPROVED",
-        "ci": "green",
-        "note": "foundational shared web-search (Tavily); key in SSM SecureString never-logged, least-privilege SSM IAM (prefix-scoped), tool-use loop terminates + degrades; resolves web-search escalation"
-      }
-    ],
+    "at": "2026-06-07T23:18:00Z",
+    "openPrsAgainstDev": 2,
+    "reviewed": [],
+    "note": "#29 merged this interval (converseWithSearch on dev). No re-pushes; #25/#28 heads unchanged.",
     "approvedAwaitingMerge": [
       {
         "pr": 25,
         "branch": "feat/interview-prep"
-      },
-      {
-        "pr": 29,
-        "branch": "feat/ai-search"
       }
     ],
     "changesRequestedOpen": [
       {
         "pr": 28,
-        "note": "sole module blocker; APPLICATION# entity (supervisor) + Grahem staged-merge"
+        "note": "APPLICATION# entity (supervisor) + Grahem staged-merge"
       }
     ],
     "followUps": [
       {
-        "what": "AI modules adopt converseWithSearch (web search) once #29 merges",
+        "what": "AI modules adopt converseWithSearch (now on dev via #29)",
         "modules": [
           "college-hub",
-          "peer-benchmark",
           "scholarship-tracker",
+          "peer-benchmark",
           "ai-assistant",
           "interview-prep"
         ]
       }
     ],
-    "merged": [],
+    "merged": [
+      29
+    ],
     "stalls": []
   }
 }
