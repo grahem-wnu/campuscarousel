@@ -1,43 +1,55 @@
 {
   "agentId": "spec-reviewer",
   "role": "spec-reviewer",
-  "updatedAt": "2026-06-07T20:48:00Z",
-  "currentTask": "Idle (reviewer caught up). #25 interview-prep APPROVED, awaiting supervisor merge. #28 application-central remains the sole wave-3 blocker \u2014 gated on the APPLICATION# entity (not on dev) + Grahem staged-merge. No re-pushes; nothing reviewable. (Full escalation in needs, unchanged.)",
+  "updatedAt": "2026-06-07T21:24:00Z",
+  "currentTask": "This pass: #29 foundational-ai-search APPROVED (shared Tavily web_search tool + Bedrock tool-use loop; secret handling + least-privilege SSM IAM verified). Resolves the web-search escalation (Grahem chose Tavily). #25 still awaiting merge; #28 still gated on APPLICATION#.",
   "status": "idle",
   "branch": "agent-bus",
   "pr": null,
   "blockers": [],
-  "needs": "FOR SUPERVISOR \u2014 (A) MERGE #25 interview-prep (APPROVED + green + MERGEABLE; privacy now fully enforced). With #25 merged, only #28 remains in wave-3. (B) #28 application-central is the SOLE remaining wave-3 blocker and is gated on YOU: provide the APPLICATION# entity on the frozen data layer (for rec-board/test-score-tracker/decision-matrix) OR get Grahem to accept a staged merge of #28 essay core (worker done in-lane, nav fixed). The APPLICATION# entity is NOT on dev yet. This blocks M4 (wave-3) and transitively wave-4 (dashboard/master-timeline depend on application-central). GOOD: #26/#27 merged; #25 privacy hard-fail fully resolved across 4 rounds. GRAHEM (standing): web-search tool decision across AI modules. WAVE-3 status: ai-assistant + demonstrated-interest-contacts + campus-visit-planner MERGED; interview-prep #25 APPROVED-awaiting-merge; application-central #28 changes (APPLICATION# gate). RECURRING: merge gate reads checkpoint+PR-comment, not reviewDecision (self-PR under grahem-wnu).",
+  "needs": "FOR SUPERVISOR \u2014 MERGE QUEUE (3 approved, clean, mergeable, unmerged): #25 interview-prep (privacy fully fixed), #29 foundational-ai-search (shared web-search). Merge both. #28 application-central is the SOLE remaining changes-requested module \u2014 gated on the APPLICATION# entity (frozen data layer; provide it OR Grahem accept staged-merge of the essay core; worker done in-lane). WEB-SEARCH ESCALATION RESOLVED: #29 lands the shared converseWithSearch capability (Tavily; gated by AI_WEB_SEARCH env, key in SSM SecureString). Once #29 merges, the AI modules (college-hub, peer-benchmark, scholarship-tracker, ai-assistant, interview-prep) should adopt it in FOLLOW-UP PRs to close the data-accuracy gap I flagged across those reviews \u2014 supervisor: schedule those adoption PRs. STATUS: M3 done. Wave-3: ai-assistant/#26/#27 merged; #25 approved-awaiting-merge; #28 changes (APPLICATION#). Foundational #29 approved-awaiting-merge. Wave-4 (dashboard/master-timeline) not yet eligible (need #28 + remaining wave-3 merged). RECURRING: merge gate reads checkpoint+PR-comment, not reviewDecision (self-PR under grahem-wnu).",
   "lastPass": {
-    "at": "2026-06-07T20:28:00Z",
-    "openPrsAgainstDev": 2,
+    "at": "2026-06-07T21:24:00Z",
+    "openPrsAgainstDev": 3,
     "reviewed": [
       {
-        "pr": 25,
-        "branch": "feat/interview-prep",
-        "headSha": "b3350da",
-        "round": 4,
+        "pr": 29,
+        "branch": "feat/ai-search",
+        "headSha": "0ddf30b",
         "verdict": "APPROVED",
         "ci": "green",
-        "note": "PUT-residual closed: update owner-gated+response-scrubbed, remove owner-gated, tested (parent 403). Privacy fully enforced end-to-end."
+        "note": "foundational shared web-search (Tavily); key in SSM SecureString never-logged, least-privilege SSM IAM (prefix-scoped), tool-use loop terminates + degrades; resolves web-search escalation"
       }
     ],
     "approvedAwaitingMerge": [
       {
         "pr": 25,
         "branch": "feat/interview-prep"
+      },
+      {
+        "pr": 29,
+        "branch": "feat/ai-search"
       }
     ],
     "changesRequestedOpen": [
       {
         "pr": 28,
-        "note": "sole wave-3 blocker; gated on APPLICATION# entity (supervisor) + Grahem staged-merge"
+        "note": "sole module blocker; APPLICATION# entity (supervisor) + Grahem staged-merge"
       }
     ],
-    "merged": [
-      26,
-      27
+    "followUps": [
+      {
+        "what": "AI modules adopt converseWithSearch (web search) once #29 merges",
+        "modules": [
+          "college-hub",
+          "peer-benchmark",
+          "scholarship-tracker",
+          "ai-assistant",
+          "interview-prep"
+        ]
+      }
     ],
+    "merged": [],
     "stalls": []
   }
 }
