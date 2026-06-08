@@ -62,6 +62,8 @@ export interface ConverseOptions {
   /** Optional system prompt. */
   system?: string;
   maxTokens?: number;
+  /** Sampling temperature passed through to the model (omit for the model default). */
+  temperature?: number;
   /** Tool-use round cap (final round runs without tools to force a text answer). Default 4. */
   maxRounds?: number;
   /** Enable the web_search tool. Defaults to env `AI_WEB_SEARCH === 'true'`. */
@@ -158,6 +160,7 @@ export async function converseWithSearch(
       max_tokens: options.maxTokens ?? 2048,
       messages,
     };
+    if (options.temperature !== undefined) body.temperature = options.temperature;
     if (options.system) body.system = options.system;
     if (offerTools) body.tools = [WEB_SEARCH_TOOL];
 
