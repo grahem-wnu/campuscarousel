@@ -30,6 +30,7 @@ import {
 import { InMemoryTableClient } from './memory-client.js';
 import type {
   Activity,
+  Application,
   Certification,
   Clinical,
   College,
@@ -38,8 +39,10 @@ import type {
   Essay,
   Goal,
   Interview,
+  Recommendation,
   Scholarship,
   Teas,
+  TestScore,
   WhyNursing,
 } from './types.js';
 
@@ -153,6 +156,27 @@ export function makeData(client: TableClient) {
     collection: 'CONTACTS',
   });
 
+  // Application Central entities (senior-year command center).
+  const applications = makeDetailsRepo<Application, 'applicationId'>(client, {
+    prefix: 'APPLICATION',
+    idField: 'applicationId',
+    collection: 'APPLICATIONS',
+    sortField: 'deadline', // falls back to createdAt when no deadline set
+  });
+
+  const recommendations = makeDetailsRepo<Recommendation, 'recommendationId'>(client, {
+    prefix: 'RECOMMENDATION',
+    idField: 'recommendationId',
+    collection: 'RECOMMENDATIONS',
+  });
+
+  const testScores = makeDetailsRepo<TestScore, 'scoreId'>(client, {
+    prefix: 'TESTSCORE',
+    idField: 'scoreId',
+    collection: 'TESTSCORES',
+    sortField: 'testDate', // falls back to createdAt when no testDate set
+  });
+
   return {
     activities,
     clinical,
@@ -166,6 +190,9 @@ export function makeData(client: TableClient) {
     interviews,
     whyNursing,
     contacts,
+    applications,
+    recommendations,
+    testScores,
     // College sub-entities + singletons + conversations.
     collegeNotes: makeCollegeNotes(client),
     touchpoints: makeTouchpoints(client),

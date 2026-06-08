@@ -90,6 +90,76 @@ describe('collection listing (GSI1) + ordering', () => {
   });
 });
 
+describe('application-central entities (applications / recommendations / testScores)', () => {
+  it('applications: CRUD, component statuses, decision, ordered by deadline', async () => {
+    const app = await data.applications.create({
+      collegeId: 'uci',
+      status: 'in-progress',
+      deadline: '2026-11-30',
+      components: { essay: 'in-progress', testScores: 'not-started' },
+    });
+    expect(app.applicationId).toMatch(/[0-9a-f-]{36}/);
+    expect(app.collegeId).toBe('uci');
+    expect(hasNoInternal(app)).toBe(true);
+
+    const decided = await data.applications.update(app.applicationId, {
+      decision: 'accepted',
+      decisionDate: '2027-03-15',
+      components: { essay: 'complete', testScores: 'submitted' },
+    });
+    expect(decided.decision).toBe('accepted');
+    expect(decided.components?.essay).toBe('complete');
+    expect(decided.createdAt).toBe(app.createdAt);
+
+    await data.applications.create({ collegeId: 'csulb', deadline: '2026-10-15' });
+    const byDeadline = await data.applications.list();
+    expect(byDeadline.map((a) => a.collegeId)).toEqual(['csulb', 'uci']); // earlier deadline first
+  });
+
+  it('recommendations: slots and status lifecycle', async () => {
+    const rec = await data.recommendations.create({
+      slot: 'clinical-supervisor',
+      contactName: 'Nurse Riley',
+      status: 'asked',
+      submittedColleges: [],
+    });
+    expect(rec.slot).toBe('clinical-supervisor');
+    const updated = await data.recommendations.update(rec.recommendationId, {
+      status: 'submitted',
+      submittedColleges: ['uci', 'csulb'],
+    });
+    expect(updated.status).toBe('submitted');
+    expect(updated.submittedColleges).toEqual(['uci', 'csulb']);
+    expect(await data.recommendations.list()).toHaveLength(1);
+  });
+
+  it('testScores: per-test record with per-college send routing, ordered by testDate', async () => {
+    const sat = await data.testScores.create({
+      testType: 'SAT',
+      testDate: '2026-05-01',
+      score: 1380,
+      sectionScores: { math: 700, reading: 680 },
+      sentTo: ['uci'],
+    });
+    expect(sat.testType).toBe('SAT');
+    expect(sat.sentTo).toEqual(['uci']);
+    await data.testScores.create({ testType: 'TEAS', testDate: '2026-02-01', score: 88 });
+    const ordered = await data.testScores.list();
+    expect(ordered.map((s) => s.testType)).toEqual(['TEAS', 'SAT']); // earlier testDate first
+    const routed = await data.testScores.update(sat.scoreId, { sentTo: ['uci', 'csulb'] });
+    expect(routed.sentTo).toEqual(['uci', 'csulb']);
+  });
+
+  it('keeps the three collections isolated', async () => {
+    await data.applications.create({ collegeId: 'uci' });
+    await data.recommendations.create({ slot: 'stem-teacher' });
+    await data.testScores.create({ testType: 'ACT' });
+    expect(await data.applications.list()).toHaveLength(1);
+    expect(await data.recommendations.list()).toHaveLength(1);
+    expect(await data.testScores.list()).toHaveLength(1);
+  });
+});
+
 describe('secondary index access patterns', () => {
   it('activities.listByCategory uses GSI2', async () => {
     await data.activities.create(buildActivity({ category: 'clinical', date: '2026-01-02' }));

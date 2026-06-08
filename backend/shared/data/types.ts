@@ -253,6 +253,110 @@ export interface Essay extends Timestamped {
 }
 
 // ---------------------------------------------------------------------------
+// Application (PK: APPLICATION#<applicationId>, SK: DETAILS) — GSI1 by deadline.
+// One per college: the senior-year tracker row. Component statuses replace the old
+// single hasTeasScore bool; test-score routing lives on TestScore.sentTo.
+// ---------------------------------------------------------------------------
+export type ApplicationComponentStatus =
+  | 'not-started'
+  | 'in-progress'
+  | 'submitted'
+  | 'complete'
+  | 'waived';
+
+export type ApplicationStatus =
+  | 'planning'
+  | 'in-progress'
+  | 'submitted'
+  | 'under-review'
+  | 'decided'
+  | 'withdrawn';
+
+export type ApplicationDecision = 'none' | 'accepted' | 'waitlisted' | 'deferred' | 'rejected';
+
+export interface Application extends Timestamped {
+  applicationId: string;
+  collegeId: string;
+  status?: ApplicationStatus;
+  applicationType?: 'early-action' | 'early-decision' | 'regular-decision' | 'rolling';
+  deadline?: string;
+  submittedDate?: string;
+  /** Per-component readiness for the tracker grid (essay / rec / transcript / scores / aid). */
+  components?: {
+    essay?: ApplicationComponentStatus;
+    recommendations?: ApplicationComponentStatus;
+    transcript?: ApplicationComponentStatus;
+    testScores?: ApplicationComponentStatus;
+    financialAid?: ApplicationComponentStatus;
+  };
+  decision?: ApplicationDecision;
+  decisionDate?: string;
+  notes?: string;
+  createdBy?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Recommendation (PK: RECOMMENDATION#<recommendationId>, SK: DETAILS) — rec-strategy board.
+// Four canonical slots; assigned to a contact; status asked→agreed→received→submitted.
+// ---------------------------------------------------------------------------
+export type RecommendationSlot =
+  | 'stem-teacher'
+  | 'humanities-teacher'
+  | 'clinical-supervisor'
+  | 'community-leader'
+  | 'other';
+
+export type RecommendationStatus =
+  | 'identified'
+  | 'asked'
+  | 'agreed'
+  | 'received'
+  | 'submitted'
+  | 'declined';
+
+export interface Recommendation extends Timestamped {
+  recommendationId: string;
+  slot: RecommendationSlot;
+  contactId?: string;
+  contactName?: string;
+  relationshipStrength?: 'strong' | 'moderate' | 'developing';
+  status?: RecommendationStatus;
+  askTimeline?: string;
+  askedDate?: string;
+  receivedDate?: string;
+  /** Colleges this letter has been submitted to. */
+  submittedColleges?: string[];
+  /** AI-generated recommender brief (regenerable; never persisted from private content). */
+  aiBrief?: string;
+  notes?: string;
+  createdBy?: string;
+}
+
+// ---------------------------------------------------------------------------
+// TestScore (PK: TESTSCORE#<scoreId>, SK: DETAILS) — GSI1 by testDate.
+// Per-test record with per-college send routing (sentTo).
+// ---------------------------------------------------------------------------
+export type TestScoreType = 'SAT' | 'ACT' | 'TEAS' | 'AP';
+
+export interface TestScore extends Timestamped {
+  scoreId: string;
+  testType: TestScoreType;
+  testDate?: string;
+  /** Composite/total (SAT total, ACT composite, TEAS overall, AP 1-5). */
+  score?: number;
+  sectionScores?: Record<string, number>;
+  /** AP subject, when testType === 'AP'. */
+  apSubject?: string;
+  /** Best superscore across sittings, when tracked. */
+  superscore?: number;
+  /** collegeIds this score has been sent to. */
+  sentTo?: string[];
+  official?: boolean;
+  notes?: string;
+  createdBy?: string;
+}
+
+// ---------------------------------------------------------------------------
 // Scholarship (PK: SCHOLARSHIP#<id>, SK: DETAILS)
 // ---------------------------------------------------------------------------
 export interface Scholarship extends Timestamped, Hydratable {
