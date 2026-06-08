@@ -1,0 +1,40 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: light;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-surface-base text-ink-800 antialiased;
+    font-family: theme("fontFamily.sans");
+  }
+
+  /* Respect users who prefer reduced motion. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.001ms !important;
+      transition-duration: 0.001ms !important;
+    }
+  }
+}
+
+@layer utilities {
+  /* iOS safe-area padding helpers for the mobile bottom tab bar / FAB. */
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .bottom-safe {
+    bottom: calc(env(safe-area-inset-bottom) + 1rem);
+  }
+}

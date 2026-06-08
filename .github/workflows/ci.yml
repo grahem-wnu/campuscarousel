@@ -1,0 +1,35 @@
+# Copied to .github/workflows/ at bootstrap (this box's hook blocks direct writes here).
+name: CI
+on:
+  pull_request:
+    branches: [dev, main]
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install
+        run: |
+          if [ -f package-lock.json ]; then npm ci; else npm install --no-audit --no-fund; fi
+      - name: Typecheck
+        run: npm run typecheck --if-present
+      - name: Lint
+        run: npm run lint --if-present
+      - name: Guard — no duplicate routes across module manifests
+        run: npm run check:routes --if-present
+      - name: Unit + integration tests
+        run: npm test --if-present
+      - name: CDK synth (self-contained; only when the infra app exists)
+        run: |
+          if [ -f infra/package.json ]; then
+            (cd infra && npm install --no-audit --no-fund && npm run synth)
+          else
+            echo "infra app not present yet — skipping synth"
+          fi

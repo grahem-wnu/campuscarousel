@@ -1,0 +1,50 @@
+{
+  "app": "npx ts-node --prefer-ts-exts bin/infra.ts",
+  "watch": {
+    "include": ["**"],
+    "exclude": [
+      "README.md",
+      "cdk*.json",
+      "**/*.d.ts",
+      "**/*.js",
+      "tsconfig.json",
+      "package*.json",
+      "node_modules",
+      "dist"
+    ]
+  },
+  "context": {
+    "project": "keiras-journey",
+    "githubOrg": "grahem-wnu",
+    "githubRepo": "keiras-journey",
+    "domainName": "keirasjourney.com",
+    "bedrockSonnetProfile": "us.anthropic.claude-sonnet-4-6",
+    "monthlyBudgetUsd": 75,
+    "_hostedZoneIdNote": "keirasjourney.com was registered via Route53 Domains (2026-06-06); this is its pre-existing authoritative public zone. DnsStack imports it (dnsMode import) rather than creating a new zone, so NS delegation stays intact.",
+    "hostedZoneId": "Z03683613MXDVX9D5VIUV",
+    "envs": {
+      "staging": {
+        "stage": "staging",
+        "dnsMode": "import",
+        "subdomain": "staging",
+        "removalPolicy": "destroy"
+      },
+      "prod": {
+        "stage": "prod",
+        "dnsMode": "import",
+        "subdomain": "",
+        "removalPolicy": "retain"
+      }
+    },
+    "@aws-cdk/aws-lambda:recognizeLayerVersion": true,
+    "@aws-cdk/core:checkSecretUsage": true,
+    "@aws-cdk/aws-iam:minimizePolicies": true,
+    "@aws-cdk/core:validateSnapshotRemovalPolicy": true,
+    "@aws-cdk/aws-apigateway:usagePlanKeyOrderInsensitiveId": true,
+    "@aws-cdk/aws-s3:createDefaultLoggingPolicy": true,
+    "@aws-cdk/aws-sns-subscriptions:restrictSqsDescryption": true,
+    "@aws-cdk/aws-cloudfront:defaultSecurityPolicyTLSv1.2_2021": true,
+    "@aws-cdk/core:target-partitions": ["aws"],
+    "@aws-cdk/aws-lambda:useCdkManagedLogGroup": false
+  }
+}

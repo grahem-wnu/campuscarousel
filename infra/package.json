@@ -1,0 +1,34 @@
+{
+  "name": "@keiras-journey/infra",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Keira's Journey \u2014 AWS infrastructure (AWS CDK, TypeScript)",
+  "bin": {
+    "infra": "bin/infra.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "presynth": "npm run build:backend",
+    "synth": "cdk synth",
+    "presynth:all": "npm run build:backend",
+    "synth:all": "cdk synth --all",
+    "diff": "cdk diff",
+    "cdk": "cdk",
+    "build:backend": "cd .. && npm run -w backend build:lambda",
+    "predeploy:staging": "npm run build:backend",
+    "deploy:staging": "cdk deploy KeirasJourney-Cicd 'KeirasJourney-*-staging' --require-approval never --context env=staging",
+    "predeploy:prod": "npm run build:backend",
+    "deploy:prod": "cdk deploy 'KeirasJourney-*-prod' --require-approval never --context env=prod"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "aws-cdk": "2.1126.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.5.0"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "2.258.0",
+    "constructs": "^10.3.0"
+  }
+}

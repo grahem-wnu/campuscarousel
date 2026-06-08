@@ -1,0 +1,28 @@
+{
+  "name": "@keiras-journey/frontend",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "React + Vite + TS SPA. src/modules/<m>/ per module; src/shared/ for the design system, shell, and API client.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "aws-amplify": "^6.6.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.26.2"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.11",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.2",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.47",
+    "tailwindcss": "^3.4.13",
+    "vite": "^5.4.10"
+  }
+}
