@@ -11,18 +11,37 @@ describe('routes.manifest ↔ buildRoutes', () => {
     expect(manifestRoutes.map(sig).sort()).toEqual(built);
   });
 
-  it('expose all nine Application Central endpoints', () => {
+  it('expose the full Application Central endpoint set (essays + tracker + rec board + scores)', () => {
     expect(manifestRoutes.map(sig).sort()).toEqual(
       [
-        'DELETE /essays/:id',
-        'GET /applications/overview',
+        // Essay workspace
         'GET /essays',
-        'GET /essays/:id',
         'POST /essays',
+        'GET /essays/:id',
+        'PUT /essays/:id',
+        'DELETE /essays/:id',
         'POST /essays/:id/draft',
         'POST /essays/:id/find-experiences',
         'POST /essays/:id/review',
-        'PUT /essays/:id',
+        // Application tracker + decision matrix
+        'GET /applications/overview',
+        'GET /applications/decision-matrix',
+        'GET /applications',
+        'POST /applications',
+        'GET /applications/:id',
+        'PUT /applications/:id',
+        'DELETE /applications/:id',
+        // Recommendation strategy board
+        'GET /recommendations',
+        'POST /recommendations',
+        'PUT /recommendations/:id',
+        'DELETE /recommendations/:id',
+        'POST /recommendations/:id/brief',
+        // Test-score tracker
+        'GET /test-scores',
+        'POST /test-scores',
+        'PUT /test-scores/:id',
+        'DELETE /test-scores/:id',
       ].sort(),
     );
   });

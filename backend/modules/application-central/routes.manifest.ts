@@ -13,6 +13,12 @@ const h = makeHandlers({ getData: (): Data => (cached ??= dataFromEnv()) });
 
 export const routes: RouteDef[] = [
   { method: 'GET', path: '/applications/overview', handler: h.overview },
+  { method: 'GET', path: '/applications/decision-matrix', handler: h.decisionMatrix },
+  { method: 'GET', path: '/applications', handler: h.listApplications },
+  { method: 'POST', path: '/applications', handler: h.createApplication },
+  { method: 'GET', path: '/applications/:id', handler: h.detailApplication },
+  { method: 'PUT', path: '/applications/:id', handler: h.updateApplication },
+  { method: 'DELETE', path: '/applications/:id', handler: h.removeApplication },
   { method: 'GET', path: '/essays', handler: h.listEssays },
   { method: 'POST', path: '/essays', handler: h.createEssay },
   { method: 'GET', path: '/essays/:id', handler: h.detailEssay },
@@ -21,4 +27,13 @@ export const routes: RouteDef[] = [
   { method: 'POST', path: '/essays/:id/draft', handler: h.addDraft },
   { method: 'POST', path: '/essays/:id/find-experiences', handler: h.findExperiences },
   { method: 'POST', path: '/essays/:id/review', handler: h.review },
+  { method: 'GET', path: '/recommendations', handler: h.listRecommendations },
+  { method: 'POST', path: '/recommendations', handler: h.createRecommendation },
+  { method: 'PUT', path: '/recommendations/:id', handler: h.updateRecommendation },
+  { method: 'DELETE', path: '/recommendations/:id', handler: h.removeRecommendation },
+  { method: 'POST', path: '/recommendations/:id/brief', handler: h.recommenderBrief },
+  { method: 'GET', path: '/test-scores', handler: h.listTestScores },
+  { method: 'POST', path: '/test-scores', handler: h.createTestScore },
+  { method: 'PUT', path: '/test-scores/:id', handler: h.updateTestScore },
+  { method: 'DELETE', path: '/test-scores/:id', handler: h.removeTestScore },
 ];

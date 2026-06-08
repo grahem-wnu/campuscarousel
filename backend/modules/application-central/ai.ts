@@ -43,6 +43,23 @@ export type EssayReviewer = (input: {
   targetWords?: number;
 }) => Promise<EssayReview>;
 
+export interface RecommenderBrief {
+  /** A short paragraph the student can hand a recommender to jog their memory. */
+  summary: string;
+  talkingPoints: string[];
+  suggestedStories: string[];
+  /** Always false-by-construction: grounded only in family-visible experiences. */
+  includesPrivate: false;
+  source: 'ai' | 'curated';
+}
+export type RecommenderBriefer = (input: {
+  slot: string;
+  contactName?: string;
+  relationship?: string;
+  focus?: string;
+  pool: ExperiencePool;
+}) => Promise<RecommenderBrief>;
+
 // ---- Bedrock plumbing -----------------------------------------------------
 
 async function invokeText(prompt: string, options: AiOptions): Promise<string> {
@@ -124,6 +141,34 @@ export const curatedEssayReviewer: EssayReviewer = async ({ content, targetWords
   };
 };
 
+const SLOT_LABELS: Record<string, string> = {
+  'stem-teacher': 'a STEM teacher',
+  'humanities-teacher': 'a humanities teacher',
+  'clinical-supervisor': 'a clinical or volunteer supervisor',
+  'community-leader': 'a community leader',
+  other: 'a recommender',
+};
+
+export const curatedRecommenderBrief: RecommenderBriefer = async ({ slot, contactName, relationship, pool }) => {
+  const who = contactName ? contactName : SLOT_LABELS[slot] ?? 'your recommender';
+  const top = pool.experiences.slice(0, 4);
+  const talkingPoints = [
+    'Keira is applying to BSN (nursing) programs and would value a letter that speaks to her readiness for nursing.',
+    relationship ? `Your relationship: ${relationship}.` : 'Speak to what you have personally seen of her work and character.',
+    'Helpful themes: compassion, reliability, intellectual curiosity, and growth over time.',
+  ];
+  const suggestedStories = top.length
+    ? top.map((e) => `${e.title}${e.detail ? ` — ${e.detail}` : ''}`)
+    : ['Add some logged activities or clinical hours and they will appear here as concrete stories to mention.'];
+  return {
+    summary: `A brief for ${who}: Keira is pursuing a Bachelor of Science in Nursing. This note collects concrete, family-shareable experiences they can reference in a recommendation.`,
+    talkingPoints,
+    suggestedStories,
+    includesPrivate: false,
+    source: 'curated',
+  };
+};
+
 // ---- Bedrock-backed (with curated fallback) -------------------------------
 
 function buildFindPrompt(input: { prompt: string; pool: ExperiencePool }): string {
@@ -188,6 +233,33 @@ export function makeBedrockEssayReviewer(options: AiOptions = {}, fallback: Essa
         rewrote: false,
         source: 'ai',
       };
+    } catch {
+      return fallback(input);
+    }
+  };
+}
+
+function buildBriefPrompt(input: { slot: string; contactName?: string; relationship?: string; focus?: string; pool: ExperiencePool }): string {
+  return [
+    'You help a BSN (nursing) applicant prepare a brief to hand to a recommender writing a letter for',
+    'her. Use ONLY the family-shareable experiences provided (never invent details). Respond with ONLY',
+    'JSON (no prose/fences): {"summary": string, "talkingPoints": string[], "suggestedStories": string[]}.',
+    `Recommender slot: ${input.slot}${input.contactName ? ` (${input.contactName})` : ''}.`,
+    input.relationship ? `Relationship strength: ${input.relationship}.` : '',
+    input.focus ? `Focus the brief on: ${input.focus}.` : '',
+    `Family-shareable experiences:\n${poolToText(input.pool)}`,
+  ].join('\n');
+}
+
+export function makeBedrockRecommenderBrief(options: AiOptions = {}, fallback: RecommenderBriefer = curatedRecommenderBrief): RecommenderBriefer {
+  return async (input) => {
+    try {
+      const raw = extractJson(await invokeText(buildBriefPrompt(input), options)) as Record<string, unknown>;
+      const summary = typeof raw.summary === 'string' ? raw.summary : '';
+      const talkingPoints = strArr(raw.talkingPoints);
+      const suggestedStories = strArr(raw.suggestedStories);
+      if (!summary && talkingPoints.length === 0 && suggestedStories.length === 0) return fallback(input);
+      return { summary, talkingPoints, suggestedStories, includesPrivate: false, source: 'ai' };
     } catch {
       return fallback(input);
     }
