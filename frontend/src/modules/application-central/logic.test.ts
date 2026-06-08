@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { deadlineLabel, essaySummary, latestDraft, wordCount, wordTargetTone } from './logic';
+import { DECISION_META, deadlineLabel, essaySummary, latestDraft, netCostLabel, RECOMMENDATION_STATUS_META, SLOT_LABELS, wordCount, wordTargetTone } from './logic';
 import type { ApplicationRow, Essay } from './types';
 
 const row = (over: Partial<ApplicationRow>): ApplicationRow => ({
@@ -50,5 +50,21 @@ describe('wordTargetTone', () => {
     expect(wordTargetTone(520, 500)).toBe('success');
     expect(wordTargetTone(700, 500)).toBe('warn');
     expect(wordTargetTone(500)).toBe('neutral');
+  });
+});
+
+describe('decision + recommender metadata', () => {
+  it('maps every decision and recommendation status to a label + tone', () => {
+    expect(DECISION_META.accepted).toMatchObject({ tone: 'success' });
+    expect(DECISION_META.rejected).toMatchObject({ tone: 'error' });
+    expect(DECISION_META.none.label).toBe('Pending');
+    expect(RECOMMENDATION_STATUS_META.submitted.tone).toBe('success');
+    expect(SLOT_LABELS['clinical-supervisor']).toMatch(/clinical/i);
+  });
+
+  it('netCostLabel prefers net cost, falls back to total, then dash', () => {
+    expect(netCostLabel(18000, 60000)).toBe('$18,000');
+    expect(netCostLabel(undefined, 60000)).toBe('$60,000');
+    expect(netCostLabel(undefined, undefined)).toBe('—');
   });
 });

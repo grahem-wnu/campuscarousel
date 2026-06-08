@@ -1,7 +1,22 @@
 // The module's data calls. Thin wrappers over the shared typed API client.
 
 import { api } from '../../shared/api';
-import type { ApplicationRow, Essay, EssayInput, EssayReview, EssayStatus, FindResponse } from './types';
+import type {
+  Application,
+  ApplicationInput,
+  ApplicationRow,
+  DecisionRow,
+  Essay,
+  EssayInput,
+  EssayReview,
+  EssayStatus,
+  FindResponse,
+  Recommendation,
+  RecommendationInput,
+  RecommenderBrief,
+  TestScore,
+  TestScoreInput,
+} from './types';
 
 export async function listEssays(filters: { collegeId?: string; status?: EssayStatus } = {}): Promise<Essay[]> {
   const res = await api.get<{ essays: Essay[] }>('/essays', { query: filters });
@@ -40,4 +55,56 @@ export async function reviewEssay(id: string, opts: { version?: number; content?
 export async function getOverview(): Promise<ApplicationRow[]> {
   const res = await api.get<{ applications: ApplicationRow[] }>('/applications/overview');
   return res.applications;
+}
+
+// --- Application tracker ----------------------------------------------------
+export async function listApplications(): Promise<Application[]> {
+  const res = await api.get<{ applications: Application[] }>('/applications');
+  return res.applications;
+}
+export function createApplication(input: ApplicationInput): Promise<Application> {
+  return api.post<Application>('/applications', input);
+}
+export function updateApplication(id: string, patch: Partial<ApplicationInput>): Promise<Application> {
+  return api.put<Application>(`/applications/${encodeURIComponent(id)}`, patch);
+}
+export function deleteApplication(id: string): Promise<void> {
+  return api.del<void>(`/applications/${encodeURIComponent(id)}`);
+}
+export async function getDecisionMatrix(): Promise<DecisionRow[]> {
+  const res = await api.get<{ decisions: DecisionRow[] }>('/applications/decision-matrix');
+  return res.decisions;
+}
+
+// --- Recommendation strategy board -----------------------------------------
+export async function listRecommendations(): Promise<Recommendation[]> {
+  const res = await api.get<{ recommendations: Recommendation[] }>('/recommendations');
+  return res.recommendations;
+}
+export function createRecommendation(input: RecommendationInput): Promise<Recommendation> {
+  return api.post<Recommendation>('/recommendations', input);
+}
+export function updateRecommendation(id: string, patch: Partial<RecommendationInput>): Promise<Recommendation> {
+  return api.put<Recommendation>(`/recommendations/${encodeURIComponent(id)}`, patch);
+}
+export function deleteRecommendation(id: string): Promise<void> {
+  return api.del<void>(`/recommendations/${encodeURIComponent(id)}`);
+}
+export async function generateRecommenderBrief(id: string, focus?: string): Promise<{ brief: RecommenderBrief; recommendation: Recommendation }> {
+  return api.post<{ brief: RecommenderBrief; recommendation: Recommendation }>(`/recommendations/${encodeURIComponent(id)}/brief`, focus ? { focus } : {});
+}
+
+// --- Test-score tracker -----------------------------------------------------
+export async function listTestScores(): Promise<TestScore[]> {
+  const res = await api.get<{ testScores: TestScore[] }>('/test-scores');
+  return res.testScores;
+}
+export function createTestScore(input: TestScoreInput): Promise<TestScore> {
+  return api.post<TestScore>('/test-scores', input);
+}
+export function updateTestScore(id: string, patch: Partial<TestScoreInput>): Promise<TestScore> {
+  return api.put<TestScore>(`/test-scores/${encodeURIComponent(id)}`, patch);
+}
+export function deleteTestScore(id: string): Promise<void> {
+  return api.del<void>(`/test-scores/${encodeURIComponent(id)}`);
 }

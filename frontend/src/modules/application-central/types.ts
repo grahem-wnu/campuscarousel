@@ -69,3 +69,112 @@ export interface ApplicationRow {
   essays: { total: number; final: number; statuses: string[] };
   hasTeasScore: boolean;
 }
+
+// --- Application tracker (persisted APPLICATION# rows) ---------------------
+export const APPLICATION_STATUSES = ['planning', 'in-progress', 'submitted', 'under-review', 'decided', 'withdrawn'] as const;
+export type ApplicationStatus = (typeof APPLICATION_STATUSES)[number];
+export const APPLICATION_DECISIONS = ['none', 'accepted', 'waitlisted', 'deferred', 'rejected'] as const;
+export type ApplicationDecision = (typeof APPLICATION_DECISIONS)[number];
+
+export interface Application {
+  applicationId: string;
+  collegeId: string;
+  status?: ApplicationStatus;
+  applicationType?: string;
+  deadline?: string;
+  submittedDate?: string;
+  components?: Partial<Record<'essay' | 'recommendations' | 'transcript' | 'testScores' | 'financialAid', string>>;
+  decision?: ApplicationDecision;
+  decisionDate?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface ApplicationInput {
+  collegeId: string;
+  status?: ApplicationStatus;
+  deadline?: string;
+  decision?: ApplicationDecision;
+  decisionDate?: string;
+  notes?: string;
+}
+
+export interface DecisionRow {
+  collegeId: string;
+  name: string;
+  decision: ApplicationDecision;
+  decisionDate?: string;
+  programType?: string;
+  isTopPick?: boolean;
+  fitScore?: number;
+  ranking?: string;
+  estimatedTotalCost?: number;
+  estimatedCostAfterAid?: number;
+}
+
+// --- Recommendation strategy board ----------------------------------------
+export const RECOMMENDATION_SLOTS = ['stem-teacher', 'humanities-teacher', 'clinical-supervisor', 'community-leader', 'other'] as const;
+export type RecommendationSlot = (typeof RECOMMENDATION_SLOTS)[number];
+export const RECOMMENDATION_STATUSES = ['identified', 'asked', 'agreed', 'received', 'submitted', 'declined'] as const;
+export type RecommendationStatus = (typeof RECOMMENDATION_STATUSES)[number];
+
+export interface Recommendation {
+  recommendationId: string;
+  slot: RecommendationSlot;
+  contactId?: string;
+  contactName?: string;
+  relationshipStrength?: 'strong' | 'moderate' | 'developing';
+  status?: RecommendationStatus;
+  askTimeline?: string;
+  askedDate?: string;
+  receivedDate?: string;
+  submittedColleges?: string[];
+  aiBrief?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface RecommendationInput {
+  slot: RecommendationSlot;
+  contactName?: string;
+  relationshipStrength?: 'strong' | 'moderate' | 'developing';
+  status?: RecommendationStatus;
+  askTimeline?: string;
+  submittedColleges?: string[];
+  notes?: string;
+}
+export interface RecommenderBrief {
+  summary: string;
+  talkingPoints: string[];
+  suggestedStories: string[];
+  includesPrivate: false;
+  source: 'ai' | 'curated';
+}
+
+// --- Test-score tracker ----------------------------------------------------
+export const TEST_SCORE_TYPES = ['SAT', 'ACT', 'TEAS', 'AP'] as const;
+export type TestScoreType = (typeof TEST_SCORE_TYPES)[number];
+
+export interface TestScore {
+  scoreId: string;
+  testType: TestScoreType;
+  testDate?: string;
+  score?: number;
+  sectionScores?: Record<string, number>;
+  apSubject?: string;
+  superscore?: number;
+  sentTo?: string[];
+  official?: boolean;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface TestScoreInput {
+  testType: TestScoreType;
+  testDate?: string;
+  score?: number;
+  apSubject?: string;
+  sentTo?: string[];
+  official?: boolean;
+  notes?: string;
+}

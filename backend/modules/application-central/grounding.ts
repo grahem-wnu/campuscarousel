@@ -51,6 +51,32 @@ export async function gatherExperiences(data: Data, requester: Requester): Promi
   };
 }
 
+/** Gather a FAMILY-ONLY experience pool (private entries always excluded), regardless of caller.
+ *  Used for the recommendation brief, which is shared with a recommender and therefore must never
+ *  carry private content — even when keira is the authenticated caller. */
+export async function gatherSharedExperiences(data: Data): Promise<ExperiencePool> {
+  const [activities, clinical, whyNursing] = await Promise.all([
+    data.activities.list(),
+    data.clinical.list(),
+    data.whyNursing.list(),
+  ]);
+  const vA = activities.filter((a) => a.visibility !== 'private');
+  const vC = clinical.filter((c) => c.visibility !== 'private');
+  const vW = whyNursing.filter((w) => w.visibility !== 'private');
+
+  const experiences: Experience[] = [
+    ...vA.map((a) => ({ kind: 'activity' as const, date: a.date, title: a.title, detail: clip(a.reflection ?? a.description), tags: a.tags })),
+    ...vC.map((c) => ({ kind: 'clinical' as const, date: c.date, title: `${c.facility}${c.department ? ` — ${c.department}` : ''}`, detail: clip(c.reflection ?? (c.duties ?? []).join(', ')) })),
+    ...vW.map((w) => ({ kind: 'why-nursing' as const, date: w.date, title: w.title, detail: clip(w.content), tags: w.tags })),
+  ].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+
+  return {
+    experiences,
+    includesPrivate: false,
+    counts: { activities: vA.length, clinical: vC.length, whyNursing: vW.length },
+  };
+}
+
 /** Compact text rendering of the pool for an AI prompt. */
 export function poolToText(pool: ExperiencePool, limit = 30): string {
   if (pool.experiences.length === 0) return '(no logged experiences yet)';

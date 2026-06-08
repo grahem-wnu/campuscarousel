@@ -2,11 +2,14 @@ import { useCallback, useEffect, useState } from 'react';
 import { Badge, Button, Card, EmptyState, Field, Input, Modal, Spinner, Tabs, Textarea, type TabItem } from '../../shared/ui';
 import { ApplicationOverview } from './ApplicationOverview';
 import { EssayWorkspace } from './EssayWorkspace';
+import { RecommendationBoard } from './RecommendationBoard';
+import { TestScoreTracker } from './TestScoreTracker';
+import { DecisionMatrix } from './DecisionMatrix';
 import { ESSAY_STATUS_META, latestDraft } from './logic';
 import { createEssay, listEssays } from './api';
 import type { Essay } from './types';
 
-type TabId = 'overview' | 'essays';
+type TabId = 'overview' | 'essays' | 'recommenders' | 'scores' | 'decisions';
 
 /** Application Central — application tracker (overview) + the essay workspace (the killer feature). */
 export default function ApplicationCentralPage() {
@@ -59,6 +62,9 @@ export default function ApplicationCentralPage() {
   const tabs: TabItem[] = [
     { id: 'overview', label: 'Applications' },
     { id: 'essays', label: 'Essays', count: essays.length },
+    { id: 'recommenders', label: 'Recommenders' },
+    { id: 'scores', label: 'Test scores' },
+    { id: 'decisions', label: 'Decisions' },
   ];
 
   return (
@@ -77,6 +83,12 @@ export default function ApplicationCentralPage() {
           <Tabs items={tabs} value={tab} onChange={(t) => setTab(t as TabId)} />
           {tab === 'overview' ? (
             <ApplicationOverview />
+          ) : tab === 'recommenders' ? (
+            <RecommendationBoard />
+          ) : tab === 'scores' ? (
+            <TestScoreTracker />
+          ) : tab === 'decisions' ? (
+            <DecisionMatrix />
           ) : (
             <div className="space-y-3">
               <div className="flex justify-end">

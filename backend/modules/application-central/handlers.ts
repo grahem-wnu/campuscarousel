@@ -14,21 +14,33 @@ import {
 import type { Data, Essay } from '../../shared/data/index.js';
 import {
   addDraftSchema,
+  applicationCreateSchema,
+  applicationQuerySchema,
+  applicationUpdateSchema,
   createSchema,
   findExperiencesSchema,
   idParamSchema,
   listQuerySchema,
+  recommendationCreateSchema,
+  recommendationUpdateSchema,
+  recommenderBriefSchema,
   reviewSchema,
+  testScoreCreateSchema,
+  testScoreQuerySchema,
+  testScoreUpdateSchema,
   updateSchema,
 } from './schema.js';
-import { gatherExperiences } from './grounding.js';
+import { gatherExperiences, gatherSharedExperiences } from './grounding.js';
 import { buildOverview } from './overview.js';
+import { buildDecisionMatrix } from './decision.js';
 import {
   makeBedrockEssayReviewer,
   makeBedrockExperienceFinder,
+  makeBedrockRecommenderBrief,
   wordCountOf,
   type EssayReviewer,
   type ExperienceFinder,
+  type RecommenderBriefer,
 } from './ai.js';
 
 export interface AppCentralHandlers {
@@ -41,12 +53,31 @@ export interface AppCentralHandlers {
   findExperiences: Handler;
   review: Handler;
   overview: Handler;
+  // Application tracker
+  listApplications: Handler;
+  detailApplication: Handler;
+  createApplication: Handler;
+  updateApplication: Handler;
+  removeApplication: Handler;
+  decisionMatrix: Handler;
+  // Recommendation strategy board
+  listRecommendations: Handler;
+  createRecommendation: Handler;
+  updateRecommendation: Handler;
+  removeRecommendation: Handler;
+  recommenderBrief: Handler;
+  // Test-score tracker
+  listTestScores: Handler;
+  createTestScore: Handler;
+  updateTestScore: Handler;
+  removeTestScore: Handler;
 }
 
 export interface AppCentralDeps {
   getData: () => Data;
   finder?: ExperienceFinder;
   reviewer?: EssayReviewer;
+  briefer?: RecommenderBriefer;
   now?: () => Date;
 }
 
@@ -57,6 +88,7 @@ export function makeHandlers(deps: AppCentralDeps): AppCentralHandlers {
   const now = deps.now ?? (() => new Date());
   const finder = deps.finder ?? makeBedrockExperienceFinder();
   const reviewer = deps.reviewer ?? makeBedrockEssayReviewer();
+  const briefer = deps.briefer ?? makeBedrockRecommenderBrief();
 
   async function requireEssay(id: string): Promise<Essay> {
     const e = await getData().essays.get(id);
@@ -157,6 +189,155 @@ export function makeHandlers(deps: AppCentralDeps): AppCentralHandlers {
       const todayIso = now().toISOString().slice(0, 10);
       return { status: 200, body: { applications: buildOverview(colleges, essays, teas, todayIso) } };
     },
+
+    // --- Application tracker (persisted APPLICATION# rows) ----------------------------------
+    // GET /applications — list, optionally filtered by college / status (ordered by deadline).
+    listApplications: async (ctx) => {
+      const q = validateQuery(applicationQuerySchema, ctx);
+      let items = await getData().applications.list();
+      if (q.collegeId) items = items.filter((a) => a.collegeId === q.collegeId);
+      if (q.status) items = items.filter((a) => a.status === q.status);
+      return { status: 200, body: { applications: items } };
+    },
+
+    // GET /applications/:id.
+    detailApplication: async (ctx) => {
+      const { id } = validateParams(idParamSchema, ctx);
+      const app = await getData().applications.get(id);
+      if (!app) throw Errors.notFound('Application not found');
+      return { status: 200, body: app };
+    },
+
+    // POST /applications — one tracker row per college.
+    createApplication: async (ctx) => {
+      const input = validateBody(applicationCreateSchema, ctx);
+      const created = await getData().applications.create({
+        ...input,
+        status: input.status ?? 'planning',
+        createdBy: ctx.requester.username,
+      } as Parameters<Data['applications']['create']>[0]);
+      return { status: 201, body: created };
+    },
+
+    // PUT /applications/:id.
+    updateApplication: async (ctx) => {
+      const { id } = validateParams(idParamSchema, ctx);
+      const patch = validateBody(applicationUpdateSchema, ctx);
+      const existing = await getData().applications.get(id);
+      if (!existing) throw Errors.notFound('Application not found');
+      return { status: 200, body: await getData().applications.update(id, patch) };
+    },
+
+    // DELETE /applications/:id.
+    removeApplication: async (ctx) => {
+      const { id } = validateParams(idParamSchema, ctx);
+      const existing = await getData().applications.get(id);
+      if (!existing) throw Errors.notFound('Application not found');
+      await getData().applications.delete(id);
+      return { status: 204, body: undefined };
+    },
+
+    // GET /applications/decision-matrix — compare offers once decisions arrive.
+    decisionMatrix: async () => {
+      const data = getData();
+      const [applications, colleges] = await Promise.all([data.applications.list(), data.colleges.list()]);
+      return { status: 200, body: { decisions: buildDecisionMatrix(applications, colleges) } };
+    },
+
+    // --- Recommendation strategy board -----------------------------------------------------
+    // GET /recommendations.
+    listRecommendations: async () => {
+      return { status: 200, body: { recommendations: await getData().recommendations.list() } };
+    },
+
+    // POST /recommendations.
+    createRecommendation: async (ctx) => {
+      const input = validateBody(recommendationCreateSchema, ctx);
+      const created = await getData().recommendations.create({
+        ...input,
+        status: input.status ?? 'identified',
+        createdBy: ctx.requester.username,
+      } as Parameters<Data['recommendations']['create']>[0]);
+      return { status: 201, body: created };
+    },
+
+    // PUT /recommendations/:id.
+    updateRecommendation: async (ctx) => {
+      const { id } = validateParams(idParamSchema, ctx);
+      const patch = validateBody(recommendationUpdateSchema, ctx);
+      const existing = await getData().recommendations.get(id);
+      if (!existing) throw Errors.notFound('Recommendation not found');
+      return { status: 200, body: await getData().recommendations.update(id, patch) };
+    },
+
+    // DELETE /recommendations/:id.
+    removeRecommendation: async (ctx) => {
+      const { id } = validateParams(idParamSchema, ctx);
+      const existing = await getData().recommendations.get(id);
+      if (!existing) throw Errors.notFound('Recommendation not found');
+      await getData().recommendations.delete(id);
+      return { status: 204, body: undefined };
+    },
+
+    // POST /recommendations/:id/brief — AI recommender brief. Grounded ONLY in family-visible
+    // experiences (gatherSharedExperiences) — a brief is shared with a recommender, so it can never
+    // carry a private entry, even for keira. Returned LIVE but ALSO persisted onto the record so the
+    // board can show the latest brief; persistence is safe precisely because no private content is in it.
+    recommenderBrief: async (ctx) => {
+      const { id } = validateParams(idParamSchema, ctx);
+      const body = validateBody(recommenderBriefSchema, ctx);
+      const data = getData();
+      const rec = await data.recommendations.get(id);
+      if (!rec) throw Errors.notFound('Recommendation not found');
+      const pool = await gatherSharedExperiences(data);
+      const brief = await briefer({
+        slot: rec.slot,
+        contactName: rec.contactName,
+        relationship: rec.relationshipStrength,
+        focus: body.focus,
+        pool,
+      });
+      const aiBrief = [brief.summary, ...brief.talkingPoints, ...brief.suggestedStories].join('\n');
+      const updated = await data.recommendations.update(id, { aiBrief });
+      return { status: 200, body: { brief, recommendation: updated } };
+    },
+
+    // --- Test-score tracker ----------------------------------------------------------------
+    // GET /test-scores — optionally filter by testType (ordered by testDate).
+    listTestScores: async (ctx) => {
+      const q = validateQuery(testScoreQuerySchema, ctx);
+      let items = await getData().testScores.list();
+      if (q.testType) items = items.filter((s) => s.testType === q.testType);
+      return { status: 200, body: { testScores: items } };
+    },
+
+    // POST /test-scores.
+    createTestScore: async (ctx) => {
+      const input = validateBody(testScoreCreateSchema, ctx);
+      const created = await getData().testScores.create({
+        ...input,
+        createdBy: ctx.requester.username,
+      } as Parameters<Data['testScores']['create']>[0]);
+      return { status: 201, body: created };
+    },
+
+    // PUT /test-scores/:id — also how schools-received routing (sentTo) is updated.
+    updateTestScore: async (ctx) => {
+      const { id } = validateParams(idParamSchema, ctx);
+      const patch = validateBody(testScoreUpdateSchema, ctx);
+      const existing = await getData().testScores.get(id);
+      if (!existing) throw Errors.notFound('Test score not found');
+      return { status: 200, body: await getData().testScores.update(id, patch) };
+    },
+
+    // DELETE /test-scores/:id.
+    removeTestScore: async (ctx) => {
+      const { id } = validateParams(idParamSchema, ctx);
+      const existing = await getData().testScores.get(id);
+      if (!existing) throw Errors.notFound('Test score not found');
+      await getData().testScores.delete(id);
+      return { status: 204, body: undefined };
+    },
   };
 }
 
@@ -165,6 +346,12 @@ export function makeHandlers(deps: AppCentralDeps): AppCentralHandlers {
 export function buildRoutes(h: AppCentralHandlers) {
   return [
     { method: 'GET' as const, path: '/applications/overview', handler: h.overview },
+    { method: 'GET' as const, path: '/applications/decision-matrix', handler: h.decisionMatrix },
+    { method: 'GET' as const, path: '/applications', handler: h.listApplications },
+    { method: 'POST' as const, path: '/applications', handler: h.createApplication },
+    { method: 'GET' as const, path: '/applications/:id', handler: h.detailApplication },
+    { method: 'PUT' as const, path: '/applications/:id', handler: h.updateApplication },
+    { method: 'DELETE' as const, path: '/applications/:id', handler: h.removeApplication },
     { method: 'GET' as const, path: '/essays', handler: h.listEssays },
     { method: 'POST' as const, path: '/essays', handler: h.createEssay },
     { method: 'GET' as const, path: '/essays/:id', handler: h.detailEssay },
@@ -173,5 +360,14 @@ export function buildRoutes(h: AppCentralHandlers) {
     { method: 'POST' as const, path: '/essays/:id/draft', handler: h.addDraft },
     { method: 'POST' as const, path: '/essays/:id/find-experiences', handler: h.findExperiences },
     { method: 'POST' as const, path: '/essays/:id/review', handler: h.review },
+    { method: 'GET' as const, path: '/recommendations', handler: h.listRecommendations },
+    { method: 'POST' as const, path: '/recommendations', handler: h.createRecommendation },
+    { method: 'PUT' as const, path: '/recommendations/:id', handler: h.updateRecommendation },
+    { method: 'DELETE' as const, path: '/recommendations/:id', handler: h.removeRecommendation },
+    { method: 'POST' as const, path: '/recommendations/:id/brief', handler: h.recommenderBrief },
+    { method: 'GET' as const, path: '/test-scores', handler: h.listTestScores },
+    { method: 'POST' as const, path: '/test-scores', handler: h.createTestScore },
+    { method: 'PUT' as const, path: '/test-scores/:id', handler: h.updateTestScore },
+    { method: 'DELETE' as const, path: '/test-scores/:id', handler: h.removeTestScore },
   ];
 }

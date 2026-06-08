@@ -1,7 +1,15 @@
 // Pure, framework-free helpers for the Application Central UI. Unit-tested in the node environment.
 
 import type { BadgeTone } from '../../shared/ui';
-import type { ApplicationRow, Essay, EssayDraft, EssayStatus } from './types';
+import type {
+  ApplicationDecision,
+  ApplicationRow,
+  Essay,
+  EssayDraft,
+  EssayStatus,
+  RecommendationSlot,
+  RecommendationStatus,
+} from './types';
 
 export const ESSAY_STATUS_META: Record<EssayStatus, { label: string; tone: BadgeTone }> = {
   brainstorming: { label: 'Brainstorming', tone: 'neutral' },
@@ -9,6 +17,37 @@ export const ESSAY_STATUS_META: Record<EssayStatus, { label: string; tone: Badge
   reviewing: { label: 'Reviewing', tone: 'warn' },
   final: { label: 'Final', tone: 'success' },
 };
+
+export const SLOT_LABELS: Record<RecommendationSlot, string> = {
+  'stem-teacher': 'STEM teacher',
+  'humanities-teacher': 'Humanities teacher',
+  'clinical-supervisor': 'Clinical / volunteer supervisor',
+  'community-leader': 'Community leader',
+  other: 'Other',
+};
+
+export const RECOMMENDATION_STATUS_META: Record<RecommendationStatus, { label: string; tone: BadgeTone }> = {
+  identified: { label: 'Identified', tone: 'neutral' },
+  asked: { label: 'Asked', tone: 'info' },
+  agreed: { label: 'Agreed', tone: 'info' },
+  received: { label: 'Received', tone: 'success' },
+  submitted: { label: 'Submitted', tone: 'success' },
+  declined: { label: 'Declined', tone: 'error' },
+};
+
+export const DECISION_META: Record<ApplicationDecision, { label: string; tone: BadgeTone }> = {
+  none: { label: 'Pending', tone: 'neutral' },
+  accepted: { label: 'Accepted', tone: 'success' },
+  waitlisted: { label: 'Waitlisted', tone: 'warn' },
+  deferred: { label: 'Deferred', tone: 'warn' },
+  rejected: { label: 'Rejected', tone: 'error' },
+};
+
+/** Net cost rendered for the decision matrix, falling back to total then "—". */
+export function netCostLabel(after?: number, total?: number): string {
+  const v = after ?? total;
+  return v === undefined ? '—' : `$${v.toLocaleString('en-US')}`;
+}
 
 export function wordCount(text: string): number {
   return text.trim().split(/\s+/).filter(Boolean).length;
