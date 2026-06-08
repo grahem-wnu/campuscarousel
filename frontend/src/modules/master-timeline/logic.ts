@@ -2,16 +2,18 @@
 
 import type { EventSource, TimelineEvent, UpcomingEvent, UpcomingGroup } from './types';
 
-/** Source color coding (spec): activities blue, goals green, app deadlines red, test dates yellow,
- *  visits purple, scholarship deadlines orange, cert expirations pink. */
+/** Source color coding mapped to the FROZEN design-system token scales only (no raw hex, no
+ *  non-existent `info` scale). The spec's 7 ideal hues (blue/green/red/yellow/purple/orange/pink)
+ *  exceed the 5 token hues, so visits + certs reuse distinct shades of existing scales; a true
+ *  purple/pink would need new token scales (a design-system change, out of this module's lane). */
 export const SOURCE_DOT: Record<EventSource, string> = {
-  activity: 'bg-info-500',
-  goal: 'bg-success-500',
-  college: 'bg-error-500',
-  teas: 'bg-warn-500',
-  visit: 'bg-[#9b6dff]',
-  scholarship: 'bg-secondary-500',
-  certification: 'bg-[#e879b9]',
+  activity: 'bg-primary-500', // blue-green
+  goal: 'bg-success-500', // green
+  college: 'bg-error-500', // red (application deadlines)
+  teas: 'bg-warn-500', // yellow (test dates)
+  visit: 'bg-primary-700', // deep teal (distinct from activity)
+  scholarship: 'bg-secondary-500', // terracotta/orange
+  certification: 'bg-ink-400', // neutral
 };
 export const SOURCE_LABEL: Record<EventSource, string> = {
   activity: 'Activity',

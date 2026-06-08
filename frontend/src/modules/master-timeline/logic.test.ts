@@ -1,8 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { countdownLabel, eventsByDate, groupUpcoming, monthGrid, monthLabel } from './logic';
+import { SOURCE_DOT, countdownLabel, eventsByDate, groupUpcoming, monthGrid, monthLabel } from './logic';
 import type { TimelineEvent, UpcomingEvent } from './types';
 
 const up = (o: Partial<UpcomingEvent>): UpcomingEvent => ({ id: 'e', date: '2026-06-10', source: 'goal', type: 'deadline', title: 'X', daysUntil: 4, group: 'this-week', ...o });
+
+describe('SOURCE_DOT — design-system tokens only', () => {
+  it('every source dot uses a frozen token scale (no raw hex, no non-existent `info`)', () => {
+    const scales = ['primary', 'secondary', 'ink', 'success', 'warn', 'error'];
+    for (const cls of Object.values(SOURCE_DOT)) {
+      expect(cls).not.toContain('bg-['); // no raw hex
+      expect(cls).not.toContain('info'); // no non-existent info scale
+      expect(scales.some((s) => cls.startsWith(`bg-${s}-`))).toBe(true);
+    }
+  });
+});
 
 describe('groupUpcoming', () => {
   it('buckets events by group in canonical order, dropping empty groups', () => {
