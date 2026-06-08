@@ -1,35 +1,34 @@
 {
   "agentId": "spec-reviewer",
   "role": "spec-reviewer",
-  "updatedAt": "2026-06-08T00:31:00Z",
-  "currentTask": "Wave-4. #30 dashboard merged. #31 master-timeline CHANGES-REQUESTED (privacy/boundary/authz clean; 2 frontend token fixes: bg-info-500 non-existent color + raw-hex classes). Last wave-4 module.",
+  "updatedAt": "2026-06-08T00:50:00Z",
+  "currentTask": "#31 master-timeline APPROVED round 2 (token fixes done) \u2014 the LAST wave-4 module. Once merged \u2192 M5 done (all 17 modules) \u2192 M6 integration QA.",
   "status": "idle",
   "branch": "agent-bus",
   "pr": null,
   "blockers": [],
-  "needs": "FOR SUPERVISOR \u2014 #31 master-timeline is the LAST wave-4 module; changes-requested on 2 quick frontend token fixes (non-existent bg-info-500 \u2192 use bg-primary-500; raw-hex visit/cert colors \u2192 token classes). Privacy verified clean. Once fixed + merged \u2192 M5 done (all 17 modules) \u2192 M6 integration QA. TRACKED FOLLOW-UPS (M6 QA / pre-Gate-3): (1) #28 deferred features (rec-board/score/matrix + APPLICATION# entity). (2) web-search adoption (converseWithSearch on dev): college-hub/scholarship-tracker/peer-benchmark/ai-assistant/interview-prep. FOR GRAHEM: confirm whether master-timeline\u2019s freshman\u2192senior arc view is in-scope for #31 or deferred (PR ships calendar+upcoming, not the arc). STATUS: M3+M4 done; M5 (wave-4): #30 dashboard MERGED, #31 master-timeline changes-requested. RECURRING: merge gate reads checkpoint+PR-comment, not reviewDecision.",
+  "needs": "FOR SUPERVISOR \u2014 MERGE #31 master-timeline (APPROVED + green). It is the FINAL wave-4 module \u2192 merging completes M5 (all 17 modules merged) \u2192 advance to M6 (integration + full staging QA). M6 INTEGRATION-QA CHECKLIST I will need to verify (flagging now): (a) cross-module wiring works end-to-end on staging; (b) the #28 deferred features gap (rec-board/test-score-tracker/decision-matrix + APPLICATION# entity) \u2014 either ship a follow-up or formally accept the gap pre-Gate-3; (c) web-search adoption follow-ups (converseWithSearch on dev) for college-hub/scholarship-tracker/peer-benchmark/ai-assistant/interview-prep; (d) FULL PRIVACY SWEEP on staging \u2014 Grahem\u2019s own SPA click-through (login as kate, confirm she cannot see keira\u2019s private journal/clinical/why-nursing entries anywhere incl. dashboard + master-timeline aggregators) \u2014 this was DEFERRED from Gate 2 to final QA and MUST pass before Gate 3 (prod). FOR GRAHEM: confirm master-timeline arc-view scope (deferred?). STATUS: M3+M4 done; M5: #30 dashboard merged, #31 master-timeline approved-awaiting-merge. RECURRING: merge gate reads checkpoint+PR-comment, not reviewDecision.",
   "lastPass": {
-    "at": "2026-06-08T00:31:00Z",
+    "at": "2026-06-08T00:50:00Z",
     "openPrsAgainstDev": 1,
     "reviewed": [
       {
         "pr": 31,
         "branch": "feat/master-timeline",
-        "headSha": "0ae7ba4",
-        "verdict": "CHANGES-REQUESTED",
+        "headSha": "1f216f3",
+        "round": 2,
+        "verdict": "APPROVED",
         "ci": "green",
-        "note": "privacy verified (only activities on timeline, filterForRequester off JWT; clinical/why-nursing not gathered; 2-dir test); 2 frontend token fixes: bg-info-500 non-existent + raw-hex visit/cert classes; arc-view scope for Grahem"
+        "note": "token fixes done (bg-primary-500 for activity; visit/cert token classes, no raw hex); privacy verified round 1; LAST wave-4 module"
       }
     ],
-    "merged": [
-      30
-    ],
-    "changesRequestedOpen": [
+    "approvedAwaitingMerge": [
       {
         "pr": 31,
-        "note": "2 frontend token fixes"
+        "branch": "feat/master-timeline"
       }
     ],
+    "merged": [],
     "stalls": []
   }
 }

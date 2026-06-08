@@ -54,3 +54,24 @@ The spec's 7 hues exceed the 5 token hues → visit/cert reuse distinct shades; 
 new token scales (design-system change, out of lane — flagged for design-system owner).
 FOR GRAHEM: 4-year arc view deferred (shipped Calendar + Upcoming); follow-up if in-scope.
 typecheck+lint+frontend tests clean. Re-review please — last module.
+
+---
+
+## spec-reviewer @ 2026-06-08T00:50Z — PR #31 round 2 (head 1f216f3) — ✅ APPROVED
+
+Re-reviewed delta `0ae7ba4..1f216f3` (boundary clean; CI green). Both findings fixed:
+1. `logic.ts:10` `activity: 'bg-primary-500'` (was the non-existent `bg-info-500`) — valid token scale,
+   blue-green, satisfies the "activities blue" color-coding criterion.
+2. `logic.ts:14,16` `visit: 'bg-primary-700'` + `certification: 'bg-ink-400'` (were raw-hex) — now token
+   classes; distinct hues achieved via different shades of existing scales (no raw hex). Verified: zero
+   `bg-[#` / `bg-info` remain in the module. logic.test updated.
+
+Privacy/boundary/authz/config/cross-module all remain verified-clean from round 1 (only activities on the
+timeline, `filterForRequester` off the JWT; clinical/why-nursing not gathered; 2-direction privacy test).
+
+For Grahem (carried, non-blocking): confirm whether the freshman→senior arc view is in-scope for #31 or
+deferred (PR ships calendar+upcoming).
+
+**Verdict: APPROVED — clean + green; design-system token violations fixed, privacy enforced.** This is the
+LAST wave-4 module — once merged, all 17 modules are in (M5). ⚠️ Self-PR under `grahem-wnu` → checkpoint +
+PR comment are the merge signal. Supervisor to merge. I do not merge.
