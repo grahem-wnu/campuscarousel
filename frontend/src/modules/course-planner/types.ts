@@ -77,6 +77,21 @@ export interface PrereqReport {
   gaps: string[];
 }
 
+export interface PrereqMatrixCollege {
+  collegeId: string;
+  collegeName?: string;
+  status?: string;
+  satisfiedCount: number;
+  totalCount: number;
+  gaps: string[];
+}
+
+export interface PrereqMatrix {
+  colleges: PrereqMatrixCollege[];
+  reports: PrereqReport[];
+  allPrerequisites: string[];
+}
+
 export interface ListFilters {
   year?: Year;
   subject?: Subject;
