@@ -1,34 +1,27 @@
 {
   "agentId": "spec-reviewer",
   "role": "spec-reviewer",
-  "updatedAt": "2026-06-08T00:50:00Z",
-  "currentTask": "#31 master-timeline APPROVED round 2 (token fixes done) \u2014 the LAST wave-4 module. Once merged \u2192 M5 done (all 17 modules) \u2192 M6 integration QA.",
+  "updatedAt": "2026-06-08T01:05:00Z",
+  "currentTask": "\ud83c\udf89 M5 DONE \u2014 all 17 modules merged (#31 master-timeline merged). Phase=integration (M6). Module-review job complete. Now in M6 support mode: ready to review the integration PR, the tracked follow-up PRs, and assist the staging QA privacy sweep. No open PRs.",
   "status": "idle",
   "branch": "agent-bus",
   "pr": null,
   "blockers": [],
-  "needs": "FOR SUPERVISOR \u2014 MERGE #31 master-timeline (APPROVED + green). It is the FINAL wave-4 module \u2192 merging completes M5 (all 17 modules merged) \u2192 advance to M6 (integration + full staging QA). M6 INTEGRATION-QA CHECKLIST I will need to verify (flagging now): (a) cross-module wiring works end-to-end on staging; (b) the #28 deferred features gap (rec-board/test-score-tracker/decision-matrix + APPLICATION# entity) \u2014 either ship a follow-up or formally accept the gap pre-Gate-3; (c) web-search adoption follow-ups (converseWithSearch on dev) for college-hub/scholarship-tracker/peer-benchmark/ai-assistant/interview-prep; (d) FULL PRIVACY SWEEP on staging \u2014 Grahem\u2019s own SPA click-through (login as kate, confirm she cannot see keira\u2019s private journal/clinical/why-nursing entries anywhere incl. dashboard + master-timeline aggregators) \u2014 this was DEFERRED from Gate 2 to final QA and MUST pass before Gate 3 (prod). FOR GRAHEM: confirm master-timeline arc-view scope (deferred?). STATUS: M3+M4 done; M5: #30 dashboard merged, #31 master-timeline approved-awaiting-merge. RECURRING: merge gate reads checkpoint+PR-comment, not reviewDecision.",
+  "needs": "MILESTONE: M5 done \u2014 all 17 modules + foundationals merged; phase=integration. M6 (integration + full staging QA) \u2014 what I (spec-reviewer) will review/verify as PRs/QA land: (1) the cross-module integration PR (wiring, nav, route aggregation, end-to-end). (2) TRACKED FOLLOW-UP PRs: #28 deferred features (rec-board/test-score-tracker/decision-matrix + APPLICATION# entity); web-search adoption (converseWithSearch) for college-hub/scholarship-tracker/peer-benchmark/ai-assistant/interview-prep. (3) THE DEFERRED GATE-2 PRIVACY SWEEP (now a hard M6 gate before Gate 3): code-level privacy is verified across all modules + both aggregators (every private-capable source \u2014 journal/clinical/why-nursing \u2014 filtered off the JWT via filterForRequester/aiVisibleSet; interview-prep owner-scoping; no private content persisted to family-readable records). The remaining piece is GRAHEM\u2019S LIVE STAGING CLICK-THROUGH: log in as kate (parent), confirm she cannot see keira\u2019s private journal/clinical/why-nursing entries ANYWHERE \u2014 list views, detail, dashboard counts/feed, master-timeline events, AI outputs. MUST pass before Gate 3 (prod). FOR GRAHEM: master-timeline arc-view scope (deferred?) still unconfirmed. STATUS: M1-M5 done; M6 pending; M7 (Gate 3 prod) pending. RECURRING: merge gate reads checkpoint+PR-comment.",
   "lastPass": {
-    "at": "2026-06-08T00:50:00Z",
-    "openPrsAgainstDev": 1,
-    "reviewed": [
-      {
-        "pr": 31,
-        "branch": "feat/master-timeline",
-        "headSha": "1f216f3",
-        "round": 2,
-        "verdict": "APPROVED",
-        "ci": "green",
-        "note": "token fixes done (bg-primary-500 for activity; visit/cert token classes, no raw hex); privacy verified round 1; LAST wave-4 module"
-      }
+    "at": "2026-06-08T01:05:00Z",
+    "openPrsAgainstDev": 0,
+    "reviewed": [],
+    "milestone": "M5 done \u2014 all 17 modules merged; phase=integration (M6)",
+    "merged": [
+      31
     ],
-    "approvedAwaitingMerge": [
-      {
-        "pr": 31,
-        "branch": "feat/master-timeline"
-      }
+    "m6Watchlist": [
+      "integration PR",
+      "#28 deferred features + APPLICATION#",
+      "web-search adoption (5 modules)",
+      "Grahem live staging privacy sweep"
     ],
-    "merged": [],
     "stalls": []
   }
 }
