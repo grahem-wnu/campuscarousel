@@ -1,40 +1,34 @@
 {
   "agentId": "spec-reviewer",
   "role": "spec-reviewer",
-  "updatedAt": "2026-06-07T23:40:00Z",
-  "currentTask": "WAVE-3 COMPLETE (M4 done). #25/#28/#29 all merged this interval (#28 STAGED-MERGED at 7e07b10 \u2014 essay core only). Zero open PRs. Wave-4 starting (feat/dashboard branch exists, no PR yet). Tracking deferred #28 features + web-search adoption follow-ups.",
+  "updatedAt": "2026-06-08T00:06:00Z",
+  "currentTask": "WAVE-4 begun. #30 dashboard APPROVED (aggregator privacy verified: filterForRequester on activities+clinical off JWT before aggregation; 2-direction privacy test). master-timeline (the other wave-4 aggregator) + web-search adoption PRs still to come.",
   "status": "idle",
   "branch": "agent-bus",
   "pr": null,
   "blockers": [],
-  "needs": "STATUS: M3 + M4 DONE \u2014 all wave-2 + wave-3 modules merged. Phase=fanout \u2192 wave-4 (M5: dashboard + master-timeline) starting (feat/dashboard branch claimed). TRACKED FOLLOW-UPS (for supervisor + M6 integration QA \u2014 do not lose): (1) #28 application-central was STAGED-MERGED (essay core + AI find/review only); the spec-acceptance features rec-strategy board + test-score tracker (per-college CRUD) + decision matrix are NOT shipped \u2014 they need the APPLICATION# entity on the frozen data layer + a follow-up PR. This is a known merged-but-incomplete gap; M6 QA must verify or a follow-up PR must land before Gate 3. (2) WEB-SEARCH ADOPTION: #29 merged converseWithSearch into backend/shared/ai (on dev). The AI modules should adopt it in follow-up PRs to close the data-accuracy gap I flagged: college-hub + scholarship-tracker (discovery/hydration), peer-benchmark (research), ai-assistant + interview-prep (citations). I will review each. WAVE-4: dashboard + master-timeline depend on most wave-2/3 modules (now merged) \u2192 eligible. I will review their PRs (aggregators read cross-module data via shared accessors; privacy: dashboard must use aiVisibleSet/filterForRequester correctly when surfacing clinical/journal/why-nursing counts off the JWT). RECURRING: merge gate reads checkpoint+PR-comment, not reviewDecision (self-PR under grahem-wnu).",
+  "needs": "FOR SUPERVISOR \u2014 MERGE #30 dashboard (APPROVED + green). Wave-4 (M5) = dashboard + master-timeline; master-timeline not yet open. TRACKED FOLLOW-UPS (M6 QA / pre-Gate-3): (1) #28 deferred features (rec-board/test-score-tracker/decision-matrix + APPLICATION# entity) \u2014 merged-but-incomplete. (2) web-search adoption (converseWithSearch now on dev): college-hub/scholarship-tracker/peer-benchmark/ai-assistant/interview-prep follow-up PRs. STATUS: M3+M4 done. Wave-4 starting: #30 dashboard approved-awaiting-merge; master-timeline pending. After M5 \u2192 M6 integration QA (must verify cross-module wiring + the #28 gap + full privacy sweep) \u2192 Gate 3 (prod, Grahem). NOTE for master-timeline review: like dashboard, it aggregates cross-module data incl. private-capable (activity/clinical/why-nursing) \u2014 must filterForRequester off the JWT before surfacing on the timeline. RECURRING: merge gate reads checkpoint+PR-comment, not reviewDecision.",
   "lastPass": {
-    "at": "2026-06-07T23:40:00Z",
-    "openPrsAgainstDev": 0,
-    "reviewed": [],
-    "milestone": "M4 done \u2014 wave-3 complete (all wave-2+wave-3 modules merged)",
-    "merged": [
-      25,
-      28,
-      29
-    ],
-    "note": "#28 staged-merged (essay core; rec-board/score/matrix deferred). Wave-4 (feat/dashboard) starting.",
-    "trackedFollowUps": [
+    "at": "2026-06-08T00:06:00Z",
+    "openPrsAgainstDev": 1,
+    "reviewed": [
       {
-        "what": "#28 deferred features (rec-board/test-score-tracker/decision-matrix) + APPLICATION# entity",
-        "owner": "supervisor",
-        "gate": "M6 QA / pre-Gate-3"
-      },
-      {
-        "what": "web-search (converseWithSearch) adoption",
-        "modules": [
-          "college-hub",
-          "scholarship-tracker",
-          "peer-benchmark",
-          "ai-assistant",
-          "interview-prep"
-        ]
+        "pr": 30,
+        "branch": "feat/dashboard",
+        "headSha": "506a733",
+        "verdict": "APPROVED",
+        "ci": "green",
+        "note": "aggregator privacy verified (filterForRequester on activities+clinical off JWT before aggregation; why-nursing not read; 2-direction privacy test); cross-module via shared accessors; nav primary"
       }
+    ],
+    "approvedAwaitingMerge": [
+      {
+        "pr": 30,
+        "branch": "feat/dashboard"
+      }
+    ],
+    "pendingWave4": [
+      "master-timeline"
     ],
     "stalls": []
   }
