@@ -54,3 +54,58 @@ export function checkPrerequisites(college: College, courses: readonly Course[])
     gaps: prerequisites.filter((p) => !p.satisfied).map((p) => p.name),
   };
 }
+
+/** Colleges excluded from the prerequisite matrix — ones Keira is no longer pursuing. */
+const EXCLUDED_FROM_MATRIX: ReadonlySet<NonNullable<College['status']>> = new Set(['removed', 'rejected']);
+
+export interface PrereqMatrixCollege {
+  collegeId: string;
+  collegeName?: string;
+  status?: College['status'];
+  satisfiedCount: number;
+  totalCount: number;
+  gaps: string[];
+}
+
+export interface PrereqMatrix {
+  /** One summary row per pursued college, most gaps first (the ones needing attention). */
+  colleges: PrereqMatrixCollege[];
+  /** Full per-college reports (course-level detail) keyed by the same collegeIds. */
+  reports: PrereqReport[];
+  /** Every distinct prerequisite name across all pursued colleges, for a columns×rows view. */
+  allPrerequisites: string[];
+}
+
+/**
+ * Build the full courses×target-colleges matrix: run {@link checkPrerequisites} for every college
+ * Keira is still pursuing (any status except removed/rejected) against her current courses. Sorted
+ * with the biggest gaps first so the UI surfaces what still needs a course.
+ */
+export function buildPrereqMatrix(colleges: readonly College[], courses: readonly Course[]): PrereqMatrix {
+  const pursued = colleges.filter((c) => c.status === undefined || !EXCLUDED_FROM_MATRIX.has(c.status));
+  const reports = pursued
+    .map((c) => ({ report: checkPrerequisites(c, courses), status: c.status }))
+    .sort((a, b) => {
+      const gapsA = a.report.totalCount - a.report.satisfiedCount;
+      const gapsB = b.report.totalCount - b.report.satisfiedCount;
+      if (gapsA !== gapsB) return gapsB - gapsA;
+      return (a.report.collegeName ?? a.report.collegeId).localeCompare(b.report.collegeName ?? b.report.collegeId);
+    });
+
+  const allPrerequisites = [...new Set(reports.flatMap((r) => r.report.prerequisites.map((p) => p.name)))].sort((a, b) =>
+    a.localeCompare(b),
+  );
+
+  return {
+    colleges: reports.map(({ report, status }) => ({
+      collegeId: report.collegeId,
+      collegeName: report.collegeName,
+      status,
+      satisfiedCount: report.satisfiedCount,
+      totalCount: report.totalCount,
+      gaps: report.gaps,
+    })),
+    reports: reports.map((r) => r.report),
+    allPrerequisites,
+  };
+}

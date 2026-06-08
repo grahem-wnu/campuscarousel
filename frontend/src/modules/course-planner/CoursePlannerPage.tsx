@@ -14,6 +14,7 @@ import { CourseForm } from './CourseForm';
 import { CourseGrid } from './CourseGrid';
 import { GpaCalculator } from './GpaCalculator';
 import { PrereqChecker } from './PrereqChecker';
+import { PrereqMatrix } from './PrereqMatrix';
 import type { Course } from './types';
 
 type TabId = 'grid' | 'gpa' | 'prerequisites';
@@ -102,7 +103,10 @@ export default function CoursePlannerPage() {
       ) : tab === 'gpa' ? (
         <GpaCalculator courses={courses} />
       ) : tab === 'prerequisites' ? (
-        <PrereqChecker courses={courses} />
+        <div className="space-y-5">
+          <PrereqMatrix />
+          <PrereqChecker courses={courses} />
+        </div>
       ) : courses.length === 0 ? (
         <EmptyState
           icon="course"

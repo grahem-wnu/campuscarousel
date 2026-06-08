@@ -13,13 +13,14 @@ import {
 } from '../../shared/api/index.js';
 import type { Course, Data } from '../../shared/data/index.js';
 import { computeGpa } from './gpa.js';
-import { checkPrerequisites } from './prerequisites.js';
+import { buildPrereqMatrix, checkPrerequisites } from './prerequisites.js';
 import { collegeIdParamSchema, createSchema, idParamSchema, listQuerySchema, updateSchema } from './schema.js';
 
 export interface CourseHandlers {
   list: Handler;
   gpa: Handler;
   prerequisites: Handler;
+  prerequisitesMatrix: Handler;
   create: Handler;
   update: Handler;
   remove: Handler;
@@ -51,6 +52,13 @@ export function makeHandlers(getData: () => Data): CourseHandlers {
       if (!college) throw Errors.notFound('College not found');
       const courses = await data.courses.list();
       return { status: 200, body: checkPrerequisites(college, courses) };
+    },
+
+    // GET /courses/prerequisites — full courses×target-colleges matrix across every pursued college.
+    prerequisitesMatrix: async () => {
+      const data = getData();
+      const [colleges, courses] = await Promise.all([data.colleges.list(), data.courses.list()]);
+      return { status: 200, body: buildPrereqMatrix(colleges, courses) };
     },
 
     // POST /courses
@@ -92,6 +100,7 @@ export function makeHandlers(getData: () => Data): CourseHandlers {
 export function buildRoutes(handlers: CourseHandlers): RouteDef[] {
   return [
     { method: 'GET', path: '/courses/gpa', handler: handlers.gpa },
+    { method: 'GET', path: '/courses/prerequisites', handler: handlers.prerequisitesMatrix },
     { method: 'GET', path: '/courses/prerequisites/:collegeId', handler: handlers.prerequisites },
     { method: 'GET', path: '/courses', handler: handlers.list },
     { method: 'POST', path: '/courses', handler: handlers.create },

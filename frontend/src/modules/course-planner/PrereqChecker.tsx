@@ -4,9 +4,9 @@ import { getPrerequisites } from './api';
 import type { Course, PrereqReport } from './types';
 
 /**
- * Per-college prerequisite satisfaction check. Enumerating colleges into a full matrix needs the
- * College Hub's college list (a sibling module not yet merged), so this checks one college at a
- * time by id and highlights the gaps — exactly the `GET /courses/prerequisites/:collegeId` contract.
+ * Per-college prerequisite spot-check by id — a focused lookup that complements the full coverage
+ * matrix (PrereqMatrix) shown above it. Hits `GET /courses/prerequisites/:collegeId` and highlights
+ * the gaps for a single college, including ones not in the pursued set (e.g. while still researching).
  */
 export function PrereqChecker({ courses }: { courses: Course[] }) {
   const [collegeId, setCollegeId] = useState('');
