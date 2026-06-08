@@ -17,7 +17,6 @@ import { CollegeForm } from './CollegeForm';
 import {
   PROGRAM_TYPE_LABEL,
   STATUS_META,
-  bestCost,
   checklistPct,
   costLabel,
   fitBand,
@@ -122,6 +121,8 @@ export default function CollegeDetailPage() {
         ← College Hub
       </button>
 
+      <CampusGallery urls={college.campusImageUrls} />
+
       <Card
         className="flex flex-wrap items-center gap-4"
         style={accent ? { borderTopColor: accent, borderTopWidth: 4 } : undefined}
@@ -184,48 +185,169 @@ export default function CollegeDetailPage() {
   );
 }
 
+/** Campus photo banner. Best-effort URLs from hydration: any image that fails to load is dropped,
+ *  and the whole strip disappears if none survive — so a broken URL never leaves a gap. */
+function CampusGallery({ urls }: { urls?: string[] }) {
+  const [broken, setBroken] = useState<Set<string>>(() => new Set());
+  const shown = (urls ?? []).filter((u) => !broken.has(u)).slice(0, 4);
+  if (shown.length === 0) return null;
+  return (
+    <div className="grid auto-cols-fr grid-flow-col gap-2 overflow-hidden rounded-xl" style={{ height: 160 }}>
+      {shown.map((url) => (
+        <img
+          key={url}
+          src={url}
+          alt=""
+          loading="lazy"
+          className="h-full w-full object-cover"
+          onError={() => setBroken((prev) => new Set(prev).add(url))}
+        />
+      ))}
+    </div>
+  );
+}
+
+const NOT_FOUND = 'Data not found';
+const yr = (n?: number): string => (n !== undefined ? `${costLabel(n)}/yr` : NOT_FOUND);
+
+/** The structured stat grid — net price is the REAL after-aid figure (never tuition), shown alongside
+ *  sticker tuition and full cost of attendance so the three are never conflated. */
 function fieldRows(college: College): { label: string; value: string }[] {
-  const net = bestCost(college);
   return [
-    { label: 'Out-of-state tuition', value: college.tuitionOutOfState !== undefined ? `${costLabel(college.tuitionOutOfState)}/yr` : 'Data not found' },
-    { label: 'Est. net cost', value: net !== undefined ? `${costLabel(net)}/yr` : 'Data not found' },
-    { label: 'Acceptance (nursing)', value: college.acceptanceRateNursing ?? 'Data not found' },
-    { label: 'Avg admitted GPA', value: college.avgGPAAdmitted ?? 'Data not found' },
-    { label: 'Ranking', value: college.ranking ?? 'Data not found' },
-    { label: 'Early action', value: college.applicationDeadlines?.earlyAction ?? 'Data not found' },
-    { label: 'Regular decision', value: college.applicationDeadlines?.regularDecision ?? 'Data not found' },
-    { label: 'Nursing app deadline', value: college.applicationDeadlines?.nursingApp ?? 'Data not found' },
+    { label: 'Ranking', value: college.ranking ?? NOT_FOUND },
+    { label: 'NCLEX pass rate', value: college.nclexPassRate ?? NOT_FOUND },
+    { label: 'Acceptance (nursing)', value: college.acceptanceRateNursing ?? NOT_FOUND },
+    { label: 'Acceptance (university)', value: college.acceptanceRateUniversity ?? NOT_FOUND },
+    { label: 'Avg admitted GPA', value: college.avgGPAAdmitted ?? NOT_FOUND },
+    { label: 'Out-of-state tuition', value: yr(college.tuitionOutOfState) },
+    { label: 'Full cost of attendance', value: yr(college.costOfAttendanceOutOfState) },
+    { label: 'Net price after aid', value: yr(college.estimatedNetPriceAfterAid) },
+    { label: '% receiving aid', value: college.percentReceivingAid ?? NOT_FOUND },
+    { label: 'Avg aid / scholarship', value: yr(college.avgAidAmount) },
+    { label: 'Application fee', value: college.applicationFee !== undefined ? costLabel(college.applicationFee) : NOT_FOUND },
+    { label: 'Early action', value: college.applicationDeadlines?.earlyAction ?? NOT_FOUND },
+    { label: 'Regular decision', value: college.applicationDeadlines?.regularDecision ?? NOT_FOUND },
+    { label: 'Nursing app deadline', value: college.applicationDeadlines?.nursingApp ?? NOT_FOUND },
+    { label: 'Employment rate', value: college.employmentRate ?? NOT_FOUND },
   ];
 }
 
-function OverviewTab({ college, onDelete }: { college: College; onDelete: () => void }) {
+/** Render a multi-paragraph narrative string (blank-line separated) as stacked paragraphs. */
+function Narrative({ text }: { text: string }) {
   return (
-    <Card className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-ink-800">Overview</h2>
-        {college.lastDataRefresh ? (
-          <span className="text-xs text-ink-400">Last refreshed {college.lastDataRefresh.slice(0, 10)}</span>
-        ) : null}
-      </div>
-      <dl className="grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2">
-        {fieldRows(college).map((row) => (
-          <div key={row.label} className="flex justify-between gap-3 border-b border-surface-border py-1.5 text-sm">
-            <dt className="text-ink-500">{row.label}</dt>
-            <dd className={row.value === 'Data not found' ? 'text-ink-400 italic' : 'text-ink-800'}>{row.value}</dd>
-          </div>
-        ))}
-      </dl>
-      {college.prerequisites?.length ? (
-        <div>
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-500">Prerequisites</h3>
-          <p className="mt-1 text-sm text-ink-700">{college.prerequisites.join(', ')}</p>
-        </div>
+    <>
+      {text.split(/\n{2,}/).map((para, i) => (
+        <p key={i} className="text-sm leading-relaxed text-ink-700">{para.trim()}</p>
+      ))}
+    </>
+  );
+}
+
+function OverviewTab({ college, onDelete }: { college: College; onDelete: () => void }) {
+  const hasNarrative = Boolean(college.overview || college.admissionsDeepDive);
+  return (
+    <div className="space-y-5">
+      {/* 1. Narrative — the lead content. Hidden entirely until hydrated. */}
+      {hasNarrative ? (
+        <Card className="space-y-4">
+          {college.overview ? (
+            <div className="space-y-2">
+              <h2 className="text-sm font-semibold text-ink-800">About {college.name}</h2>
+              <Narrative text={college.overview} />
+            </div>
+          ) : null}
+          {college.admissionsDeepDive ? (
+            <div className="space-y-2 border-t border-surface-border pt-4">
+              <h2 className="text-sm font-semibold text-ink-800">Getting in</h2>
+              <Narrative text={college.admissionsDeepDive} />
+            </div>
+          ) : null}
+        </Card>
       ) : null}
-      {college.specialNotes ? <p className="text-sm text-ink-600">{college.specialNotes}</p> : null}
-      <div className="pt-1">
+
+      {/* 2. Student voices. */}
+      {college.testimonials?.length ? (
+        <Card className="space-y-3">
+          <h2 className="text-sm font-semibold text-ink-800">Student voices</h2>
+          <div className="space-y-3">
+            {college.testimonials.map((t, i) => (
+              <figure key={i} className="border-l-2 border-primary-300 pl-3">
+                <blockquote className="text-sm italic text-ink-700">“{t.quote}”</blockquote>
+                {(t.attribution || t.source) && (
+                  <figcaption className="mt-1 text-xs text-ink-400">
+                    {t.attribution ?? 'Student'}
+                    {t.source ? (
+                      <>
+                        {' · '}
+                        <a className="text-primary-600 hover:underline" href={t.source} target="_blank" rel="noreferrer">source</a>
+                      </>
+                    ) : null}
+                  </figcaption>
+                )}
+              </figure>
+            ))}
+          </div>
+        </Card>
+      ) : null}
+
+      {/* 3. Key stats. */}
+      <Card className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-ink-800">Key stats</h2>
+          {college.lastDataRefresh ? (
+            <span className="text-xs text-ink-400">Last refreshed {college.lastDataRefresh.slice(0, 10)}</span>
+          ) : null}
+        </div>
+        <dl className="grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2">
+          {fieldRows(college).map((row) => (
+            <div key={row.label} className="flex justify-between gap-3 border-b border-surface-border py-1.5 text-sm">
+              <dt className="text-ink-500">{row.label}</dt>
+              <dd className={row.value === NOT_FOUND ? 'text-ink-400 italic' : 'text-ink-800'}>{row.value}</dd>
+            </div>
+          ))}
+        </dl>
+        {college.prerequisites?.length ? (
+          <div>
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-500">Prerequisites</h3>
+            <p className="mt-1 text-sm text-ink-700">{college.prerequisites.join(', ')}</p>
+          </div>
+        ) : null}
+        {college.requiredTests?.length ? (
+          <div>
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-500">Required tests</h3>
+            <p className="mt-1 text-sm text-ink-700">{college.requiredTests.join(', ')}</p>
+          </div>
+        ) : null}
+        {college.clinicalPartners?.length ? (
+          <div>
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-500">Clinical partners</h3>
+            <p className="mt-1 text-sm text-ink-700">{college.clinicalPartners.join(', ')}</p>
+          </div>
+        ) : null}
+        {college.specialNotes ? <p className="text-sm text-ink-600">{college.specialNotes}</p> : null}
+      </Card>
+
+      {/* 4. Sources — let the family verify and dig deeper. */}
+      {college.dataSources?.length ? (
+        <Card className="space-y-2">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-ink-800">Sources</h2>
+            {college.dataAsOf ? <span className="text-xs text-ink-400">{college.dataAsOf}</span> : null}
+          </div>
+          <ul className="space-y-1 text-sm">
+            {college.dataSources.map((src) => (
+              <li key={src}>
+                <a className="break-all text-primary-600 hover:underline" href={src} target="_blank" rel="noreferrer">{src}</a>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      ) : null}
+
+      <div>
         <Button size="sm" variant="danger" onClick={onDelete}>Remove college</Button>
       </div>
-    </Card>
+    </div>
   );
 }
 

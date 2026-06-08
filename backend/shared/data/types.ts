@@ -64,8 +64,21 @@ export interface College extends Timestamped, Hydratable {
   hasAcceleratedBSN?: boolean;
   isTopPick?: boolean;
   ranking?: string;
+  /** AI narrative (2-3 paragraphs): what makes this school/program distinctive + who it fits. */
+  overview?: string;
+  /** AI narrative (1-2 paragraphs): exactly how a student gets in — pathways, timeline, selectivity. */
+  admissionsDeepDive?: string;
+  nclexPassRate?: string;
+  employmentRate?: string;
   tuitionInState?: number;
   tuitionOutOfState?: number;
+  /** Annual full cost of attendance (tuition + fees + housing + food + books) — sticker before aid. */
+  costOfAttendanceOutOfState?: number;
+  /** Annual cost AFTER grants & scholarships — the real out-of-pocket figure; distinct from tuition. */
+  estimatedNetPriceAfterAid?: number;
+  percentReceivingAid?: string;
+  avgAidAmount?: number;
+  applicationFee?: number;
   estimatedTotalCost?: number;
   estimatedCostAfterAid?: number;
   acceptanceRateNursing?: string;
@@ -76,8 +89,16 @@ export interface College extends Timestamped, Hydratable {
   essayPrompts?: string[];
   requiredTests?: string[];
   clinicalPartners?: string[];
+  /** Authentic student voices, each with a source URL for verification. */
+  testimonials?: { quote: string; attribution?: string; source?: string }[];
+  /** URLs to campus/program photos for the branded header gallery. */
+  campusImageUrls?: string[];
   specialNotes?: string;
   website?: string;
+  /** URLs the AI relied on during the most recent hydration (shown as "Sources"). */
+  dataSources?: string[];
+  /** Academic year the hydrated figures reflect, e.g. "2025-2026". */
+  dataAsOf?: string;
   branding?: { logoUrl?: string; primaryColor?: string; secondaryColor?: string; mascot?: string };
   contactInfo?: {
     nursingAdmissionsPhone?: string;

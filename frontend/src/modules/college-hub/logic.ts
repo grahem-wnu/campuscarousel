@@ -76,9 +76,14 @@ export function costLabel(cost?: number): string {
   return `$${cost.toLocaleString('en-US')}`;
 }
 
-/** The best available annual cost figure for display/comparison. */
+/** The best available ANNUAL cost figure for at-a-glance cards/table/compare: the real net price
+ *  after aid if known, else the full cost of attendance, else tuition (a sticker fallback). The
+ *  4-year fields (`estimatedTotalCost`/`estimatedCostAfterAid`) are deliberately NOT used here —
+ *  they are 4-year totals and would mislabel as "/yr" and compound when multiplied for a 4-year view. */
 export function bestCost(c: College): number | undefined {
-  return c.estimatedCostAfterAid ?? c.estimatedTotalCost ?? c.tuitionOutOfState ?? c.tuitionInState;
+  return (
+    c.estimatedNetPriceAfterAid ?? c.costOfAttendanceOutOfState ?? c.tuitionOutOfState ?? c.tuitionInState
+  );
 }
 
 /** Bare domain from a URL ("https://www.osu.edu/x" → "osu.edu"), or undefined. */

@@ -51,6 +51,47 @@ describe('pickHydratableFields', () => {
     });
     expect(out).toEqual({ location: 'Columbus, OH', tuitionInState: 12000, ranking: 'Top 50' });
   });
+
+  it('keeps the new narrative + financial fields', () => {
+    const out = pickHydratableFields({
+      overview: 'A distinctive program.',
+      admissionsDeepDive: 'Two pathways.',
+      nclexPassRate: '94%',
+      estimatedNetPriceAfterAid: 45984,
+      costOfAttendanceOutOfState: 58860,
+      dataAsOf: '2025-2026',
+    });
+    expect(out).toEqual({
+      overview: 'A distinctive program.',
+      admissionsDeepDive: 'Two pathways.',
+      nclexPassRate: '94%',
+      estimatedNetPriceAfterAid: 45984,
+      costOfAttendanceOutOfState: 58860,
+      dataAsOf: '2025-2026',
+    });
+  });
+
+  it('cleans testimonials (drops quote-less), image URLs, and source URLs', () => {
+    const out = pickHydratableFields({
+      testimonials: [
+        { quote: 'I loved the clinicals.', attribution: 'BSN student', source: 'https://niche.com/x' },
+        { attribution: 'no quote — dropped' },
+        'not an object — dropped',
+      ],
+      campusImageUrls: ['https://cdn.osu.edu/a.jpg', 'not-a-url', 'ftp://nope'],
+      dataSources: ['https://nursing.osu.edu', 'garbage'],
+    });
+    expect(out.testimonials).toEqual([
+      { quote: 'I loved the clinicals.', attribution: 'BSN student', source: 'https://niche.com/x' },
+    ]);
+    expect(out.campusImageUrls).toEqual(['https://cdn.osu.edu/a.jpg']);
+    expect(out.dataSources).toEqual(['https://nursing.osu.edu']);
+  });
+
+  it('drops structured fields entirely when nothing survives cleaning', () => {
+    const out = pickHydratableFields({ testimonials: [{ attribution: 'x' }], campusImageUrls: ['nope'] });
+    expect(out).toEqual({});
+  });
 });
 
 describe('makeBedrockDiscoverer', () => {
@@ -132,5 +173,49 @@ describe('makeBedrockHydrator', () => {
   it('returns hydrationStatus failed on any error', async () => {
     const hydrate = makeBedrockHydrator({ modelId: MODEL, invoker: throwing });
     expect(await hydrate({ name: 'Ohio State' })).toEqual({ hydrationStatus: 'failed' });
+  });
+
+  it('folds the URLs it actually searched into dataSources (deduped with model-listed)', async () => {
+    let calls = 0;
+    // Round 1: model asks to web_search. Round 2: it returns JSON citing one source itself.
+    const invoker: BedrockInvoker = {
+      invoke: async () => {
+        calls += 1;
+        if (calls === 1) {
+          return new TextEncoder().encode(
+            JSON.stringify({
+              stop_reason: 'tool_use',
+              content: [{ type: 'tool_use', id: 't1', name: 'web_search', input: { query: 'OSU net price' } }],
+            }),
+          );
+        }
+        return new TextEncoder().encode(
+          JSON.stringify({
+            stop_reason: 'end_turn',
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  overview: 'Top-ranked.',
+                  estimatedNetPriceAfterAid: 45984,
+                  dataSources: ['https://nursing.osu.edu'], // also surfaces below as a consulted URL
+                }),
+              },
+            ],
+          }),
+        );
+      },
+    };
+    const searcher: WebSearcher = async () => [
+      { title: 'OSU Nursing', url: 'https://nursing.osu.edu', snippet: 'net price' },
+      { title: 'College Navigator', url: 'https://nces.ed.gov/osu', snippet: 'aid' },
+    ];
+    const hydrate = makeBedrockHydrator({ modelId: MODEL, invoker, searcher, webSearch: true });
+    const out = await hydrate({ name: 'Ohio State' });
+    expect(out.hydrationStatus).toBe('complete');
+    expect(out.overview).toBe('Top-ranked.');
+    expect(out.estimatedNetPriceAfterAid).toBe(45984);
+    // model-listed first, consulted appended, deduped (nursing.osu.edu appears once).
+    expect(out.dataSources).toEqual(['https://nursing.osu.edu', 'https://nces.ed.gov/osu']);
   });
 });
