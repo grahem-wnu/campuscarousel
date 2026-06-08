@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-06-07T00:35:00Z-M4-wave3-done",
+  "updatedAt": "2026-06-07T00:55:00Z-16of17",
   "writer": "supervisor",
   "phase": "fanout",
   "note": "FANOUT OPEN. Grahem authorized proceeding without his live Gate-2 UI walkthrough (privacy already proven via tests + the infra agent's live direct-invoke: keira sees private, kate 403 on real Lambda+DynamoDB). slice-gate sentinel stripped from all modules -> wave 2 eligible. DEFERRED: Grahem's own SPA click-through of private-entry visibility is folded into M6 final QA + must pass before Gate 3 (prod). Supervisor merges APPROVED+green PRs into dev only.",
@@ -532,9 +532,9 @@
       "spec": "specs/modules/dashboard.md",
       "owner": null,
       "worktree": "",
-      "branch": "",
-      "pr": null,
-      "status": "todo",
+      "branch": "feat/dashboard",
+      "pr": 30,
+      "status": "merged",
       "dependsOn": [
         "foundational-data-layer",
         "foundational-auth",
@@ -549,7 +549,8 @@
         "certifications",
         "teas-prep"
       ],
-      "blockedReason": ""
+      "blockedReason": "",
+      "note": "MERGED (#30)."
     },
     {
       "id": "master-timeline",
@@ -558,9 +559,9 @@
       "spec": "specs/modules/master-timeline.md",
       "owner": null,
       "worktree": "",
-      "branch": "",
-      "pr": null,
-      "status": "todo",
+      "branch": "feat/master-timeline",
+      "pr": 31,
+      "status": "review",
       "dependsOn": [
         "foundational-data-layer",
         "foundational-auth",
