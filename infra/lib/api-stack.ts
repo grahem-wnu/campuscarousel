@@ -91,10 +91,14 @@ export class ApiStack extends Stack {
 
     const integration = new HttpLambdaIntegration("RoutingIntegration", routing);
 
+    // No defaultAuthorizer/defaultIntegration: those create a `$default` route bound to the
+    // JWT authorizer, which also matches the browser's CORS preflight OPTIONS. An authorized
+    // OPTIONS returns 401 (no token on a preflight), so the preflight fails its "HTTP ok"
+    // check and the browser blocks the real request ("Failed to fetch"). API Gateway only
+    // auto-answers preflight (204) when NO route matches the OPTIONS request, so we leave
+    // OPTIONS unrouted and let the corsPreflight config handle it.
     const api = new HttpApi(this, "HttpApi", {
       apiName: `${config.namePrefix}-api`,
-      defaultAuthorizer: authorizer,
-      defaultIntegration: integration,
       corsPreflight: {
         allowOrigins: [`https://${envHostname(config)}`, "http://localhost:5173"],
         allowMethods: [
@@ -110,10 +114,18 @@ export class ApiStack extends Stack {
       },
     });
 
-    // Catch-all: the routing Lambda dispatches by method+path internally.
+    // Catch-all: the routing Lambda dispatches by method+path internally. We enumerate the
+    // real verbs instead of ANY so the route does NOT match OPTIONS — preflight is left for
+    // API Gateway's automatic CORS responder (see HttpApi comment above).
     api.addRoutes({
       path: "/{proxy+}",
-      methods: [HttpMethod.ANY],
+      methods: [
+        HttpMethod.GET,
+        HttpMethod.POST,
+        HttpMethod.PUT,
+        HttpMethod.PATCH,
+        HttpMethod.DELETE,
+      ],
       integration,
       authorizer,
     });
