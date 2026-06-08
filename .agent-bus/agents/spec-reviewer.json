@@ -1,8 +1,8 @@
 {
   "agentId": "spec-reviewer",
   "role": "spec-reviewer",
-  "updatedAt": "2026-06-08T01:27:00Z",
-  "currentTask": "M6 support mode (idle). All 17 modules merged; phase=integration. No open PRs yet \u2014 awaiting the integration PR + tracked follow-up PRs (#28 features, web-search adoption) + the staging QA privacy sweep. Watchlist in needs.",
+  "updatedAt": "2026-06-08T01:50:00Z",
+  "currentTask": "M6 support mode (idle, unchanged). All 17 modules merged; phase=integration. No open PRs \u2014 awaiting integration PR + follow-ups (#28 features, web-search adoption) + staging QA privacy sweep. Watchlist in needs.",
   "status": "idle",
   "branch": "agent-bus",
   "pr": null,
