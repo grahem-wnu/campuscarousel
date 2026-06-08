@@ -160,10 +160,25 @@ Attributes:
   - hasAcceleratedBSN: boolean
   - isTopPick: boolean (default false — user-toggled flag for prioritized schools)
   - ranking: string (e.g., "US News #8 BSN 2026")
+  - overview: string (AI-generated narrative, 2-3 paragraphs — what makes this school and its
+    nursing program distinctive: reputation, teaching hospital/clinical network, culture,
+    outcomes, and who it's a good fit for. This is the lead content of the Overview tab.)
+  - admissionsDeepDive: string (AI-generated narrative, 1-2 paragraphs — exactly how a student
+    gets in: every pathway (direct-admit vs. secondary application), what each requires, the real
+    timeline, selectivity, and the most important things an applicant must nail.)
+  - nclexPassRate: string (e.g., "94% first-time (2024)")
+  - employmentRate: string (e.g., "98% employed within 6 months")
   - tuitionInState: number (annual)
   - tuitionOutOfState: number (annual)
+  - costOfAttendanceOutOfState: number (annual full cost of attendance — tuition + fees + housing
+    + food + books; the sticker price before aid)
+  - estimatedNetPriceAfterAid: number (annual cost AFTER grants & scholarships — this is the real
+    out-of-pocket figure and is DISTINCT from tuition; never copy tuition into this field)
+  - percentReceivingAid: string (e.g., "62% receive grants/scholarships")
+  - avgAidAmount: number (annual average grant/scholarship per student)
+  - applicationFee: number (e.g., 60)
   - estimatedTotalCost: number (4-year with room/board)
-  - estimatedCostAfterAid: number (estimated with merit aid)
+  - estimatedCostAfterAid: number (estimated 4-year cost with merit aid)
   - acceptanceRateNursing: string (e.g., "~10%" or "70 of 700 applicants")
   - acceptanceRateUniversity: string
   - avgGPAAdmitted: string
@@ -172,8 +187,14 @@ Attributes:
   - essayPrompts: list of strings
   - requiredTests: list of strings (e.g., "TEAS", "SAT", "Casper SJT")
   - clinicalPartners: list of strings (hospitals/health systems)
+  - testimonials: list of maps { quote: string, attribution: string (e.g., "BSN student"),
+    source: string (URL) } — authentic student voices pulled from Niche/Cappex/Reddit/the school
+  - campusImageUrls: list of strings (URLs to campus/program photos for the branded header gallery)
   - specialNotes: string (e.g., "Attached to UPMC — excellent ICU rotations")
   - website: string
+  - dataSources: list of strings (URLs the AI relied on during the most recent hydration — shown
+    as "Sources" so the family can verify and dig deeper)
+  - dataAsOf: string (academic year the hydrated figures reflect, e.g., "2025-2026")
   - branding: map
     - logoUrl: string (URL to college logo — AI fetches from school website or public source during hydration)
     - primaryColor: string (hex — school's primary brand color, e.g., "#002855" for Michigan)
@@ -648,14 +669,26 @@ When the College Hub has zero colleges, the user sees:
 
 **College Hydration (AI-powered data enrichment):**
 - When a college is added (via discovery OR manual add), a hydration job runs:
-  - Lambda calls Bedrock with web search to research the specific school
-  - Prompt: "Search the web for [School Name]'s BSN nursing program. Find and return as structured JSON: in-state and out-of-state tuition, room and board costs, nursing program acceptance rate, overall university acceptance rate, average admitted GPA, application deadlines (early action, regular decision, nursing-specific), required tests (SAT, ACT, TEAS, Casper SJT, etc.), prerequisite courses, clinical hospital partners, US News ranking if available, whether the program is direct-admit or requires secondary application, NCLEX pass rate, the nursing admissions office phone and email, financial aid office phone and URL, campus visit URL, the school mascot, primary and secondary brand colors (hex), and a URL to the school's official logo. Also note anything distinctive about the program (special certifications, unique curriculum, notable clinical partnerships)."
+  - Lambda calls Bedrock **through the shared web-search tool path** (`converseWithSearch`, Tavily-backed) — NOT plain general-knowledge inference. Numbers like tuition, net price, average admitted GPA, acceptance rate, deadlines, and rankings change yearly and MUST be verified against current-year web sources, not recalled from training data.
+  - The prompt instructs the model to run **multiple searches across different source types**, because no single site has everything:
+    - The college's own nursing site (.edu) — program structure, prerequisites, deadlines, application steps, clinical partners
+    - U.S. News / Niche — rankings and reputation
+    - College Navigator / NCES, collegetuitioncompare, the school's financial-aid office — cost of attendance, **net price after aid**, % receiving aid
+    - Common Data Set / admissions-stats sites — **average admitted GPA and acceptance rate**, which are rarely on the school's own marketing pages and must be searched for specifically
+    - Niche / Cappex / Reddit — authentic student testimonials about the nursing program
+  - The prompt requires genuine **narrative** output (not just fields): an `overview` (2-3 paragraphs on what makes the school/program distinctive and who it fits) and an `admissionsDeepDive` (how a student actually gets in — every pathway, timeline, selectivity, what to nail).
+  - **Critical accuracy rules baked into the prompt:**
+    - Separate NURSING-specific stats (BSN/direct-admit acceptance rate, nursing GPA) from UNIVERSITY-WIDE stats, and label which is which.
+    - `estimatedNetPriceAfterAid` is the cost AFTER grants/scholarships and is DISTINCT from tuition — never copy tuition into it. If only tuition is found, leave net price null.
+    - **Prefer partial data over blanks:** include any value found for even one of tuition/net price/GPA/acceptance rate. Only omit a field if genuinely unavailable after searching. NEVER fabricate a number — an omitted field is acceptable, a wrong one is not.
+    - Cite every source URL in `dataSources`, and stamp `dataAsOf` with the academic year the figures reflect.
   - Results parsed and stored in DynamoDB
   - `hydrationStatus` updated to "complete" or "partial" (if some fields couldn't be found)
   - `lastDataRefresh` set to current timestamp
 - Fields the AI couldn't find are left null and visually flagged in the UI as "Not found — edit manually or refresh"
 - Hydration can be re-triggered per college ("Refresh Data" button) or in bulk ("Refresh All" button)
 - Hydration is async — college appears in list immediately with a loading indicator, data populates as it arrives
+- **Fallback:** if `AI_WEB_SEARCH` is disabled or the search tool is unavailable, hydration degrades to general-knowledge inference (today's behavior) and the college is marked `partial` rather than failing outright.
 
 **Manual College Add:**
 - Simple form: just the school name (required), optionally city/state/website
@@ -685,13 +718,17 @@ When the College Hub has zero colleges, the user sees:
 **College Detail View:**
 Each college has a full detail page with a branded header and tabs:
 
-- **Header:** College logo (large), school name, mascot, location, and school colors used as accent/background stripe. Contact info (nursing admissions phone/email, financial aid, campus visit link) displayed as quick-action buttons/links.
+- **Header:** College logo (large), school name, mascot, location, and school colors used as accent/background stripe. A campus photo gallery (from `campusImageUrls`) banners the page. Contact info (nursing admissions phone/email, financial aid, campus visit link) displayed as quick-action buttons/links.
 
-- **Overview tab:** All structured data (tuition, deadlines, requirements, rankings, clinical partners, etc.)
+- **Overview tab (story-first):** Reads top-to-bottom like a viewbook so a first-time visitor can answer "should I even look into this school?" before scanning numbers.
+  1. **Narrative** — the `overview` paragraphs lead the page, followed by the `admissionsDeepDive`.
+  2. **Student voices** — `testimonials` rendered as quote cards with attribution.
+  3. **Key stats** — the structured data grid (ranking, NCLEX pass rate, net price after aid, out-of-state tuition, full cost of attendance, % receiving aid, nursing vs. university acceptance rate, average admitted GPA, deadlines, required tests, prerequisites, clinical partners).
+  4. **Sources** — `dataSources` listed as links, with the `dataAsOf` academic year, so the family can verify and dig deeper.
   - "Refresh Data" button — triggers AI to re-research this school via web search and update any changed information
   - "Last refreshed: [date]" timestamp shown prominently
   - Every field is manually editable — user edits override AI-fetched values
-  - Fields the AI couldn't find are highlighted with "Data not found" placeholder and edit button
+  - Fields the AI couldn't find are highlighted with "Data not found" placeholder and edit button; the narrative blocks are hidden (not shown empty) until hydrated.
   
 - **Notes tab:** Chronological notes from any family member
   - Note types: general, visit notes, research finding, contact info, financial aid info, application update
