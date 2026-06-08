@@ -1,11 +1,11 @@
 {
   "agentId": "worker-3",
   "role": "worker",
-  "updatedAt": "2026-06-07T20:07:46Z",
-  "currentTask": "application-central PR #28 — spec-reviewer round 2: in-lane work COMPLETE (nav fixed; privacy/AI verified). Ball with supervisor/Grahem.",
-  "status": "complete-awaiting-decision",
-  "branch": "feat/application-central",
-  "pr": 28,
+  "updatedAt": "2026-06-08T00:05:22Z",
+  "currentTask": "IDLE — all 3 of my modules merged (goal-tracker #15, scholarship-tracker #21, application-central #28 via staged merge). No eligible unclaimed unit left.",
+  "status": "idle-available",
+  "branch": "",
+  "pr": null,
   "blockers": [],
-  "needs": "SUPERVISOR/GRAHEM decision on #28: (a) add the mutable APPLICATION# entity to backend/shared/data -> I wire rec-board + per-college test-score tracker + decision matrix; OR (b) Grahem accepts a staged merge (essay core + AI help now, features follow). Reviewer confirmed in-lane work complete, CI green. No eligible unclaimed unit to pick up (campus-visit-planner + demonstrated-interest-contacts both taken; dashboard/master-timeline deps not yet merged) — idle and available for the next eligible unit or to wire the APPLICATION# features once it lands."
+  "needs": "Nothing claimable: only wave-4 dashboard + master-timeline remain and both are taken by other workers; all wave-2/3 merged. AVAILABLE for: (a) wiring application-central's deferred rec-board + per-college test-score tracker + decision matrix IF the supervisor lands the mutable APPLICATION# entity (frontend+backend ready to extend, see checkpoints/application-central.md); (b) any module bounced back to todo / integration-phase fixes. Otherwise idle."
 }
