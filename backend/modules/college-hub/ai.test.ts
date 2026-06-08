@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { WebSearcher } from '../../shared/ai/index.js';
 import {
   extractJson,
   makeBedrockDiscoverer,
@@ -9,16 +10,17 @@ import {
 
 const MODEL = 'us.anthropic.test-model';
 
-/** Stub Bedrock client whose response carries `text` as the assistant message. */
+/** Stub the shared Bedrock seam: its `invoke` returns the encoded Anthropic response carrying
+ *  `text`. stop_reason !== 'tool_use', so the shared loop returns immediately (no web search in
+ *  tests — AI_WEB_SEARCH is unset). */
 function stub(text: string): BedrockInvoker {
   return {
-    send: async () => ({
-      body: new TextEncoder().encode(JSON.stringify({ content: [{ text }] })),
-    }),
+    invoke: async () =>
+      new TextEncoder().encode(JSON.stringify({ stop_reason: 'end_turn', content: [{ type: 'text', text }] })),
   };
 }
 const throwing: BedrockInvoker = {
-  send: async () => {
+  invoke: async () => {
     throw new Error('ThrottlingException');
   },
 };
@@ -55,7 +57,7 @@ describe('makeBedrockDiscoverer', () => {
   it('parses + validates candidates and respects the limit', async () => {
     const discover = makeBedrockDiscoverer({
       modelId: MODEL,
-      client: stub(
+      invoker: stub(
         JSON.stringify([
           { name: 'Ohio State', state: 'Ohio', programType: 'direct-admit-BSN', tuitionInState: 12000 },
           { name: 'Indiana U', state: 'Indiana' },
@@ -69,16 +71,47 @@ describe('makeBedrockDiscoverer', () => {
   });
 
   it('returns [] when the model output is not an array', async () => {
-    const discover = makeBedrockDiscoverer({ modelId: MODEL, client: stub('{"oops":true}') });
+    const discover = makeBedrockDiscoverer({ modelId: MODEL, invoker: stub('{"oops":true}') });
     expect(await discover({})).toEqual([]);
   });
 
+  it('uses web_search when enabled, then parses the grounded answer', async () => {
+    let calls = 0;
+    const searched: string[] = [];
+    // Round 1: the model asks to web_search. Round 2: it returns the grounded JSON.
+    const invoker: BedrockInvoker = {
+      invoke: async () => {
+        calls += 1;
+        if (calls === 1) {
+          return new TextEncoder().encode(
+            JSON.stringify({
+              stop_reason: 'tool_use',
+              content: [{ type: 'tool_use', id: 't1', name: 'web_search', input: { query: 'direct-admit BSN Ohio' } }],
+            }),
+          );
+        }
+        return new TextEncoder().encode(
+          JSON.stringify({ stop_reason: 'end_turn', content: [{ type: 'text', text: JSON.stringify([{ name: 'Ohio State', state: 'Ohio' }]) }] }),
+        );
+      },
+    };
+    const searcher: WebSearcher = async (q) => {
+      searched.push(q);
+      return [{ title: 'OSU Nursing', url: 'https://osu.edu/nursing', snippet: 'Direct-admit BSN.' }];
+    };
+    const discover = makeBedrockDiscoverer({ modelId: MODEL, invoker, searcher, webSearch: true });
+    const out = await discover({ state: 'Ohio' });
+    expect(out.map((c) => c.name)).toEqual(['Ohio State']);
+    expect(searched).toEqual(['direct-admit BSN Ohio']); // the searcher was actually consulted
+    expect(calls).toBe(2);
+  });
+
   it('returns [] on client error and when no model id is configured', async () => {
-    expect(await makeBedrockDiscoverer({ modelId: MODEL, client: throwing })({})).toEqual([]);
+    expect(await makeBedrockDiscoverer({ modelId: MODEL, invoker: throwing })({})).toEqual([]);
     const prev = process.env.BEDROCK_MODEL_ID;
     delete process.env.BEDROCK_MODEL_ID;
     try {
-      expect(await makeBedrockDiscoverer({ client: stub('[]') })({})).toEqual([]);
+      expect(await makeBedrockDiscoverer({ invoker: stub('[]') })({})).toEqual([]);
     } finally {
       if (prev !== undefined) process.env.BEDROCK_MODEL_ID = prev;
     }
@@ -89,7 +122,7 @@ describe('makeBedrockHydrator', () => {
   it('returns allowlisted fields + hydrationStatus complete on success', async () => {
     const hydrate = makeBedrockHydrator({
       modelId: MODEL,
-      client: stub(JSON.stringify({ location: 'Columbus, OH', status: 'accepted', tuitionInState: 12000 })),
+      invoker: stub(JSON.stringify({ location: 'Columbus, OH', status: 'accepted', tuitionInState: 12000 })),
     });
     const out = await hydrate({ name: 'Ohio State' });
     expect(out).toEqual({ location: 'Columbus, OH', tuitionInState: 12000, hydrationStatus: 'complete' });
@@ -97,7 +130,7 @@ describe('makeBedrockHydrator', () => {
   });
 
   it('returns hydrationStatus failed on any error', async () => {
-    const hydrate = makeBedrockHydrator({ modelId: MODEL, client: throwing });
+    const hydrate = makeBedrockHydrator({ modelId: MODEL, invoker: throwing });
     expect(await hydrate({ name: 'Ohio State' })).toEqual({ hydrationStatus: 'failed' });
   });
 });

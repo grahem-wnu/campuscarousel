@@ -1,19 +1,17 @@
 // AI layer for College Hub: discovery (POST /colleges/discover) and hydration (the SQS worker).
-// Both go through Bedrock (model/inference-profile from BEDROCK_MODEL_ID env, never hardcoded) and
-// are injectable so handlers/worker tests run with a stub client and no network. Any error/timeout/
-// malformed response degrades gracefully: discovery → [] (empty candidate list), hydration → a
-// `{ hydrationStatus: 'failed' }` patch. The spec also calls for a web-search tool; that is not yet
-// available server-side (no shared web client) — Bedrock general knowledge is used meanwhile and the
-// gap is noted on the checkpoint, same as the certifications curated fallback.
+// Both go through the shared web-grounded Bedrock call site (`converseWithSearch`): when the
+// `AI_WEB_SEARCH` env flag is on (it is, on the API + worker Lambdas), the model can call the
+// `web_search` tool (Tavily) to ground deadlines/tuition/rankings in live sources, then we parse its
+// final JSON; when the flag is off or search is unconfigured, it degrades to model knowledge — the
+// exact prior behaviour. Everything stays injectable (invoker + searcher) so tests run with no
+// network. Any error/timeout/malformed response still degrades gracefully: discovery → [] (empty
+// candidate list), hydration → a `{ hydrationStatus: 'failed' }` patch.
 
+import { converseWithSearch, type BedrockInvoker, type WebSearcher } from '../../shared/ai/index.js';
 import type { College } from '../../shared/data/index.js';
 import type { DiscoverInput } from './schema.js';
 
-/** Minimal structural type of the Bedrock client (just `send`) — keeps tests injectable without a
- *  hard dependency on the SDK's concrete class. */
-export interface BedrockInvoker {
-  send(command: unknown): Promise<{ body?: Uint8Array }>;
-}
+export type { BedrockInvoker };
 
 /** A discovered candidate — College-shaped, name required, plus a short rationale. */
 export interface CollegeCandidate {
@@ -35,34 +33,26 @@ export type Hydrator = (input: { name: string; state?: string }) => Promise<Part
 
 export interface AiOptions {
   modelId?: string;
-  client?: BedrockInvoker;
+  /** Inject the shared Bedrock seam (tests); else the real SDK client. */
+  invoker?: BedrockInvoker;
+  /** Inject the web searcher (tests); else Tavily. */
+  searcher?: WebSearcher;
+  /** Force web search on/off; defaults to the `AI_WEB_SEARCH` env flag. */
+  webSearch?: boolean;
 }
 
-/** Invoke Bedrock (Anthropic Messages) and return the assistant's raw text. Throws on any problem. */
+/** Run a prompt through the shared web-grounded Bedrock loop and return the model's final text.
+ *  Web search is used when `AI_WEB_SEARCH` is on; otherwise it answers from model knowledge.
+ *  Throws on a missing model id / invoker error — callers catch and degrade. */
 async function invokeText(prompt: string, options: AiOptions): Promise<string> {
-  const modelId = options.modelId ?? process.env.BEDROCK_MODEL_ID;
-  if (!modelId) throw new Error('BEDROCK_MODEL_ID is not set');
-  const { BedrockRuntimeClient, InvokeModelCommand } = await import('@aws-sdk/client-bedrock-runtime');
-  const client: BedrockInvoker =
-    options.client ?? (new BedrockRuntimeClient({}) as unknown as BedrockInvoker);
-  const command = new InvokeModelCommand({
-    modelId,
-    contentType: 'application/json',
-    accept: 'application/json',
-    body: new TextEncoder().encode(
-      JSON.stringify({
-        anthropic_version: 'bedrock-2023-05-31',
-        max_tokens: 2048,
-        messages: [{ role: 'user', content: prompt }],
-      }),
-    ),
+  const { text } = await converseWithSearch(prompt, {
+    modelId: options.modelId,
+    invoker: options.invoker,
+    searcher: options.searcher,
+    webSearch: options.webSearch,
+    maxTokens: 2048,
   });
-  const res = await client.send(command);
-  if (!res.body) throw new Error('empty Bedrock response');
-  const decoded = JSON.parse(new TextDecoder().decode(res.body)) as {
-    content?: Array<{ text?: string }>;
-  };
-  return (decoded.content ?? []).map((c) => (typeof c?.text === 'string' ? c.text : '')).join('\n');
+  return text;
 }
 
 /** Pull the first JSON value (object or array) out of model text, tolerating prose / code fences. */
