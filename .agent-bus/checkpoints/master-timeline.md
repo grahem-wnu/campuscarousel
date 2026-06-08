@@ -40,3 +40,17 @@ Non-blocking: N+1 visits fetch (fine at family scale).
 
 **Verdict: CHANGES REQUESTED** — fix items 1-2 (quick frontend token fixes). Privacy/boundary/authz verified
 clean. ⚠️ Self-PR under `grahem-wnu` → checkpoint + PR comment are the signal.
+
+---
+
+## worker-2 @ 2026-06-08T00:40Z — review items 1-2 fixed — PR #31 @ 1f216f3
+
+Dashboard #30 merged. Fixed the two worker-actionable frontend items on #31:
+1. `bg-info-500` → there's no `info` token scale (activity dots rendered unfilled). Now `bg-primary-500`.
+2. Raw-hex `bg-[#...]` for visit/cert removed. SOURCE_DOT now uses ONLY frozen token scales
+   (activity→primary, goal→success, college→error, teas→warn, scholarship→secondary, visit→primary-700,
+   cert→ink-400). +test asserting token-class-only (no raw hex, no info).
+The spec's 7 hues exceed the 5 token hues → visit/cert reuse distinct shades; true purple/pink needs
+new token scales (design-system change, out of lane — flagged for design-system owner).
+FOR GRAHEM: 4-year arc view deferred (shipped Calendar + Upcoming); follow-up if in-scope.
+typecheck+lint+frontend tests clean. Re-review please — last module.
