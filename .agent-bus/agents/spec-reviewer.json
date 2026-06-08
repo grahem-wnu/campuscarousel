@@ -1,34 +1,34 @@
 {
   "agentId": "spec-reviewer",
   "role": "spec-reviewer",
-  "updatedAt": "2026-06-08T00:06:00Z",
-  "currentTask": "WAVE-4 begun. #30 dashboard APPROVED (aggregator privacy verified: filterForRequester on activities+clinical off JWT before aggregation; 2-direction privacy test). master-timeline (the other wave-4 aggregator) + web-search adoption PRs still to come.",
+  "updatedAt": "2026-06-08T00:31:00Z",
+  "currentTask": "Wave-4. #30 dashboard merged. #31 master-timeline CHANGES-REQUESTED (privacy/boundary/authz clean; 2 frontend token fixes: bg-info-500 non-existent color + raw-hex classes). Last wave-4 module.",
   "status": "idle",
   "branch": "agent-bus",
   "pr": null,
   "blockers": [],
-  "needs": "FOR SUPERVISOR \u2014 MERGE #30 dashboard (APPROVED + green). Wave-4 (M5) = dashboard + master-timeline; master-timeline not yet open. TRACKED FOLLOW-UPS (M6 QA / pre-Gate-3): (1) #28 deferred features (rec-board/test-score-tracker/decision-matrix + APPLICATION# entity) \u2014 merged-but-incomplete. (2) web-search adoption (converseWithSearch now on dev): college-hub/scholarship-tracker/peer-benchmark/ai-assistant/interview-prep follow-up PRs. STATUS: M3+M4 done. Wave-4 starting: #30 dashboard approved-awaiting-merge; master-timeline pending. After M5 \u2192 M6 integration QA (must verify cross-module wiring + the #28 gap + full privacy sweep) \u2192 Gate 3 (prod, Grahem). NOTE for master-timeline review: like dashboard, it aggregates cross-module data incl. private-capable (activity/clinical/why-nursing) \u2014 must filterForRequester off the JWT before surfacing on the timeline. RECURRING: merge gate reads checkpoint+PR-comment, not reviewDecision.",
+  "needs": "FOR SUPERVISOR \u2014 #31 master-timeline is the LAST wave-4 module; changes-requested on 2 quick frontend token fixes (non-existent bg-info-500 \u2192 use bg-primary-500; raw-hex visit/cert colors \u2192 token classes). Privacy verified clean. Once fixed + merged \u2192 M5 done (all 17 modules) \u2192 M6 integration QA. TRACKED FOLLOW-UPS (M6 QA / pre-Gate-3): (1) #28 deferred features (rec-board/score/matrix + APPLICATION# entity). (2) web-search adoption (converseWithSearch on dev): college-hub/scholarship-tracker/peer-benchmark/ai-assistant/interview-prep. FOR GRAHEM: confirm whether master-timeline\u2019s freshman\u2192senior arc view is in-scope for #31 or deferred (PR ships calendar+upcoming, not the arc). STATUS: M3+M4 done; M5 (wave-4): #30 dashboard MERGED, #31 master-timeline changes-requested. RECURRING: merge gate reads checkpoint+PR-comment, not reviewDecision.",
   "lastPass": {
-    "at": "2026-06-08T00:06:00Z",
+    "at": "2026-06-08T00:31:00Z",
     "openPrsAgainstDev": 1,
     "reviewed": [
       {
-        "pr": 30,
-        "branch": "feat/dashboard",
-        "headSha": "506a733",
-        "verdict": "APPROVED",
+        "pr": 31,
+        "branch": "feat/master-timeline",
+        "headSha": "0ae7ba4",
+        "verdict": "CHANGES-REQUESTED",
         "ci": "green",
-        "note": "aggregator privacy verified (filterForRequester on activities+clinical off JWT before aggregation; why-nursing not read; 2-direction privacy test); cross-module via shared accessors; nav primary"
+        "note": "privacy verified (only activities on timeline, filterForRequester off JWT; clinical/why-nursing not gathered; 2-dir test); 2 frontend token fixes: bg-info-500 non-existent + raw-hex visit/cert classes; arc-view scope for Grahem"
       }
     ],
-    "approvedAwaitingMerge": [
+    "merged": [
+      30
+    ],
+    "changesRequestedOpen": [
       {
-        "pr": 30,
-        "branch": "feat/dashboard"
+        "pr": 31,
+        "note": "2 frontend token fixes"
       }
-    ],
-    "pendingWave4": [
-      "master-timeline"
     ],
     "stalls": []
   }
