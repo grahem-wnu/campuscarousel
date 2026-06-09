@@ -216,6 +216,22 @@ Attributes:
   - updatedAt: ISO timestamp
 ```
 
+#### Discovery Job
+Transient record backing async college discovery (web-grounded discovery exceeds the 30s API budget,
+so the API creates a job and the SQS worker fills it; the frontend polls).
+```
+PK: DISCOVERY#<jobId>
+SK: DETAILS
+Attributes:
+  - status: "pending" | "complete" | "failed"
+  - filters: map (the discovery input echoed back: query, state, programType, maxTuition, directAdmitOnly, limit)
+  - candidates: list of maps (discovered colleges: name, location, state, programType, isDirectAdmit, hasBSN, ranking, tuition, website, summary)
+  - count: number (candidates found)
+  - error: string (set when status = "failed")
+  - createdAt: ISO timestamp
+  - updatedAt: ISO timestamp
+```
+
 #### College Note
 ```
 PK: COLLEGE#<collegeId>
@@ -659,10 +675,18 @@ When the College Hub has zero colleges, the user sees:
 - Triggered by the "Discover BSN Programs" button (available anytime, not just first run)
 - User can optionally narrow the search with filters: region/state, direct-admit only, cost ceiling, minimum ranking, public/private
 - Or just click "Find All" to cast the widest net
-- Backend: Lambda sends a structured prompt to Bedrock with web search enabled:
-  - "Search the web and find all accredited universities in the United States that offer a Bachelor of Science in Nursing (BSN) program. For each school, determine: school name, city, state, whether the BSN program is direct-admit from high school or requires a secondary/separate nursing application after enrollment, the nursing program website URL, and any available ranking. Return results as structured JSON."
-  - This may require multiple Bedrock calls (chunked by region or by source) since a single call can't reliably enumerate 200+ programs
-  - Strategy: search by state/region in parallel, deduplicate results
+- Backend: discovery is **async** (mirrors hydration), because web-grounded discovery routinely
+  exceeds the API Gateway/Lambda 30s synchronous budget:
+  - `POST /colleges/discover` validates the filters, creates a transient **DiscoveryJob**
+    (`status: "pending"`, PK `DISCOVERY#<jobId>`), enqueues it on the shared SQS hydration queue
+    (message routed by `jobId`), and returns `202` with the job id immediately.
+  - The SQS worker (300s budget) runs the web-grounded discovery prompt: "Search the web and find
+    accredited U.S. universities offering a BSN program; for each, determine name, city, state,
+    whether it's direct-admit from high school or requires a secondary nursing application, the
+    nursing program URL, and any ranking. Return structured JSON." It writes the candidates back
+    onto the job (`status: "complete"`, or `"failed"` with an error).
+  - The frontend polls `GET /colleges/discover/:jobId` until the job settles, then renders the
+    candidates. (With no queue configured — tests/local — the job runs inline.)
 - Results displayed as a scrollable list with checkboxes — user selects which colleges to add
 - "Add All" and "Add Selected" buttons
 - Each added college is saved to DynamoDB with `hydrationStatus: "pending"`

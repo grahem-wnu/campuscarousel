@@ -112,6 +112,43 @@ export interface College extends Timestamped, Hydratable {
   fitScore?: number;
 }
 
+/** One discovered candidate (College-shaped, name required) — the result of a discovery run. */
+export interface DiscoveredCollege {
+  name: string;
+  location?: string;
+  state?: string;
+  programType?: College['programType'];
+  isDirectAdmit?: boolean;
+  hasBSN?: boolean;
+  ranking?: string;
+  tuitionInState?: number;
+  tuitionOutOfState?: number;
+  website?: string;
+  summary?: string;
+}
+
+/**
+ * A transient async discovery job. The API creates one (status 'pending') and enqueues it; the SQS
+ * worker runs the web-grounded discovery (which can exceed the 30s API budget) and writes the
+ * candidates back; the frontend polls until it settles. PK: DISCOVERY#<jobId>, SK: DETAILS.
+ */
+export interface DiscoveryJob extends Timestamped {
+  jobId: string;
+  status: 'pending' | 'complete' | 'failed';
+  /** The discovery filters echoed from the request, so the worker can run the search. */
+  filters?: {
+    query?: string;
+    state?: string;
+    programType?: College['programType'];
+    maxTuition?: number;
+    directAdmitOnly?: boolean;
+    limit?: number;
+  };
+  candidates?: DiscoveredCollege[];
+  count?: number;
+  error?: string;
+}
+
 export interface CollegeNote extends Timestamped {
   collegeId: string;
   noteId: string; // derived from the SK timestamp

@@ -100,6 +100,17 @@ export interface CollegeCandidate {
   summary?: string;
 }
 
+/** An async discovery job — created by POST /colleges/discover, polled via GET /colleges/discover/:jobId. */
+export interface DiscoveryJob {
+  jobId: string;
+  status: 'pending' | 'complete' | 'failed';
+  candidates?: CollegeCandidate[];
+  count?: number;
+  error?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface CollegeNote {
   collegeId: string;
   noteId: string;

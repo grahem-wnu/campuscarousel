@@ -18,6 +18,7 @@ import {
   createSchema,
   discoverSchema,
   idParamSchema,
+  jobIdParamSchema,
   listQuerySchema,
   noteSchema,
   topPickSchema,
@@ -27,6 +28,7 @@ import { queryColleges } from './query.js';
 import { findActiveByName, normalizeCollegeName } from './dedupe.js';
 import { makeBedrockDiscoverer, type Discoverer } from './ai.js';
 import { makeInlineDispatcher, type HydrationDispatcher } from './hydration.js';
+import { runDiscoveryJob, type DiscoverDispatcher } from './discover.js';
 
 export interface CollegeHandlers {
   list: Handler;
@@ -38,6 +40,7 @@ export interface CollegeHandlers {
   hydrate: Handler;
   hydrateAll: Handler;
   discover: Handler;
+  discoverStatus: Handler;
   bulkAdd: Handler;
   listNotes: Handler;
   addNote: Handler;
@@ -51,12 +54,19 @@ export interface CollegeDeps {
   discoverer?: Discoverer;
   /** Hydration trigger; defaults to the inline dispatcher (SQS enqueue once the worker is wired). */
   dispatch?: HydrationDispatcher;
+  /** Discovery-job trigger; defaults to running the job inline with the handler's discoverer. */
+  discoverDispatch?: DiscoverDispatcher;
 }
 
 export function makeHandlers(deps: CollegeDeps): CollegeHandlers {
   const { getData } = deps;
   const discoverer = deps.discoverer ?? makeBedrockDiscoverer();
   const dispatch = deps.dispatch ?? makeInlineDispatcher(getData);
+  // Default: run the discovery job inline using THIS handler's discoverer (so tests use the stub).
+  // Production injects the SQS enqueuer (routes.manifest) so the slow web-grounded search runs on the
+  // 300s worker instead of the 30s API request.
+  const discoverDispatch =
+    deps.discoverDispatch ?? ((jobId: string) => runDiscoveryJob(getData, discoverer, jobId));
 
   /** Fetch a college or throw 404. */
   async function requireCollege(id: string): Promise<College> {
@@ -151,11 +161,24 @@ export function makeHandlers(deps: CollegeDeps): CollegeHandlers {
       return { status: 202, body: { requested: targets.length } };
     },
 
-    // POST /colleges/discover — AI candidates for the filters; adds nothing.
+    // POST /colleges/discover — start an ASYNC discovery job and return its id. Web-grounded
+    // discovery can exceed the 30s API budget, so the job runs on the SQS worker; the frontend polls
+    // GET /colleges/discover/:jobId. (In tests/local with no queue, the job runs inline.)
     discover: async (ctx) => {
       const input = validateBody(discoverSchema, ctx);
-      const candidates = await discoverer(input);
-      return { status: 200, body: { candidates } };
+      const job = await getData().discoveryJobs.create({ status: 'pending', filters: input });
+      await discoverDispatch(job.jobId);
+      // Re-read so an inline run (tests) returns the finished result; async returns the pending job.
+      const after = await getData().discoveryJobs.get(job.jobId);
+      return { status: 202, body: after ?? job };
+    },
+
+    // GET /colleges/discover/:jobId — poll a discovery job's status + candidates.
+    discoverStatus: async (ctx) => {
+      const { jobId } = validateParams(jobIdParamSchema, ctx);
+      const job = await getData().discoveryJobs.get(jobId);
+      if (!job) throw Errors.notFound('Discovery job not found');
+      return { status: 200, body: job };
     },
 
     // POST /colleges/bulk-add — add several discovered colleges at once (no auto-hydrate; they carry
@@ -234,6 +257,7 @@ export function buildRoutes(h: CollegeHandlers) {
     { method: 'GET' as const, path: '/colleges', handler: h.list },
     { method: 'POST' as const, path: '/colleges', handler: h.create },
     { method: 'POST' as const, path: '/colleges/discover', handler: h.discover },
+    { method: 'GET' as const, path: '/colleges/discover/:jobId', handler: h.discoverStatus },
     { method: 'POST' as const, path: '/colleges/hydrate-all', handler: h.hydrateAll },
     { method: 'POST' as const, path: '/colleges/bulk-add', handler: h.bulkAdd },
     { method: 'GET' as const, path: '/colleges/:id', handler: h.detail },
