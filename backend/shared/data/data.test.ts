@@ -206,6 +206,36 @@ describe('hydration: mergePreservingUserEdits', () => {
     expect(merged.lastDataRefresh).toBeDefined();
   });
 
+  it('never marks hydration system fields as user-edited, and self-heals a poisoned record', async () => {
+    const c = await data.colleges.create({ name: 'Ohio State', addedBy: 'ai-discovered' });
+
+    // The /hydrate handler sets the in-progress badge via update(); this must NOT make
+    // hydrationStatus user-owned (else the worker could never set it back to complete).
+    const inProgress = await data.colleges.update(c.collegeId, { hydrationStatus: 'in-progress' });
+    expect(inProgress.userEdited ?? []).not.toContain('hydrationStatus');
+
+    // The worker can then complete it.
+    const done = await data.colleges.mergePreservingUserEdits(c.collegeId, {
+      ranking: '#1 public',
+      hydrationStatus: 'complete',
+    });
+    expect(done.hydrationStatus).toBe('complete');
+    expect(done.ranking).toBe('#1 public');
+
+    // Self-heal: a record a prior bug poisoned (hydrationStatus already in userEdited) is cleaned
+    // on the next update() that touches it, so the badge can clear again — while genuine user
+    // edits in the same list are kept.
+    const poisoned = await data.colleges.create({
+      name: 'Indiana',
+      addedBy: 'ai-discovered',
+      userEdited: ['hydrationStatus', 'name'],
+    });
+    expect(poisoned.userEdited).toContain('hydrationStatus');
+    const healed = await data.colleges.update(poisoned.collegeId, { hydrationStatus: 'in-progress' });
+    expect(healed.userEdited ?? []).not.toContain('hydrationStatus');
+    expect(healed.userEdited ?? []).toContain('name'); // genuine user edits are kept
+  });
+
   it('hydrates a never-edited entity fully', async () => {
     const s = await data.scholarships.create({ name: 'Seed', addedBy: 'ai-discovered' });
     const merged = await data.scholarships.mergePreservingUserEdits(s.scholarshipId, {
