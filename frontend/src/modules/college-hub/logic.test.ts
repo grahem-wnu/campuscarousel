@@ -46,7 +46,13 @@ describe('costLabel / bestCost', () => {
     expect(costLabel(0)).toBe('Free');
     expect(costLabel(undefined)).toBe('');
     expect(costLabel(42000)).toBe('$42,000');
-    expect(bestCost(college({ tuitionOutOfState: 40000, estimatedCostAfterAid: 22000 }))).toBe(22000);
+    // bestCost is an ANNUAL figure: real net price wins, then full COA, then tuition. The 4-year
+    // fields (estimatedTotalCost/estimatedCostAfterAid) are intentionally ignored here.
+    expect(
+      bestCost(college({ estimatedNetPriceAfterAid: 19000, costOfAttendanceOutOfState: 58000, tuitionOutOfState: 40000 })),
+    ).toBe(19000);
+    expect(bestCost(college({ costOfAttendanceOutOfState: 58000, tuitionOutOfState: 40000 }))).toBe(58000);
+    expect(bestCost(college({ tuitionOutOfState: 40000, estimatedCostAfterAid: 22000 }))).toBe(40000);
     expect(bestCost(college({ tuitionInState: 12000 }))).toBe(12000);
     expect(bestCost(college())).toBeUndefined();
   });

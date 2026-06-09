@@ -63,6 +63,14 @@ const contactInfo = z
   })
   .strict();
 
+const testimonial = z
+  .object({
+    quote: z.string().min(1).max(2000),
+    attribution: z.string().max(200).optional(),
+    source: url.optional(),
+  })
+  .strict();
+
 /** The set of College fields a caller may edit. Used (partial) by create and update. */
 const editableCollege = {
   name: z.string().min(1).max(200),
@@ -74,8 +82,17 @@ const editableCollege = {
   hasAcceleratedBSN: z.boolean().optional(),
   isTopPick: z.boolean().optional(),
   ranking: z.string().max(120).optional(),
+  overview: z.string().max(8000).optional(),
+  admissionsDeepDive: z.string().max(8000).optional(),
+  nclexPassRate: z.string().max(120).optional(),
+  employmentRate: z.string().max(120).optional(),
   tuitionInState: z.number().nonnegative().max(1_000_000).optional(),
   tuitionOutOfState: z.number().nonnegative().max(1_000_000).optional(),
+  costOfAttendanceOutOfState: z.number().nonnegative().max(1_000_000).optional(),
+  estimatedNetPriceAfterAid: z.number().nonnegative().max(1_000_000).optional(),
+  percentReceivingAid: z.string().max(120).optional(),
+  avgAidAmount: z.number().nonnegative().max(1_000_000).optional(),
+  applicationFee: z.number().nonnegative().max(10_000).optional(),
   estimatedTotalCost: z.number().nonnegative().max(2_000_000).optional(),
   estimatedCostAfterAid: z.number().nonnegative().max(2_000_000).optional(),
   acceptanceRateNursing: z.string().max(60).optional(),
@@ -86,8 +103,12 @@ const editableCollege = {
   essayPrompts: z.array(z.string().min(1).max(2000)).max(50).optional(),
   requiredTests: z.array(z.string().min(1).max(120)).max(50).optional(),
   clinicalPartners: z.array(z.string().min(1).max(200)).max(100).optional(),
+  testimonials: z.array(testimonial).max(20).optional(),
+  campusImageUrls: z.array(url).max(20).optional(),
   specialNotes: z.string().max(10000).optional(),
   website: url.optional(),
+  dataSources: z.array(url).max(50).optional(),
+  dataAsOf: z.string().max(40).optional(),
   branding: branding.optional(),
   contactInfo: contactInfo.optional(),
   status: z.enum(COLLEGE_STATUSES).optional(),
