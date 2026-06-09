@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Badge,
@@ -47,6 +47,7 @@ export default function CollegeDetailPage() {
   const [tab, setTab] = useState<TabId>('overview');
   const [showEdit, setShowEdit] = useState(false);
   const [busy, setBusy] = useState(false);
+  const pollRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const load = useCallback(async () => {
     setError(null);
@@ -63,6 +64,14 @@ export default function CollegeDetailPage() {
     setLoading(true);
     void load();
   }, [load]);
+
+  // While this college is mid-hydration, poll so an async refresh fills the page in without a manual
+  // reload (mirrors the list view). hydrationMeta(...).busy is true only for pending/in-progress.
+  useEffect(() => {
+    if (!college || !hydrationMeta(college.hydrationStatus)?.busy) return;
+    pollRef.current = setTimeout(() => void load(), 4000);
+    return () => clearTimeout(pollRef.current);
+  }, [college, load]);
 
   async function onEdit(input: CollegeInput): Promise<void> {
     setBusy(true);
