@@ -46,14 +46,21 @@ export interface AiOptions {
 
 /** Run a prompt through the shared web-grounded Bedrock loop and return the model's final text.
  *  Web search is used when `AI_WEB_SEARCH` is on; otherwise it answers from model knowledge.
- *  Throws on a missing model id / invoker error — callers catch and degrade. */
-async function invokeText(prompt: string, options: AiOptions): Promise<string> {
+ *  `maxRounds`/`maxTokens` are tunable: web-grounded enumeration needs enough rounds to finish
+ *  searching AND a final round to emit the JSON (too few → the model is cut off mid-search and
+ *  returns nothing). Throws on a missing model id / invoker error — callers catch and degrade. */
+async function invokeText(
+  prompt: string,
+  options: AiOptions,
+  tune: { maxRounds?: number; maxTokens?: number } = {},
+): Promise<string> {
   const { text } = await converseWithSearch(prompt, {
     modelId: options.modelId,
     invoker: options.invoker,
     searcher: options.searcher,
     webSearch: options.webSearch,
-    maxTokens: 2048,
+    maxRounds: tune.maxRounds,
+    maxTokens: tune.maxTokens ?? 2048,
   });
   return text;
 }
@@ -140,6 +147,8 @@ function buildDiscoverPrompt(input: DiscoverInput): string {
   const limit = input.limit ?? 8;
   return [
     `List up to ${limit} U.S. colleges with ${wants.join(', ')}.`,
+    'Use web_search to verify current programs (a few targeted searches are enough), then STOP',
+    'searching and output the result. Include every matching school you can — partial data is fine.',
     'Respond with ONLY a JSON array (no prose, no code fences). Each element:',
     '{"name": string, "location": string, "state": string,',
     '"programType": "direct-admit-BSN"|"pre-nursing-secondary-app"|"ABSN-only"|"RN-to-BSN-only",',
@@ -153,7 +162,10 @@ function buildDiscoverPrompt(input: DiscoverInput): string {
 export function makeBedrockDiscoverer(options: AiOptions = {}): Discoverer {
   return async (input) => {
     try {
-      const text = await invokeText(buildDiscoverPrompt(input), options);
+      // Web-grounded enumeration: give it room to search several sources THEN emit the array. With
+      // the default 4 rounds the model burns them all searching and returns nothing. Runs async on
+      // the 300s worker, so the extra rounds are affordable.
+      const text = await invokeText(buildDiscoverPrompt(input), options, { maxRounds: 7, maxTokens: 4096 });
       const json = extractJson(text);
       if (!Array.isArray(json)) return [];
       const limit = input.limit ?? 8;

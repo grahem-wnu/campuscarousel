@@ -14,15 +14,21 @@ import type { RouteDef } from '../../shared/api/index.js';
 import { dataFromEnv, type Data } from '../../shared/data/index.js';
 import { makeHandlers } from './handlers.js';
 import { makeSqsEnqueuer } from './enqueue.js';
+import { makeSqsDiscoverEnqueuer } from './discover.js';
 
 let cached: Data | undefined;
 const getData = (): Data => (cached ??= dataFromEnv());
-const handlers = makeHandlers({ getData, dispatch: makeSqsEnqueuer(getData) });
+const handlers = makeHandlers({
+  getData,
+  dispatch: makeSqsEnqueuer(getData),
+  discoverDispatch: makeSqsDiscoverEnqueuer(getData),
+});
 
 export const routes: RouteDef[] = [
   { method: 'GET', path: '/colleges', handler: handlers.list },
   { method: 'POST', path: '/colleges', handler: handlers.create },
   { method: 'POST', path: '/colleges/discover', handler: handlers.discover },
+  { method: 'GET', path: '/colleges/discover/:jobId', handler: handlers.discoverStatus },
   { method: 'POST', path: '/colleges/hydrate-all', handler: handlers.hydrateAll },
   { method: 'POST', path: '/colleges/bulk-add', handler: handlers.bulkAdd },
   { method: 'GET', path: '/colleges/:id', handler: handlers.detail },

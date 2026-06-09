@@ -182,6 +182,9 @@ export const checklistSchema = z
 
 export const idParamSchema = z.object({ id: z.string().min(1) });
 
+/** GET /colleges/discover/:jobId path param. */
+export const jobIdParamSchema = z.object({ jobId: z.string().min(1) });
+
 export type CreateInput = z.infer<typeof createSchema>;
 export type UpdateInput = z.infer<typeof updateSchema>;
 export type ListQuery = z.infer<typeof listQuerySchema>;

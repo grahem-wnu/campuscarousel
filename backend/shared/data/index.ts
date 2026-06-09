@@ -36,6 +36,7 @@ import type {
   College,
   Contact,
   Course,
+  DiscoveryJob,
   Essay,
   Goal,
   Interview,
@@ -103,6 +104,12 @@ export function makeData(client: TableClient) {
     idField: 'collegeId',
     collection: 'COLLEGES',
     hydratable: true,
+  });
+
+  // Transient async discovery jobs (no collection — fetched only by id while polling).
+  const discoveryJobs = makeDetailsRepo<DiscoveryJob, 'jobId'>(client, {
+    prefix: 'DISCOVERY',
+    idField: 'jobId',
   });
 
   const scholarships = makeDetailsRepo<Scholarship, 'scholarshipId'>(client, {
@@ -182,6 +189,7 @@ export function makeData(client: TableClient) {
     clinical,
     teas,
     colleges,
+    discoveryJobs,
     scholarships,
     goals,
     courses,
