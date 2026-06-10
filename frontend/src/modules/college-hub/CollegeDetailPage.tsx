@@ -38,7 +38,7 @@ import {
 } from './api';
 import type { ChecklistItem, College, CollegeInput, CollegeNote } from './types';
 
-type TabId = 'overview' | 'notes' | 'checklist' | 'fit';
+type TabId = 'overview' | 'notes' | 'checklist' | 'fit' | 'photos';
 
 /** College detail — branded header + Overview / Notes / Checklist / Fit tabs, edit, refresh, delete.
  *  Touchpoints, Visits, and Benchmark tabs are owned by their own modules and slot in separately. */
@@ -132,6 +132,7 @@ export default function CollegeDetailPage() {
     { id: 'notes', label: 'Notes' },
     { id: 'checklist', label: 'Checklist' },
     { id: 'fit', label: 'Fit analysis' },
+    { id: 'photos', label: 'Photos' },
   ];
 
   return (
@@ -194,9 +195,6 @@ export default function CollegeDetailPage() {
         </div>
       </Card>
 
-      {/* AI-discovered campus photos (web-grounded hydration); a richer set below the cached hero. */}
-      <CampusGallery urls={college.campusImageUrls} />
-
       <Tabs items={tabs} value={tab} onChange={(t) => setTab(t as TabId)} />
 
       {tab === 'overview' ? (
@@ -205,6 +203,8 @@ export default function CollegeDetailPage() {
         <NotesTab collegeId={id} />
       ) : tab === 'checklist' ? (
         <ChecklistTab college={college} onSaved={load} />
+      ) : tab === 'photos' ? (
+        <PhotosTab college={college} busy={busy} onRefresh={() => void onRefresh()} />
       ) : (
         <Card className="space-y-2">
           <h2 className="text-sm font-semibold text-ink-800">Fit analysis</h2>
@@ -223,25 +223,51 @@ export default function CollegeDetailPage() {
   );
 }
 
-/** Campus photo banner. Best-effort URLs from hydration: any image that fails to load is dropped,
- *  and the whole strip disappears if none survive — so a broken URL never leaves a gap. */
-function CampusGallery({ urls }: { urls?: string[] }) {
+/** Photos tab — every campus image we have: the cached hero (downloaded + stored by the assets
+ *  worker, always stable) first, then any AI-discovered web URLs from hydration, deduped. Each image
+ *  drops itself if it fails to load, so a broken hotlink never leaves a gap. When nothing survives we
+ *  show an empty state with a Refresh action (re-hydrate fetches a fresh campus photo + searches the
+ *  web for more). */
+function PhotosTab({ college, busy, onRefresh }: { college: College; busy: boolean; onRefresh: () => void }) {
+  const all = [campusImageSrc(college), ...(college.campusImageUrls ?? [])].filter(
+    (u): u is string => Boolean(u),
+  );
+  const photos = Array.from(new Set(all));
   const [broken, setBroken] = useState<Set<string>>(() => new Set());
-  const shown = (urls ?? []).filter((u) => !broken.has(u)).slice(0, 4);
-  if (shown.length === 0) return null;
+  const shown = photos.filter((u) => !broken.has(u));
+
+  if (shown.length === 0) {
+    return (
+      <Card className="space-y-3 py-8 text-center">
+        <p className="text-sm text-ink-500">No campus photos yet.</p>
+        <p className="mx-auto max-w-sm text-xs text-ink-400">
+          Refresh fetches a campus photo and searches the web for more — they’ll appear here once found.
+        </p>
+        <div className="flex justify-center pt-1">
+          <Button size="sm" variant="outline" icon="course" loading={busy} onClick={onRefresh}>Refresh</Button>
+        </div>
+      </Card>
+    );
+  }
+
   return (
-    <div className="grid auto-cols-fr grid-flow-col gap-2 overflow-hidden rounded-xl" style={{ height: 160 }}>
-      {shown.map((url) => (
-        <img
-          key={url}
-          src={url}
-          alt=""
-          loading="lazy"
-          className="h-full w-full object-cover"
-          onError={() => setBroken((prev) => new Set(prev).add(url))}
-        />
-      ))}
-    </div>
+    <Card className="space-y-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        {shown.map((url) => (
+          <img
+            key={url}
+            src={url}
+            alt={`${college.name} campus`}
+            loading="lazy"
+            className="aspect-[4/3] w-full rounded-lg object-cover"
+            onError={() => setBroken((prev) => new Set(prev).add(url))}
+          />
+        ))}
+      </div>
+      {college.campusImageCredit ? (
+        <p className="text-[10px] text-ink-400" title={college.campusImageCredit}>{college.campusImageCredit}</p>
+      ) : null}
+    </Card>
   );
 }
 
