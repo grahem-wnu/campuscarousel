@@ -17,6 +17,8 @@ import {
   makeCollegeNotes,
   makeConversations,
   makeProfiles,
+  makeReminderSettings,
+  makeStudentProfile,
   makeTouchpoints,
   makeVisits,
 } from './collections.js';
@@ -36,8 +38,13 @@ import type {
   College,
   Contact,
   Course,
+  DiscoveryJob,
+  Document,
   Essay,
+  FinAidItem,
   Goal,
+  Opportunity,
+  OpportunityDiscoveryJob,
   Interview,
   Recommendation,
   Scholarship,
@@ -105,6 +112,12 @@ export function makeData(client: TableClient) {
     hydratable: true,
   });
 
+  // Transient async discovery jobs (no collection — fetched only by id while polling).
+  const discoveryJobs = makeDetailsRepo<DiscoveryJob, 'jobId'>(client, {
+    prefix: 'DISCOVERY',
+    idField: 'jobId',
+  });
+
   const scholarships = makeDetailsRepo<Scholarship, 'scholarshipId'>(client, {
     prefix: 'SCHOLARSHIP',
     idField: 'scholarshipId',
@@ -116,6 +129,32 @@ export function makeData(client: TableClient) {
     prefix: 'GOAL',
     idField: 'goalId',
     collection: 'GOALS',
+  });
+
+  // Document metadata (v2.1 F2). Bytes live in the private S3 bucket; this is the index + links.
+  const documents = makeDetailsRepo<Document, 'documentId'>(client, {
+    prefix: 'DOCUMENT',
+    idField: 'documentId',
+    collection: 'DOCUMENTS',
+  });
+
+  // Opportunity Finder (v2.1 Module 18): tracked volunteer/shadowing/CNA opportunities + async jobs.
+  const opportunities = makeDetailsRepo<Opportunity, 'opportunityId'>(client, {
+    prefix: 'OPPORTUNITY',
+    idField: 'opportunityId',
+    collection: 'OPPORTUNITIES',
+  });
+  const opportunityDiscoveryJobs = makeDetailsRepo<OpportunityDiscoveryJob, 'jobId'>(client, {
+    prefix: 'OPPORTUNITY_DISCOVERY',
+    idField: 'jobId',
+  });
+
+  // Financial Aid Center (v2.1 Module 19): FAFSA/CSS + per-school aid deadlines, sorted by deadline.
+  const finaid = makeDetailsRepo<FinAidItem, 'itemId'>(client, {
+    prefix: 'FINAID',
+    idField: 'itemId',
+    collection: 'FINAID',
+    sortField: 'deadline', // falls back to createdAt when no deadline set
   });
 
   const courses = makeDetailsRepo<Course, 'courseId'>(client, {
@@ -182,6 +221,7 @@ export function makeData(client: TableClient) {
     clinical,
     teas,
     colleges,
+    discoveryJobs,
     scholarships,
     goals,
     courses,
@@ -202,6 +242,12 @@ export function makeData(client: TableClient) {
     conversations: makeConversations(client),
     budget: makeBudget(client),
     profiles: makeProfiles(client),
+    reminderSettings: makeReminderSettings(client),
+    documents,
+    opportunities,
+    opportunityDiscoveryJobs,
+    studentProfile: makeStudentProfile(client),
+    finaid,
   };
 }
 

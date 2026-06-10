@@ -16,7 +16,7 @@ import type { ComponentType } from "react";
  * If no module has registered a slot, the shell shows a friendly placeholder. This is
  * the only sanctioned way to inject into the shell; modules never edit shell files.
  */
-export type SlotName = "ai-panel" | "quick-add";
+export type SlotName = "ai-panel" | "quick-add" | "onboarding";
 
 type SlotLoader = () => Promise<{ default: ComponentType }>;
 

@@ -155,6 +155,25 @@ export async function converseWithSearch(
   for (let round = 1; round <= maxRounds; round++) {
     // Offer tools every round except the last, so the loop is guaranteed to terminate with prose.
     const offerTools = webSearch && round < maxRounds;
+
+    // On the final round we cut off tools — but a model mid-research will otherwise keep narrating
+    // "let me do one more search" and never synthesize. Tell it explicitly that search is closed and
+    // it must answer now. Appended as a trailing text block so any prior tool_result stays first.
+    if (webSearch && round === maxRounds && maxRounds > 1) {
+      const nudge: TextBlock = {
+        type: 'text',
+        text:
+          'Web search is now closed for this task. Do NOT ask to search again. Using everything you ' +
+          'have already gathered, produce your final answer now, in full, exactly as instructed above.',
+      };
+      const last = messages[messages.length - 1];
+      if (last && last.role === 'user' && Array.isArray(last.content)) {
+        last.content.push(nudge);
+      } else {
+        messages.push({ role: 'user', content: [nudge] });
+      }
+    }
+
     const body: Record<string, unknown> = {
       anthropic_version: 'bedrock-2023-05-31',
       max_tokens: options.maxTokens ?? 2048,

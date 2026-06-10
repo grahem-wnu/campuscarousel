@@ -186,6 +186,9 @@ export function AppShell({ nav }: { nav: AssembledNav }) {
           }
         />
       </Modal>
+
+      {/* First-run onboarding (filled by the onboarding slot; renders itself only when incomplete) */}
+      <SlotOutlet name="onboarding" placeholder={null} />
     </div>
   );
 }

@@ -160,10 +160,23 @@ describe('hydrate / hydrate-all', () => {
 });
 
 describe('discover / bulk-add', () => {
-  it('discover returns candidates without adding anything', async () => {
+  it('discover starts an async job (202) that the stub runs inline, pollable by id, adds nothing', async () => {
     const res = await h.discover(ctx({ body: { state: 'Ohio' } }));
-    expect((res.body as { candidates: { name: string }[] }).candidates[0]?.name).toBe('Discovered U');
-    expect((await data.colleges.list())).toHaveLength(0); // nothing persisted
+    expect(res.status).toBe(202);
+    const job = res.body as { jobId: string; status: string; candidates?: { name: string }[] };
+    expect(job.jobId).toBeTruthy();
+    expect(job.status).toBe('complete'); // inline stub run
+    expect(job.candidates?.[0]?.name).toBe('Discovered U');
+    expect(await data.colleges.list()).toHaveLength(0); // nothing persisted
+
+    // The job is pollable via the status endpoint.
+    const poll = await h.discoverStatus(ctx({ params: { jobId: job.jobId } }));
+    expect(poll.status).toBe(200);
+    expect((poll.body as { candidates: { name: string }[] }).candidates[0]?.name).toBe('Discovered U');
+  });
+
+  it('discoverStatus 404s an unknown job id', async () => {
+    await expect(h.discoverStatus(ctx({ params: { jobId: 'nope' } }))).rejects.toBeTruthy();
   });
 
   it('bulk-add creates several at once', async () => {

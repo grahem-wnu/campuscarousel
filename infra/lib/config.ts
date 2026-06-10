@@ -39,6 +39,9 @@ export interface EnvConfig {
   readonly ssmPrefix: string;
   /** Resource name prefix, e.g. "keiras-journey-staging". */
   readonly namePrefix: string;
+  /** Verified SES sender for the reminder digest (v2.1 F1). Context `reminderSenderEmail`;
+   *  defaults to reminders@<domainName>. Must be a verified SES identity before sends succeed. */
+  readonly reminderSenderEmail: string;
 }
 
 /**
@@ -107,6 +110,8 @@ export function getEnvConfig(app: App, stage: Stage): EnvConfig {
   const bedrockSonnetProfile =
     (app.node.tryGetContext("bedrockSonnetProfile") as string) ||
     "us.anthropic.claude-sonnet-4-20250514-v1:0";
+  const reminderSenderEmail =
+    (app.node.tryGetContext("reminderSenderEmail") as string) || `reminders@${domainName}`;
 
   const envs = (app.node.tryGetContext("envs") as Record<string, Partial<EnvConfig>>) || {};
   const envCtx = envs[stage] || {};
@@ -131,6 +136,7 @@ export function getEnvConfig(app: App, stage: Stage): EnvConfig {
     bedrockSonnetProfile,
     ssmPrefix: `/${proj}/${stage}`,
     namePrefix: `${proj}-${stage}`,
+    reminderSenderEmail,
   };
 }
 

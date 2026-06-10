@@ -4,12 +4,12 @@
 import { api } from '../../shared/api';
 import type {
   College,
-  CollegeCandidate,
   CollegeChecklist,
   CollegeInput,
   CollegeNote,
   ChecklistItem,
   DiscoverFilters,
+  DiscoveryJob,
   ListFilters,
 } from './types';
 
@@ -59,9 +59,15 @@ export function hydrateAll(): Promise<{ requested: number }> {
   return api.post<{ requested: number }>('/colleges/hydrate-all');
 }
 
-export async function discoverColleges(filters: DiscoverFilters): Promise<CollegeCandidate[]> {
-  const res = await api.post<{ candidates: CollegeCandidate[] }>('/colleges/discover', filters);
-  return res.candidates;
+/** Start an async discovery job. Web-grounded discovery runs on the SQS worker (it can exceed the
+ *  30s API budget), so this returns a job to poll via getDiscovery — it does NOT block on results. */
+export function startDiscovery(filters: DiscoverFilters): Promise<DiscoveryJob> {
+  return api.post<DiscoveryJob>('/colleges/discover', filters);
+}
+
+/** Poll a discovery job's status + candidates. */
+export function getDiscovery(jobId: string): Promise<DiscoveryJob> {
+  return api.get<DiscoveryJob>(`/colleges/discover/${encodeURIComponent(jobId)}`);
 }
 
 export function bulkAddColleges(colleges: CollegeInput[]): Promise<{ created: College[]; skipped: string[] }> {

@@ -64,8 +64,21 @@ export interface College extends Timestamped, Hydratable {
   hasAcceleratedBSN?: boolean;
   isTopPick?: boolean;
   ranking?: string;
+  /** AI narrative (2-3 paragraphs): what makes this school/program distinctive + who it fits. */
+  overview?: string;
+  /** AI narrative (1-2 paragraphs): exactly how a student gets in — pathways, timeline, selectivity. */
+  admissionsDeepDive?: string;
+  nclexPassRate?: string;
+  employmentRate?: string;
   tuitionInState?: number;
   tuitionOutOfState?: number;
+  /** Annual full cost of attendance (tuition + fees + housing + food + books) — sticker before aid. */
+  costOfAttendanceOutOfState?: number;
+  /** Annual cost AFTER grants & scholarships — the real out-of-pocket figure; distinct from tuition. */
+  estimatedNetPriceAfterAid?: number;
+  percentReceivingAid?: string;
+  avgAidAmount?: number;
+  applicationFee?: number;
   estimatedTotalCost?: number;
   estimatedCostAfterAid?: number;
   acceptanceRateNursing?: string;
@@ -76,8 +89,16 @@ export interface College extends Timestamped, Hydratable {
   essayPrompts?: string[];
   requiredTests?: string[];
   clinicalPartners?: string[];
+  /** Authentic student voices, each with a source URL for verification. */
+  testimonials?: { quote: string; attribution?: string; source?: string }[];
+  /** URLs to campus/program photos for the branded header gallery. */
+  campusImageUrls?: string[];
   specialNotes?: string;
   website?: string;
+  /** URLs the AI relied on during the most recent hydration (shown as "Sources"). */
+  dataSources?: string[];
+  /** Academic year the hydrated figures reflect, e.g. "2025-2026". */
+  dataAsOf?: string;
   branding?: { logoUrl?: string; primaryColor?: string; secondaryColor?: string; mascot?: string };
   contactInfo?: {
     nursingAdmissionsPhone?: string;
@@ -86,9 +107,51 @@ export interface College extends Timestamped, Hydratable {
     financialAidPhone?: string;
     financialAidUrl?: string;
     campusVisitUrl?: string;
+    netPriceCalculatorUrl?: string;
   };
+  /** Application services this school accepts (e.g. "NursingCAS", "Common App") — v2.1 Module 19. */
+  appServices?: string[];
+  /** True if the nursing program applies through NursingCAS (centralized application service). */
+  usesNursingCAS?: boolean;
   status?: CollegeStatus;
   fitScore?: number;
+}
+
+/** One discovered candidate (College-shaped, name required) — the result of a discovery run. */
+export interface DiscoveredCollege {
+  name: string;
+  location?: string;
+  state?: string;
+  programType?: College['programType'];
+  isDirectAdmit?: boolean;
+  hasBSN?: boolean;
+  ranking?: string;
+  tuitionInState?: number;
+  tuitionOutOfState?: number;
+  website?: string;
+  summary?: string;
+}
+
+/**
+ * A transient async discovery job. The API creates one (status 'pending') and enqueues it; the SQS
+ * worker runs the web-grounded discovery (which can exceed the 30s API budget) and writes the
+ * candidates back; the frontend polls until it settles. PK: DISCOVERY#<jobId>, SK: DETAILS.
+ */
+export interface DiscoveryJob extends Timestamped {
+  jobId: string;
+  status: 'pending' | 'complete' | 'failed';
+  /** The discovery filters echoed from the request, so the worker can run the search. */
+  filters?: {
+    query?: string;
+    state?: string;
+    programType?: College['programType'];
+    maxTuition?: number;
+    directAdmitOnly?: boolean;
+    limit?: number;
+  };
+  candidates?: DiscoveredCollege[];
+  count?: number;
+  error?: string;
 }
 
 export interface CollegeNote extends Timestamped {
@@ -528,5 +591,191 @@ export interface Budget extends Timestamped {
   totalBudget: number;
   currency?: 'USD';
   notes?: string;
+  updatedBy?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Reminder settings (PK: REMINDER_SETTINGS, SK: DETAILS) — global singleton.
+// Drives the scheduled email digest of upcoming/overdue deadlines (v2.1 F1).
+// ---------------------------------------------------------------------------
+
+/** One person the digest emails. `includePrivate` is true ONLY for Keira's own address — it
+ *  gates whether items sourced from her private journal entries appear in that recipient's email. */
+export interface ReminderRecipient {
+  label: string; // "Keira", "Mom", "Dad"
+  email: string;
+  includePrivate: boolean;
+}
+
+export interface ReminderSettings extends Timestamped {
+  enabled: boolean;
+  cadence: 'daily' | 'weekly';
+  sendHourUTC: number; // 0-23 — the digest fires only on this UTC hour
+  weeklyDayOfWeek: number; // 0-6 (0 = Sunday); used when cadence = 'weekly'
+  horizonDays: number; // look-ahead window for "upcoming" items
+  recipients: ReminderRecipient[];
+  lastSentAt?: string; // ISO timestamp of the last successful send (idempotency guard)
+  // Event ids already emailed in a scheduled digest. Items here are NEVER re-sent — each deadline
+  // appears in exactly one weekly digest and never nags again (Grahem: "weekly, never repeat").
+  notifiedEventIds?: string[];
+  updatedBy?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Document (PK: DOCUMENT#<documentId>, SK: DETAILS; collection GSI1PK=DOCUMENTS) — v2.1 F2.
+// Metadata for a file stored in the private documents S3 bucket; bytes are never in DynamoDB.
+// Visibility follows the family/private model (private = Keira only; AI sees all when she's caller).
+// ---------------------------------------------------------------------------
+export type DocumentCategory =
+  | 'certificate'
+  | 'essay'
+  | 'application-doc'
+  | 'recommendation'
+  | 'transcript'
+  | 'financial-aid'
+  | 'visit-photo'
+  | 'other';
+
+/** Optional link to the entity a document belongs to; absent = lives only in the general vault. */
+export interface DocumentLink {
+  type: 'certification' | 'essay' | 'application' | 'contact' | 'college' | 'scholarship';
+  id: string;
+}
+
+export interface Document extends Timestamped {
+  documentId: string;
+  fileName: string;
+  contentType: string;
+  sizeBytes: number;
+  s3Key: string; // server-generated; never client-supplied
+  category: DocumentCategory;
+  linkedEntity?: DocumentLink;
+  visibility: Visibility;
+  uploadedBy: string;
+  notes?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Opportunity (PK: OPPORTUNITY#<id>, SK: DETAILS; collection GSI1PK=OPPORTUNITIES) — v2.1 Module 18.
+// Volunteer / shadowing / CNA / summer programs the family can pursue to build clinical hours. The
+// app DISCOVERS these via web-grounded AI (like colleges/scholarships) and tracks the ones she picks.
+// ---------------------------------------------------------------------------
+export type OpportunityType =
+  | 'hospital-volunteer'
+  | 'shadowing'
+  | 'cna-program'
+  | 'summer-program'
+  | 'job'
+  | 'club'
+  | 'other';
+
+export type OpportunityStatus =
+  | 'discovered'
+  | 'interested'
+  | 'applied'
+  | 'active'
+  | 'completed'
+  | 'dismissed';
+
+export interface Opportunity extends Timestamped {
+  opportunityId: string;
+  name: string;
+  organization?: string;
+  type: OpportunityType;
+  location?: string;
+  distanceNote?: string;
+  description?: string;
+  eligibility?: string[];
+  timeCommitment?: string;
+  cost?: number;
+  applicationUrl?: string;
+  contact?: { name?: string; email?: string; phone?: string };
+  applicationDeadline?: string;
+  status: OpportunityStatus;
+  linkedActivityId?: string;
+  linkedClinicalId?: string;
+  dataSources?: string[];
+  addedBy?: 'ai-discovered' | 'manual';
+}
+
+/** One discovered opportunity (name required) — the result of a discovery run. */
+export interface OpportunityCandidate {
+  name: string;
+  organization?: string;
+  type?: OpportunityType;
+  location?: string;
+  distanceNote?: string;
+  description?: string;
+  eligibility?: string[];
+  timeCommitment?: string;
+  cost?: number;
+  applicationUrl?: string;
+  applicationDeadline?: string;
+}
+
+/**
+ * Transient async opportunity-discovery job (mirrors DiscoveryJob). The API creates one and enqueues
+ * it; the SQS worker runs the web-grounded search and writes candidates back; the frontend polls.
+ * PK: OPPORTUNITY_DISCOVERY#<jobId>, SK: DETAILS.
+ */
+export interface OpportunityDiscoveryJob extends Timestamped {
+  jobId: string;
+  status: 'pending' | 'complete' | 'failed';
+  filters?: { type?: OpportunityType; location?: string; query?: string; limit?: number };
+  candidates?: OpportunityCandidate[];
+  count?: number;
+  error?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Student profile (PK: STUDENT_PROFILE, SK: DETAILS) — global singleton. Keira's academic profile,
+// captured by the first-run onboarding wizard (v2.1 F4). Distinct from the per-user account `Profile`
+// (USER#<id>). All fields optional so the wizard can save incrementally. `onboardingComplete` gates
+// whether the wizard reappears.
+// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Financial aid item (PK: FINAID#<itemId>, SK: DETAILS; collection GSI1PK=FINAID) — v2.1 Module 19.
+// FAFSA/CSS + per-school aid deadlines and award letters. Feeds the Master Timeline + reminder digest.
+// ---------------------------------------------------------------------------
+export type FinAidKind =
+  | 'fafsa'
+  | 'css-profile'
+  | 'state-aid'
+  | 'institutional-aid'
+  | 'loan'
+  | 'award-letter'
+  | 'other';
+
+export type FinAidStatus = 'not-started' | 'in-progress' | 'submitted' | 'received' | 'n/a';
+
+export interface FinAidItem extends Timestamped {
+  itemId: string;
+  kind: FinAidKind;
+  title: string;
+  relatedCollegeId?: string;
+  openDate?: string;
+  deadline?: string;
+  priorityDeadline?: string;
+  status: FinAidStatus;
+  amountOffered?: number;
+  amountAccepted?: number;
+  documentId?: string; // optional link to an uploaded award letter (v2.1 F2)
+  notes?: string;
+}
+
+export interface StudentProfile extends Timestamped {
+  name?: string;
+  highSchool?: string;
+  district?: string;
+  location?: string;
+  graduationYear?: number;
+  currentGPA?: number;
+  gpaType?: 'weighted' | 'unweighted';
+  careerGoal?: string;
+  dreamSchool?: string;
+  interests?: string[];
+  currentActivities?: { name: string; type?: string; organization?: string }[];
+  budget?: { total?: number; currency?: 'USD'; notes?: string };
+  onboardingComplete?: boolean;
   updatedBy?: string;
 }

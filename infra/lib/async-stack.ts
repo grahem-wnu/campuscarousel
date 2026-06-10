@@ -1,14 +1,16 @@
 import { join } from "node:path";
 import { CfnOutput, Duration, Stack, type StackProps } from "aws-cdk-lib";
 import type { Table } from "aws-cdk-lib/aws-dynamodb";
+import { Rule, Schedule } from "aws-cdk-lib/aws-events";
+import { LambdaFunction as LambdaFunctionTarget } from "aws-cdk-lib/aws-events-targets";
 import { Code, Function as LambdaFunction, Runtime } from "aws-cdk-lib/aws-lambda";
 import { SqsEventSource } from "aws-cdk-lib/aws-lambda-event-sources";
 import { RetentionDays } from "aws-cdk-lib/aws-logs";
 import { Queue } from "aws-cdk-lib/aws-sqs";
 import type { Construct } from "constructs";
-import type { EnvConfig } from "./config";
+import { envHostname, type EnvConfig } from "./config";
 import { putOutput } from "./ssm";
-import { bedrockInvokeStatement, ssmReadConfigStatement } from "./policies";
+import { bedrockInvokeStatement, sesSendStatement, ssmReadConfigStatement } from "./policies";
 
 export interface AsyncStackProps extends StackProps {
   readonly config: EnvConfig;
@@ -30,6 +32,7 @@ export class AsyncStack extends Stack {
   public readonly hydrationQueue: Queue;
   public readonly deadLetterQueue: Queue;
   public readonly workerFunctionName: string;
+  public readonly digestFunctionName: string;
 
   constructor(scope: Construct, id: string, props: AsyncStackProps) {
     super(scope, id, props);
@@ -90,5 +93,43 @@ export class AsyncStack extends Stack {
 
     new CfnOutput(this, "HydrationQueueUrl", { value: this.hydrationQueue.queueUrl });
     new CfnOutput(this, "HydrationDlqUrl", { value: this.deadLetterQueue.queueUrl });
+
+    // -----------------------------------------------------------------------
+    // Reminder digest (v2.1 F1): an hourly EventBridge schedule fires the digest Lambda, which
+    // gates to the configured send hour/weekday (settings live in DynamoDB) and emails each
+    // recipient's upcoming/overdue deadlines via SES. 60s timeout — it's a quick read + send.
+    // -----------------------------------------------------------------------
+    const appUrl = `https://${envHostname(config)}`;
+    const digest = new LambdaFunction(this, "ReminderDigest", {
+      functionName: `${config.namePrefix}-reminder-digest`,
+      runtime: Runtime.NODEJS_20_X,
+      handler: "index.handler",
+      // Real asset built by `npm run -w backend build:lambda` (CI builds before deploy).
+      code: Code.fromAsset(join(__dirname, "../../backend/dist/digest")),
+      timeout: Duration.seconds(60),
+      memorySize: 256,
+      logRetention: RetentionDays.ONE_MONTH,
+      environment: {
+        TABLE_NAME: table.tableName,
+        REMINDER_SENDER_EMAIL: config.reminderSenderEmail,
+        APP_URL: appUrl,
+        STAGE: config.stage,
+      },
+    });
+    this.digestFunctionName = digest.functionName;
+
+    // Read all entities for the digest + update lastSentAt on the settings singleton.
+    table.grantReadWriteData(digest);
+    digest.addToRolePolicy(sesSendStatement(this.region, this.account));
+
+    // Fire hourly at minute 0; the Lambda itself decides whether this hour/weekday should send.
+    new Rule(this, "ReminderDigestSchedule", {
+      ruleName: `${config.namePrefix}-reminder-digest`,
+      schedule: Schedule.cron({ minute: "0" }),
+      targets: [new LambdaFunctionTarget(digest)],
+    });
+
+    putOutput(this, config, "reminderDigestFn", digest.functionName, "Reminder digest Lambda name");
+    new CfnOutput(this, "ReminderDigestFn", { value: digest.functionName });
   }
 }

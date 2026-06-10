@@ -16,6 +16,8 @@ import type {
   ConversationMessage,
   Benchmark,
   Profile,
+  ReminderSettings,
+  StudentProfile,
   Touchpoint,
   Timestamped,
   Visit,
@@ -331,6 +333,41 @@ export function makeBudget(client: TableClient): BudgetRepo {
   };
 }
 
+// Reminder settings: global singleton (PK=REMINDER_SETTINGS) driving the email digest (v2.1 F1).
+export interface ReminderSettingsRepo {
+  get(): Promise<ReminderSettings | null>;
+  put(input: Omit<ReminderSettings, 'createdAt' | 'updatedAt'>): Promise<ReminderSettings>;
+  update(patch: Partial<Omit<ReminderSettings, 'createdAt' | 'updatedAt'>>): Promise<ReminderSettings>;
+}
+
+export function makeReminderSettings(client: TableClient): ReminderSettingsRepo {
+  const write = async (domain: ReminderSettings): Promise<ReminderSettings> => {
+    await client.put({
+      ...(domain as unknown as Record<string, unknown>),
+      PK: 'REMINDER_SETTINGS',
+      SK: SK_DETAILS,
+    });
+    return domain;
+  };
+  return {
+    async get() {
+      const item = await client.get('REMINDER_SETTINGS', SK_DETAILS);
+      return item ? toDomain<ReminderSettings>(item) : null;
+    },
+    async put(input) {
+      const existing = await client.get('REMINDER_SETTINGS', SK_DETAILS);
+      const now = isoNow();
+      return write({ ...input, createdAt: (existing?.createdAt as string | undefined) ?? now, updatedAt: now });
+    },
+    async update(patch) {
+      const existing = await client.get('REMINDER_SETTINGS', SK_DETAILS);
+      if (!existing) throw new NotFoundError('REMINDER_SETTINGS', 'singleton');
+      const current = toDomain<ReminderSettings>(existing);
+      return write({ ...current, ...patch, createdAt: current.createdAt, updatedAt: isoNow() });
+    },
+  };
+}
+
 export interface ProfileRepo {
   get(userId: string): Promise<Profile | null>;
   put(input: Omit<Profile, 'createdAt' | 'updatedAt'>): Promise<Profile>;
@@ -358,6 +395,36 @@ export function makeProfiles(client: TableClient): ProfileRepo {
       if (!existing) throw new NotFoundError('USER', userId);
       const current = toDomain<Profile>(existing);
       return write({ ...current, ...patch, userId, createdAt: current.createdAt, updatedAt: isoNow() });
+    },
+  };
+}
+
+// Student profile: global singleton (PK=STUDENT_PROFILE) for the onboarding wizard (v2.1 F4).
+export interface StudentProfileRepo {
+  get(): Promise<StudentProfile | null>;
+  put(input: Omit<StudentProfile, 'createdAt' | 'updatedAt'>): Promise<StudentProfile>;
+}
+
+export function makeStudentProfile(client: TableClient): StudentProfileRepo {
+  return {
+    async get() {
+      const item = await client.get('STUDENT_PROFILE', SK_DETAILS);
+      return item ? toDomain<StudentProfile>(item) : null;
+    },
+    async put(input) {
+      const existing = await client.get('STUDENT_PROFILE', SK_DETAILS);
+      const now = isoNow();
+      const domain: StudentProfile = {
+        ...input,
+        createdAt: (existing?.createdAt as string | undefined) ?? now,
+        updatedAt: now,
+      };
+      await client.put({
+        ...(domain as unknown as Record<string, unknown>),
+        PK: 'STUDENT_PROFILE',
+        SK: SK_DETAILS,
+      });
+      return domain;
     },
   };
 }

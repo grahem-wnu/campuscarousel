@@ -35,8 +35,17 @@ export interface College {
   hasAcceleratedBSN?: boolean;
   isTopPick?: boolean;
   ranking?: string;
+  overview?: string;
+  admissionsDeepDive?: string;
+  nclexPassRate?: string;
+  employmentRate?: string;
   tuitionInState?: number;
   tuitionOutOfState?: number;
+  costOfAttendanceOutOfState?: number;
+  estimatedNetPriceAfterAid?: number;
+  percentReceivingAid?: string;
+  avgAidAmount?: number;
+  applicationFee?: number;
   estimatedTotalCost?: number;
   estimatedCostAfterAid?: number;
   acceptanceRateNursing?: string;
@@ -47,8 +56,12 @@ export interface College {
   essayPrompts?: string[];
   requiredTests?: string[];
   clinicalPartners?: string[];
+  testimonials?: { quote: string; attribution?: string; source?: string }[];
+  campusImageUrls?: string[];
   specialNotes?: string;
   website?: string;
+  dataSources?: string[];
+  dataAsOf?: string;
   branding?: { logoUrl?: string; primaryColor?: string; secondaryColor?: string; mascot?: string };
   contactInfo?: {
     nursingAdmissionsPhone?: string;
@@ -85,6 +98,17 @@ export interface CollegeCandidate {
   tuitionOutOfState?: number;
   website?: string;
   summary?: string;
+}
+
+/** An async discovery job — created by POST /colleges/discover, polled via GET /colleges/discover/:jobId. */
+export interface DiscoveryJob {
+  jobId: string;
+  status: 'pending' | 'complete' | 'failed';
+  candidates?: CollegeCandidate[];
+  count?: number;
+  error?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface CollegeNote {

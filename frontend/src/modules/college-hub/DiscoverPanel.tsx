@@ -1,8 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button, Card, Field, Icon, Input, Select, Spinner } from '../../shared/ui';
 import { PROGRAM_TYPE_LABEL, costLabel, untrackedCandidates } from './logic';
-import { discoverColleges } from './api';
+import { getDiscovery, startDiscovery } from './api';
 import { PROGRAM_TYPES, type CollegeCandidate, type DiscoverFilters, type ProgramType } from './types';
+
+const POLL_MS = 3000;
+const MAX_POLLS = 60; // ~3 min — web-grounded discovery runs on the 300s worker but is usually <90s
 
 interface Props {
   /** Names already in the tracked list — matching candidates are hidden from results. */
@@ -23,11 +26,32 @@ export function DiscoverPanel({ trackedNames, onAdd, onClose }: Props) {
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Guard against setting state after the panel closes mid-poll.
+  const aliveRef = useRef(true);
+  useEffect(() => () => { aliveRef.current = false; }, []);
+
   async function run() {
     setLoading(true);
     setError(null);
     try {
-      const found = await discoverColleges(filters);
+      // Discovery is async: start a job, then poll until the worker finishes (it searches the web,
+      // which can take up to ~90s and exceeds the API's synchronous budget).
+      const job = await startDiscovery(filters);
+      let current = job;
+      for (let i = 0; current.status === 'pending' && i < MAX_POLLS; i++) {
+        await new Promise((r) => setTimeout(r, POLL_MS));
+        if (!aliveRef.current) return;
+        current = await getDiscovery(job.jobId);
+      }
+      if (current.status === 'failed') {
+        setError(current.error || 'Discovery failed. Try again.');
+        return;
+      }
+      if (current.status === 'pending') {
+        setError('Discovery is taking longer than expected — please try again in a moment.');
+        return;
+      }
+      const found = current.candidates ?? [];
       // Hide candidates already in the list so the user can't re-add a tracked school.
       const fresh = untrackedCandidates(found, trackedNames);
       setHiddenCount(found.length - fresh.length);
@@ -35,9 +59,9 @@ export function DiscoverPanel({ trackedNames, onAdd, onClose }: Props) {
       setSelected(new Set(fresh.map((c) => c.name)));
       setRan(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Discovery failed. Try again.');
+      if (aliveRef.current) setError(err instanceof Error ? err.message : 'Discovery failed. Try again.');
     } finally {
-      setLoading(false);
+      if (aliveRef.current) setLoading(false);
     }
   }
 
@@ -109,8 +133,9 @@ export function DiscoverPanel({ trackedNames, onAdd, onClose }: Props) {
       {error ? <p className="mt-3 text-sm text-error-600">{error}</p> : null}
 
       {loading ? (
-        <div className="flex justify-center py-8">
+        <div className="flex flex-col items-center gap-2 py-8">
           <Spinner />
+          <p className="text-sm text-primary-700">Searching the web for programs… this can take up to a minute.</p>
         </div>
       ) : ran && results.length === 0 ? (
         <p className="mt-4 text-center text-sm text-primary-700">
