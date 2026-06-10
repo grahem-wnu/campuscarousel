@@ -37,6 +37,10 @@ export function configureAmplify(): void {
 export interface AuthUser {
   username: string;
   role: Role;
+  /** The family/tenant this user belongs to (SaaS). */
+  tenantId?: string;
+  /** Platform super-admin (Grahem) — gates the admin console. */
+  platformAdmin?: boolean;
 }
 
 function parseRole(claim: unknown): Role {
@@ -55,7 +59,9 @@ export async function getCurrentAuthUser(): Promise<AuthUser | null> {
     const claims = idToken.payload;
     const username = String(claims["cognito:username"] ?? claims["username"] ?? "");
     if (!username) return null;
-    return { username, role: parseRole(claims["custom:role"]) };
+    const tenantId = typeof claims["custom:tenantId"] === "string" ? (claims["custom:tenantId"] as string) : undefined;
+    const platformAdmin = claims["custom:platformAdmin"] === "true" || claims["custom:platformAdmin"] === true;
+    return { username, role: parseRole(claims["custom:role"]), tenantId, platformAdmin };
   } catch {
     return null;
   }
