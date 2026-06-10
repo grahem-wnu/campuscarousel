@@ -25,6 +25,20 @@ export interface Hydratable {
 }
 
 // ---------------------------------------------------------------------------
+// Tenant (PK: TENANT#<tenantId>, SK: DETAILS) — the one intentionally-GLOBAL namespace (SaaS
+// platform). A tenant is a family. Written/read via the un-scoped base client (never tenant-prefixed),
+// and enumerable via a GSI1PK='TENANTS' collection so background jobs can iterate all families.
+// ---------------------------------------------------------------------------
+export interface Tenant extends Timestamped {
+  tenantId: string;
+  familyName: string;
+  plan: 'free' | 'family';
+  status: 'active' | 'suspended' | 'past_due';
+  /** Parental-consent capture (hook for the compliance sub-project). */
+  consent?: { acceptedAt?: string; tosVersion?: string; byEmail?: string };
+}
+
+// ---------------------------------------------------------------------------
 // User profile (PK: USER#<userId>, SK: PROFILE)
 // ---------------------------------------------------------------------------
 export interface Profile extends Timestamped {

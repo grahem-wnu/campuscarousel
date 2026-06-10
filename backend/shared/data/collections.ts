@@ -18,6 +18,7 @@ import type {
   Profile,
   ReminderSettings,
   StudentProfile,
+  Tenant,
   Touchpoint,
   Timestamped,
   Visit,
@@ -425,6 +426,53 @@ export function makeStudentProfile(client: TableClient): StudentProfileRepo {
         SK: SK_DETAILS,
       });
       return domain;
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Tenant registry (PK: TENANT#<id>) — the one GLOBAL namespace (SaaS platform). Always built on the
+// UN-scoped base client, so registry keys are never tenant-prefixed. Enumerable via GSI1PK='TENANTS'.
+// ---------------------------------------------------------------------------
+export interface TenantRepo {
+  get(tenantId: string): Promise<Tenant | null>;
+  create(input: Omit<Tenant, 'createdAt' | 'updatedAt'>): Promise<Tenant>;
+  update(
+    tenantId: string,
+    patch: Partial<Omit<Tenant, 'tenantId' | 'createdAt' | 'updatedAt'>>,
+  ): Promise<Tenant>;
+  list(): Promise<Tenant[]>;
+}
+
+export function makeTenants(client: TableClient): TenantRepo {
+  const write = async (domain: Tenant): Promise<Tenant> => {
+    await client.put({
+      ...(domain as unknown as Record<string, unknown>),
+      PK: `TENANT#${domain.tenantId}`,
+      SK: SK_DETAILS,
+      GSI1PK: 'TENANTS',
+      GSI1SK: dateSortKey(domain.createdAt, domain.tenantId),
+    });
+    return domain;
+  };
+  return {
+    async get(tenantId) {
+      const item = await client.get(`TENANT#${tenantId}`, SK_DETAILS);
+      return item ? toDomain<Tenant>(item) : null;
+    },
+    async create(input) {
+      const now = isoNow();
+      return write({ ...input, createdAt: now, updatedAt: now });
+    },
+    async update(tenantId, patch) {
+      const existing = await client.get(`TENANT#${tenantId}`, SK_DETAILS);
+      if (!existing) throw new NotFoundError('TENANT', tenantId);
+      const current = toDomain<Tenant>(existing);
+      return write({ ...current, ...patch, tenantId, createdAt: current.createdAt, updatedAt: isoNow() });
+    },
+    async list() {
+      const items = await client.queryIndex('GSI1', 'TENANTS', { ascending: true });
+      return items.map((i) => toDomain<Tenant>(i));
     },
   };
 }
