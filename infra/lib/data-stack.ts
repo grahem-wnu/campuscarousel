@@ -6,8 +6,9 @@ import {
   Table,
   TableEncryption,
 } from "aws-cdk-lib/aws-dynamodb";
+import { BlockPublicAccess, Bucket, BucketEncryption, HttpMethods } from "aws-cdk-lib/aws-s3";
 import type { Construct } from "constructs";
-import type { EnvConfig } from "./config";
+import { envHostname, type EnvConfig } from "./config";
 import { putOutput } from "./ssm";
 
 export interface DataStackProps extends StackProps {
@@ -30,6 +31,7 @@ export interface DataStackProps extends StackProps {
  */
 export class DataStack extends Stack {
   public readonly table: Table;
+  public readonly documentsBucket: Bucket;
 
   constructor(scope: Construct, id: string, props: DataStackProps) {
     super(scope, id, props);
@@ -85,5 +87,28 @@ export class DataStack extends Stack {
 
     new CfnOutput(this, "TableName", { value: this.table.tableName });
     new CfnOutput(this, "TableArn", { value: this.table.tableArn });
+
+    // --- Private documents bucket (v2.1 F2) ---
+    // Family file uploads (certs, essays, rec letters, transcripts). NEVER public — all access is via
+    // short-lived presigned URLs minted by the API Lambda. CORS allows the browser to PUT/GET directly.
+    this.documentsBucket = new Bucket(this, "DocumentsBucket", {
+      blockPublicAccess: BlockPublicAccess.BLOCK_ALL,
+      encryption: BucketEncryption.S3_MANAGED,
+      enforceSSL: true,
+      removalPolicy,
+      // staging is ephemeral (destroy → empty first); prod retains.
+      autoDeleteObjects: config.removalPolicy !== "retain",
+      cors: [
+        {
+          allowedMethods: [HttpMethods.PUT, HttpMethods.GET],
+          allowedOrigins: [`https://${envHostname(config)}`, "http://localhost:5173"],
+          allowedHeaders: ["*"],
+          maxAge: 3000,
+        },
+      ],
+    });
+
+    putOutput(this, config, "documentsBucket", this.documentsBucket.bucketName, "Documents S3 bucket");
+    new CfnOutput(this, "DocumentsBucketName", { value: this.documentsBucket.bucketName });
   }
 }
