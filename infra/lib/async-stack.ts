@@ -7,6 +7,7 @@ import { Code, Function as LambdaFunction, Runtime } from "aws-cdk-lib/aws-lambd
 import { SqsEventSource } from "aws-cdk-lib/aws-lambda-event-sources";
 import { RetentionDays } from "aws-cdk-lib/aws-logs";
 import { Queue } from "aws-cdk-lib/aws-sqs";
+import type { IBucket } from "aws-cdk-lib/aws-s3";
 import type { Construct } from "constructs";
 import { envHostname, type EnvConfig } from "./config";
 import { putOutput } from "./ssm";
@@ -15,6 +16,10 @@ import { bedrockInvokeStatement, sesSendStatement, ssmReadConfigStatement } from
 export interface AsyncStackProps extends StackProps {
   readonly config: EnvConfig;
   readonly table: Table;
+  /** Media bucket the assets worker writes campus photos + logos into (from AssetsStack). */
+  readonly assetsBucket: IBucket;
+  /** CloudFront base url for that bucket; the worker stamps `<base>/<key>` onto the college. */
+  readonly assetsBaseUrl: string;
 }
 
 /**
@@ -33,10 +38,13 @@ export class AsyncStack extends Stack {
   public readonly deadLetterQueue: Queue;
   public readonly workerFunctionName: string;
   public readonly digestFunctionName: string;
+  public readonly assetsQueue: Queue;
+  public readonly assetsDeadLetterQueue: Queue;
+  public readonly assetsWorkerFunctionName: string;
 
   constructor(scope: Construct, id: string, props: AsyncStackProps) {
     super(scope, id, props);
-    const { config, table } = props;
+    const { config, table, assetsBucket, assetsBaseUrl } = props;
 
     this.deadLetterQueue = new Queue(this, "HydrationDlq", {
       queueName: `${config.namePrefix}-hydration-dlq`,
@@ -131,5 +139,60 @@ export class AsyncStack extends Stack {
 
     putOutput(this, config, "reminderDigestFn", digest.functionName, "Reminder digest Lambda name");
     new CfnOutput(this, "ReminderDigestFn", { value: digest.functionName });
+
+    // --- Parallel assets pipeline: campus photos + logos -----------------------------------------
+    // A separate queue + worker so imagery fetches (Wikimedia + Clearbit → S3, seconds) run
+    // concurrently with — and never queue behind — the long Bedrock text hydration. The worker
+    // reuses the SAME bundle (backend/dist/hydration); the shared registry dispatches the
+    // `college-assets` message type to its handler. No Bedrock/SSM grant — it only needs S3 + Dynamo.
+    this.assetsDeadLetterQueue = new Queue(this, "AssetsDlq", {
+      queueName: `${config.namePrefix}-assets-dlq`,
+      retentionPeriod: Duration.days(14),
+      enforceSSL: true,
+    });
+
+    this.assetsQueue = new Queue(this, "AssetsQueue", {
+      queueName: `${config.namePrefix}-assets`,
+      // Must be >= the assets worker timeout so a message isn't redelivered mid-processing.
+      visibilityTimeout: Duration.seconds(180),
+      retentionPeriod: Duration.days(4),
+      enforceSSL: true,
+      deadLetterQueue: { queue: this.assetsDeadLetterQueue, maxReceiveCount: 3 },
+    });
+
+    const assetsWorker = new LambdaFunction(this, "AssetsWorker", {
+      functionName: `${config.namePrefix}-assets-worker`,
+      runtime: Runtime.NODEJS_20_X,
+      handler: "index.handler",
+      code: Code.fromAsset(join(__dirname, "../../backend/dist/hydration")),
+      // Image fetch + S3 put is quick; no Bedrock, so a much shorter budget than hydration.
+      timeout: Duration.seconds(120),
+      memorySize: 512,
+      logRetention: RetentionDays.ONE_MONTH,
+      environment: {
+        TABLE_NAME: table.tableName,
+        ASSETS_QUEUE_URL: this.assetsQueue.queueUrl,
+        ASSETS_BUCKET: assetsBucket.bucketName,
+        ASSETS_BASE_URL: assetsBaseUrl,
+        STAGE: config.stage,
+      },
+    });
+    this.assetsWorkerFunctionName = assetsWorker.functionName;
+
+    // One message at a time (matches the hydration worker); failures retry then land in the DLQ.
+    assetsWorker.addEventSource(
+      new SqsEventSource(this.assetsQueue, { batchSize: 1, reportBatchItemFailures: true }),
+    );
+
+    // Least-privilege: DynamoDB CRUD on the table + write objects to the media bucket. No Bedrock/SSM.
+    table.grantReadWriteData(assetsWorker);
+    assetsBucket.grantPut(assetsWorker);
+
+    putOutput(this, config, "assetsQueueUrl", this.assetsQueue.queueUrl, "Assets SQS URL");
+    putOutput(this, config, "assetsQueueArn", this.assetsQueue.queueArn, "Assets SQS ARN");
+    putOutput(this, config, "assetsDlqUrl", this.assetsDeadLetterQueue.queueUrl, "Assets DLQ URL");
+
+    new CfnOutput(this, "AssetsQueueUrl", { value: this.assetsQueue.queueUrl });
+    new CfnOutput(this, "AssetsDlqUrl", { value: this.assetsDeadLetterQueue.queueUrl });
   }
 }

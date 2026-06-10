@@ -17,6 +17,7 @@ import { CollegeForm } from './CollegeForm';
 import {
   PROGRAM_TYPE_LABEL,
   STATUS_META,
+  campusImageSrc,
   checklistPct,
   costLabel,
   fitBand,
@@ -48,6 +49,8 @@ export default function CollegeDetailPage() {
   const [showEdit, setShowEdit] = useState(false);
   const [busy, setBusy] = useState(false);
   const pollRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  // Swap back to the plain header if the cached campus photo fails to load.
+  const [campusErrored, setCampusErrored] = useState(false);
 
   const load = useCallback(async () => {
     setError(null);
@@ -72,6 +75,9 @@ export default function CollegeDetailPage() {
     pollRef.current = setTimeout(() => void load(), 4000);
     return () => clearTimeout(pollRef.current);
   }, [college, load]);
+
+  // Reset the photo-error flag whenever the cached campus image changes (e.g. after a refresh).
+  useEffect(() => setCampusErrored(false), [college?.campusImageUrl]);
 
   async function onEdit(input: CollegeInput): Promise<void> {
     setBusy(true);
@@ -116,6 +122,8 @@ export default function CollegeDetailPage() {
   const hyd = hydrationMeta(college.hydrationStatus);
   const fit = fitBand(college.fitScore);
   const accent = college.branding?.primaryColor;
+  const campus = campusImageSrc(college);
+  const hero = campus && !campusErrored;
 
   const tabs: TabItem[] = [
     { id: 'overview', label: 'Overview' },
@@ -130,7 +138,23 @@ export default function CollegeDetailPage() {
         ← College Hub
       </button>
 
-      <CampusGallery urls={college.campusImageUrls} />
+      {/* Cached campus hero (downloaded + stored by the assets worker; stable + credited). */}
+      {hero ? (
+        <div className="relative h-44 w-full overflow-hidden rounded-xl bg-surface-sunken sm:h-56">
+          <img
+            src={campus ?? undefined}
+            alt={`${college.name} campus`}
+            className="h-full w-full object-cover"
+            onError={() => setCampusErrored(true)}
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/45 to-transparent" />
+          {college.campusImageCredit ? (
+            <p className="absolute bottom-1.5 right-2 max-w-[80%] truncate text-[10px] text-white/85 drop-shadow" title={college.campusImageCredit}>
+              {college.campusImageCredit}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
 
       <Card
         className="flex flex-wrap items-center gap-4"
@@ -167,6 +191,9 @@ export default function CollegeDetailPage() {
           <Button size="sm" variant="ghost" icon="course" loading={busy} onClick={() => void onRefresh()}>Refresh</Button>
         </div>
       </Card>
+
+      {/* AI-discovered campus photos (web-grounded hydration); a richer set below the cached hero. */}
+      <CampusGallery urls={college.campusImageUrls} />
 
       <Tabs items={tabs} value={tab} onChange={(t) => setTab(t as TabId)} />
 

@@ -115,6 +115,16 @@ export interface College extends Timestamped, Hydratable {
   usesNursingCAS?: boolean;
   status?: CollegeStatus;
   fitScore?: number;
+  // Campus imagery + cached logo, written by the async assets worker (college-assets) — never the
+  // text hydrator. System-owned: not in the create/update schema; merged so a manual edit is kept.
+  /** CloudFront URL of the cached campus photo (sourced from Wikimedia). */
+  campusImageUrl?: string;
+  /** Attribution/license for the campus photo (Wikimedia Commons expects visible credit). */
+  campusImageCredit?: string;
+  /** CloudFront URL of the cached school logo (sourced from Clearbit by website domain). */
+  logoImageUrl?: string;
+  /** Asset-fetch lifecycle, polled independently of `hydrationStatus`. */
+  assetsStatus?: 'pending' | 'in-progress' | 'complete' | 'failed';
 }
 
 /** One discovered candidate (College-shaped, name required) — the result of a discovery run. */
