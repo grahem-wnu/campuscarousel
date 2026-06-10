@@ -39,6 +39,22 @@ export interface Tenant extends Timestamped {
 }
 
 // ---------------------------------------------------------------------------
+// Invite (PK: INVITE#<code>, SK: DETAILS; collection GSI1PK='INVITES') — GLOBAL namespace, base client.
+// A super-admin (Grahem) issues a single-use code to a family's email; redeeming it provisions a tenant.
+// The v1 front door (sub-project 2). Free comp by default.
+// ---------------------------------------------------------------------------
+export interface Invite extends Timestamped {
+  code: string;
+  email: string;
+  familyName?: string;
+  plan: 'free' | 'family';
+  status: 'pending' | 'accepted' | 'revoked' | 'expired';
+  invitedBy: string; // super-admin username
+  expiresAt?: string;
+  acceptedTenantId?: string;
+}
+
+// ---------------------------------------------------------------------------
 // User profile (PK: USER#<userId>, SK: PROFILE)
 // ---------------------------------------------------------------------------
 export interface Profile extends Timestamped {

@@ -15,6 +15,7 @@ import type {
   Conversation,
   ConversationMessage,
   Benchmark,
+  Invite,
   Profile,
   ReminderSettings,
   StudentProfile,
@@ -473,6 +474,53 @@ export function makeTenants(client: TableClient): TenantRepo {
     async list() {
       const items = await client.queryIndex('GSI1', 'TENANTS', { ascending: true });
       return items.map((i) => toDomain<Tenant>(i));
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Invite registry (PK: INVITE#<code>) — GLOBAL (base client, never tenant-prefixed). Enumerable via
+// GSI1PK='INVITES'. Mirrors the tenant registry. Codes are the partition, so lookup-by-code is O(1).
+// ---------------------------------------------------------------------------
+export interface InviteRepo {
+  get(code: string): Promise<Invite | null>;
+  create(input: Omit<Invite, 'createdAt' | 'updatedAt'>): Promise<Invite>;
+  update(
+    code: string,
+    patch: Partial<Omit<Invite, 'code' | 'createdAt' | 'updatedAt'>>,
+  ): Promise<Invite>;
+  list(): Promise<Invite[]>;
+}
+
+export function makeInvites(client: TableClient): InviteRepo {
+  const write = async (domain: Invite): Promise<Invite> => {
+    await client.put({
+      ...(domain as unknown as Record<string, unknown>),
+      PK: `INVITE#${domain.code}`,
+      SK: SK_DETAILS,
+      GSI1PK: 'INVITES',
+      GSI1SK: dateSortKey(domain.createdAt, domain.code),
+    });
+    return domain;
+  };
+  return {
+    async get(code) {
+      const item = await client.get(`INVITE#${code}`, SK_DETAILS);
+      return item ? toDomain<Invite>(item) : null;
+    },
+    async create(input) {
+      const now = isoNow();
+      return write({ ...input, createdAt: now, updatedAt: now });
+    },
+    async update(code, patch) {
+      const existing = await client.get(`INVITE#${code}`, SK_DETAILS);
+      if (!existing) throw new NotFoundError('INVITE', code);
+      const current = toDomain<Invite>(existing);
+      return write({ ...current, ...patch, code, createdAt: current.createdAt, updatedAt: isoNow() });
+    },
+    async list() {
+      const items = await client.queryIndex('GSI1', 'INVITES', { ascending: false });
+      return items.map((i) => toDomain<Invite>(i));
     },
   };
 }

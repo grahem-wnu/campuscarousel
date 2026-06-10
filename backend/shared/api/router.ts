@@ -126,6 +126,9 @@ export function createRouter(routes: RouteDef[]): LambdaHandler {
       if (matched.route.roles && matched.route.roles.length > 0) {
         requireRole(...matched.route.roles)(requester);
       }
+      if (matched.route.platformAdmin && !requester.platformAdmin) {
+        throw Errors.forbidden('Requires platform admin');
+      }
       // SaaS isolation: every request must carry a tenant (or be a platform-admin route). The handler
       // runs inside the tenant's AsyncLocalStorage context so the data layer scopes all keys to it.
       if (!requester.tenantId && !requester.platformAdmin) {

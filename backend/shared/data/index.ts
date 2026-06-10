@@ -16,6 +16,7 @@ import {
   makeCollegeChecklist,
   makeCollegeNotes,
   makeConversations,
+  makeInvites,
   makeProfiles,
   makeReminderSettings,
   makeStudentProfile,
@@ -255,8 +256,9 @@ export function makeData(client: TableClient, base: TableClient = client) {
     opportunityDiscoveryJobs,
     studentProfile: makeStudentProfile(client),
     finaid,
-    // GLOBAL registry — built on the un-scoped base client (never tenant-prefixed).
+    // GLOBAL registries — built on the un-scoped base client (never tenant-prefixed).
     tenants: makeTenants(base),
+    invites: makeInvites(base),
   };
 }
 
