@@ -51,7 +51,7 @@ describe('documents router integration', () => {
     );
     expect(up.statusCode).toBe(200);
     const s3Key = parse(up).s3Key as string;
-    expect(s3Key).toMatch(/^documents\//);
+    expect(s3Key).toMatch(/^T\/test-tenant\/documents\//);
 
     const created = await dispatch(
       event('POST', '/documents', {
