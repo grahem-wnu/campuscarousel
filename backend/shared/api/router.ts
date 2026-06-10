@@ -131,7 +131,12 @@ export function createRouter(routes: RouteDef[]): LambdaHandler {
       }
       // SaaS isolation: every request must carry a tenant (or be a platform-admin route). The handler
       // runs inside the tenant's AsyncLocalStorage context so the data layer scopes all keys to it.
-      if (!requester.tenantId && !requester.platformAdmin) {
+      // Transition compatibility: a request with no tenant claim falls back to DEFAULT_TENANT_ID when
+      // set (the legacy single-family migration tenant), so existing users keep working before their
+      // tokens carry a tenant. With the env unset, a missing claim is rejected (strict / fail closed).
+      const tenantId =
+        requester.tenantId ?? (requester.platformAdmin ? undefined : process.env.DEFAULT_TENANT_ID);
+      if (!tenantId && !requester.platformAdmin) {
         throw Errors.unauthorized('Missing tenant claim');
       }
       const ctx: HandlerContext = {
@@ -140,8 +145,8 @@ export function createRouter(routes: RouteDef[]): LambdaHandler {
         query: normalizeRecord(event.queryStringParameters),
         body: parseBody(event),
       };
-      const result = requester.tenantId
-        ? await runWithTenant(requester.tenantId, () => matched.route.handler(ctx))
+      const result = tenantId
+        ? await runWithTenant(tenantId, () => matched.route.handler(ctx))
         : await matched.route.handler(ctx);
       return json(result.status, result.body);
     } catch (err) {

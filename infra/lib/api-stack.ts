@@ -63,6 +63,9 @@ export class ApiStack extends Stack {
       environment: {
         TABLE_NAME: table.tableName,
         DOCUMENTS_BUCKET: documentsBucket.bucketName,
+        // SaaS transition: requests with no tenant claim fall back to this tenant (the legacy single
+        // family, migrated to T#primary#). Existing users keep working before their tokens carry a tenant.
+        DEFAULT_TENANT_ID: "primary",
         HYDRATION_QUEUE_URL: hydrationQueue.queueUrl,
         ASSETS_QUEUE_URL: assetsQueue.queueUrl,
         USER_POOL_ID: userPool.userPoolId,
