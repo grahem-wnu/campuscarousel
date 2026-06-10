@@ -1,0 +1,162 @@
+// First-run onboarding (v2.1 F4). Registered as the shell's "onboarding" slot, so it mounts once on
+// every authenticated load. It fetches the student profile and, when onboarding isn't complete, shows
+// a 3-step wizard (profile → discover colleges → set up goals). Steps 2 & 3 hand off to the existing
+// College Finder / Goal Tracker rather than reimplementing them. Any hand-off or "Finish" marks
+// onboardingComplete so it never nags again.
+
+import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Button, Field, Input, Modal, Select, Spinner, useToast } from '../../shared/ui';
+import { getProfile, putProfile, type StudentProfile } from './api';
+
+export default function OnboardingGate() {
+  const [checked, setChecked] = useState(false);
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    getProfile()
+      .then((p) => {
+        if (alive) setOpen(p.onboardingComplete !== true);
+      })
+      .catch(() => {
+        /* if profile can't load, don't block the app */
+      })
+      .finally(() => {
+        if (alive) setChecked(true);
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  if (!checked || !open) return null;
+  return <Wizard onClose={() => setOpen(false)} />;
+}
+
+function Wizard({ onClose }: { onClose: () => void }) {
+  const toast = useToast();
+  const navigate = useNavigate();
+  const [step, setStep] = useState(1);
+  const [saving, setSaving] = useState(false);
+
+  const [name, setName] = useState('');
+  const [highSchool, setHighSchool] = useState('');
+  const [gradYear, setGradYear] = useState('');
+  const [gpa, setGpa] = useState('');
+  const [gpaType, setGpaType] = useState<'weighted' | 'unweighted'>('unweighted');
+  const [careerGoal, setCareerGoal] = useState('Critical Care Nurse / ICU');
+  const [location, setLocation] = useState('');
+  const [budget, setBudget] = useState('');
+
+  async function saveProfile() {
+    setSaving(true);
+    try {
+      const patch: Partial<StudentProfile> = { gpaType };
+      if (name.trim()) patch.name = name.trim();
+      if (highSchool.trim()) patch.highSchool = highSchool.trim();
+      if (gradYear) patch.graduationYear = Number(gradYear);
+      if (gpa) patch.currentGPA = Number(gpa);
+      if (careerGoal.trim()) patch.careerGoal = careerGoal.trim();
+      if (location.trim()) patch.location = location.trim();
+      if (budget) patch.budget = { total: Number(budget), currency: 'USD' };
+      await putProfile(patch);
+      setStep(2);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not save profile.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  /** Mark onboarding complete, close, and optionally jump to a module. */
+  async function finish(navigateTo?: string) {
+    try {
+      await putProfile({ onboardingComplete: true });
+    } catch {
+      /* non-fatal — closing anyway */
+    }
+    onClose();
+    if (navigateTo) navigate(navigateTo);
+  }
+
+  const title =
+    step === 1 ? "Welcome — let's set up Keira's profile" : step === 2 ? 'Find nursing programs' : 'Set up goals';
+
+  return (
+    <Modal open onClose={onClose} title={title} size="lg">
+      {step === 1 ? (
+        <div className="space-y-4">
+          <p className="text-sm text-ink-600">A few basics power the dashboard, AI help, and benchmarks. You can change all of this later.</p>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Field label="Student name">
+              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Keira" />
+            </Field>
+            <Field label="High school">
+              <Input value={highSchool} onChange={(e) => setHighSchool(e.target.value)} />
+            </Field>
+            <Field label="Graduation year">
+              <Input type="number" value={gradYear} onChange={(e) => setGradYear(e.target.value)} placeholder="2029" />
+            </Field>
+            <Field label="Location (city, state)">
+              <Input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Aliso Viejo, CA" />
+            </Field>
+            <Field label="Current GPA">
+              <Input type="number" step="0.01" value={gpa} onChange={(e) => setGpa(e.target.value)} placeholder="4.0" />
+            </Field>
+            <Field label="GPA type">
+              <Select value={gpaType} onChange={(e) => setGpaType(e.target.value as 'weighted' | 'unweighted')}>
+                <option value="unweighted">Unweighted</option>
+                <option value="weighted">Weighted</option>
+              </Select>
+            </Field>
+            <Field label="Career goal">
+              <Input value={careerGoal} onChange={(e) => setCareerGoal(e.target.value)} />
+            </Field>
+            <Field label="Family college budget ($)">
+              <Input type="number" value={budget} onChange={(e) => setBudget(e.target.value)} placeholder="200000" />
+            </Field>
+          </div>
+          <div className="flex justify-between pt-1">
+            <Button variant="ghost" onClick={() => void finish()}>
+              Skip setup
+            </Button>
+            <Button loading={saving} onClick={() => void saveProfile()}>
+              Save &amp; continue
+            </Button>
+          </div>
+        </div>
+      ) : step === 2 ? (
+        <div className="space-y-4">
+          <p className="text-sm text-ink-600">
+            Next, let&rsquo;s find BSN programs. The College Finder searches hundreds of schools, checks
+            direct-admit status, and pulls tuition, rankings, and contacts — all in real time.
+          </p>
+          <div className="flex flex-wrap justify-between gap-2 pt-1">
+            <Button variant="ghost" onClick={() => setStep(3)}>
+              Skip for now
+            </Button>
+            <Button icon="search" onClick={() => void finish('/colleges')}>
+              Open College Finder
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <p className="text-sm text-ink-600">
+            Finally, set up year-by-year goals. The Goal Tracker can suggest milestones for an aspiring
+            nurse based on grade level and career goal — accept, edit, or add your own.
+          </p>
+          <div className="flex flex-wrap justify-between gap-2 pt-1">
+            <Button variant="ghost" onClick={() => void finish()}>
+              Finish
+            </Button>
+            <Button icon="goal" onClick={() => void finish('/goals')}>
+              Open Goal Tracker
+            </Button>
+          </div>
+        </div>
+      )}
+    </Modal>
+  );
+}

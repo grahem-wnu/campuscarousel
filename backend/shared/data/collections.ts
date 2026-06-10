@@ -17,6 +17,7 @@ import type {
   Benchmark,
   Profile,
   ReminderSettings,
+  StudentProfile,
   Touchpoint,
   Timestamped,
   Visit,
@@ -394,6 +395,36 @@ export function makeProfiles(client: TableClient): ProfileRepo {
       if (!existing) throw new NotFoundError('USER', userId);
       const current = toDomain<Profile>(existing);
       return write({ ...current, ...patch, userId, createdAt: current.createdAt, updatedAt: isoNow() });
+    },
+  };
+}
+
+// Student profile: global singleton (PK=STUDENT_PROFILE) for the onboarding wizard (v2.1 F4).
+export interface StudentProfileRepo {
+  get(): Promise<StudentProfile | null>;
+  put(input: Omit<StudentProfile, 'createdAt' | 'updatedAt'>): Promise<StudentProfile>;
+}
+
+export function makeStudentProfile(client: TableClient): StudentProfileRepo {
+  return {
+    async get() {
+      const item = await client.get('STUDENT_PROFILE', SK_DETAILS);
+      return item ? toDomain<StudentProfile>(item) : null;
+    },
+    async put(input) {
+      const existing = await client.get('STUDENT_PROFILE', SK_DETAILS);
+      const now = isoNow();
+      const domain: StudentProfile = {
+        ...input,
+        createdAt: (existing?.createdAt as string | undefined) ?? now,
+        updatedAt: now,
+      };
+      await client.put({
+        ...(domain as unknown as Record<string, unknown>),
+        PK: 'STUDENT_PROFILE',
+        SK: SK_DETAILS,
+      });
+      return domain;
     },
   };
 }

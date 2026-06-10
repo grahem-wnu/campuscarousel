@@ -721,3 +721,26 @@ export interface OpportunityDiscoveryJob extends Timestamped {
   count?: number;
   error?: string;
 }
+
+// ---------------------------------------------------------------------------
+// Student profile (PK: STUDENT_PROFILE, SK: DETAILS) — global singleton. Keira's academic profile,
+// captured by the first-run onboarding wizard (v2.1 F4). Distinct from the per-user account `Profile`
+// (USER#<id>). All fields optional so the wizard can save incrementally. `onboardingComplete` gates
+// whether the wizard reappears.
+// ---------------------------------------------------------------------------
+export interface StudentProfile extends Timestamped {
+  name?: string;
+  highSchool?: string;
+  district?: string;
+  location?: string;
+  graduationYear?: number;
+  currentGPA?: number;
+  gpaType?: 'weighted' | 'unweighted';
+  careerGoal?: string;
+  dreamSchool?: string;
+  interests?: string[];
+  currentActivities?: { name: string; type?: string; organization?: string }[];
+  budget?: { total?: number; currency?: 'USD'; notes?: string };
+  onboardingComplete?: boolean;
+  updatedBy?: string;
+}

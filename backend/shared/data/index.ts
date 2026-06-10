@@ -18,6 +18,7 @@ import {
   makeConversations,
   makeProfiles,
   makeReminderSettings,
+  makeStudentProfile,
   makeTouchpoints,
   makeVisits,
 } from './collections.js';
@@ -236,6 +237,7 @@ export function makeData(client: TableClient) {
     documents,
     opportunities,
     opportunityDiscoveryJobs,
+    studentProfile: makeStudentProfile(client),
   };
 }
 
