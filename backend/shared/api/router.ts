@@ -4,6 +4,7 @@
 // body, and translates any thrown error into the standard envelope.
 
 import { getRequester, requireRole } from '../auth/index.js';
+import { runWithTenant } from '../tenant/index.js';
 import { Errors } from './errors.js';
 import { json, responseForError } from './respond.js';
 import type { ApiEvent, ApiResponse, LambdaHandler } from './event.js';
@@ -125,13 +126,20 @@ export function createRouter(routes: RouteDef[]): LambdaHandler {
       if (matched.route.roles && matched.route.roles.length > 0) {
         requireRole(...matched.route.roles)(requester);
       }
+      // SaaS isolation: every request must carry a tenant (or be a platform-admin route). The handler
+      // runs inside the tenant's AsyncLocalStorage context so the data layer scopes all keys to it.
+      if (!requester.tenantId && !requester.platformAdmin) {
+        throw Errors.unauthorized('Missing tenant claim');
+      }
       const ctx: HandlerContext = {
         requester,
         params: matched.params,
         query: normalizeRecord(event.queryStringParameters),
         body: parseBody(event),
       };
-      const result = await matched.route.handler(ctx);
+      const result = requester.tenantId
+        ? await runWithTenant(requester.tenantId, () => matched.route.handler(ctx))
+        : await matched.route.handler(ctx);
       return json(result.status, result.body);
     } catch (err) {
       return responseForError(err);

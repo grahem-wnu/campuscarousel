@@ -50,7 +50,13 @@ export function getRequester(event: JwtAuthorizedEvent): Requester {
     throw new UnauthorizedError('Missing or invalid role claim');
   }
 
-  return { username, role };
+  // SaaS platform: the tenant (family) the caller belongs to, and whether they're a platform admin.
+  // Tenant enforcement happens in the router (401 if absent on a tenant route) + the fail-closed data
+  // layer; resolved here so it flows through HandlerContext.
+  const tenantId = asString(claims['custom:tenantId']);
+  const platformAdmin = claims['custom:platformAdmin'] === 'true' || claims['custom:platformAdmin'] === true;
+
+  return { username, role, ...(tenantId ? { tenantId } : {}), ...(platformAdmin ? { platformAdmin } : {}) };
 }
 
 /**

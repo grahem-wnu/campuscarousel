@@ -24,7 +24,7 @@ afterEach(() => {
   if (prevModel !== undefined) process.env.BEDROCK_MODEL_ID = prevModel;
 });
 
-const claimsFor = (r: Requester) => ({ 'cognito:username': r.username, 'custom:role': r.role });
+const claimsFor = (r: Requester) => ({ 'cognito:username': r.username, 'custom:role': r.role, 'custom:tenantId': r.tenantId ?? 'test-tenant' });
 function event(method: string, path: string, opts: { as?: Requester; body?: unknown; query?: Record<string, string> } = {}): ApiEvent {
   return {
     rawPath: path,

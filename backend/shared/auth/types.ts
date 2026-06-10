@@ -10,6 +10,12 @@ export type Role = 'admin' | 'parent' | 'student';
 export interface Requester {
   username: string;
   role: Role;
+  /** The family/tenant this caller belongs to (from JWT `custom:tenantId`). Optional on the type for
+   *  test ergonomics; the router REQUIRES it at runtime (401 if absent) for all non-platform-admin
+   *  routes, and the data layer fails closed without it — so production is always tenant-scoped. */
+  tenantId?: string;
+  /** Platform super-admin (Grahem) — from JWT `custom:platformAdmin`. NOT a family membership. */
+  platformAdmin?: boolean;
 }
 
 export type Visibility = 'family' | 'private';
