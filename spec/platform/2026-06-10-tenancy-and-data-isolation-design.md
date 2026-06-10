@@ -71,16 +71,28 @@ enterprise/B2B tier).
 ### 2. Tenant-scoping `TableClient` decorator (`backend/shared/data/tenant-client.ts`)
 - `tenantScoped(client: TableClient): TableClient` wrapping all five methods:
   - `get(pk, sk)`, `delete(pk, sk)`, `query(pk, …)` → prefix `pk` with `T#${currentTenantId()}#`.
-  - `queryIndex(index, pk, …)` → prefix the GSI partition value.
-  - `put(item)` → prefix `item.PK` and every present `GSIxPK` attribute.
+  - `queryIndex(index, pk, …)` → prefix the partition value for **every** index — not just GSI1. The
+    GSI2/GSI3/GSI4 lookups (activities-by-category, clinical-by-facility, TEAS-by-date) must be prefixed
+    too, or those queries leak cross-tenant.
+  - `put(item)` → prefix `item.PK` **and iterate every present `GSI{1..4}PK` attribute**, prefixing each.
+    Some writers (e.g. `collections.ts` `makeConversations`, and the activities/clinical/TEAS index
+    projections) set `GSIxPK` to bare constants directly through `client.put`; the decorator must catch
+    all of them via a loop over the index set, not a hard-coded `GSI1PK`. **This symmetry (prefix on
+    both write `GSIxPK` and `queryIndex` partition, for all indexes) is the single most important
+    correctness property of the whole design.**
 - Reads need **no** un-prefixing: `stripInternal` already drops `PK`/`SK`/`GSIxPK` before returning the
   domain object.
 - The decorator calls `currentTenantId()` at each operation → fail-closed by construction.
+- **Completeness rests on this being the only path to DynamoDB.** Verified: every access in the codebase
+  goes through these five `TableClient` methods (no `Scan`/`BatchWrite`/`TransactWrite`/raw-client use).
+  A CI guard (see Testing) enforces that no future writer bypasses the decorator.
 
 ### 3. Data accessor wiring (`backend/shared/data/index.ts`)
 - `dataFromEnv()` → `makeData(tenantScoped(tableClientFromEnv(env)))`.
-- The **un-scoped** base client is still used for the tenant registry only (below). `makeData` gains a
-  `tenants` accessor built on the base client; everything else uses the scoped client.
+- `makeData` internally also holds the **un-scoped** base client, but exposes it to callers **only**
+  through the `tenants` registry accessor (below). The base client is **not** returned to module code —
+  the 22 modules can reach only tenant-scoped repos, so no future module can accidentally bypass
+  isolation. This is a hard interface boundary, enforced by `makeData`'s return type.
 - `routes.manifest` closures (`getData = () => cached ??= dataFromEnv()`) are unchanged — the per-Lambda
   cached `Data` is fine because the *client* resolves the tenant per operation via ALS.
 
@@ -88,22 +100,40 @@ enterprise/B2B tier).
 - The one intentionally-global namespace: `PK: TENANT#<tenantId>`, `SK: DETAILS`.
 - `Tenant` entity: `tenantId`, `familyName`, `plan` (placeholder for sub-project 3), `status`
   (`active`|`suspended`), `consent` (placeholder map for sub-project 0), `createdAt`, `updatedAt`.
-- Accessed via the **base** (un-scoped) client. `tenants.list()` lets background jobs enumerate tenants.
+- **Enumeration backing:** the registry item carries `GSI1PK = 'TENANTS'`, `GSI1SK = <createdAt>#<tenantId>`,
+  so `tenants.list()` is a normal `queryIndex(GSI1, 'TENANTS')` — **no new GSI** (reuses GSI1, consistent
+  with §8) and **no `Scan`**. Because the registry is global, the `tenants` repo writes/reads through the
+  **base (un-scoped) client**, so `GSI1PK` stays the literal `'TENANTS'` (NOT tenant-prefixed). This is the
+  one deliberate asymmetry in the design and must be called out in code: the tenant registry is the only
+  thing written un-prefixed.
 
 ### 5. Auth (`backend/shared/auth/`)
-- `Requester` gains `tenantId: string`. `getRequester` reads `custom:tenantId` from JWT claims;
-  **a request with no tenant claim is rejected (401)** before any handler runs.
+- `Requester` gains `tenantId: string`. This **additively extends** the "frozen contract" `Requester`
+  shape — safe because it's a new required field set centrally in `getRequester`; the plan must update
+  `auth/types.ts`, the contract comments, and `requester.test.ts` accordingly.
+- `getRequester` reads `custom:tenantId` from JWT claims; **a request with no tenant claim is rejected
+  (401)** before any handler runs.
 - The router wraps handler execution in `runWithTenant(requester.tenantId, () => handler(ctx))`.
 - The role model (`admin`/`parent`/`student`, `canSeePrivate`, `filterForRequester`) is unchanged — it
   now operates *within* a tenant.
 
-### 6. S3 documents (`backend/shared/storage/`)
-- Object keys prefixed `T/<tenantId>/documents/<id>/<file>`; the storage seam reads `currentTenantId()`.
-- Existing presign/visibility logic unchanged otherwise. One bucket, tenant-prefixed keys.
+### 6. S3 documents
+- Object keys become `T/<tenantId>/documents/<id>/<file>`. The prefix is built where keys are
+  **constructed** — the `documents` module handler (`uploadUrl`'s `s3Key = …`) and any other caller —
+  reading `currentTenantId()` there. `s3DocumentStore` itself stays key-agnostic (it takes a key); a thin
+  helper `tenantDocKey(name)` centralizes prefixing so no caller forgets. One bucket, tenant-prefixed keys.
+- **Migration note (data correctness):** existing document rows store un-prefixed S3 keys AND the bytes
+  live at the un-prefixed object path. The migration (below) must therefore **(a)** copy each S3 object to
+  its new `T/<tenant1>/…` key and delete the old object, AND **(b)** rewrite the `s3Key` attribute on the
+  DynamoDB document row — not just re-key the row's PK. (Few/zero objects exist today, but the script must
+  handle them.)
 
 ### 7. Non-request paths
-- **Digest Lambda** (`backend/lambda/digest.ts`): enumerate `tenants.list()`; for each, run the existing
-  digest inside `runWithTenant(tenantId, …)`. (Per-tenant `REMINDER_SETTINGS` is read inside context.)
+- **Digest Lambda** (`backend/lambda/digest.ts`): restructure from a single `dataFromEnv()` call to:
+  `tenants.list()` → for each tenant, `runWithTenant(tenantId, () => runScheduledDigest(...))`, **each
+  wrapped in its own try/catch** so one tenant's failure logs loudly and the loop continues (a single bad
+  tenant must never silently skip everyone after it). Per-tenant `REMINDER_SETTINGS`/`lastSentAt`/
+  `notifiedEventIds` are read/written inside that tenant's context.
 - **SQS discovery worker** (`backend/lambda/hydration.ts` + module handlers): every enqueued message
   carries `tenantId`; the worker calls `runWithTenant(message.tenantId, …)` before touching data.
   Enqueuers (`college-hub`, `scholarship-tracker`, `opportunities`) include `tenantId` in the message.
@@ -126,23 +156,32 @@ writes back under the tenant's keys → frontend polls (in-tenant).
 
 ## Migration (Keira → tenant #1)
 
-A one-time, **dry-runnable** Node script (`backend/scripts/migrate-tenant.mjs`):
-1. Assign `tenant1 = <generated id>`; create the `TENANT#tenant1` registry record.
-2. Scan the table; for each item, compute the prefixed `PK` and each `GSIxPK`; write the transformed
-   item; verify a read-back; then delete the original (or write-new-then-delete-old in batches).
-3. Verify item counts pre/post and spot-check a few entities; print a summary. `--dry-run` prints the
-   plan without writing.
-4. Set `custom:tenantId = tenant1` on Keira's three Cognito users (CLI/admin).
+A one-time, **dry-runnable** Node script (`backend/scripts/migrate-tenant.mjs`), in **phases** (not
+write-then-delete per item, so a mid-run failure can't leave a mixed prefixed/un-prefixed table):
+1. Assign `tenant1 = <generated id>`; create the `TENANT#tenant1` registry record (written un-prefixed
+   via the base client, with `GSI1PK = 'TENANTS'`).
+2. **Phase A — write all new:** scan the table; for each existing tenant-data item, compute the prefixed
+   `PK` and every `GSIxPK`, and write the transformed copy. (Idempotent — re-runnable.)
+3. **Phase B — verify:** counts pre/post match; spot-check several entities read back through the scoped
+   client under `runWithTenant(tenant1)`.
+4. **Phase C — S3 relocation:** for each document row, copy the object to `T/<tenant1>/…`, rewrite the
+   row's `s3Key`, then delete the old object.
+5. **Phase D — delete old:** only after A–C verify, delete the original un-prefixed items.
+6. Set `custom:tenantId = tenant1` on Keira's three Cognito users (CLI/admin).
 
-Runs on **staging first** (destroyable) to prove correctness; **prod runs only on Grahem's explicit go**,
-with a table PITR/backup checkpoint taken first.
+`--dry-run` prints the plan and counts without writing. Runs on **staging first** (destroyable) to prove
+correctness; **prod runs only on Grahem's explicit go**, with a DynamoDB PITR checkpoint + S3 versioning/
+inventory snapshot taken first.
 
 ## Error handling / edge cases
 
 - **No tenant context** → `currentTenantId()` throws `TenantContextError`; the decorator never issues an
   un-prefixed operation. A request with no `custom:tenantId` claim → 401 at the router.
 - **Background job missing tenantId** (message without it) → drained/failed loudly, never run un-scoped.
-- **Suspended tenant** → registry `status` checked at the router; suspended → 403 (hook for sub-project 3).
+- **Suspended tenant** → `Tenant.status` exists now, but enforcement is a **no-op stub** in this
+  sub-project (a `requireActiveTenant()` hook that currently always passes). A live check means reading the
+  registry on every request (a base-client `get TENANT#<id>` on the hot path), so the actual enforcement +
+  any caching is deferred to sub-project 3 (billing/entitlements), where it belongs.
 - **Legacy un-prefixed items** post-migration → none should exist; the migration verifies, and a
   follow-up guard can scan for un-prefixed PKs as a CI/ops check.
 
@@ -158,6 +197,11 @@ with a table PITR/backup checkpoint taken first.
   and counts match; `--dry-run` writes nothing.
 - **Live staging check:** provision two test families; with each family's real Cognito token, confirm
   cross-tenant reads return nothing and a no-tenant token is rejected.
+- **CI isolation guard (deliverable, not optional):** a check (script run in CI) that fails the build if
+  any code path writes/reads DynamoDB outside the `tenantScoped` decorator — i.e. greps for direct
+  `client.put`/`queryIndex` of a `GSIxPK`/`PK` that isn't routed through the seam, and (post-migration, as
+  an ops check) scans for any stored item whose `PK` lacks a `T#` prefix except the `TENANT#`/`TENANTS`
+  registry. This is the belt-and-suspenders that catches a future writer silently breaking isolation.
 
 ## Build sequence (for the implementation plan; not built yet)
 
@@ -167,15 +211,22 @@ with a table PITR/backup checkpoint taken first.
 4. `Requester.tenantId` + `getRequester` + router `runWithTenant` wrap + no-claim 401.
 5. S3 storage seam prefixing.
 6. Non-request paths: digest per-tenant loop; SQS message `tenantId` + worker context.
-7. Migration script (+ dry-run + tests); staging run.
-8. Two-tenant isolation integration proof + live staging verification.
+7. Migration script (phased + dry-run + S3 relocation + tests); staging run.
+8. CI isolation guard.
+9. Two-tenant isolation integration proof + live staging verification.
 
 ## Open questions for review
 
 - Spec location: `spec/platform/` (here) vs elsewhere — confirm.
 - Tenant id format: opaque UUID vs slug. (Default: opaque id.)
-- Whether to add a CI guard that scans for any un-prefixed `PK` post-migration (recommended, cheap).
-- Prod migration timing — gated on Grahem's explicit go + PITR checkpoint.
+- Prod migration timing — gated on Grahem's explicit go + PITR + S3 snapshot.
+
+## Review status
+
+Independent spec review (2026-06-10): **approved**, with five correctness gaps which are now folded in —
+prefix **all** GSI indexes (not just GSI1) on write + queryIndex; back `tenants.list()` with a `TENANTS`
+collection on GSI1 (no Scan); S3 prefix at key-construction + relocate objects in the migration;
+per-tenant try/catch in the digest loop; hard base-client boundary + CI isolation guard as a deliverable.
 
 ---
 *Author: Grahem + Claude. Sub-project 1 of the SaaS platform decomposition.*
