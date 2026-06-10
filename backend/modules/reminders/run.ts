@@ -9,17 +9,18 @@ import { shouldSendNow } from './settings.js';
 
 /** Fetch everything the digest needs in one pass. Activities stay RAW — privacy is applied per recipient. */
 export async function gatherForDigest(data: Data): Promise<GatheredData> {
-  const [activities, goals, colleges, teas, scholarships, certifications] = await Promise.all([
+  const [activities, goals, colleges, teas, scholarships, certifications, finaid] = await Promise.all([
     data.activities.list(),
     data.goals.list(),
     data.colleges.list(),
     data.teas.list(),
     data.scholarships.list(),
     data.certifications.list(),
+    data.finaid.list(),
   ]);
   // Visits are sub-entities under COLLEGE#<id>; list per college and flatten (mirrors master-timeline).
   const visitLists = await Promise.all(colleges.map((c) => data.visits.list(c.collegeId)));
-  return { activities, goals, colleges, teas, visits: visitLists.flat(), scholarships, certifications };
+  return { activities, goals, colleges, teas, visits: visitLists.flat(), scholarships, certifications, finaid };
 }
 
 export interface DigestRunDeps {

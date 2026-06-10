@@ -8,6 +8,7 @@ import type {
   Activity,
   Certification,
   College,
+  FinAidItem,
   Goal,
   ReminderRecipient,
   Scholarship,
@@ -31,6 +32,7 @@ export interface GatheredData {
   visits: Visit[];
   scholarships: Scholarship[];
   certifications: Certification[];
+  finaid: FinAidItem[];
 }
 
 /** Build the event stream for one recipient, honoring whether they may see private-sourced items. */
@@ -44,6 +46,7 @@ export function eventsFor(g: GatheredData, includePrivate: boolean): TimelineEve
     visits: g.visits,
     scholarships: g.scholarships,
     certifications: g.certifications,
+    finaid: g.finaid,
   });
 }
 
@@ -63,6 +66,7 @@ const SOURCE_LABEL: Record<string, string> = {
   visit: 'Campus visit',
   scholarship: 'Scholarship',
   certification: 'Certification',
+  finaid: 'Financial aid',
 };
 
 export interface DigestSection {

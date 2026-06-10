@@ -7,13 +7,14 @@ import type {
   Activity,
   Certification,
   College,
+  FinAidItem,
   Goal,
   Scholarship,
   Teas,
   Visit,
 } from '../../shared/data/index.js';
 
-export const EVENT_SOURCES = ['activity', 'goal', 'college', 'teas', 'visit', 'scholarship', 'certification'] as const;
+export const EVENT_SOURCES = ['activity', 'goal', 'college', 'teas', 'visit', 'scholarship', 'certification', 'finaid'] as const;
 export type EventSource = (typeof EVENT_SOURCES)[number];
 
 export interface TimelineEvent {
@@ -44,6 +45,8 @@ export interface EventSources {
   visits: readonly Visit[];
   scholarships: readonly Scholarship[];
   certifications: readonly Certification[];
+  /** Financial-aid items (v2.1 Module 19). Optional so existing callers need no change. */
+  finaid?: readonly FinAidItem[];
 }
 
 /** Build the unified, date-ascending event stream from all sources. */
@@ -67,6 +70,7 @@ export function buildEvents(s: EventSources): TimelineEvent[] {
   for (const v of s.visits) push({ source: 'visit', type: v.visitType ?? 'visit', title: `Campus visit${v.visitType ? ` — ${v.visitType}` : ''}`, date: v.date, refId: v.visitId, collegeId: v.collegeId });
   for (const sc of s.scholarships) if (!['awarded', 'denied', 'expired'].includes(sc.status ?? '') && sc.applicationDeadline) push({ source: 'scholarship', type: 'deadline', title: sc.name, date: sc.applicationDeadline, refId: sc.scholarshipId });
   for (const c of s.certifications) if (c.renewalRequired && c.expirationDate) push({ source: 'certification', type: 'expiration', title: `${c.name} renewal`, date: c.expirationDate, refId: c.certId });
+  for (const f of s.finaid ?? []) if (f.deadline && f.status !== 'n/a') push({ source: 'finaid', type: f.kind, title: f.title, date: f.deadline, refId: f.itemId, collegeId: f.relatedCollegeId });
 
   return out.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.source.localeCompare(b.source)));
 }

@@ -41,6 +41,7 @@ import type {
   DiscoveryJob,
   Document,
   Essay,
+  FinAidItem,
   Goal,
   Opportunity,
   OpportunityDiscoveryJob,
@@ -148,6 +149,14 @@ export function makeData(client: TableClient) {
     idField: 'jobId',
   });
 
+  // Financial Aid Center (v2.1 Module 19): FAFSA/CSS + per-school aid deadlines, sorted by deadline.
+  const finaid = makeDetailsRepo<FinAidItem, 'itemId'>(client, {
+    prefix: 'FINAID',
+    idField: 'itemId',
+    collection: 'FINAID',
+    sortField: 'deadline', // falls back to createdAt when no deadline set
+  });
+
   const courses = makeDetailsRepo<Course, 'courseId'>(client, {
     prefix: 'COURSE',
     idField: 'courseId',
@@ -238,6 +247,7 @@ export function makeData(client: TableClient) {
     opportunities,
     opportunityDiscoveryJobs,
     studentProfile: makeStudentProfile(client),
+    finaid,
   };
 }
 

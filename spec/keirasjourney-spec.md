@@ -1645,7 +1645,12 @@ All features ship in v1. Future phases are net-new ideas, not deferred core func
 
 ## v2.1 Feature Wave — Post-Launch Additions
 
-**Status: Draft — awaiting Grahem approval (2026-06-10)**
+**Status: Approved 2026-06-10 (Grahem). Implemented — all five features built and merged to `dev`.**
+
+> As-built notes: Documents (F2), Opportunities (Module 18), and FinAid (Module 19) reuse the existing
+> shared GSI1 collection pattern — **no new GSI / table migration** was needed (the GSI5 mention below
+> is superseded). F4 **added** the `GET/PUT /profile` routes (a `StudentProfile` singleton); they did
+> not previously exist. FinAid deadlines flow into the Master Timeline and the reminder digest.
 
 Five gaps surfaced from a post-launch review of the deployed app. The app fully implements the
 v2.0 spec; these are net-new capabilities that make the difference between *tracking* the journey

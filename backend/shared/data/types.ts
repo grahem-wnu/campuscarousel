@@ -107,7 +107,12 @@ export interface College extends Timestamped, Hydratable {
     financialAidPhone?: string;
     financialAidUrl?: string;
     campusVisitUrl?: string;
+    netPriceCalculatorUrl?: string;
   };
+  /** Application services this school accepts (e.g. "NursingCAS", "Common App") — v2.1 Module 19. */
+  appServices?: string[];
+  /** True if the nursing program applies through NursingCAS (centralized application service). */
+  usesNursingCAS?: boolean;
   status?: CollegeStatus;
   fitScore?: number;
 }
@@ -728,6 +733,36 @@ export interface OpportunityDiscoveryJob extends Timestamped {
 // (USER#<id>). All fields optional so the wizard can save incrementally. `onboardingComplete` gates
 // whether the wizard reappears.
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Financial aid item (PK: FINAID#<itemId>, SK: DETAILS; collection GSI1PK=FINAID) — v2.1 Module 19.
+// FAFSA/CSS + per-school aid deadlines and award letters. Feeds the Master Timeline + reminder digest.
+// ---------------------------------------------------------------------------
+export type FinAidKind =
+  | 'fafsa'
+  | 'css-profile'
+  | 'state-aid'
+  | 'institutional-aid'
+  | 'loan'
+  | 'award-letter'
+  | 'other';
+
+export type FinAidStatus = 'not-started' | 'in-progress' | 'submitted' | 'received' | 'n/a';
+
+export interface FinAidItem extends Timestamped {
+  itemId: string;
+  kind: FinAidKind;
+  title: string;
+  relatedCollegeId?: string;
+  openDate?: string;
+  deadline?: string;
+  priorityDeadline?: string;
+  status: FinAidStatus;
+  amountOffered?: number;
+  amountAccepted?: number;
+  documentId?: string; // optional link to an uploaded award letter (v2.1 F2)
+  notes?: string;
+}
+
 export interface StudentProfile extends Timestamped {
   name?: string;
   highSchool?: string;

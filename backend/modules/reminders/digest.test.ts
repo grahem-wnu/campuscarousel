@@ -22,6 +22,7 @@ const empty: GatheredData = {
   visits: [],
   scholarships: [],
   certifications: [],
+  finaid: [],
 };
 
 const keira: ReminderRecipient = { label: 'Keira', email: 'k@x.com', includePrivate: true };

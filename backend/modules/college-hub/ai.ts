@@ -186,7 +186,7 @@ const HYDRATABLE_FIELDS = [
   'acceptanceRateNursing', 'acceptanceRateUniversity', 'avgGPAAdmitted', 'prerequisites',
   'applicationDeadlines', 'essayPrompts', 'requiredTests', 'clinicalPartners',
   'testimonials', 'campusImageUrls', 'specialNotes', 'website', 'dataSources', 'dataAsOf',
-  'branding', 'contactInfo',
+  'branding', 'contactInfo', 'appServices', 'usesNursingCAS',
 ] as const;
 
 /** Per-field cleaners for the structured/best-effort fields; everything else is copied as-is
@@ -271,7 +271,10 @@ function buildHydratePrompt(name: string, state?: string): string {
     '  campusImageUrls (string[] — direct https URLs to campus/program photos), location (string),',
     '  state (2-letter), website (string), branding ({logoUrl, primaryColor (hex), secondaryColor (hex),',
     '  mascot}), contactInfo ({nursingAdmissionsUrl, nursingAdmissionsPhone, nursingAdmissionsEmail,',
-    '  financialAidUrl, financialAidPhone, campusVisitUrl}), specialNotes (string),',
+    '  financialAidUrl, financialAidPhone, campusVisitUrl, netPriceCalculatorUrl}),',
+    '  appServices (string[] — application services this school accepts, e.g. "NursingCAS", "Common App",',
+    '  "Coalition", "Direct"), usesNursingCAS (bool — true if its nursing program applies via NursingCAS),',
+    '  specialNotes (string),',
     '  dataSources (string[] — every URL you relied on), dataAsOf (string — the academic year these',
     `  figures reflect, e.g. "${year}-${year + 1}").`,
   ].join('\n');
