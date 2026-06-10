@@ -16,6 +16,7 @@ import type {
   ConversationMessage,
   Benchmark,
   Profile,
+  ReminderSettings,
   Touchpoint,
   Timestamped,
   Visit,
@@ -326,6 +327,41 @@ export function makeBudget(client: TableClient): BudgetRepo {
       const existing = await client.get('BUDGET', SK_DETAILS);
       if (!existing) throw new NotFoundError('BUDGET', 'singleton');
       const current = toDomain<Budget>(existing);
+      return write({ ...current, ...patch, createdAt: current.createdAt, updatedAt: isoNow() });
+    },
+  };
+}
+
+// Reminder settings: global singleton (PK=REMINDER_SETTINGS) driving the email digest (v2.1 F1).
+export interface ReminderSettingsRepo {
+  get(): Promise<ReminderSettings | null>;
+  put(input: Omit<ReminderSettings, 'createdAt' | 'updatedAt'>): Promise<ReminderSettings>;
+  update(patch: Partial<Omit<ReminderSettings, 'createdAt' | 'updatedAt'>>): Promise<ReminderSettings>;
+}
+
+export function makeReminderSettings(client: TableClient): ReminderSettingsRepo {
+  const write = async (domain: ReminderSettings): Promise<ReminderSettings> => {
+    await client.put({
+      ...(domain as unknown as Record<string, unknown>),
+      PK: 'REMINDER_SETTINGS',
+      SK: SK_DETAILS,
+    });
+    return domain;
+  };
+  return {
+    async get() {
+      const item = await client.get('REMINDER_SETTINGS', SK_DETAILS);
+      return item ? toDomain<ReminderSettings>(item) : null;
+    },
+    async put(input) {
+      const existing = await client.get('REMINDER_SETTINGS', SK_DETAILS);
+      const now = isoNow();
+      return write({ ...input, createdAt: (existing?.createdAt as string | undefined) ?? now, updatedAt: now });
+    },
+    async update(patch) {
+      const existing = await client.get('REMINDER_SETTINGS', SK_DETAILS);
+      if (!existing) throw new NotFoundError('REMINDER_SETTINGS', 'singleton');
+      const current = toDomain<ReminderSettings>(existing);
       return write({ ...current, ...patch, createdAt: current.createdAt, updatedAt: isoNow() });
     },
   };

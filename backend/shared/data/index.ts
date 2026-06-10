@@ -17,6 +17,7 @@ import {
   makeCollegeNotes,
   makeConversations,
   makeProfiles,
+  makeReminderSettings,
   makeTouchpoints,
   makeVisits,
 } from './collections.js';
@@ -210,6 +211,7 @@ export function makeData(client: TableClient) {
     conversations: makeConversations(client),
     budget: makeBudget(client),
     profiles: makeProfiles(client),
+    reminderSettings: makeReminderSettings(client),
   };
 }
 
