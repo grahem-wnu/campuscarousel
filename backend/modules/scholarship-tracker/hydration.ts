@@ -16,6 +16,7 @@
 // never clobbered, and hydrationStatus/lastDataRefresh reflect the outcome.
 
 import type { Data, Scholarship } from '../../shared/data/index.js';
+import { currentTenantId } from '../../shared/tenant/index.js';
 import { makeBedrockHydrator, type Hydrator } from './ai.js';
 
 /** SQS message `type` discriminator for a single-scholarship hydration job. */
@@ -24,10 +25,11 @@ export const HYDRATION_TYPE = 'scholarship-hydrate';
 export interface ScholarshipHydrationMessage {
   type: typeof HYDRATION_TYPE;
   scholarshipId: string;
+  tenantId: string;
 }
 
 export function buildHydrationMessage(scholarshipId: string): ScholarshipHydrationMessage {
-  return { type: HYDRATION_TYPE, scholarshipId };
+  return { type: HYDRATION_TYPE, scholarshipId, tenantId: currentTenantId() };
 }
 
 /** Hydrate one scholarship: fetch → AI patch → merge (preserving user edits). Returns the updated

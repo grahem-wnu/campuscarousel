@@ -9,6 +9,7 @@
 // functional, and the failure is contained to that request.
 
 import type { Data } from '../../shared/data/index.js';
+import { currentTenantId } from '../../shared/tenant/index.js';
 import { HYDRATION_TYPE, makeInlineDispatcher, type HydrationDispatcher } from './hydration.js';
 
 /** Minimal structural type of the SQS client (just `send`) — keeps tests injectable without a hard
@@ -38,7 +39,7 @@ export function makeSqsEnqueuer(getData: () => Data, options: SqsEnqueuerOptions
       await client.send(
         new SendMessageCommand({
           QueueUrl: queueUrl,
-          MessageBody: JSON.stringify({ type: HYDRATION_TYPE, collegeId }),
+          MessageBody: JSON.stringify({ type: HYDRATION_TYPE, collegeId, tenantId: currentTenantId() }),
         }),
       );
     } catch {
