@@ -60,6 +60,7 @@ for (const stage of stages) {
     env,
     config: cfg,
     table: data.table,
+    documentsBucket: data.documentsBucket,
     userPool: auth.userPool,
     userPoolClient: auth.userPoolClient,
     hydrationQueue: asyncStack.hydrationQueue,

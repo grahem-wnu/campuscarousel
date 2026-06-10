@@ -37,6 +37,7 @@ import type {
   Contact,
   Course,
   DiscoveryJob,
+  Document,
   Essay,
   Goal,
   Interview,
@@ -125,6 +126,13 @@ export function makeData(client: TableClient) {
     collection: 'GOALS',
   });
 
+  // Document metadata (v2.1 F2). Bytes live in the private S3 bucket; this is the index + links.
+  const documents = makeDetailsRepo<Document, 'documentId'>(client, {
+    prefix: 'DOCUMENT',
+    idField: 'documentId',
+    collection: 'DOCUMENTS',
+  });
+
   const courses = makeDetailsRepo<Course, 'courseId'>(client, {
     prefix: 'COURSE',
     idField: 'courseId',
@@ -210,6 +218,7 @@ export function makeData(client: TableClient) {
     conversations: makeConversations(client),
     budget: makeBudget(client),
     profiles: makeProfiles(client),
+    documents,
   };
 }
 

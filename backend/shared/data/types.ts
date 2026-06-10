@@ -588,3 +588,37 @@ export interface Budget extends Timestamped {
   notes?: string;
   updatedBy?: string;
 }
+
+// ---------------------------------------------------------------------------
+// Document (PK: DOCUMENT#<documentId>, SK: DETAILS; collection GSI1PK=DOCUMENTS) — v2.1 F2.
+// Metadata for a file stored in the private documents S3 bucket; bytes are never in DynamoDB.
+// Visibility follows the family/private model (private = Keira only; AI sees all when she's caller).
+// ---------------------------------------------------------------------------
+export type DocumentCategory =
+  | 'certificate'
+  | 'essay'
+  | 'application-doc'
+  | 'recommendation'
+  | 'transcript'
+  | 'financial-aid'
+  | 'visit-photo'
+  | 'other';
+
+/** Optional link to the entity a document belongs to; absent = lives only in the general vault. */
+export interface DocumentLink {
+  type: 'certification' | 'essay' | 'application' | 'contact' | 'college' | 'scholarship';
+  id: string;
+}
+
+export interface Document extends Timestamped {
+  documentId: string;
+  fileName: string;
+  contentType: string;
+  sizeBytes: number;
+  s3Key: string; // server-generated; never client-supplied
+  category: DocumentCategory;
+  linkedEntity?: DocumentLink;
+  visibility: Visibility;
+  uploadedBy: string;
+  notes?: string;
+}

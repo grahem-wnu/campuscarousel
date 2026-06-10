@@ -4,6 +4,7 @@ import { HttpApi, HttpMethod, CorsHttpMethod } from "aws-cdk-lib/aws-apigatewayv
 import { HttpUserPoolAuthorizer } from "aws-cdk-lib/aws-apigatewayv2-authorizers";
 import { HttpLambdaIntegration } from "aws-cdk-lib/aws-apigatewayv2-integrations";
 import type { Table } from "aws-cdk-lib/aws-dynamodb";
+import type { Bucket } from "aws-cdk-lib/aws-s3";
 import type { UserPool, UserPoolClient } from "aws-cdk-lib/aws-cognito";
 import { Code, Function as LambdaFunction, Runtime } from "aws-cdk-lib/aws-lambda";
 import { RetentionDays } from "aws-cdk-lib/aws-logs";
@@ -18,6 +19,7 @@ import { bedrockInvokeStatement } from "./policies";
 export interface ApiStackProps extends StackProps {
   readonly config: EnvConfig;
   readonly table: Table;
+  readonly documentsBucket: Bucket;
   readonly userPool: UserPool;
   readonly userPoolClient: UserPoolClient;
   readonly hydrationQueue: Queue;
@@ -44,7 +46,7 @@ export class ApiStack extends Stack {
 
   constructor(scope: Construct, id: string, props: ApiStackProps) {
     super(scope, id, props);
-    const { config, table, userPool, userPoolClient, hydrationQueue } = props;
+    const { config, table, documentsBucket, userPool, userPoolClient, hydrationQueue } = props;
 
     const routing = new LambdaFunction(this, "RoutingFn", {
       functionName: `${config.namePrefix}-api-routing`,
@@ -59,6 +61,7 @@ export class ApiStack extends Stack {
       logRetention: RetentionDays.ONE_MONTH,
       environment: {
         TABLE_NAME: table.tableName,
+        DOCUMENTS_BUCKET: documentsBucket.bucketName,
         HYDRATION_QUEUE_URL: hydrationQueue.queueUrl,
         USER_POOL_ID: userPool.userPoolId,
         USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId,
@@ -74,6 +77,8 @@ export class ApiStack extends Stack {
 
     // Least-privilege grants.
     table.grantReadWriteData(routing);
+    documentsBucket.grantReadWrite(routing); // presigned PUT/GET of family documents (v2.1 F2)
+    documentsBucket.grantDelete(routing);
     hydrationQueue.grantSendMessages(routing);
     routing.addToRolePolicy(bedrockInvokeStatement(this.account, config.bedrockSonnetProfile));
     routing.addToRolePolicy(
