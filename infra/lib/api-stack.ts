@@ -23,6 +23,7 @@ export interface ApiStackProps extends StackProps {
   readonly userPool: UserPool;
   readonly userPoolClient: UserPoolClient;
   readonly hydrationQueue: Queue;
+  readonly assetsQueue: Queue;
 }
 
 /**
@@ -46,7 +47,7 @@ export class ApiStack extends Stack {
 
   constructor(scope: Construct, id: string, props: ApiStackProps) {
     super(scope, id, props);
-    const { config, table, documentsBucket, userPool, userPoolClient, hydrationQueue } = props;
+    const { config, table, documentsBucket, userPool, userPoolClient, hydrationQueue, assetsQueue } = props;
 
     const routing = new LambdaFunction(this, "RoutingFn", {
       functionName: `${config.namePrefix}-api-routing`,
@@ -63,6 +64,7 @@ export class ApiStack extends Stack {
         TABLE_NAME: table.tableName,
         DOCUMENTS_BUCKET: documentsBucket.bucketName,
         HYDRATION_QUEUE_URL: hydrationQueue.queueUrl,
+        ASSETS_QUEUE_URL: assetsQueue.queueUrl,
         USER_POOL_ID: userPool.userPoolId,
         USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId,
         BEDROCK_MODEL_ID: config.bedrockSonnetProfile,
@@ -80,6 +82,7 @@ export class ApiStack extends Stack {
     documentsBucket.grantReadWrite(routing); // presigned PUT/GET of family documents (v2.1 F2)
     documentsBucket.grantDelete(routing);
     hydrationQueue.grantSendMessages(routing);
+    assetsQueue.grantSendMessages(routing);
     routing.addToRolePolicy(bedrockInvokeStatement(this.account, config.bedrockSonnetProfile));
     routing.addToRolePolicy(
       new PolicyStatement({

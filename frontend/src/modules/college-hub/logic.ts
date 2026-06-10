@@ -98,14 +98,26 @@ export function domainOf(website?: string): string | undefined {
 }
 
 /**
- * Logo source chain: explicit branding URL, else a Clearbit hotlink derived from the website domain.
- * Returns null when neither is available (the component then renders the graduation-cap fallback).
- * The component also swaps to the cap on an <img> load error.
+ * Logo source chain: explicit branding URL (user/AI), else our cached logo (assets worker), else a
+ * live Clearbit hotlink derived from the website domain. Returns null when none is available (the
+ * component then renders the graduation-cap fallback). The component also swaps to the cap on an
+ * <img> load error.
  */
 export function logoSrc(c: College): string | null {
   if (c.branding?.logoUrl) return c.branding.logoUrl;
+  if (c.logoImageUrl) return c.logoImageUrl;
   const domain = domainOf(c.website);
   return domain ? `https://logo.clearbit.com/${domain}` : null;
+}
+
+/** Cached campus photo url, or null. Drives the card/detail hero banner when present. */
+export function campusImageSrc(c: College): string | null {
+  return c.campusImageUrl ?? null;
+}
+
+/** True if any college is mid imagery-fetch (drives the list's poll loop alongside hydration). */
+export function anyFetchingAssets(colleges: readonly College[]): boolean {
+  return colleges.some((c) => c.assetsStatus === 'in-progress' || c.assetsStatus === 'pending');
 }
 
 /** A short fit-score band for quick scanning. */

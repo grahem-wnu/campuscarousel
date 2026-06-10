@@ -23,6 +23,7 @@ export const PROGRAM_TYPES = [
 export type ProgramType = (typeof PROGRAM_TYPES)[number];
 
 export type HydrationStatus = 'pending' | 'in-progress' | 'complete' | 'partial' | 'failed';
+export type AssetsStatus = 'pending' | 'in-progress' | 'complete' | 'failed';
 
 export interface College {
   collegeId: string;
@@ -77,12 +78,32 @@ export interface College {
   lastDataRefresh?: string;
   userEdited?: string[];
   addedBy?: 'ai-discovered' | 'manual';
+  // Campus imagery + cached logo, set by the async assets worker (never user-editable).
+  campusImageUrl?: string;
+  campusImageCredit?: string;
+  logoImageUrl?: string;
+  assetsStatus?: AssetsStatus;
   createdAt: string;
   updatedAt: string;
 }
 
-/** Body for create/update (the lib stamps id + timestamps). */
-export type CollegeInput = Partial<Omit<College, 'collegeId' | 'createdAt' | 'updatedAt' | 'hydrationStatus' | 'lastDataRefresh' | 'userEdited' | 'addedBy'>> & {
+/** Body for create/update (the lib stamps id + timestamps; imagery is system-owned). */
+export type CollegeInput = Partial<
+  Omit<
+    College,
+    | 'collegeId'
+    | 'createdAt'
+    | 'updatedAt'
+    | 'hydrationStatus'
+    | 'lastDataRefresh'
+    | 'userEdited'
+    | 'addedBy'
+    | 'campusImageUrl'
+    | 'campusImageCredit'
+    | 'logoImageUrl'
+    | 'assetsStatus'
+  >
+> & {
   name?: string;
 };
 

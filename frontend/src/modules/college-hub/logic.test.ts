@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  anyFetchingAssets,
   anyHydrating,
   bestCost,
+  campusImageSrc,
   checklistPct,
   costLabel,
   domainOf,
@@ -66,10 +68,24 @@ describe('domainOf / logoSrc', () => {
     expect(domainOf(undefined)).toBeUndefined();
   });
 
-  it('prefers branding logo, falls back to Clearbit, else null', () => {
+  it('prefers branding logo, then the cached logo, then Clearbit, else null', () => {
     expect(logoSrc(college({ branding: { logoUrl: 'https://x/logo.png' } }))).toBe('https://x/logo.png');
+    expect(logoSrc(college({ logoImageUrl: 'https://cdn/logo.png', website: 'https://www.osu.edu' }))).toBe('https://cdn/logo.png');
     expect(logoSrc(college({ website: 'https://www.osu.edu' }))).toBe('https://logo.clearbit.com/osu.edu');
     expect(logoSrc(college())).toBeNull();
+  });
+});
+
+describe('campusImageSrc / anyFetchingAssets', () => {
+  it('returns the cached campus url or null', () => {
+    expect(campusImageSrc(college({ campusImageUrl: 'https://cdn/campus.jpg' }))).toBe('https://cdn/campus.jpg');
+    expect(campusImageSrc(college())).toBeNull();
+  });
+
+  it('is true when any college is mid imagery-fetch', () => {
+    expect(anyFetchingAssets([college(), college({ assetsStatus: 'in-progress' })])).toBe(true);
+    expect(anyFetchingAssets([college({ assetsStatus: 'pending' })])).toBe(true);
+    expect(anyFetchingAssets([college({ assetsStatus: 'complete' })])).toBe(false);
   });
 });
 

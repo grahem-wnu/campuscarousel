@@ -6,8 +6,9 @@ import { CollegeTable } from './CollegeTable';
 import { CollegeForm } from './CollegeForm';
 import { CompareView } from './CompareView';
 import { DiscoverPanel } from './DiscoverPanel';
-import { PROGRAM_TYPE_LABEL, STATUS_META, anyHydrating } from './logic';
+import { PROGRAM_TYPE_LABEL, STATUS_META, anyFetchingAssets, anyHydrating } from './logic';
 import {
+  backfillAssets,
   bulkAddColleges,
   createCollege,
   hydrateAll,
@@ -45,6 +46,7 @@ export default function CollegeHubPage() {
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [backfilling, setBackfilling] = useState(false);
 
   const [compareIds, setCompareIds] = useState<string[]>([]);
   const [showCompare, setShowCompare] = useState(false);
@@ -78,9 +80,10 @@ export default function CollegeHubPage() {
     void refresh();
   }, [refresh]);
 
-  // Light poll while any college is mid-hydration (so async refreshes surface without a manual reload).
+  // Light poll while any college is mid-hydration or mid imagery-fetch (so async refreshes — text
+  // and campus photos — surface without a manual reload).
   useEffect(() => {
-    if (!anyHydrating(colleges)) return;
+    if (!anyHydrating(colleges) && !anyFetchingAssets(colleges)) return;
     pollRef.current = setTimeout(() => void refresh(), 4000);
     return () => clearTimeout(pollRef.current);
   }, [colleges, refresh]);
@@ -157,7 +160,22 @@ export default function CollegeHubPage() {
     }
   }
 
+  // One-time imagery backfill: fetch campus photos for tracked colleges that don't have one yet.
+  // The button self-hides once every college has a photo (or none are tracked).
+  async function backfillImagery(): Promise<void> {
+    setBackfilling(true);
+    try {
+      await backfillAssets();
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not fetch campus photos.');
+    } finally {
+      setBackfilling(false);
+    }
+  }
+
   const hasFilters = Boolean(status || programType || search);
+  const missingImagery = colleges.some((c) => c.status !== 'removed' && !c.campusImageUrl);
 
   return (
     <div className="mx-auto max-w-5xl space-y-5 p-4 sm:p-6">
@@ -172,6 +190,11 @@ export default function CollegeHubPage() {
           {colleges.length > 0 ? (
             <Button variant="ghost" icon="course" loading={refreshing} onClick={() => void refreshAll()}>
               Refresh all
+            </Button>
+          ) : null}
+          {missingImagery ? (
+            <Button variant="ghost" icon="school" loading={backfilling} onClick={() => void backfillImagery()}>
+              Get photos
             </Button>
           ) : null}
           <Button variant="outline" icon="search" onClick={() => setShowDiscover((s) => !s)}>

@@ -27,6 +27,7 @@ describe('routes.manifest ↔ buildRoutes', () => {
         'POST /colleges',
         'POST /colleges/:id/hydrate',
         'POST /colleges/:id/notes',
+        'POST /colleges/assets-backfill',
         'POST /colleges/bulk-add',
         'POST /colleges/discover',
         'POST /colleges/hydrate-all',
