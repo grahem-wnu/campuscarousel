@@ -41,6 +41,8 @@ import type {
   Document,
   Essay,
   Goal,
+  Opportunity,
+  OpportunityDiscoveryJob,
   Interview,
   Recommendation,
   Scholarship,
@@ -134,6 +136,17 @@ export function makeData(client: TableClient) {
     collection: 'DOCUMENTS',
   });
 
+  // Opportunity Finder (v2.1 Module 18): tracked volunteer/shadowing/CNA opportunities + async jobs.
+  const opportunities = makeDetailsRepo<Opportunity, 'opportunityId'>(client, {
+    prefix: 'OPPORTUNITY',
+    idField: 'opportunityId',
+    collection: 'OPPORTUNITIES',
+  });
+  const opportunityDiscoveryJobs = makeDetailsRepo<OpportunityDiscoveryJob, 'jobId'>(client, {
+    prefix: 'OPPORTUNITY_DISCOVERY',
+    idField: 'jobId',
+  });
+
   const courses = makeDetailsRepo<Course, 'courseId'>(client, {
     prefix: 'COURSE',
     idField: 'courseId',
@@ -221,6 +234,8 @@ export function makeData(client: TableClient) {
     profiles: makeProfiles(client),
     reminderSettings: makeReminderSettings(client),
     documents,
+    opportunities,
+    opportunityDiscoveryJobs,
   };
 }
 

@@ -649,3 +649,75 @@ export interface Document extends Timestamped {
   uploadedBy: string;
   notes?: string;
 }
+
+// ---------------------------------------------------------------------------
+// Opportunity (PK: OPPORTUNITY#<id>, SK: DETAILS; collection GSI1PK=OPPORTUNITIES) — v2.1 Module 18.
+// Volunteer / shadowing / CNA / summer programs the family can pursue to build clinical hours. The
+// app DISCOVERS these via web-grounded AI (like colleges/scholarships) and tracks the ones she picks.
+// ---------------------------------------------------------------------------
+export type OpportunityType =
+  | 'hospital-volunteer'
+  | 'shadowing'
+  | 'cna-program'
+  | 'summer-program'
+  | 'job'
+  | 'club'
+  | 'other';
+
+export type OpportunityStatus =
+  | 'discovered'
+  | 'interested'
+  | 'applied'
+  | 'active'
+  | 'completed'
+  | 'dismissed';
+
+export interface Opportunity extends Timestamped {
+  opportunityId: string;
+  name: string;
+  organization?: string;
+  type: OpportunityType;
+  location?: string;
+  distanceNote?: string;
+  description?: string;
+  eligibility?: string[];
+  timeCommitment?: string;
+  cost?: number;
+  applicationUrl?: string;
+  contact?: { name?: string; email?: string; phone?: string };
+  applicationDeadline?: string;
+  status: OpportunityStatus;
+  linkedActivityId?: string;
+  linkedClinicalId?: string;
+  dataSources?: string[];
+  addedBy?: 'ai-discovered' | 'manual';
+}
+
+/** One discovered opportunity (name required) — the result of a discovery run. */
+export interface OpportunityCandidate {
+  name: string;
+  organization?: string;
+  type?: OpportunityType;
+  location?: string;
+  distanceNote?: string;
+  description?: string;
+  eligibility?: string[];
+  timeCommitment?: string;
+  cost?: number;
+  applicationUrl?: string;
+  applicationDeadline?: string;
+}
+
+/**
+ * Transient async opportunity-discovery job (mirrors DiscoveryJob). The API creates one and enqueues
+ * it; the SQS worker runs the web-grounded search and writes candidates back; the frontend polls.
+ * PK: OPPORTUNITY_DISCOVERY#<jobId>, SK: DETAILS.
+ */
+export interface OpportunityDiscoveryJob extends Timestamped {
+  jobId: string;
+  status: 'pending' | 'complete' | 'failed';
+  filters?: { type?: OpportunityType; location?: string; query?: string; limit?: number };
+  candidates?: OpportunityCandidate[];
+  count?: number;
+  error?: string;
+}
