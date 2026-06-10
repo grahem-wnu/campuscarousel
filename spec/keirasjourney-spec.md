@@ -1643,6 +1643,338 @@ All features ship in v1. Future phases are net-new ideas, not deferred core func
 
 ---
 
+## v2.1 Feature Wave — Post-Launch Additions
+
+**Status: Draft — awaiting Grahem approval (2026-06-10)**
+
+Five gaps surfaced from a post-launch review of the deployed app. The app fully implements the
+v2.0 spec; these are net-new capabilities that make the difference between *tracking* the journey
+and *driving* it. Ship as **phased PRs to `dev`**, in the priority order below — each is independently
+reviewable and deployable. Each subsection extends (does not replace) the v2.0 spec.
+
+**Priority / ship order:**
+1. **F1 — Deadline Reminders** (email digest) — highest leverage, smallest surface
+2. **F2 — Document Storage** (S3 uploads)
+3. **Module 18 — Opportunity Finder** (AI discovery of volunteer/shadowing/CNA opportunities)
+4. **F4 — Guided First-Run Onboarding** (completes the v2.0 First-Run Experience)
+5. **Module 19 — Financial Aid Center** (FAFSA/CSS timeline, net-price tooling, NursingCAS awareness)
+
+Privacy, single-table DynamoDB, server-side auth off the JWT, no hardcoded config, and AI-on-Bedrock
+all carry over unchanged. New AI features degrade gracefully to curated fallbacks like the existing ones.
+
+---
+
+### F1 — Deadline Reminders (Email Digest)
+
+**Purpose:** The app is currently pull-only — a missed scholarship/cert/application deadline is silent.
+A scheduled email digest pushes upcoming and overdue items to the family so nothing slips.
+
+**Channel:** Amazon SES (v2) email digest (chosen over calendar sync / SMS for reliability + simplicity).
+Because Cognito accounts are username-only (no email on file), recipient addresses are stored in
+reminder settings, not derived from the user record.
+
+**Cadence + "never repeat" (Grahem, 2026-06-10):** the digest defaults to **weekly** (Monday), and a
+deadline is emailed **exactly once** — never repeated in later digests. A per-settings ledger
+(`notifiedEventIds`) records every event id already sent; subsequent digests exclude them, so the
+email is a nudge, not a weekly nag. (Tradeoff: an item is surfaced once even if it later goes overdue.)
+
+**Data Model:**
+```
+PK: REMINDER_SETTINGS
+SK: DETAILS
+Attributes:
+  - enabled: boolean (default true)
+  - cadence: "daily" | "weekly" (default "weekly")
+  - sendHourUTC: number (0-23, when the digest fires; default 13 = ~6-9am US)
+  - weeklyDayOfWeek: number (0-6, used when cadence = "weekly"; default 1 = Monday)
+  - horizonDays: number (look-ahead window for "upcoming"; default 30)
+  - recipients: list of maps { label: string (e.g., "Keira", "Mom", "Dad"), email: string, includePrivate: boolean }
+      - includePrivate is false for everyone except Keira's own address (private items never email a parent)
+  - notifiedEventIds: list of strings (server-internal "never repeat" ledger; not user-editable)
+  - lastSentAt: ISO timestamp
+  - updatedBy: string (userId)
+  - updatedAt: ISO timestamp
+```
+
+**Aggregation:** Reuses the master-timeline aggregation (`buildEvents`/`upcoming`, the same logic
+behind `GET /timeline/upcoming`). The digest Lambda assembles overdue + next-`horizonDays` items
+across colleges, scholarships, certifications (expirations/renewals), goals, application deadlines,
+and campus visits — grouped "Overdue / This week / Next week / This month / Later", each linking back
+into the app. Per-recipient content respects `includePrivate` (private-sourced items only appear in
+Keira's own email) and excludes anything already in `notifiedEventIds` (never repeat).
+
+**Infrastructure:**
+- EventBridge rule (cron, **hourly** at minute 0) → **digest Lambda** (separate handler, 60s timeout).
+- The hourly tick lets the Lambda honor the configured `sendHourUTC` (and, for weekly, `weeklyDayOfWeek`);
+  it sends at most once/day, and records `lastSentAt` (same-UTC-day guard) + appends sent ids to the ledger.
+- SES: verify the family sender identity + (in SES sandbox) the recipient addresses, OR request
+  production access. Sender from config/env (`REMINDER_SENDER_EMAIL`), never hardcoded. Send via
+  `@aws-sdk/client-sesv2`; least-privilege `ses:SendEmail` scoped to the account's SES identities.
+- All new config (sender address, app URL, schedule) via env/CDK config. Added to the async stack.
+
+**API:**
+- `GET /reminders/settings` — get reminder settings (any user; returns defaults if none saved)
+- `PUT /reminders/settings` — update cadence, recipients, horizon, enabled (ledger preserved server-side)
+- `POST /reminders/send-test` — send the digest now (bypasses cadence + the ledger). With `{ to }`, sends a
+  single test to that address using the caller's visibility; otherwise emails all configured recipients.
+
+**Edge cases:** no recipients / disabled → Lambda no-ops; SES send failure → throws so the CloudWatch
+error alarm fires (retried next tick); empty/already-notified digest → skip that recipient's send;
+sender email unset → send-test returns 409 (config error) rather than failing silently.
+
+**Acceptance criteria:**
+- [x] Weekly digest emails configured recipients with correctly grouped overdue/upcoming items
+- [x] Keira's email includes her private-deadline items; parents' emails never do
+- [x] Each deadline is emailed once and never repeated (notifiedEventIds ledger)
+- [x] Disabling reminders or clearing recipients stops all sends
+- [x] "Send test" delivers a digest on demand; failures are visible (409/toast), not silent
+- [x] Schedule + sender are config-driven (no hardcoded values), deployed via the async stack
+
+**Test plan:** unit (digest assembly grouping + per-recipient private filtering; cadence/day/hour gating
+logic); integration (settings CRUD; send-test path with a stubbed SES client); manual (deploy to
+staging, set recipients to verified addresses, confirm a real digest arrives and links resolve).
+
+---
+
+### F2 — Document Storage (S3 Uploads)
+
+**Purpose:** Over 4 years the family accumulates real artifacts — scanned certs, final essay PDFs,
+transcripts, signed recommendation letters, financial-aid letters. Schema fields like `documentUrl`
+exist but there is no upload pipeline. Add private file storage with presigned S3 upload/download.
+
+**Scope (per approval):** attach to **Certifications**, **Application Central (essays & app docs)**,
+**Recommendation letters (contacts/recommender slots)**, plus a **general document vault** catch-all.
+
+**Data Model:**
+```
+PK: DOCUMENT#<documentId>
+SK: DETAILS
+Attributes:
+  - fileName: string (original name)
+  - contentType: string (MIME)
+  - sizeBytes: number
+  - s3Key: string (server-generated; never client-supplied)
+  - category: "certificate" | "essay" | "application-doc" | "recommendation" | "transcript" | "financial-aid" | "visit-photo" | "other"
+  - linkedEntity: map { type: "certification" | "essay" | "application" | "contact" | "college" | "scholarship" | null, id: string | null }
+      - null/null = lives only in the general vault
+  - visibility: "family" | "private"   (same model as journal/clinical; private = Keira only, AI sees all when Keira authed)
+  - uploadedBy: string (userId)
+  - notes: string
+  - createdAt: ISO timestamp
+  - updatedAt: ISO timestamp
+
+GSI (vault + per-entity listing):
+  GSI5PK: DOCUMENTS
+  GSI5SK: <createdAt>#<documentId>
+```
+
+**Infrastructure:** new **private** S3 documents bucket (block all public access, SSE, lifecycle/versioning
+optional), in the existing stack. No public read — all access via short-lived presigned URLs minted by
+Lambda. Bucket name via env/SSM. Lambda role gets scoped `s3:PutObject/GetObject/DeleteObject` on that bucket only.
+
+**Upload flow (presigned, two-step):**
+1. `POST /documents/upload-url` → validates category/contentType/size, generates `s3Key` +
+   presigned **PUT** URL; client uploads bytes directly to S3.
+2. `POST /documents` → records the metadata after a successful upload (status confirmed via HEAD).
+
+**API:**
+- `GET /documents` — list (filters: category, linkedEntity, visibility-by-auth)
+- `GET /documents/:id` — metadata + presigned **GET** download URL (visibility-enforced)
+- `POST /documents/upload-url` — mint presigned PUT URL
+- `POST /documents` — create metadata record
+- `PUT /documents/:id` — update notes/category/visibility/links
+- `DELETE /documents/:id` — delete metadata + S3 object
+
+**UI:** an "Attachments" panel on Certification / essay / recommender / college detail views (list +
+upload + download/delete), and a standalone **Documents** vault page (grid by category, filter, upload).
+Private docs follow the lock affordance Keira already sees on journal entries.
+
+**Edge cases:** size cap (e.g., 25MB) + content-type allowlist enforced server-side before minting URL;
+orphaned S3 object if step 2 never runs → swept by a lifecycle rule on an `incoming/` prefix; presigned
+URLs expire (≤5 min upload, ≤60s download); deleting a record deletes the object; non-student cannot
+list/fetch/download a `private` document (enforced via the existing `assertCanRead`/`filterForRequester`).
+
+**Acceptance criteria:**
+- [ ] Family can upload a cert/essay/rec/transcript and download it later via presigned URL
+- [ ] Documents attach to the right entity or live in the vault; vault lists everything visible to the caller
+- [ ] Private documents are invisible/inaccessible to parent + admin; visible to Keira and the AI when Keira is authed
+- [ ] Bucket blocks public access; no object is ever world-readable; size/type validated server-side
+- [ ] Deleting a document removes both metadata and the S3 object
+
+**Test plan:** unit (key generation, size/type validation, visibility filtering reuse); integration
+(upload-url → put → create → get → delete round-trip with an in-memory/stubbed S3; private-doc 403 for
+parent); manual (staging upload of a real PDF, download, privacy check).
+
+---
+
+### Module 18 — Opportunity Finder
+
+**Purpose:** Clinical/volunteer hours are *the* BSN admission gate, yet the app only records them after
+the fact. This module helps the family **find** opportunities — hospital volunteer programs, nurse
+shadowing, CNA training courses, and relevant part-time roles near them — mirroring the existing
+College/Scholarship AI discovery pattern. Found opportunities flow into Clinical Hours / Activity Journal.
+
+**Data Model:**
+```
+PK: OPPORTUNITY#<opportunityId>
+SK: DETAILS
+Attributes:
+  - name: string
+  - organization: string (e.g., "CHOC Children's", "Saddleback College")
+  - type: "hospital-volunteer" | "shadowing" | "cna-program" | "summer-program" | "job" | "club" | "other"
+  - location: string (city, state)
+  - distanceNote: string (e.g., "~12 mi from Aliso Viejo")
+  - description: string
+  - eligibility: list of strings (e.g., "16+", "background check", "TB test")
+  - timeCommitment: string (e.g., "4 hrs/week, 6-month min")
+  - cost: number (0 if free)
+  - applicationUrl: string
+  - contact: map { name, email, phone }
+  - applicationDeadline: ISO date (optional)
+  - status: "discovered" | "interested" | "applied" | "active" | "completed" | "dismissed"
+  - linkedActivityId: string (optional — once she starts logging hours)
+  - linkedClinicalId: string (optional)
+  - dataSources: list of strings (URLs)
+  - addedBy: "ai-discovered" | "manual"
+  - createdAt / updatedAt: ISO timestamp
+```
+Discovery is async (like college discovery), backed by a transient `OPPORTUNITY_DISCOVERY#<jobId>` job
+on the shared SQS hydration queue; the web-grounded prompt (`converseWithSearch`, Tavily) is seeded with
+the student's location/grade from the profile and the requested type. Frontend polls the job.
+
+**API:**
+- `GET /opportunities` — list (filters: type, status, search)
+- `GET /opportunities/:id` / `POST` / `PUT` / `DELETE` — CRUD
+- `POST /opportunities/discover` — async AI discovery (filters: type, radius, keyword); returns `202` + jobId
+- `GET /opportunities/discover/:jobId` — poll discovery job
+- `POST /opportunities/bulk-add` — add selected discovered opportunities
+
+**UI:** new secondary-nav module. Empty state → "Find ways to get clinical & volunteer hours."
+Discovery panel (type + location filters) → results with checkboxes → add. List view grouped by type
+with status pills; "Log hours" action deep-links into Clinical Hours / Activity Journal pre-filled.
+
+**Edge cases:** no results after search → friendly empty state, never fabricate; web search disabled →
+falls back to model-only suggestions flagged `partial`; dismissed opportunities hidden from default list.
+
+**Acceptance criteria:**
+- [ ] AI discovers real, location-relevant opportunities with source URLs (async + polling, like colleges)
+- [ ] Opportunities can be saved, status-tracked, and deep-link into hours logging
+- [ ] Never fabricates a program/contact; degrades to `partial` when search is unavailable
+
+**Test plan:** unit (prompt assembly with profile location; JSON parse + fallback); integration (discover
+job lifecycle inline + via queue; CRUD); manual (staging discovery for "hospital volunteer near
+<city>", confirm plausible cited results).
+
+---
+
+### F4 — Guided First-Run Onboarding
+
+**Purpose:** The v2.0 "First-Run Experience" is only partially built — the backend profile/suggest
+endpoints exist, but there's no guided wizard. New users land in an empty app with no path. Complete it.
+
+**Behavior:** On login, if `STUDENT_PROFILE` is absent or `onboardingComplete` is false, show a 3-step
+wizard (skippable at any step):
+1. **Profile** — name, high school, graduation year, current GPA + type, career goal, location, budget
+   → `PUT /profile` (reuses existing endpoint).
+2. **Discover colleges** — prompt + button into the existing College Hub discovery flow (can skip).
+3. **Suggest goals** — calls `POST /goals/suggest`, shows editable suggestions to accept/modify (can skip).
+On finish/skip-all, set `onboardingComplete: true` on the profile so it doesn't reappear; re-runnable
+later from Settings.
+
+**Data Model:** extend `STUDENT_PROFILE` with `onboardingComplete: boolean` (default false). No new entities.
+
+**API:** none new — reuses `GET/PUT /profile`, `POST /colleges/discover`, `POST /goals/suggest`.
+
+**UI:** full-screen stepper shown above the app shell when triggered; progress dots; "Skip for now" on
+every step; admin/parent can complete the profile on Keira's behalf.
+
+**Edge cases:** partially-filled profile → resume where left off; skip-all still marks complete; empty DB
+detection must not flash the wizard for an already-onboarded user mid-load.
+
+**Acceptance criteria:**
+- [ ] First login on an empty DB walks profile → discovery → goals, each skippable
+- [ ] Completing or skipping all sets `onboardingComplete`; wizard doesn't reappear
+- [ ] Re-runnable from Settings; works for a parent setting it up on Keira's behalf
+
+**Test plan:** unit (trigger logic from profile state); integration (profile create flips the flag);
+manual (fresh staging user sees the wizard once, not again).
+
+---
+
+### Module 19 — Financial Aid Center
+
+**Purpose:** A $200K budget is central to the spec, but FAFSA/CSS appear only as goal-checklist text.
+Add a home for the money mechanics: federal/institutional aid deadlines, net-price tooling, and
+awareness that many nursing programs apply through **NursingCAS** (a centralized application service).
+
+**Data Model:**
+```
+PK: FINAID#<itemId>
+SK: DETAILS
+Attributes:
+  - kind: "fafsa" | "css-profile" | "state-aid" | "institutional-aid" | "loan" | "award-letter" | "other"
+  - title: string
+  - relatedCollegeId: string (optional — institutional aid forms are per-school)
+  - openDate: ISO date (when the form opens — FAFSA typically Oct 1 / Dec)
+  - deadline: ISO date
+  - priorityDeadline: ISO date (optional — many schools have a priority FAFSA date)
+  - status: "not-started" | "in-progress" | "submitted" | "received" | "n/a"
+  - amountOffered: number (for award-letter items)
+  - amountAccepted: number
+  - documentId: string (optional — link to an uploaded award letter via F2)
+  - notes: string
+  - createdAt / updatedAt: ISO timestamp
+```
+Seedable defaults: when first opened, offer to create the standard FAFSA + CSS items for the student's
+class year (editable, opt-in — consistent with goals/certs). Net-price calculator links are pulled per
+college during existing hydration (store `contactInfo.netPriceCalculatorUrl` on the College entity).
+
+**College entity additions (NursingCAS awareness):**
+- `appServices: list of strings` (e.g., `["NursingCAS", "Common App", "Coalition", "Direct"]`)
+- `usesNursingCAS: boolean`
+These are populated by the existing college hydration prompt (add to its instructions/schema) and shown
+on the college Overview + Application Central.
+
+**API:**
+- `GET /finaid` — list items (filters: kind, status, relatedCollege)
+- `GET /finaid/:id` / `POST` / `PUT` / `DELETE` — CRUD
+- `POST /finaid/seed` — create standard FAFSA/CSS items for the class year (returns editable set, opt-in)
+- `GET /finaid/summary` — counts by status + nearest deadline (feeds Dashboard + reminders)
+
+**Integration:** FinAid deadlines flow into the **Master Timeline** and the **F1 reminder digest**
+(orange "financial aid" source). Award-letter amounts can attach an uploaded PDF via F2 and inform the
+Budget view alongside scholarships.
+
+**UI:** new secondary-nav module — deadline-sorted list with countdowns + status, "Seed FAFSA/CSS"
+action, per-college net-price-calculator links, award-letter tracking. NursingCAS badge on colleges that use it.
+
+**Edge cases:** FAFSA open/deadline dates shift yearly → dates are editable, seed uses current cycle;
+`n/a` status hides an item from countdowns; net-price URL absent → graceful omission.
+
+**Acceptance criteria:**
+- [ ] FAFSA/CSS + per-school aid deadlines tracked with countdowns and status
+- [ ] FinAid deadlines appear in the Master Timeline and the email digest
+- [ ] College records surface NursingCAS/Common App usage and a net-price-calculator link when hydrated
+- [ ] Award letters can be recorded (and optionally attached as a document)
+
+**Test plan:** unit (seed generation for a class year; summary/nearest-deadline calc); integration
+(CRUD; timeline + digest pick up finaid items; hydration populates appServices); manual (staging: seed,
+confirm timeline/digest inclusion, check a hydrated college shows NursingCAS where applicable).
+
+---
+
+### v2.1 Infrastructure Summary
+
+- **SES** (F1): sender identity verified; recipients verified or production access requested; send via SDK.
+- **EventBridge Scheduler** (F1): daily trigger → digest Lambda (in the async stack).
+- **S3 documents bucket** (F2): private, public-access-blocked, SSE, scoped IAM, presigned URLs only.
+- **SQS reuse** (Module 18): opportunity discovery rides the existing shared hydration queue + DLQ.
+- **DynamoDB**: all new entities on the single table; one new GSI (`GSI5` for documents/vault).
+- **Config**: sender address, bucket name, schedule, NursingCAS flag — all env/SSM, none hardcoded.
+- **No prod cutover** without Grahem's explicit go (Gate 3 rule unchanged); ship to `dev` → staging first.
+
+---
+
 ## Budget Summary
 
 **Infrastructure cost estimate (monthly):**
@@ -1653,10 +1985,14 @@ All features ship in v1. Future phases are net-new ideas, not deferred core func
 - Cognito: $0 (free for <50K users)
 - Bedrock (Claude Sonnet): ~$10-30 depending on AI usage (more features now — mock interviews, study plans, scholarship discovery, benchmark research, recommender briefs all hit Bedrock)
 - Route 53: ~$0.50/month for hosted zone
+- SES (v2.1 digest): ~$0 (well under the free tier at family volume)
+- S3 documents bucket (v2.1): ~$0 (a few hundred MB of PDFs is negligible)
+- EventBridge Scheduler (v2.1): ~$0
 - **Total: ~$12-35/month**
 
 ---
 
-*Last updated: June 5, 2026*
+*Last updated: June 10, 2026*
+*Version: 2.1 (Draft) — Post-launch feature wave. Added: Deadline Reminders (email digest), Document Storage (S3), Opportunity Finder (Module 18), Guided First-Run Onboarding, Financial Aid Center (Module 19). Awaiting Grahem approval before implementation.*
 *Version: 2.0 — Full 17-module spec. Added: Scholarship Tracker, TEAS Prep, Clinical Hours Log, Certifications, Interview Prep, Why Nursing, Demonstrated Interest + Contacts, Campus Visits, Peer Benchmarks, Master Timeline*
 *Authors: Grahem + Claude*

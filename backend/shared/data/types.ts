@@ -588,3 +588,30 @@ export interface Budget extends Timestamped {
   notes?: string;
   updatedBy?: string;
 }
+
+// ---------------------------------------------------------------------------
+// Reminder settings (PK: REMINDER_SETTINGS, SK: DETAILS) — global singleton.
+// Drives the scheduled email digest of upcoming/overdue deadlines (v2.1 F1).
+// ---------------------------------------------------------------------------
+
+/** One person the digest emails. `includePrivate` is true ONLY for Keira's own address — it
+ *  gates whether items sourced from her private journal entries appear in that recipient's email. */
+export interface ReminderRecipient {
+  label: string; // "Keira", "Mom", "Dad"
+  email: string;
+  includePrivate: boolean;
+}
+
+export interface ReminderSettings extends Timestamped {
+  enabled: boolean;
+  cadence: 'daily' | 'weekly';
+  sendHourUTC: number; // 0-23 — the digest fires only on this UTC hour
+  weeklyDayOfWeek: number; // 0-6 (0 = Sunday); used when cadence = 'weekly'
+  horizonDays: number; // look-ahead window for "upcoming" items
+  recipients: ReminderRecipient[];
+  lastSentAt?: string; // ISO timestamp of the last successful send (idempotency guard)
+  // Event ids already emailed in a scheduled digest. Items here are NEVER re-sent — each deadline
+  // appears in exactly one weekly digest and never nags again (Grahem: "weekly, never repeat").
+  notifiedEventIds?: string[];
+  updatedBy?: string;
+}

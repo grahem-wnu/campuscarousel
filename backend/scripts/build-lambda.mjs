@@ -133,5 +133,8 @@ console.log(
 
 await bundle('lambda/api.ts', 'api');
 await bundle('lambda/hydration.ts', 'hydration');
+await bundle('lambda/digest.ts', 'digest');
 
-console.log('build:lambda — wrote backend/dist/api/index.js and backend/dist/hydration/index.js');
+console.log(
+  'build:lambda — wrote backend/dist/{api,hydration,digest}/index.js',
+);
