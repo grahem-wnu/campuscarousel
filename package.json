@@ -2,7 +2,7 @@
   "name": "keiras-journey",
   "version": "0.0.0",
   "private": true,
-  "description": "Keira's Journey — monorepo root (workspaces, base tooling, route guard).",
+  "description": "Campus Carousel — monorepo root (workspaces, base tooling, route guard).",
   "license": "UNLICENSED",
   "engines": {
     "node": ">=20"
