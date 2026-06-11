@@ -96,7 +96,7 @@ export default function GoalsPage() {
         <div>
           <h1 className="text-2xl font-bold text-ink-900">Goals</h1>
           <p className="mt-0.5 text-sm text-ink-500">
-            Map your path to a BSN — year by year, milestone by milestone.
+            Map your path to college — year by year, milestone by milestone.
           </p>
         </div>
         <div className="flex gap-2">

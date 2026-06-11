@@ -111,12 +111,12 @@ export interface BedrockPrepOptions {
 /** Prompt asking the model for best-time guidance + a few college-specific questions as JSON. */
 function buildPrompt(college: College, visit: Visit): string {
   return [
-    `A prospective BSN nursing applicant is planning a ${visit.visitType ?? 'campus'} visit to ${college.name}`,
+    `A prospective college applicant is planning a ${visit.visitType ?? 'campus'} visit to ${college.name}`,
     college.location ? ` (${college.location})` : '',
     ` on ${visit.date}.`,
-    'Give concise, nursing-focused visit prep. Respond with ONLY a JSON object (no prose, no code fences):',
+    'Give concise, program-focused visit prep. Respond with ONLY a JSON object (no prose, no code fences):',
     '{"bestTime": string (one or two sentences on the best time/season to visit this school),',
-    '"extraQuestions": string[] (up to 5 school-specific nursing questions beyond the standard checklist)}.',
+    '"extraQuestions": string[] (up to 5 school-specific program questions beyond the standard checklist)}.',
   ].join('');
 }
 

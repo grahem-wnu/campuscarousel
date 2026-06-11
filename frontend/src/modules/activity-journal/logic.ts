@@ -34,7 +34,7 @@ export const REFLECTION_PROMPTS: readonly string[] = [
   'What did you do this week that felt meaningful — and why?',
   'Describe a moment with a patient, peer, or mentor that stuck with you.',
   'What did you learn about yourself this week?',
-  'When did you feel most like the nurse you want to become?',
+  'When did you feel most like the person you want to become?',
   'What was hard this week, and how did you handle it?',
   'Who did you help this week, and what did it teach you?',
   'What are you proud of right now?',

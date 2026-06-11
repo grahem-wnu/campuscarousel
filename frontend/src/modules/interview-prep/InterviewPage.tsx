@@ -80,7 +80,7 @@ export default function InterviewPage() {
       <header>
         <h1 className="text-2xl font-bold text-ink-900">Interview Prep</h1>
         <p className="mt-0.5 text-sm text-ink-500">
-          Practice BSN interviews with an AI coach that grounds feedback in your real experiences.
+          Practice admissions interviews with an AI coach that grounds feedback in your real experiences.
         </p>
       </header>
 

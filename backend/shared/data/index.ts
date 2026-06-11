@@ -17,6 +17,7 @@ import {
   makeCollegeNotes,
   makeConversations,
   makeInvites,
+  makeMembers,
   makeProfiles,
   makeReminderSettings,
   makeStudentProfile,
@@ -268,6 +269,7 @@ export function makeData(
     profiles: makeProfiles(familyClient),
     reminderSettings: makeReminderSettings(familyClient),
     students: makeStudents(familyClient),
+    members: makeMembers(familyClient),
     // GLOBAL registries — built on the un-scoped base client (never tenant-prefixed).
     tenants: makeTenants(base),
     invites: makeInvites(base),

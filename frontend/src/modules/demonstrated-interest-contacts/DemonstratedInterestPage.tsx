@@ -152,7 +152,7 @@ export default function DemonstratedInterestPage() {
             <EmptyState
               icon="contacts"
               title="Start your contact network"
-              description="Add the nurses, teachers, counselors, and mentors who can become recommenders and advocates."
+              description="Add the mentors, teachers, counselors, and professionals who can become recommenders and advocates."
               action={<Button icon="plus" onClick={() => setAdding(true)}>Add your first contact</Button>}
             />
           ) : visibleContacts.length === 0 ? (

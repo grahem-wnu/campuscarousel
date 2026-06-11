@@ -197,6 +197,17 @@ describe('createRouter', () => {
     else process.env.DEFAULT_STUDENT_ID = prev;
   });
 
+  it('lets a view-only member read (GET) but refuses any mutation (403)', async () => {
+    const MEMBER = { 'cognito:username': 'grandma', 'custom:role': 'member', 'custom:tenantId': 'fam1' };
+    const read = parse(await dispatch(event({ method: 'GET', path: '/activities', claims: MEMBER })));
+    expect(read.status).toBe(200);
+    const write = parse(await dispatch(event({ method: 'POST', path: '/activities', claims: MEMBER, body: { title: 'x' } })));
+    expect(write.status).toBe(403);
+    expect(write.body).toMatchObject({ error: { code: 'forbidden' } });
+    const del = await dispatch(event({ method: 'DELETE', path: '/activities/1', claims: MEMBER }));
+    expect(del.statusCode).toBe(403);
+  });
+
   it('throws when two routes share method+path', () => {
     expect(() =>
       createRouter([

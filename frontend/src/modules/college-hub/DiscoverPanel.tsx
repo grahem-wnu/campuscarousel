@@ -14,7 +14,7 @@ interface Props {
   onClose: () => void;
 }
 
-/** "Discover BSN Programs" — set filters (or just Find), review AI candidates with checkboxes, and
+/** "Discover Programs" — set filters (or just Find), review AI candidates with checkboxes, and
  *  add all or the selected ones. Discovery adds nothing until the user picks. */
 export function DiscoverPanel({ trackedNames, onAdd, onClose }: Props) {
   const [filters, setFilters] = useState<DiscoverFilters>({});
@@ -90,7 +90,7 @@ export function DiscoverPanel({ trackedNames, onAdd, onClose }: Props) {
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <Icon name="search" size={18} className="text-primary-600" />
-          <h2 className="text-sm font-semibold text-primary-800">Discover BSN programs</h2>
+          <h2 className="text-sm font-semibold text-primary-800">Discover programs</h2>
         </div>
         <button type="button" onClick={onClose} aria-label="Close discovery" className="text-primary-600 hover:text-primary-800">
           <Icon name="close" size={16} />

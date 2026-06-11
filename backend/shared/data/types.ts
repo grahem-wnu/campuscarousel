@@ -7,7 +7,7 @@
 // because the AI path needs unfiltered access when keira is the caller. The lib returns raw.
 
 export type Visibility = 'family' | 'private';
-export type Role = 'admin' | 'parent' | 'student';
+export type Role = 'admin' | 'parent' | 'student' | 'member';
 
 /** Fields the library stamps/owns on every stored entity. */
 export interface Timestamped {
@@ -66,6 +66,38 @@ export interface Student extends Timestamped {
   name: string;
   graduationYear?: number;
   status: 'active' | 'archived';
+}
+
+// ---------------------------------------------------------------------------
+// Family member (PK: MEMBER#<userId>, SK: DETAILS; collection GSI1PK='MEMBERS') — FAMILY-LEVEL
+// (tenant-scoped). Everyone with login access to a family's account: the managing guardians AND the
+// wider circle (grandparents, aunts/uncles, family friends, counselors, mentors). Two independent
+// axes: `relationship` is descriptive (who they are); `accessLevel` is what they can do — `manager`
+// (full: manage the family, invite, edit → JWT role 'parent') or `viewer` (read-only, no private,
+// no management → JWT role 'member'). The student (the kid) is tracked in the Student roster, not here.
+// ---------------------------------------------------------------------------
+export type MemberRelationship =
+  | 'parent'
+  | 'grandparent'
+  | 'aunt-uncle'
+  | 'sibling'
+  | 'family-friend'
+  | 'counselor'
+  | 'mentor'
+  | 'other';
+
+export type MemberAccessLevel = 'manager' | 'viewer';
+
+export interface FamilyMember extends Timestamped {
+  /** Cognito username (the invitee's email). Stable id for the member record. */
+  userId: string;
+  email: string;
+  displayName?: string;
+  relationship: MemberRelationship;
+  accessLevel: MemberAccessLevel;
+  status: 'invited' | 'active';
+  /** Username of the guardian/admin who invited them. */
+  invitedBy?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -826,6 +858,10 @@ export interface StudentProfile extends Timestamped {
   currentGPA?: number;
   gpaType?: 'weighted' | 'unweighted';
   careerGoal?: string;
+  /** The college major(s) the student is considering — a kid may be weighing more than one. Drives
+   *  AI college matching/benchmarks and genericizes the app away from a hardcoded nursing/BSN focus.
+   *  Empty/undefined → the AI and copy use a neutral "their intended program". */
+  intendedMajors?: string[];
   dreamSchool?: string;
   interests?: string[];
   currentActivities?: { name: string; type?: string; organization?: string }[];

@@ -25,6 +25,9 @@ interface CompiledRoute {
   route: RouteDef;
 }
 
+/** Methods that mutate state — refused for view-only members (see the role guard in dispatch). */
+const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+
 function splitPath(path: string): string[] {
   return path.split('/').filter((s) => s.length > 0);
 }
@@ -138,6 +141,12 @@ export function createRouter(routes: RouteDef[]): LambdaHandler {
       }
       if (matched.route.platformAdmin && !requester.platformAdmin) {
         throw Errors.forbidden('Requires platform admin');
+      }
+      // View-only members (grandparents, counselors, family friends — JWT role 'member') can read the
+      // family's journey but never change it. Enforced once here so the 24 CRUD modules need no edits:
+      // any mutating method is refused for a member. Reads (GET/HEAD) pass through.
+      if (requester.role === 'member' && MUTATING_METHODS.has(method)) {
+        throw Errors.forbidden('Your access is view-only');
       }
       // SaaS isolation: every request must carry a tenant (or be a platform-admin route). The handler
       // runs inside the tenant's AsyncLocalStorage context so the data layer scopes all keys to it.

@@ -145,9 +145,9 @@ export default function ClinicalPage() {
     <div className="mx-auto max-w-3xl space-y-5 p-4 sm:p-6">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-ink-900">Clinical Hours</h1>
+          <h1 className="text-2xl font-bold text-ink-900">Experience Hours</h1>
           <p className="mt-0.5 text-sm text-ink-500">
-            Structured clinical hours in the format nursing programs want — facility, supervisor, duties, reflections.
+            Structured experience hours in the format programs want — facility, supervisor, duties, reflections.
           </p>
         </div>
         <div className="flex gap-2">
@@ -225,7 +225,7 @@ export default function ClinicalPage() {
           description={
             hasFilters
               ? 'Try clearing the filters to see everything.'
-              : 'Log each shift — facility, supervisor, hours, and what you did. It builds the clinical record nursing programs ask for.'
+              : 'Log each shift — facility, supervisor, hours, and what you did. It builds the experience record programs ask for.'
           }
           action={
             hasFilters ? (

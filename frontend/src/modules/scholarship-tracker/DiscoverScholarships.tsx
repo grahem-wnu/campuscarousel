@@ -129,10 +129,10 @@ export function DiscoverScholarships({ onSaved, onCancel }: Props) {
   return (
     <form onSubmit={run} className="space-y-4">
       <p className="text-sm text-ink-600">
-        Search for nursing, healthcare, community-service, state, and college-specific scholarships.
+        Search for major-specific, merit, community-service, state, and college-specific scholarships.
       </p>
       <Field label="What to look for" hint="Keywords, focus, or eligibility">
-        <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="nursing scholarships for high school seniors" />
+        <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="scholarships for high school seniors in your major" />
       </Field>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Field label="Type">

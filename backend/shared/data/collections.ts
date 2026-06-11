@@ -16,6 +16,7 @@ import type {
   ConversationMessage,
   Benchmark,
   Invite,
+  FamilyMember,
   Profile,
   ReminderSettings,
   Student,
@@ -480,6 +481,59 @@ export function makeStudents(client: TableClient): StudentRepo {
     async list() {
       const items = await client.queryIndex('GSI1', 'STUDENTS', { ascending: true });
       return items.map((i) => toDomain<Student>(i));
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Family members (PK: MEMBER#<userId>) — FAMILY-LEVEL (family-scoped client → keys become
+// T#<tenant>#MEMBER#…, listed via GSI1PK='MEMBERS'). Everyone with login access to the family beyond
+// the student: managing guardians + the wider support circle (grandparents, counselors, friends).
+// ---------------------------------------------------------------------------
+export interface MemberRepo {
+  get(userId: string): Promise<FamilyMember | null>;
+  put(input: Omit<FamilyMember, 'createdAt' | 'updatedAt'>): Promise<FamilyMember>;
+  update(
+    userId: string,
+    patch: Partial<Omit<FamilyMember, 'userId' | 'createdAt' | 'updatedAt'>>,
+  ): Promise<FamilyMember>;
+  delete(userId: string): Promise<void>;
+  list(): Promise<FamilyMember[]>;
+}
+
+export function makeMembers(client: TableClient): MemberRepo {
+  const write = async (domain: FamilyMember): Promise<FamilyMember> => {
+    await client.put({
+      ...(domain as unknown as Record<string, unknown>),
+      PK: `MEMBER#${domain.userId}`,
+      SK: SK_DETAILS,
+      GSI1PK: 'MEMBERS',
+      GSI1SK: dateSortKey(domain.createdAt, domain.userId),
+    });
+    return domain;
+  };
+  return {
+    async get(userId) {
+      const item = await client.get(`MEMBER#${userId}`, SK_DETAILS);
+      return item ? toDomain<FamilyMember>(item) : null;
+    },
+    async put(input) {
+      const existing = await client.get(`MEMBER#${input.userId}`, SK_DETAILS);
+      const now = isoNow();
+      return write({ ...input, createdAt: (existing?.createdAt as string | undefined) ?? now, updatedAt: now });
+    },
+    async update(userId, patch) {
+      const existing = await client.get(`MEMBER#${userId}`, SK_DETAILS);
+      if (!existing) throw new NotFoundError('MEMBER', userId);
+      const current = toDomain<FamilyMember>(existing);
+      return write({ ...current, ...patch, userId, createdAt: current.createdAt, updatedAt: isoNow() });
+    },
+    async delete(userId) {
+      await client.delete(`MEMBER#${userId}`, SK_DETAILS);
+    },
+    async list() {
+      const items = await client.queryIndex('GSI1', 'MEMBERS', { ascending: true });
+      return items.map((i) => toDomain<FamilyMember>(i));
     },
   };
 }

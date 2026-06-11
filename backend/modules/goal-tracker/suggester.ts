@@ -57,7 +57,7 @@ const isCategory = (v: unknown): v is SuggestedGoal['category'] =>
 export function buildSuggestPrompt(input: SuggestInput): string {
   const count = input.count ?? 6;
   const lines: string[] = [
-    'You are an advisor helping a student plan their path toward a BSN (nursing) program.',
+    'You are an advisor helping a student plan their path toward their intended college program(s).',
     `Suggest ${count} concrete, achievable goals tailored to this student.`,
   ];
   if (input.gradeLevel) lines.push(`Grade level: ${input.gradeLevel}.`);

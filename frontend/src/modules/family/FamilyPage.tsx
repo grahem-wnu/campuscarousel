@@ -1,7 +1,21 @@
-import { useState } from "react";
-import { Badge, Button, Card, EmptyState, Field, Icon, Input, Modal, useToast } from "../../shared/ui";
+import { useCallback, useEffect, useState } from "react";
+import { Badge, Button, Card, EmptyState, Field, Icon, Input, Modal, Select, Spinner, useToast } from "../../shared/ui";
 import { useActiveStudent, type Student } from "../../shared/shell";
-import { createStudent, deleteStudent, updateStudent } from "./api";
+import {
+  RELATIONSHIP_LABELS,
+  createStudent,
+  deleteMember,
+  deleteStudent,
+  getStudentProfile,
+  inviteMember,
+  listMembers,
+  putStudentProfile,
+  updateMember,
+  updateStudent,
+  type FamilyMember,
+  type MemberAccessLevel,
+  type MemberRelationship,
+} from "./api";
 
 /**
  * Family management (parents/admins). Today it manages the **children** in the family — the roster
@@ -69,7 +83,7 @@ export default function FamilyPage() {
             <EmptyState
               icon="user"
               title="No children yet"
-              description="Add your first child to start tracking their path to nursing."
+              description="Add your first child to start tracking their college journey."
             />
           </div>
         ) : (
@@ -114,15 +128,9 @@ export default function FamilyPage() {
         </div>
       </Card>
 
-      <Card>
-        <div className="border-b border-surface-border px-4 py-3">
-          <h2 className="font-semibold text-ink-800">Parents &amp; access</h2>
-        </div>
-        <div className="p-4 text-sm text-ink-500">
-          Inviting a co-parent to share access is coming soon. For now, account access is managed by your
-          administrator.
-        </div>
-      </Card>
+      <AcademicFocusCard />
+
+      <MembersCard />
 
       {editing && (
         <EditStudentModal
@@ -276,6 +284,277 @@ function EditStudentModal({
               Save
             </Button>
           </div>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+/**
+ * Academic focus for the ACTIVE child (the switcher's selection). Edits intended major(s), which drive
+ * the AI's college matching, benchmarks, and copy — this is what genericizes the app beyond nursing.
+ * Scoped to the active student because /profile resolves to whoever the X-Student-Id header names.
+ */
+function AcademicFocusCard() {
+  const toast = useToast();
+  const { activeStudent, activeStudentId } = useActiveStudent();
+  const [majors, setMajors] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const p = await getStudentProfile();
+      setMajors((p.intendedMajors ?? []).join(", "));
+    } catch {
+      setMajors("");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Reload whenever the active child changes (the data is per-child).
+  useEffect(() => {
+    void load();
+  }, [load, activeStudentId]);
+
+  async function save() {
+    setBusy(true);
+    try {
+      const list = majors.split(",").map((m) => m.trim()).filter(Boolean);
+      await putStudentProfile({ intendedMajors: list });
+      toast.success("Saved.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not save.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!activeStudentId) return null;
+
+  return (
+    <Card>
+      <div className="border-b border-surface-border px-4 py-3">
+        <h2 className="font-semibold text-ink-800">
+          Academic focus{activeStudent ? ` — ${activeStudent.name}` : ""}
+        </h2>
+      </div>
+      <div className="p-4">
+        {loading ? (
+          <Spinner size={20} />
+        ) : (
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+            <Field
+              label="Intended major(s)"
+              className="flex-1"
+              hint="Comma-separated. List more than one if they're still deciding — the AI weighs them all."
+            >
+              <Input
+                value={majors}
+                onChange={(e) => setMajors(e.target.value)}
+                placeholder="e.g. Nursing, Biology, Psychology"
+              />
+            </Field>
+            <Button onClick={save} disabled={busy}>
+              Save
+            </Button>
+          </div>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+const RELATIONSHIPS: MemberRelationship[] = [
+  "parent",
+  "grandparent",
+  "aunt-uncle",
+  "sibling",
+  "family-friend",
+  "counselor",
+  "mentor",
+  "other",
+];
+
+/** Parents & access: everyone with a login to the family — guardians + the wider support circle. */
+function MembersCard() {
+  const toast = useToast();
+  const [members, setMembers] = useState<FamilyMember[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [inviting, setInviting] = useState(false);
+  const [editing, setEditing] = useState<FamilyMember | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      setMembers((await listMembers()).members);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not load members.");
+    } finally {
+      setLoading(false);
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  async function remove(m: FamilyMember) {
+    if (!window.confirm(`Remove ${m.displayName || m.email}'s access? They'll no longer be able to sign in.`)) return;
+    try {
+      await deleteMember(m.userId);
+      toast.success("Access removed.");
+      await load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not remove.");
+    }
+  }
+
+  return (
+    <Card>
+      <div className="flex items-center justify-between border-b border-surface-border px-4 py-3">
+        <h2 className="font-semibold text-ink-800">Parents &amp; access</h2>
+        <Button size="sm" onClick={() => setInviting(true)}>
+          <Icon name="plus" size={15} /> Invite
+        </Button>
+      </div>
+
+      {loading ? (
+        <div className="p-4">
+          <Spinner size={20} />
+        </div>
+      ) : members.length === 0 ? (
+        <div className="p-4">
+          <EmptyState
+            icon="contacts"
+            title="No one else yet"
+            description="Invite a co-parent, grandparent, counselor, or family friend. Managers can edit; viewers can follow along."
+          />
+        </div>
+      ) : (
+        <ul className="divide-y divide-surface-border">
+          {members.map((m) => (
+            <li key={m.userId} className="flex items-center gap-3 px-4 py-3">
+              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-secondary-100 text-secondary-700">
+                <Icon name="user" size={18} />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-medium text-ink-800">{m.displayName || m.email}</p>
+                <p className="truncate text-xs text-ink-500">
+                  {RELATIONSHIP_LABELS[m.relationship]} · {m.email}
+                </p>
+              </div>
+              <Badge tone={m.accessLevel === "manager" ? "primary" : "neutral"}>
+                {m.accessLevel === "manager" ? "Manager" : "View-only"}
+              </Badge>
+              <Button variant="ghost" size="sm" onClick={() => setEditing(m)}>
+                Edit
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => void remove(m)} aria-label={`Remove ${m.email}`}>
+                <Icon name="close" size={16} />
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {inviting && (
+        <MemberFormModal
+          onClose={() => setInviting(false)}
+          onSaved={async () => {
+            setInviting(false);
+            await load();
+          }}
+        />
+      )}
+      {editing && (
+        <MemberFormModal
+          member={editing}
+          onClose={() => setEditing(null)}
+          onSaved={async () => {
+            setEditing(null);
+            await load();
+          }}
+        />
+      )}
+    </Card>
+  );
+}
+
+/** Invite a new member (no `member`) or edit an existing one's relationship + access level. */
+function MemberFormModal({
+  member,
+  onClose,
+  onSaved,
+}: {
+  member?: FamilyMember;
+  onClose: () => void;
+  onSaved: () => Promise<void>;
+}) {
+  const toast = useToast();
+  const editingExisting = Boolean(member);
+  const [email, setEmail] = useState(member?.email ?? "");
+  const [displayName, setDisplayName] = useState(member?.displayName ?? "");
+  const [relationship, setRelationship] = useState<MemberRelationship>(member?.relationship ?? "grandparent");
+  const [accessLevel, setAccessLevel] = useState<MemberAccessLevel>(member?.accessLevel ?? "viewer");
+  const [busy, setBusy] = useState(false);
+
+  async function save() {
+    if (!editingExisting && !/^\S+@\S+\.\S+$/.test(email.trim())) {
+      toast.error("Enter a valid email.");
+      return;
+    }
+    setBusy(true);
+    try {
+      if (editingExisting && member) {
+        await updateMember(member.userId, { displayName: displayName.trim() || undefined, relationship, accessLevel });
+        toast.success("Updated.");
+      } else {
+        await inviteMember({ email: email.trim(), displayName: displayName.trim() || undefined, relationship, accessLevel });
+        toast.success(`Invited ${email.trim()} — we emailed them a sign-in link.`);
+      }
+      await onSaved();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not save.");
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal open onClose={onClose} title={editingExisting ? "Edit access" : "Invite someone"}>
+      <div className="space-y-4">
+        {!editingExisting && (
+          <Field label="Email" hint="We'll email them a temporary password to sign in with.">
+            <Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@example.com" />
+          </Field>
+        )}
+        <Field label="Name (optional)">
+          <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="e.g. Grandma Jo" />
+        </Field>
+        <Field label="Relationship">
+          <Select value={relationship} onChange={(e) => setRelationship(e.target.value as MemberRelationship)}>
+            {RELATIONSHIPS.map((r) => (
+              <option key={r} value={r}>
+                {RELATIONSHIP_LABELS[r]}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Access" hint="Managers can edit and invite. Viewers can follow along but not change anything or see private journal entries.">
+          <Select value={accessLevel} onChange={(e) => setAccessLevel(e.target.value as MemberAccessLevel)}>
+            <option value="viewer">View-only</option>
+            <option value="manager">Manager</option>
+          </Select>
+        </Field>
+        <div className="flex justify-end gap-2 pt-1">
+          <Button variant="ghost" onClick={onClose} disabled={busy}>
+            Cancel
+          </Button>
+          <Button onClick={save} disabled={busy}>
+            {editingExisting ? "Save" : "Send invite"}
+          </Button>
         </div>
       </div>
     </Modal>

@@ -31,7 +31,7 @@ const isoDate = /^\d{4}-\d{2}-\d{2}$/;
 export function buildDiscoverPrompt(input: DiscoverInput): string {
   const count = input.count ?? 8;
   const lines: string[] = [
-    'You are helping a student find scholarships to fund a BSN (nursing) degree.',
+    'You are helping a student find scholarships to fund their intended college degree.',
     `Use web search to find ${count} real, currently-open scholarships. Do not invent any.`,
   ];
   if (input.query) lines.push(`Focus: ${input.query}.`);

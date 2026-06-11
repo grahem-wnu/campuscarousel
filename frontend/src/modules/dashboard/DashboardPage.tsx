@@ -62,7 +62,7 @@ export default function DashboardPage() {
     <div className="mx-auto max-w-5xl space-y-5 p-4 sm:p-6">
       <header>
         <h1 className="text-2xl font-bold text-ink-900">Dashboard</h1>
-        <p className="mt-0.5 text-sm text-ink-500">Your whole journey to a BSN, at a glance.</p>
+        <p className="mt-0.5 text-sm text-ink-500">Your whole journey, at a glance.</p>
       </header>
 
       {/* Headline stats */}

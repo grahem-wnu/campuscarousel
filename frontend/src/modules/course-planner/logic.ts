@@ -63,7 +63,7 @@ export function formatGpa(n: number): string {
 export type CourseImportance = 'required' | 'recommended' | 'elective';
 
 /**
- * Importance for color-coding the grid: nursing programs lean on science/math (and health
+ * Importance for color-coding the grid: programs lean on science/math (and health
  * sciences); humanities are recommended; everything else is elective. A UI heuristic, not a
  * data field.
  */

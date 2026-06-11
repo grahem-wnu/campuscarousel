@@ -7,7 +7,7 @@ import type { NavEntry } from '../../shared/shell';
 export const nav: NavEntry[] = [
   {
     id: 'clinical-hours',
-    label: 'Clinical Hours',
+    label: 'Experience Hours',
     group: 'primary',
     order: 30,
     route: '/clinical',

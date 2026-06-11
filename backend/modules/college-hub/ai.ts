@@ -11,6 +11,7 @@
 // `{ hydrationStatus: 'failed' }` patch.
 
 import { converseWithSearch, type BedrockInvoker, type WebSearcher } from '../../shared/ai/index.js';
+import { majorPhrase } from '../../shared/ai/major.js';
 import type { College } from '../../shared/data/index.js';
 import type { DiscoverInput } from './schema.js';
 
@@ -138,12 +139,15 @@ function toCandidate(raw: unknown): CollegeCandidate | null {
 }
 
 function buildDiscoverPrompt(input: DiscoverInput): string {
-  const wants: string[] = ['BSN (Bachelor of Science in Nursing) programs'];
+  // The student's intended major(s) come through the free-text `query` (e.g. "Nursing", "Biology");
+  // with none supplied we research undergraduate programs generically.
+  const program = majorPhrase(undefined, 'undergraduate');
+  const wants: string[] = [`strong ${program} programs`];
   if (input.state) wants.push(`in ${input.state}`);
   if (input.programType) wants.push(`of program type ${input.programType}`);
-  if (input.directAdmitOnly) wants.push('that offer direct-admit BSN');
+  if (input.directAdmitOnly) wants.push('that offer direct admission to the program');
   if (input.maxTuition) wants.push(`with annual tuition under $${input.maxTuition}`);
-  if (input.query) wants.push(`matching: "${input.query}"`);
+  if (input.query) wants.push(`matching the student's focus: "${input.query}"`);
   const limit = input.limit ?? 8;
   return [
     `List up to ${limit} U.S. colleges with ${wants.join(', ')}.`,
@@ -154,7 +158,7 @@ function buildDiscoverPrompt(input: DiscoverInput): string {
     '"programType": "direct-admit-BSN"|"pre-nursing-secondary-app"|"ABSN-only"|"RN-to-BSN-only",',
     '"isDirectAdmit": boolean, "hasBSN": boolean, "ranking": string,',
     '"tuitionInState": number, "tuitionOutOfState": number, "website": string,',
-    '"summary": string (one sentence on its nursing program)}.',
+    '"summary": string (one sentence on how its program fits the student)}.',
   ].join('\n');
 }
 
@@ -219,28 +223,32 @@ export function pickHydratableFields(raw: unknown): Partial<College> {
 function buildHydratePrompt(name: string, state?: string): string {
   const where = state ? `, ${state}` : '';
   const year = new Date().getFullYear();
+  // No per-call major is threaded here (hydration runs on the SQS worker, decoupled from the
+  // profile), so keep the language program-agnostic. If the school's intended program is a
+  // health/nursing one, the nursing-specific JSON fields below simply get filled; otherwise they
+  // go unused. The narrative covers whichever program the student is researching.
   return [
-    `You are a college research analyst building a rich, decision-ready profile of the nursing (BSN)`,
-    `program at "${name}"${where} for a prospective undergraduate applicant and her family.`,
+    `You are a college research analyst building a rich, decision-ready profile of the undergraduate`,
+    `program at "${name}"${where} for a prospective applicant and their family.`,
     '',
     'USE THE web_search TOOL to ground every number — do NOT rely on prior knowledge for tuition, GPA,',
     `acceptance rate, deadlines, or rankings; these change yearly and must be verified against ${year}-${year + 1}`,
     'sources. Search EFFICIENTLY: roughly 5-9 well-chosen queries is plenty. Cover DIFFERENT source types,',
     'because no single site has everything:',
-    "  - The college's own nursing site (.edu) — program structure, prerequisites, deadlines, clinical partners.",
+    "  - The college's own program/department site (.edu) — program structure, prerequisites, deadlines, partners.",
     '  - U.S. News / Niche — rankings and reputation.',
     "  - College Navigator / NCES, collegetuitioncompare, the school's financial-aid office — cost of",
     '    attendance, NET PRICE after aid, and % receiving aid.',
     '  - Common Data Set / admissions-stats sites — average ADMITTED GPA and acceptance rate (these are',
     "    rarely on the college's own marketing pages, so search the wider web for them specifically).",
-    '  - Niche / Cappex / Reddit — authentic student testimonials about the nursing program.',
+    '  - Niche / Cappex / Reddit — authentic student testimonials about the program.',
     'As soon as you have enough to fill the fields below, STOP searching and output the final JSON',
     'object. Do not keep searching for marginal details — partial data delivered beats perfect data',
     'that never arrives.',
     '',
     'CRITICAL ACCURACY RULES:',
-    '  - Separate NURSING-program stats (BSN/direct-admit acceptance rate, nursing GPA) from',
-    '    UNIVERSITY-WIDE stats. Use acceptanceRateNursing vs acceptanceRateUniversity accordingly.',
+    '  - Separate PROGRAM/major-specific admission stats (acceptance rate, admitted GPA) from',
+    '    UNIVERSITY-WIDE stats. Use acceptanceRateNursing for the program figure vs acceptanceRateUniversity accordingly.',
     '  - estimatedNetPriceAfterAid is the cost AFTER grants & scholarships and is DIFFERENT from tuition.',
     '    Make a DEDICATED search for it — College Navigator (nces.ed.gov) publishes an "Average net',
     '    price" figure for nearly every U.S. college, and collegetuitioncompare lists it too. Report',
@@ -250,12 +258,11 @@ function buildHydratePrompt(name: string, state?: string): string {
     '    wrong one is not.',
     '',
     'Write a genuine NARRATIVE, not bullet fragments:',
-    '  - overview: 2-3 paragraphs on what makes this school and its nursing program distinctive —',
-    '    reputation, teaching hospital / clinical network, culture, outcomes (NCLEX pass rate, employment),',
-    "    and who it's a good fit for.",
+    '  - overview: 2-3 paragraphs on what makes this school and its program distinctive —',
+    '    reputation, facilities and partnerships, culture, outcomes, and who it’s a good fit for.',
     '  - admissionsDeepDive: 1-2 paragraphs walking through exactly how a student gets in — every pathway',
-    '    (direct admit vs. secondary application), what each requires, the real timeline, selectivity, and',
-    '    the most important things an applicant must nail.',
+    '    (e.g. direct admit vs. secondary application where applicable), what each requires, the real timeline,',
+    '    selectivity, and the most important things an applicant must nail.',
     '',
     'Respond with ONLY a JSON object (no prose, no code fences) using these keys where known:',
     '  overview (string), admissionsDeepDive (string), programType',

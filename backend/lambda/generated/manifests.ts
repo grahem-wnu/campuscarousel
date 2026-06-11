@@ -15,6 +15,7 @@ import { routes as coursePlannerRoutes } from '../../modules/course-planner/rout
 import { routes as dashboardRoutes } from '../../modules/dashboard/routes.manifest.js';
 import { routes as demonstratedInterestContactsRoutes } from '../../modules/demonstrated-interest-contacts/routes.manifest.js';
 import { routes as documentsRoutes } from '../../modules/documents/routes.manifest.js';
+import { routes as familyRoutes } from '../../modules/family/routes.manifest.js';
 import { routes as finaidRoutes } from '../../modules/finaid/routes.manifest.js';
 import { routes as goalTrackerRoutes } from '../../modules/goal-tracker/routes.manifest.js';
 import { routes as interviewPrepRoutes } from '../../modules/interview-prep/routes.manifest.js';
@@ -41,6 +42,7 @@ export const manifests: RouteManifest[] = [
   { routes: dashboardRoutes },
   { routes: demonstratedInterestContactsRoutes },
   { routes: documentsRoutes },
+  { routes: familyRoutes },
   { routes: finaidRoutes },
   { routes: goalTrackerRoutes },
   { routes: interviewPrepRoutes },

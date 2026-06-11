@@ -38,7 +38,7 @@ function CourseChip({ course, onClick }: { course: Course; onClick?: (c: Course)
   );
 }
 
-/** 4-year plan: a column per year, courses grouped by semester, color-coded by nursing importance. */
+/** 4-year plan: a column per year, courses grouped by semester, color-coded by program importance. */
 export function CourseGrid({ courses, onSelect }: { courses: Course[]; onSelect?: (c: Course) => void }) {
   const grid = buildGrid(courses);
   const loose = unscheduled(courses);
@@ -47,7 +47,7 @@ export function CourseGrid({ courses, onSelect }: { courses: Course[]; onSelect?
     <div className="space-y-4">
       <div className="flex flex-wrap gap-3 text-xs text-ink-500">
         <span className="flex items-center gap-1">
-          <span className="h-2.5 w-2.5 rounded-full bg-error-500" /> Required for nursing
+          <span className="h-2.5 w-2.5 rounded-full bg-error-500" /> Required for your program
         </span>
         <span className="flex items-center gap-1">
           <span className="h-2.5 w-2.5 rounded-full bg-warn-500" /> Recommended

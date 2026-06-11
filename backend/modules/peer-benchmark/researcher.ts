@@ -10,6 +10,7 @@
 // module's public surface.
 
 import { ApiError } from '../../shared/api/index.js';
+import { majorPhrase } from '../../shared/ai/major.js';
 import type { College } from '../../shared/data/index.js';
 import type { KeiraStats } from './stats.js';
 import type { MatrixRow } from './compare.js';
@@ -74,9 +75,12 @@ function firstJsonObject(raw: string): Record<string, unknown> | undefined {
 }
 
 export function buildResearchPrompt(college: College, focus?: string): string {
+  // No major is threaded here (the researcher only gets a college + optional free-text focus), so
+  // keep the language program-agnostic; `focus` carries any program-specific steer the caller adds.
+  const program = majorPhrase(undefined, 'undergraduate');
   const lines = [
-    'You research competitive admission profiles for BSN (nursing) programs.',
-    `Describe the TYPICAL admitted student to the nursing program at "${college.name}"${
+    `You research competitive admission profiles for ${program} programs.`,
+    `Describe the TYPICAL admitted student to the program at "${college.name}"${
       college.location ? ` (${college.location})` : ''
     }.`,
     college.programType ? `Program type: ${college.programType}.` : '',
@@ -123,9 +127,9 @@ export function buildGapsPrompt(stats: KeiraStats, rows: readonly MatrixRow[]): 
     )
     .join('\n');
   return [
-    'You advise a student applying to BSN (nursing) programs. Identify her biggest competitive gaps',
+    'You advise a student applying to their intended college programs. Identify their biggest competitive gaps',
     'and give specific, actionable recommendations to close them.',
-    `Her current stats: GPA ${stats.gpa ?? 'n/a'}, best TEAS ${stats.teasScore ?? 'not taken'}, ` +
+    `Their current stats: GPA ${stats.gpa ?? 'n/a'}, best TEAS ${stats.teasScore ?? 'not taken'}, ` +
       `clinical hours ${stats.clinicalHours}, volunteer hours ${stats.volunteerHours}, ` +
       `certifications: ${stats.certifications.join(', ') || 'none'}.`,
     targets ? `Target schools (typical admitted student):\n${targets}` : 'No school benchmarks available yet.',

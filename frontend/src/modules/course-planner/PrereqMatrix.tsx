@@ -33,7 +33,7 @@ export function PrereqMatrix() {
       <EmptyState
         icon="school"
         title="No colleges to map yet"
-        description="Add target colleges in the College Hub (with their nursing prerequisites). They’ll appear here as a coverage matrix against your courses."
+        description="Add target colleges in the College Hub (with their program prerequisites). They’ll appear here as a coverage matrix against your courses."
       />
     );
   }

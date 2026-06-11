@@ -89,7 +89,7 @@ const strArr = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is 
 function buildPrompt(events: readonly UpcomingEvent[], todayIso: string): string {
   const compact = events.slice(0, 40).map((e) => ({ date: e.date, in: e.daysUntil, source: e.source, title: e.title }));
   return [
-    'You are a BSN-applicant planning coach. Given today and the upcoming timeline events, identify',
+    'You are a college-applicant planning coach. Given today and the upcoming timeline events, identify',
     'what to prioritize, any conflicts (overlapping/clustered deadlines, double-booked weekends), and',
     'likely missing items (no exam date, no app deadlines, no visits). Respond with ONLY JSON (no',
     'prose/fences): {"priorities": string[], "conflicts": string[], "missing": string[]}.',

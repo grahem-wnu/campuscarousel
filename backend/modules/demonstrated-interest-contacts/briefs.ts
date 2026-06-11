@@ -21,25 +21,25 @@ export type ModelInvoker = (prompt: string) => Promise<string>;
 export function buildBriefPrompt(contact: Contact, sources: BriefSources, focus?: string): string {
   const lines: string[] = [
     'Write a concise one-page recommender brief that helps this person write a strong letter of',
-    'recommendation for Keira, a high-school student applying to BSN (nursing) programs.',
+    'recommendation for the student, a high-school student applying to their intended college programs.',
     `Recommender: ${contact.name}${contact.role ? `, ${contact.role}` : ''}${
       contact.organization ? ` at ${contact.organization}` : ''
     }${contact.relationship ? ` (relationship: ${contact.relationship})` : ''}.`,
   ];
   if (focus) lines.push(`Emphasis: ${focus}.`);
   if (sources.activities.length) {
-    lines.push('', 'Keira’s activities:');
+    lines.push('', 'The student’s activities:');
     for (const a of sources.activities.slice(0, 12)) {
       lines.push(`- ${a.title}${a.description ? `: ${a.description.slice(0, 160)}` : ''}`);
     }
   }
   if (sources.goals.length) {
-    lines.push('', 'Keira’s goals:');
+    lines.push('', 'The student’s goals:');
     for (const g of sources.goals.slice(0, 8)) lines.push(`- ${g.title}`);
   }
   lines.push(
     '',
-    'Output a warm, specific, factual brief (about one page): who Keira is, concrete strengths with',
+    'Output a warm, specific, factual brief (about one page): who the student is, concrete strengths with',
     'examples drawn ONLY from the data above, and what this recommender is best positioned to speak to.',
     'Do not invent facts. Plain prose, no markdown headers.',
   );

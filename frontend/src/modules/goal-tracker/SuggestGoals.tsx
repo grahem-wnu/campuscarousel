@@ -138,7 +138,7 @@ export function SuggestGoals({ onSaved, onCancel }: SuggestGoalsProps) {
         <Input value={gradeLevel} onChange={(e) => setGradeLevel(e.target.value)} placeholder="Junior" />
       </Field>
       <Field label="Career goal">
-        <Input value={careerGoal} onChange={(e) => setCareerGoal(e.target.value)} placeholder="Pediatric nurse (BSN)" />
+        <Input value={careerGoal} onChange={(e) => setCareerGoal(e.target.value)} placeholder="e.g. Biology, Pre-med" />
       </Field>
       <Field label="Plan for (period)" hint="Optional — applies to every saved goal">
         <Input value={period} onChange={(e) => setPeriod(e.target.value)} placeholder="Junior Year" />

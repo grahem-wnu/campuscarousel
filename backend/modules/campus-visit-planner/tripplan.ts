@@ -97,7 +97,7 @@ function buildPrompt(clusters: readonly TripCluster[]): string {
     .map((c) => `- ${c.region}: ${c.colleges.map((x) => x.name).join(', ')}`)
     .join('\n');
   return [
-    'A BSN applicant wants to group campus visits into efficient trips. Here are schools grouped by region:',
+    'A college applicant wants to group campus visits into efficient trips. Here are schools grouped by region:',
     lines,
     'For each region, write a one-sentence itinerary suggestion (when to go, how to cluster the visits).',
     'Respond with ONLY a JSON array (no prose, no code fences): [{"region": string, "itinerary": string}].',

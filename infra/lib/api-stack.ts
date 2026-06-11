@@ -100,6 +100,19 @@ export class ApiStack extends Stack {
         resources: [`arn:aws:ssm:${this.region}:${this.account}:parameter${config.ssmPrefix}/*`],
       }),
     );
+    // Family-member management (invite/re-role/remove the wider support circle) creates & maintains
+    // member logins in THIS pool only. Least-privilege: no list/global cognito access.
+    routing.addToRolePolicy(
+      new PolicyStatement({
+        sid: "ManageFamilyMembers",
+        actions: [
+          "cognito-idp:AdminCreateUser",
+          "cognito-idp:AdminUpdateUserAttributes",
+          "cognito-idp:AdminDeleteUser",
+        ],
+        resources: [userPool.userPoolArn],
+      }),
+    );
 
     // Public redeem/self-signup Lambda (SaaS sub-project 2) — the ONE unauthenticated endpoint. A new
     // parent has no token yet, so this is NOT behind the JWT authorizer. It provisions a family tenant +

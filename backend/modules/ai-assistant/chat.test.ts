@@ -74,7 +74,7 @@ describe('makeAssistant', () => {
     });
     await a.reply(bundle(), [{ role: 'user', content: 'earlier' }, { role: 'assistant', content: 'reply' }], 'now');
     expect(captured!.messages.map((m) => m.content)).toEqual(['earlier', 'reply', 'now']);
-    expect(captured!.system).toContain('Keira’s Journey');
+    expect(captured!.system).toContain('college-prep app');
   });
 
   it('surfaces an invoker failure as a 502', async () => {

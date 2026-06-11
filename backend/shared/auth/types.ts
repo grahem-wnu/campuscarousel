@@ -4,7 +4,11 @@
 // and the data layer's visibility-bearing entities (journal, clinical-hours, why-nursing) carry
 // the `visibility` field defined here.
 
-export type Role = 'admin' | 'parent' | 'student';
+// Permission tiers (JWT `custom:role`). `parent` = a managing guardian (manage family, invite, edit);
+// `member` = a view-only supporter (grandparent, counselor, family friend — read the journey, no edits,
+// no private entries, no management). The descriptive RELATIONSHIP (grandparent/counselor/…) is separate
+// metadata on the family-member record; this union is only the access tier the backend enforces.
+export type Role = 'admin' | 'parent' | 'student' | 'member';
 
 /** The authenticated caller, resolved from the validated Cognito JWT. */
 export interface Requester {

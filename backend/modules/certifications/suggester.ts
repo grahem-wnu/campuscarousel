@@ -31,7 +31,7 @@ export type Suggester = (input: {
 }) => Promise<CertSuggestion[]>;
 
 /** Default career goal when neither the request nor the profile supplies one. */
-export const DEFAULT_CAREER_GOAL = 'aspiring BSN nursing student aiming for ICU / critical care';
+export const DEFAULT_CAREER_GOAL = 'a college-bound high-school student';
 
 /** A curated entry carries `aliases` — canonical short identifiers used ONLY for held-cert dedupe
  *  (e.g. "BLS" matches "BLS/CPR Certification"). Aliases are internal and never returned to the API. */
@@ -240,9 +240,9 @@ function parseModelSuggestions(decoded: unknown): CertSuggestion[] {
 function buildPrompt(careerGoal: string, existingNames: string[]): string {
   const held = existingNames.length ? existingNames.join(', ') : '(none yet)';
   return [
-    `A high-school student is working toward a BSN nursing program. Their stated goal: "${careerGoal}".`,
+    `A high-school student is working toward their intended college program. Their stated goal: "${careerGoal}".`,
     `They already hold or track these certifications: ${held}.`,
-    'Suggest 4–8 healthcare certifications relevant to that goal that they do NOT already have.',
+    'Suggest 4–8 certifications relevant to that goal that they do NOT already have.',
     'Respond with ONLY a JSON array (no prose, no code fences) where each element is:',
     '{"name": string, "issuingOrganization": string, "why": string (one sentence),',
     '"typicalCost": number (USD, 0 if free), "renewalFrequency": string, "priority": number (1 = do first)}.',

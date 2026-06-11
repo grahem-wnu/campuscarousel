@@ -45,9 +45,13 @@ function Wizard({ onClose }: { onClose: () => void }) {
   const [gradYear, setGradYear] = useState('');
   const [gpa, setGpa] = useState('');
   const [gpaType, setGpaType] = useState<'weighted' | 'unweighted'>('unweighted');
-  const [careerGoal, setCareerGoal] = useState('Critical Care Nurse / ICU');
+  const [careerGoal, setCareerGoal] = useState('');
+  const [majors, setMajors] = useState('');
   const [location, setLocation] = useState('');
   const [budget, setBudget] = useState('');
+
+  const parseMajors = (s: string): string[] =>
+    s.split(',').map((m) => m.trim()).filter(Boolean);
 
   async function saveProfile() {
     setSaving(true);
@@ -58,6 +62,8 @@ function Wizard({ onClose }: { onClose: () => void }) {
       if (gradYear) patch.graduationYear = Number(gradYear);
       if (gpa) patch.currentGPA = Number(gpa);
       if (careerGoal.trim()) patch.careerGoal = careerGoal.trim();
+      const majorList = parseMajors(majors);
+      if (majorList.length > 0) patch.intendedMajors = majorList;
       if (location.trim()) patch.location = location.trim();
       if (budget) patch.budget = { total: Number(budget), currency: 'USD' };
       await putProfile(patch);
@@ -81,7 +87,7 @@ function Wizard({ onClose }: { onClose: () => void }) {
   }
 
   const title =
-    step === 1 ? "Welcome — let's set up Keira's profile" : step === 2 ? 'Find nursing programs' : 'Set up goals';
+    step === 1 ? "Welcome — let's set up the student's profile" : step === 2 ? 'Find college programs' : 'Set up goals';
 
   return (
     <Modal open onClose={onClose} title={title} size="lg">
@@ -90,7 +96,7 @@ function Wizard({ onClose }: { onClose: () => void }) {
           <p className="text-sm text-ink-600">A few basics power the dashboard, AI help, and benchmarks. You can change all of this later.</p>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field label="Student name">
-              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Keira" />
+              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="First name" />
             </Field>
             <Field label="High school">
               <Input value={highSchool} onChange={(e) => setHighSchool(e.target.value)} />
@@ -110,8 +116,11 @@ function Wizard({ onClose }: { onClose: () => void }) {
                 <option value="weighted">Weighted</option>
               </Select>
             </Field>
-            <Field label="Career goal">
-              <Input value={careerGoal} onChange={(e) => setCareerGoal(e.target.value)} />
+            <Field label="Intended major(s)" hint="Comma-separated — list more than one if they're still deciding.">
+              <Input value={majors} onChange={(e) => setMajors(e.target.value)} placeholder="e.g. Nursing, Biology" />
+            </Field>
+            <Field label="Career goal (optional)">
+              <Input value={careerGoal} onChange={(e) => setCareerGoal(e.target.value)} placeholder="e.g. Pediatric nurse, Software engineer" />
             </Field>
             <Field label="Family college budget ($)">
               <Input type="number" value={budget} onChange={(e) => setBudget(e.target.value)} placeholder="200000" />
@@ -129,8 +138,8 @@ function Wizard({ onClose }: { onClose: () => void }) {
       ) : step === 2 ? (
         <div className="space-y-4">
           <p className="text-sm text-ink-600">
-            Next, let&rsquo;s find BSN programs. The College Finder searches hundreds of schools, checks
-            direct-admit status, and pulls tuition, rankings, and contacts — all in real time.
+            Next, let&rsquo;s find programs that fit. The College Finder searches hundreds of schools for
+            the student&rsquo;s intended major(s), and pulls tuition, rankings, and contacts — all in real time.
           </p>
           <div className="flex flex-wrap justify-between gap-2 pt-1">
             <Button variant="ghost" onClick={() => setStep(3)}>
@@ -144,8 +153,8 @@ function Wizard({ onClose }: { onClose: () => void }) {
       ) : (
         <div className="space-y-4">
           <p className="text-sm text-ink-600">
-            Finally, set up year-by-year goals. The Goal Tracker can suggest milestones for an aspiring
-            nurse based on grade level and career goal — accept, edit, or add your own.
+            Finally, set up year-by-year goals. The Goal Tracker can suggest milestones based on the
+            student&rsquo;s grade level and intended major — accept, edit, or add your own.
           </p>
           <div className="flex flex-wrap justify-between gap-2 pt-1">
             <Button variant="ghost" onClick={() => void finish()}>

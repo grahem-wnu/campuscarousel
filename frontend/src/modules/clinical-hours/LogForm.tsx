@@ -132,7 +132,7 @@ export function LogForm({ facilities = [], onCreated, onCancel }: LogFormProps) 
         />
         <TextField
           label="Title"
-          placeholder="e.g. RN, Charge Nurse"
+          placeholder="e.g. Supervisor, Manager"
           value={supervisorTitle}
           onChange={(e) => setSupervisorTitle(e.target.value)}
         />

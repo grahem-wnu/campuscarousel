@@ -65,8 +65,8 @@ export function MockInterview({ onSessionChanged }: Props) {
       <Card className="space-y-3">
         <h2 className="text-sm font-semibold text-ink-800">Start a mock interview</h2>
         <p className="text-sm text-ink-500">
-          The AI asks BSN interview questions one at a time and coaches each answer using your real journal,
-          clinical hours, and “Why Nursing” entries.
+          The AI asks admissions interview questions one at a time and coaches each answer using your real journal,
+          experience hours, and reflections.
         </p>
         <div className="flex flex-wrap items-end gap-3">
           <Field label="School (optional)" className="min-w-[12rem] flex-1">

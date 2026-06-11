@@ -47,7 +47,7 @@ const comparisonColumns: Column<ComparisonRow>[] = [
   { key: 'cost', header: 'Travel', align: 'right', render: (r) => (r.travelCost != null ? formatCost(r.travelCost) : '—') },
 ];
 
-/** Campus Visit Planner — pick a college, plan/debrief visits, get nursing prep, plan trips. */
+/** Campus Visit Planner — pick a college, plan/debrief visits, get visit prep, plan trips. */
 export default function VisitPlannerPage() {
   const toast = useToast();
   const [colleges, setColleges] = useState<CollegeOption[]>([]);
@@ -145,7 +145,7 @@ export default function VisitPlannerPage() {
       <header>
         <h1 className="text-2xl font-bold text-ink-900">Campus Visits</h1>
         <p className="mt-0.5 text-sm text-ink-500">
-          Plan visits, prep nursing-specific questions, debrief after, and group nearby schools into trips.
+          Plan visits, prep questions to ask, debrief after, and group nearby schools into trips.
         </p>
       </header>
 
@@ -197,7 +197,7 @@ export default function VisitPlannerPage() {
             <EmptyState
               icon="calendar"
               title="No visits planned"
-              description="Plan a campus visit and we'll prep nursing-specific questions and logistics for you."
+              description="Plan a campus visit and we'll prep questions to ask and logistics for you."
               action={
                 <Button icon="plus" onClick={openNew}>
                   Plan your first visit
@@ -281,7 +281,7 @@ export default function VisitPlannerPage() {
               <p className="mt-1 text-sm text-ink-700">{prep.data.bestTime}</p>
             </div>
             <div>
-              <h4 className="text-sm font-semibold text-ink-900">Nursing questions to ask</h4>
+              <h4 className="text-sm font-semibold text-ink-900">Questions to ask</h4>
               <ul className="mt-1 list-disc space-y-1 pl-5 text-sm text-ink-700">
                 {prep.data.questions.map((q) => (
                   <li key={q}>{q}</li>
@@ -306,7 +306,7 @@ export default function VisitPlannerPage() {
               </div>
             ) : null}
             <p className="text-xs text-ink-400">
-              {prep.data.source === 'ai' ? 'Tailored by AI.' : 'Standard nursing checklist.'}
+              {prep.data.source === 'ai' ? 'Tailored by AI.' : 'Standard checklist.'}
             </p>
           </div>
         ) : null}

@@ -180,7 +180,7 @@ describe('suggest (POST /certifications/suggest)', () => {
 
   it('falls back to the default goal when neither body nor profile supplies one', async () => {
     const res = await h.suggest(ctx({ body: {} }));
-    expect((res.body as { careerGoal: string }).careerGoal).toMatch(/nursing/i);
+    expect((res.body as { careerGoal: string }).careerGoal).toMatch(/college-bound/i);
   });
 
   it('422s on an unknown body field', async () => {

@@ -89,7 +89,7 @@ export default function WhyNursingPage() {
     <div className="mx-auto max-w-3xl space-y-5 p-4 sm:p-6">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-ink-900">Why Nursing</h1>
+          <h1 className="text-2xl font-bold text-ink-900">Why This Path</h1>
           <p className="mt-0.5 text-sm text-ink-500">
             The moments, conversations, and realizations behind your why — the raw material for
             authentic essays.
@@ -149,7 +149,7 @@ export default function WhyNursingPage() {
           description={
             hasFilters
               ? 'Try clearing the filters to see everything.'
-              : 'Capture the first moment that made you want to be a nurse — a patient, a conversation, a feeling. Each one becomes the heart of a future essay.'
+              : "Capture the first moment that revealed what's driving you toward your goals — a person, a conversation, a feeling. Each one becomes the heart of a future essay."
           }
           action={
             hasFilters ? (

@@ -1,6 +1,6 @@
 // Frontend types for the Dashboard — mirror the GET /dashboard payload (role-specific).
 
-export type Role = 'admin' | 'parent' | 'student';
+export type Role = 'admin' | 'parent' | 'student' | 'member';
 
 export interface Gpa {
   weighted: number | null;

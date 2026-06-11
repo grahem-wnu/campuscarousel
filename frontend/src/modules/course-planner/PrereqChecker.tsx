@@ -99,7 +99,7 @@ export function PrereqChecker({ courses }: { courses: Course[] }) {
         <EmptyState
           icon="school"
           title="Check prerequisites for a college"
-          description="Enter a college id to see which of its nursing prerequisites your courses already cover, and which are still gaps."
+          description="Enter a college id to see which of its program prerequisites your courses already cover, and which are still gaps."
         />
       )}
     </div>

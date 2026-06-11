@@ -4,7 +4,7 @@
 import type { Requester, Role } from './types.js';
 import { ForbiddenError, UnauthorizedError } from './errors.js';
 
-const ROLES: readonly Role[] = ['admin', 'parent', 'student'];
+const ROLES: readonly Role[] = ['admin', 'parent', 'student', 'member'];
 
 /**
  * Minimal shape of an API Gateway HTTP API (v2) event carrying a Cognito JWT authorizer.

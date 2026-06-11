@@ -142,7 +142,7 @@ export default function CertificationsPage() {
         <div>
           <h1 className="text-2xl font-bold text-ink-900">Certifications</h1>
           <p className="mt-0.5 text-sm text-ink-500">
-            Track healthcare certifications, renewal dates, and training toward your nursing goal.
+            Track certifications, renewal dates, and training toward your goals.
           </p>
         </div>
         <div className="flex items-center gap-2">

@@ -183,7 +183,7 @@ export default function CollegeHubPage() {
         <div>
           <h1 className="text-2xl font-bold text-ink-900">College Hub</h1>
           <p className="mt-0.5 text-sm text-ink-500">
-            Research, track, and compare BSN programs on the way to nursing school.
+            Research, track, and compare college programs on the way to your goals.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -269,7 +269,7 @@ export default function CollegeHubPage() {
           description={
             hasFilters
               ? 'Try clearing the filters.'
-              : 'Discover BSN programs with AI, or add a school by name — we’ll fill in the details automatically.'
+              : 'Discover programs with AI, or add a school by name — we’ll fill in the details automatically.'
           }
           action={
             <div className="flex gap-2">
