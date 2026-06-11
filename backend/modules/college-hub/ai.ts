@@ -113,7 +113,7 @@ const testimonialArray = (
   return out.length ? out : undefined;
 };
 
-const PROGRAM_TYPES = new Set(['direct-admit-BSN', 'pre-nursing-secondary-app', 'ABSN-only', 'RN-to-BSN-only']);
+const PROGRAM_TYPES = new Set(['direct-admit', 'secondary-application', 'accelerated', 'transfer-pathway']);
 const programType = (v: unknown): College['programType'] | undefined =>
   typeof v === 'string' && PROGRAM_TYPES.has(v) ? (v as College['programType']) : undefined;
 
@@ -155,7 +155,7 @@ function buildDiscoverPrompt(input: DiscoverInput): string {
     'searching and output the result. Include every matching school you can — partial data is fine.',
     'Respond with ONLY a JSON array (no prose, no code fences). Each element:',
     '{"name": string, "location": string, "state": string,',
-    '"programType": "direct-admit-BSN"|"pre-nursing-secondary-app"|"ABSN-only"|"RN-to-BSN-only",',
+    '"programType": "direct-admit"|"secondary-application"|"accelerated"|"transfer-pathway",',
     '"isDirectAdmit": boolean, "hasBSN": boolean, "ranking": string,',
     '"tuitionInState": number, "tuitionOutOfState": number, "website": string,',
     '"summary": string (one sentence on how its program fits the student)}.',
@@ -187,10 +187,10 @@ const HYDRATABLE_FIELDS = [
   'overview', 'admissionsDeepDive', 'nclexPassRate', 'employmentRate',
   'tuitionInState', 'tuitionOutOfState', 'costOfAttendanceOutOfState', 'estimatedNetPriceAfterAid',
   'percentReceivingAid', 'avgAidAmount', 'applicationFee', 'estimatedTotalCost', 'estimatedCostAfterAid',
-  'acceptanceRateNursing', 'acceptanceRateUniversity', 'avgGPAAdmitted', 'prerequisites',
+  'acceptanceRateProgram', 'acceptanceRateUniversity', 'avgGPAAdmitted', 'prerequisites',
   'applicationDeadlines', 'essayPrompts', 'requiredTests', 'clinicalPartners',
   'testimonials', 'campusImageUrls', 'specialNotes', 'website', 'dataSources', 'dataAsOf',
-  'branding', 'contactInfo', 'appServices', 'usesNursingCAS',
+  'branding', 'contactInfo', 'appServices', 'usesCAS',
 ] as const;
 
 /** Per-field cleaners for the structured/best-effort fields; everything else is copied as-is
@@ -224,9 +224,8 @@ function buildHydratePrompt(name: string, state?: string): string {
   const where = state ? `, ${state}` : '';
   const year = new Date().getFullYear();
   // No per-call major is threaded here (hydration runs on the SQS worker, decoupled from the
-  // profile), so keep the language program-agnostic. If the school's intended program is a
-  // health/nursing one, the nursing-specific JSON fields below simply get filled; otherwise they
-  // go unused. The narrative covers whichever program the student is researching.
+  // profile), so keep the language program-agnostic. The narrative covers whichever program the
+  // student is researching.
   return [
     `You are a college research analyst building a rich, decision-ready profile of the undergraduate`,
     `program at "${name}"${where} for a prospective applicant and their family.`,
@@ -248,7 +247,7 @@ function buildHydratePrompt(name: string, state?: string): string {
     '',
     'CRITICAL ACCURACY RULES:',
     '  - Separate PROGRAM/major-specific admission stats (acceptance rate, admitted GPA) from',
-    '    UNIVERSITY-WIDE stats. Use acceptanceRateNursing for the program figure vs acceptanceRateUniversity accordingly.',
+    '    UNIVERSITY-WIDE stats. Use acceptanceRateProgram for the program figure vs acceptanceRateUniversity accordingly.',
     '  - estimatedNetPriceAfterAid is the cost AFTER grants & scholarships and is DIFFERENT from tuition.',
     '    Make a DEDICATED search for it — College Navigator (nces.ed.gov) publishes an "Average net',
     '    price" figure for nearly every U.S. college, and collegetuitioncompare lists it too. Report',
@@ -266,21 +265,21 @@ function buildHydratePrompt(name: string, state?: string): string {
     '',
     'Respond with ONLY a JSON object (no prose, no code fences) using these keys where known:',
     '  overview (string), admissionsDeepDive (string), programType',
-    '  ("direct-admit-BSN"|"pre-nursing-secondary-app"|"ABSN-only"|"RN-to-BSN-only"), isDirectAdmit (bool),',
+    '  ("direct-admit"|"secondary-application"|"accelerated"|"transfer-pathway"), isDirectAdmit (bool),',
     '  hasBSN (bool), hasAcceleratedBSN (bool), ranking (string), nclexPassRate (string),',
     '  employmentRate (string), tuitionInState (number), tuitionOutOfState (number),',
     '  costOfAttendanceOutOfState (number), estimatedNetPriceAfterAid (number), percentReceivingAid',
-    '  (string), avgAidAmount (number), applicationFee (number), acceptanceRateNursing (string),',
+    '  (string), avgAidAmount (number), applicationFee (number), acceptanceRateProgram (string),',
     '  acceptanceRateUniversity (string), avgGPAAdmitted (string), prerequisites (string[]),',
-    '  applicationDeadlines ({earlyAction, regularDecision, nursingApp}), essayPrompts (string[]),',
+    '  applicationDeadlines ({earlyAction, regularDecision, programApp}), essayPrompts (string[]),',
     '  requiredTests (string[]), clinicalPartners (string[]),',
     '  testimonials ([{quote, attribution, source}] — verbatim student quotes, each with a source URL),',
     '  campusImageUrls (string[] — direct https URLs to campus/program photos), location (string),',
     '  state (2-letter), website (string), branding ({logoUrl, primaryColor (hex), secondaryColor (hex),',
-    '  mascot}), contactInfo ({nursingAdmissionsUrl, nursingAdmissionsPhone, nursingAdmissionsEmail,',
+    '  mascot}), contactInfo ({programAdmissionsUrl, programAdmissionsPhone, programAdmissionsEmail,',
     '  financialAidUrl, financialAidPhone, campusVisitUrl, netPriceCalculatorUrl}),',
     '  appServices (string[] — application services this school accepts, e.g. "NursingCAS", "Common App",',
-    '  "Coalition", "Direct"), usesNursingCAS (bool — true if its nursing program applies via NursingCAS),',
+    '  "Coalition", "Direct"), usesCAS (bool — true if its program applies via a centralized application service),',
     '  specialNotes (string),',
     '  dataSources (string[] — every URL you relied on), dataAsOf (string — the academic year these',
     `  figures reflect, e.g. "${year}-${year + 1}").`,

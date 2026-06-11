@@ -64,7 +64,7 @@ export function buildEvents(s: EventSources): TimelineEvent[] {
     const d = c.applicationDeadlines;
     if (d?.earlyAction) push({ source: 'college', type: 'early-action', title: `${c.name} — early action`, date: d.earlyAction, refId: c.collegeId, collegeId: c.collegeId });
     if (d?.regularDecision) push({ source: 'college', type: 'regular-decision', title: `${c.name} — regular decision`, date: d.regularDecision, refId: c.collegeId, collegeId: c.collegeId });
-    if (d?.nursingApp) push({ source: 'college', type: 'nursing-app', title: `${c.name} — nursing app`, date: d.nursingApp, refId: c.collegeId, collegeId: c.collegeId });
+    if (d?.programApp) push({ source: 'college', type: 'program-app', title: `${c.name} — program app`, date: d.programApp, refId: c.collegeId, collegeId: c.collegeId });
   }
   for (const t of s.teas) if (t.type === 'official-exam') push({ source: 'teas', type: 'official-exam', title: 'TEAS official exam', date: t.date, refId: t.recordId });
   for (const v of s.visits) push({ source: 'visit', type: v.visitType ?? 'visit', title: `Campus visit${v.visitType ? ` — ${v.visitType}` : ''}`, date: v.date, refId: v.visitId, collegeId: v.collegeId });

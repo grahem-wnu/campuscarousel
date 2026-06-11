@@ -131,10 +131,10 @@ export interface College extends Timestamped, Hydratable {
   location?: string;
   state?: string;
   programType?:
-    | 'direct-admit-BSN'
-    | 'pre-nursing-secondary-app'
-    | 'ABSN-only'
-    | 'RN-to-BSN-only';
+    | 'direct-admit'
+    | 'secondary-application'
+    | 'accelerated'
+    | 'transfer-pathway';
   isDirectAdmit?: boolean;
   hasBSN?: boolean;
   hasAcceleratedBSN?: boolean;
@@ -157,11 +157,11 @@ export interface College extends Timestamped, Hydratable {
   applicationFee?: number;
   estimatedTotalCost?: number;
   estimatedCostAfterAid?: number;
-  acceptanceRateNursing?: string;
+  acceptanceRateProgram?: string;
   acceptanceRateUniversity?: string;
   avgGPAAdmitted?: string;
   prerequisites?: string[];
-  applicationDeadlines?: { earlyAction?: string; regularDecision?: string; nursingApp?: string };
+  applicationDeadlines?: { earlyAction?: string; regularDecision?: string; programApp?: string };
   essayPrompts?: string[];
   requiredTests?: string[];
   clinicalPartners?: string[];
@@ -177,9 +177,9 @@ export interface College extends Timestamped, Hydratable {
   dataAsOf?: string;
   branding?: { logoUrl?: string; primaryColor?: string; secondaryColor?: string; mascot?: string };
   contactInfo?: {
-    nursingAdmissionsPhone?: string;
-    nursingAdmissionsEmail?: string;
-    nursingAdmissionsUrl?: string;
+    programAdmissionsPhone?: string;
+    programAdmissionsEmail?: string;
+    programAdmissionsUrl?: string;
     financialAidPhone?: string;
     financialAidUrl?: string;
     campusVisitUrl?: string;
@@ -187,8 +187,8 @@ export interface College extends Timestamped, Hydratable {
   };
   /** Application services this school accepts (e.g. "NursingCAS", "Common App") — v2.1 Module 19. */
   appServices?: string[];
-  /** True if the nursing program applies through NursingCAS (centralized application service). */
-  usesNursingCAS?: boolean;
+  /** True if the program applies through a centralized application service (e.g. NursingCAS). */
+  usesCAS?: boolean;
   status?: CollegeStatus;
   fitScore?: number;
   // Campus imagery + cached logo, written by the async assets worker (college-assets) — never the

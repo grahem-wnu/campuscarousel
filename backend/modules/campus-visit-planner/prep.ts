@@ -56,8 +56,8 @@ const has = (s?: string): s is string => typeof s === 'string' && s.trim().lengt
 /** Build the logistics block from the college's own stored contact info / location. */
 export function logisticsFor(college: College): VisitLogistics {
   const contact =
-    college.contactInfo?.nursingAdmissionsEmail ??
-    college.contactInfo?.nursingAdmissionsPhone ??
+    college.contactInfo?.programAdmissionsEmail ??
+    college.contactInfo?.programAdmissionsPhone ??
     college.contactInfo?.financialAidPhone;
   return {
     address: has(college.location) ? college.location : undefined,

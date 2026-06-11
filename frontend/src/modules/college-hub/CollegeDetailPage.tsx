@@ -175,8 +175,8 @@ export default function CollegeDetailPage() {
             {college.branding?.mascot ? ` · ${college.branding.mascot}` : ''}
           </p>
           <div className="mt-2 flex flex-wrap gap-2 text-sm">
-            {college.contactInfo?.nursingAdmissionsUrl ? (
-              <a className="text-primary-600 hover:underline" href={college.contactInfo.nursingAdmissionsUrl} target="_blank" rel="noreferrer">Nursing admissions</a>
+            {college.contactInfo?.programAdmissionsUrl ? (
+              <a className="text-primary-600 hover:underline" href={college.contactInfo.programAdmissionsUrl} target="_blank" rel="noreferrer">Program admissions</a>
             ) : null}
             {college.contactInfo?.campusVisitUrl ? (
               <a className="text-primary-600 hover:underline" href={college.contactInfo.campusVisitUrl} target="_blank" rel="noreferrer">Plan a visit</a>
@@ -252,7 +252,7 @@ function fieldRows(college: College): { label: string; value: string }[] {
   return [
     { label: 'Ranking', value: college.ranking ?? NOT_FOUND },
     { label: 'NCLEX pass rate', value: college.nclexPassRate ?? NOT_FOUND },
-    { label: 'Acceptance (nursing)', value: college.acceptanceRateNursing ?? NOT_FOUND },
+    { label: 'Acceptance (program)', value: college.acceptanceRateProgram ?? NOT_FOUND },
     { label: 'Acceptance (university)', value: college.acceptanceRateUniversity ?? NOT_FOUND },
     { label: 'Avg admitted GPA', value: college.avgGPAAdmitted ?? NOT_FOUND },
     { label: 'Out-of-state tuition', value: yr(college.tuitionOutOfState) },
@@ -263,7 +263,7 @@ function fieldRows(college: College): { label: string; value: string }[] {
     { label: 'Application fee', value: college.applicationFee !== undefined ? costLabel(college.applicationFee) : NOT_FOUND },
     { label: 'Early action', value: college.applicationDeadlines?.earlyAction ?? NOT_FOUND },
     { label: 'Regular decision', value: college.applicationDeadlines?.regularDecision ?? NOT_FOUND },
-    { label: 'Nursing app deadline', value: college.applicationDeadlines?.nursingApp ?? NOT_FOUND },
+    { label: 'Program app deadline', value: college.applicationDeadlines?.programApp ?? NOT_FOUND },
     { label: 'Employment rate', value: college.employmentRate ?? NOT_FOUND },
   ];
 }

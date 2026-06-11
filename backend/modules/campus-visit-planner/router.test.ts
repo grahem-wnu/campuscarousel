@@ -76,7 +76,7 @@ describe('router integration', () => {
   });
 
   it('routes the deeper /visits/:vid/prep over the shallower :vid route', async () => {
-    const id = await seedCollege({ contactInfo: { nursingAdmissionsEmail: 'n@uci.edu' } });
+    const id = await seedCollege({ contactInfo: { programAdmissionsEmail: 'n@uci.edu' } });
     const created = await dispatch(event('POST', `/colleges/${id}/visits`, { as: keira, body: { date: '2026-04-01' } }));
     const vid = (parse(created) as { visitId: string }).visitId;
     const res = await dispatch(event('POST', `/colleges/${id}/visits/${vid}/prep`, { as: keira, body: {} }));

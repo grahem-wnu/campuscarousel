@@ -34,7 +34,7 @@ function nextDeadline(college: College, todayIso: string): { label: string; date
   const candidates = [
     d.earlyAction ? { label: 'Early action', date: d.earlyAction } : null,
     d.regularDecision ? { label: 'Regular decision', date: d.regularDecision } : null,
-    d.nursingApp ? { label: 'Nursing app', date: d.nursingApp } : null,
+    d.programApp ? { label: 'Program app', date: d.programApp } : null,
   ].filter((x): x is { label: string; date: string } => x !== null);
   if (candidates.length === 0) return null;
   const upcoming = candidates

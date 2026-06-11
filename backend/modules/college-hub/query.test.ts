@@ -26,11 +26,11 @@ describe('filterColleges', () => {
 
   it('filters by status, programType, state, and top-pick', () => {
     const items = [
-      college({ name: 'A', status: 'target', programType: 'direct-admit-BSN', state: 'Ohio', isTopPick: true }),
-      college({ name: 'B', status: 'researching', programType: 'ABSN-only', state: 'Indiana' }),
+      college({ name: 'A', status: 'target', programType: 'direct-admit', state: 'Ohio', isTopPick: true }),
+      college({ name: 'B', status: 'researching', programType: 'accelerated', state: 'Indiana' }),
     ];
     expect(filterColleges(items, q({ status: 'target' })).map((c) => c.name)).toEqual(['A']);
-    expect(filterColleges(items, q({ programType: 'ABSN-only' })).map((c) => c.name)).toEqual(['B']);
+    expect(filterColleges(items, q({ programType: 'accelerated' })).map((c) => c.name)).toEqual(['B']);
     expect(filterColleges(items, q({ state: 'ohio' })).map((c) => c.name)).toEqual(['A']); // case-insensitive
     expect(filterColleges(items, q({ isTopPick: 'true' })).map((c) => c.name)).toEqual(['A']);
     expect(filterColleges(items, q({ isTopPick: 'false' })).map((c) => c.name)).toEqual(['B']);

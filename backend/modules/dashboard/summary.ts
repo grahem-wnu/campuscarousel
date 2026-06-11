@@ -150,7 +150,7 @@ export function upcomingDeadlines(
     if (c.status === 'removed') continue;
     push('college', `${c.name}: early action`, c.applicationDeadlines?.earlyAction);
     push('college', `${c.name}: regular decision`, c.applicationDeadlines?.regularDecision);
-    push('college', `${c.name}: nursing app`, c.applicationDeadlines?.nursingApp);
+    push('college', `${c.name}: program app`, c.applicationDeadlines?.programApp);
   }
   for (const g of data.goals) if (g.status !== 'completed' && g.status !== 'dropped') push('goal', g.title, g.targetDate);
   for (const s of data.scholarships) if (s.status !== 'awarded' && s.status !== 'denied' && s.status !== 'expired') push('scholarship', s.name, s.applicationDeadline);

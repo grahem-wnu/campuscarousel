@@ -100,7 +100,7 @@ describe('makeBedrockDiscoverer', () => {
       modelId: MODEL,
       invoker: stub(
         JSON.stringify([
-          { name: 'Ohio State', state: 'Ohio', programType: 'direct-admit-BSN', tuitionInState: 12000 },
+          { name: 'Ohio State', state: 'Ohio', programType: 'direct-admit', tuitionInState: 12000 },
           { name: 'Indiana U', state: 'Indiana' },
           { notName: 'dropped' }, // invalid → filtered
         ]),
@@ -108,7 +108,7 @@ describe('makeBedrockDiscoverer', () => {
     });
     const out = await discover({ limit: 2 });
     expect(out.map((c) => c.name)).toEqual(['Ohio State', 'Indiana U']);
-    expect(out[0]?.programType).toBe('direct-admit-BSN');
+    expect(out[0]?.programType).toBe('direct-admit');
   });
 
   it('returns [] when the model output is not an array', async () => {

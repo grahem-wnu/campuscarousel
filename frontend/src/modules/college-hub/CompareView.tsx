@@ -19,7 +19,7 @@ const ROWS: Row[] = [
   { label: 'Direct admit', value: (c) => (c.isDirectAdmit ? 'Yes' : c.isDirectAdmit === false ? 'No' : '—') },
   { label: 'Ranking', value: (c) => c.ranking ?? '—' },
   { label: 'Net cost / yr', value: (c) => (bestCost(c) !== undefined ? costLabel(bestCost(c)) : '—') },
-  { label: 'Acceptance (nursing)', value: (c) => c.acceptanceRateNursing ?? '—' },
+  { label: 'Acceptance (program)', value: (c) => c.acceptanceRateProgram ?? '—' },
   { label: 'Avg GPA', value: (c) => c.avgGPAAdmitted ?? '—' },
   { label: 'Fit score', value: (c) => (c.fitScore !== undefined ? String(c.fitScore) : '—') },
 ];

@@ -30,7 +30,7 @@ const makeAssetsDispatch = () => async (id: string) => {
 };
 
 const stubDiscoverer: Discoverer = async (input) => [
-  { name: 'Discovered U', state: input.state ?? 'Ohio', programType: 'direct-admit-BSN' },
+  { name: 'Discovered U', state: input.state ?? 'Ohio', programType: 'direct-admit' },
 ];
 
 beforeEach(() => {

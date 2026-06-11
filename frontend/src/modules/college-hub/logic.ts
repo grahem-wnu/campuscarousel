@@ -23,10 +23,10 @@ export const STATUS_META: Record<CollegeStatus, StatusMeta> = {
 };
 
 export const PROGRAM_TYPE_LABEL: Record<ProgramType, string> = {
-  'direct-admit-BSN': 'Direct-admit BSN',
-  'pre-nursing-secondary-app': 'Pre-nursing (secondary app)',
-  'ABSN-only': 'Accelerated BSN',
-  'RN-to-BSN-only': 'RN-to-BSN',
+  'direct-admit': 'Direct admit',
+  'secondary-application': 'Secondary application',
+  'accelerated': 'Accelerated',
+  'transfer-pathway': 'Transfer pathway',
 };
 
 /** Statuses a user may set in the UI (removed is reached via delete/restore, not the picker). */

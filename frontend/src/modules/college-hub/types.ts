@@ -15,10 +15,10 @@ export const COLLEGE_STATUSES = [
 export type CollegeStatus = (typeof COLLEGE_STATUSES)[number];
 
 export const PROGRAM_TYPES = [
-  'direct-admit-BSN',
-  'pre-nursing-secondary-app',
-  'ABSN-only',
-  'RN-to-BSN-only',
+  'direct-admit',
+  'secondary-application',
+  'accelerated',
+  'transfer-pathway',
 ] as const;
 export type ProgramType = (typeof PROGRAM_TYPES)[number];
 
@@ -49,11 +49,11 @@ export interface College {
   applicationFee?: number;
   estimatedTotalCost?: number;
   estimatedCostAfterAid?: number;
-  acceptanceRateNursing?: string;
+  acceptanceRateProgram?: string;
   acceptanceRateUniversity?: string;
   avgGPAAdmitted?: string;
   prerequisites?: string[];
-  applicationDeadlines?: { earlyAction?: string; regularDecision?: string; nursingApp?: string };
+  applicationDeadlines?: { earlyAction?: string; regularDecision?: string; programApp?: string };
   essayPrompts?: string[];
   requiredTests?: string[];
   clinicalPartners?: string[];
@@ -65,9 +65,9 @@ export interface College {
   dataAsOf?: string;
   branding?: { logoUrl?: string; primaryColor?: string; secondaryColor?: string; mascot?: string };
   contactInfo?: {
-    nursingAdmissionsPhone?: string;
-    nursingAdmissionsEmail?: string;
-    nursingAdmissionsUrl?: string;
+    programAdmissionsPhone?: string;
+    programAdmissionsEmail?: string;
+    programAdmissionsUrl?: string;
     financialAidPhone?: string;
     financialAidUrl?: string;
     campusVisitUrl?: string;

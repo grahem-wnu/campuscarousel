@@ -17,10 +17,10 @@ export const COLLEGE_STATUSES = [
 ] as const;
 
 export const PROGRAM_TYPES = [
-  'direct-admit-BSN',
-  'pre-nursing-secondary-app',
-  'ABSN-only',
-  'RN-to-BSN-only',
+  'direct-admit',
+  'secondary-application',
+  'accelerated',
+  'transfer-pathway',
 ] as const;
 
 export const NOTE_TYPES = [
@@ -39,7 +39,7 @@ const deadlines = z
   .object({
     earlyAction: isoDate.optional(),
     regularDecision: isoDate.optional(),
-    nursingApp: isoDate.optional(),
+    programApp: isoDate.optional(),
   })
   .strict();
 
@@ -54,9 +54,9 @@ const branding = z
 
 const contactInfo = z
   .object({
-    nursingAdmissionsPhone: z.string().max(60).optional(),
-    nursingAdmissionsEmail: z.string().max(200).optional(),
-    nursingAdmissionsUrl: url.optional(),
+    programAdmissionsPhone: z.string().max(60).optional(),
+    programAdmissionsEmail: z.string().max(200).optional(),
+    programAdmissionsUrl: url.optional(),
     financialAidPhone: z.string().max(60).optional(),
     financialAidUrl: url.optional(),
     campusVisitUrl: url.optional(),
@@ -95,7 +95,7 @@ const editableCollege = {
   applicationFee: z.number().nonnegative().max(10_000).optional(),
   estimatedTotalCost: z.number().nonnegative().max(2_000_000).optional(),
   estimatedCostAfterAid: z.number().nonnegative().max(2_000_000).optional(),
-  acceptanceRateNursing: z.string().max(60).optional(),
+  acceptanceRateProgram: z.string().max(60).optional(),
   acceptanceRateUniversity: z.string().max(60).optional(),
   avgGPAAdmitted: z.string().max(60).optional(),
   prerequisites: z.array(z.string().min(1).max(200)).max(100).optional(),

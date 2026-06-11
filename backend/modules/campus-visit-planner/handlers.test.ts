@@ -94,7 +94,7 @@ describe('prep (POST /colleges/:id/visits/:vid/prep)', () => {
   });
 
   it('returns the curated nursing checklist + logistics for a real visit', async () => {
-    const id = await seedCollege({ contactInfo: { nursingAdmissionsEmail: 'nursing@uci.edu' } });
+    const id = await seedCollege({ contactInfo: { programAdmissionsEmail: 'nursing@uci.edu' } });
     const created = await h.create(ctx({ params: { id }, body: { date: '2026-04-01' } }));
     const vid = (created.body as { visitId: string }).visitId;
     const res = await h.prep(ctx({ params: { id, vid } }));
