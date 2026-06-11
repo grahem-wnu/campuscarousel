@@ -5,13 +5,13 @@
 
 import type {
   Activity,
-  Clinical,
+  ExperienceEntry,
   College,
   Course,
   Goal,
   Scholarship,
-  Teas,
-  WhyNursing,
+  ExamScore,
+  Motivation,
 } from '../../shared/data/index.js';
 import type { DataSummary, GroundingRecord, Mode } from './chat.js';
 
@@ -20,8 +20,8 @@ const sum = (ns: readonly number[]): number => ns.reduce((a, b) => a + b, 0);
 
 export interface SummarySources {
   courses: readonly Course[];
-  teas: readonly Teas[];
-  clinical: readonly Clinical[];
+  exams: readonly ExamScore[];
+  experiences: readonly ExperienceEntry[];
   activities: readonly Activity[];
   colleges: readonly College[];
   goals: readonly Goal[];
@@ -42,11 +42,11 @@ function gpaOf(courses: readonly Course[]): number | undefined {
 }
 
 export function buildSummary(s: SummarySources): DataSummary {
-  const teasScores = s.teas.map((t) => t.overallScore).filter((n): n is number => typeof n === 'number');
+  const examScores = s.exams.map((t) => t.overallScore).filter((n): n is number => typeof n === 'number');
   return {
     gpa: gpaOf(s.courses),
-    bestTeas: teasScores.length ? Math.max(...teasScores) : undefined,
-    clinicalHours: round2(sum(s.clinical.map((c) => (typeof c.hours === 'number' ? c.hours : 0)))),
+    bestTeas: examScores.length ? Math.max(...examScores) : undefined,
+    clinicalHours: round2(sum(s.experiences.map((c) => (typeof c.hours === 'number' ? c.hours : 0)))),
     volunteerHours: round2(
       sum(s.activities.filter((a) => a.category === 'volunteer').map((a) => (typeof a.hours === 'number' ? a.hours : 0))),
     ),
@@ -58,9 +58,9 @@ export function buildSummary(s: SummarySources): DataSummary {
 const clip = (text: string, max = 280): string => (text.length <= max ? text : `${text.slice(0, max).trimEnd()}…`);
 
 export interface RecordSources {
-  whyNursing: readonly WhyNursing[];
+  motivations: readonly Motivation[];
   activities: readonly Activity[];
-  clinical: readonly Clinical[];
+  experiences: readonly ExperienceEntry[];
   colleges: readonly College[];
   scholarships: readonly Scholarship[];
 }
@@ -83,7 +83,7 @@ function recent<T extends { date?: string; createdAt: string }>(items: readonly 
 export function selectRecords(mode: Mode, s: RecordSources): GroundingRecord[] {
   const records: GroundingRecord[] = [];
   const why = (n: number) =>
-    recent(s.whyNursing, n).map((w) => ({ kind: 'why-nursing', text: `${w.title}: ${clip(w.content)}` }));
+    recent(s.motivations, n).map((w) => ({ kind: 'motivation', text: `${w.title}: ${clip(w.content)}` }));
   const acts = (n: number) =>
     recent(s.activities, n).map((a) => ({
       kind: 'activity',

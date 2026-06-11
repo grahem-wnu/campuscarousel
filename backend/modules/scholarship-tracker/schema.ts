@@ -9,7 +9,7 @@ import { z } from '../../shared/api/index.js';
 export const TYPES = [
   'merit',
   'need-based',
-  'nursing-specific',
+  'major-specific',
   'community-service',
   'diversity',
   'state-specific',

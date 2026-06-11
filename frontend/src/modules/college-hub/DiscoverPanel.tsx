@@ -100,7 +100,7 @@ export function DiscoverPanel({ trackedNames, onAdd, onClose }: Props) {
       <div className="mt-3 flex flex-wrap items-end gap-3">
         <Field label="Keywords" className="min-w-[12rem] flex-1">
           <Input
-            placeholder="e.g. small class sizes, strong NCLEX pass rate"
+            placeholder="e.g. small class sizes, strong outcomes"
             value={filters.query ?? ''}
             onChange={(e) => setFilters((f) => ({ ...f, query: e.target.value || undefined }))}
           />

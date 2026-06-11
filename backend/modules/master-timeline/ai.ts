@@ -43,7 +43,7 @@ export const curatedAnalyzer: Analyzer = async ({ events, allEvents }) => {
   }
 
   const missing: string[] = [];
-  if (!allEvents.some((e) => e.source === 'teas')) missing.push('No TEAS exam date on the calendar — schedule one.');
+  if (!allEvents.some((e) => e.source === 'exam')) missing.push('No exam date on the calendar — schedule one.');
   if (!allEvents.some((e) => e.source === 'college')) missing.push('No college application deadlines yet — add your target schools’ dates.');
   if (!allEvents.some((e) => e.source === 'visit')) missing.push('No campus visits planned — visits boost demonstrated interest.');
   if (missing.length === 0) missing.push('Good coverage — exams, applications, and visits are all on the calendar.');

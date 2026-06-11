@@ -11,7 +11,7 @@ function stub(text: string): BedrockInvoker {
 const throwing: BedrockInvoker = { send: async () => { throw new Error('Throttle'); } };
 
 function ctx(sources: Partial<EventSources>) {
-  const full: EventSources = { activities: [], goals: [], colleges: [], teas: [], visits: [], scholarships: [], certifications: [], ...sources };
+  const full: EventSources = { activities: [], goals: [], colleges: [], exams: [], visits: [], scholarships: [], certifications: [], ...sources };
   const all = buildEvents(full);
   return { events: upcoming(all, TODAY, 90), allEvents: all, todayIso: TODAY };
 }
@@ -31,13 +31,13 @@ describe('curatedAnalyzer', () => {
     expect(a.source).toBe('curated');
     expect(a.priorities.join(' ')).toMatch(/Overdue/);
     expect(a.conflicts.join(' ')).toMatch(/1d apart|same day/); // OSU 06-15 & Merit 06-16
-    expect(a.missing.join(' ')).toMatch(/TEAS/); // no teas event
+    expect(a.missing.join(' ')).toMatch(/exam/); // no exam event
   });
 
   it('reports good coverage when exams/apps/visits exist', async () => {
     const a = await curatedAnalyzer(
       ctx({
-        teas: [{ recordId: 't', type: 'official-exam', date: '2026-08-01', createdAt: 'x', updatedAt: 'x' }],
+        exams: [{ recordId: 't', type: 'official-exam', date: '2026-08-01', createdAt: 'x', updatedAt: 'x' }],
         colleges: [{ collegeId: 'c', name: 'OSU', status: 'applying', applicationDeadlines: { regularDecision: '2026-12-01' }, createdAt: 'x', updatedAt: 'x' }],
         visits: [{ visitId: 'v', collegeId: 'c', date: '2026-09-01', createdAt: 'x', updatedAt: 'x' }],
       }),

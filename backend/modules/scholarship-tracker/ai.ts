@@ -93,7 +93,7 @@ function buildHydratePrompt(name: string, provider?: string): string {
     `Provide factual details about the scholarship "${name}"${provider ? ` from ${provider}` : ''}.`,
     'Respond with ONLY a JSON object (no prose, no code fences) using these keys where known:',
     'provider, amount (number USD), amountDescription, type (one of: merit, need-based,',
-    'nursing-specific, community-service, diversity, state-specific, organization, other),',
+    'major-specific, community-service, diversity, state-specific, organization, other),',
     'eligibility (string[]), applicationDeadline ("YYYY-MM-DD"), applicationUrl,',
     'requiredMaterials (string[]), isRenewable (boolean), renewalRequirements.',
     'Omit any field you are unsure of rather than guessing. Do not invent a URL.',

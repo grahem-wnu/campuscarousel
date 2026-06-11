@@ -35,7 +35,7 @@ export interface EssayInput {
 
 export interface ExperienceSuggestion {
   title: string;
-  kind: 'activity' | 'clinical' | 'why-nursing';
+  kind: 'activity' | 'experience' | 'motivation';
   why: string;
 }
 export interface FindResult {
@@ -45,7 +45,7 @@ export interface FindResult {
 }
 export interface FindResponse {
   result: FindResult;
-  basedOn: { activities: number; clinical: number; whyNursing: number };
+  basedOn: { activities: number; experiences: number; motivations: number };
 }
 
 export interface EssayReview {
@@ -67,7 +67,7 @@ export interface ApplicationRow {
   nextDeadline: { label: string; date: string } | null;
   daysUntilDeadline: number | null;
   essays: { total: number; final: number; statuses: string[] };
-  hasTeasScore: boolean;
+  hasExamScore: boolean;
 }
 
 // --- Application tracker (persisted APPLICATION# rows) ---------------------

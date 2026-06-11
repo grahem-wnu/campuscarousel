@@ -10,11 +10,11 @@ import type {
   FinAidItem,
   Goal,
   Scholarship,
-  Teas,
+  ExamScore,
   Visit,
 } from '../../shared/data/index.js';
 
-export const EVENT_SOURCES = ['activity', 'goal', 'college', 'teas', 'visit', 'scholarship', 'certification', 'finaid'] as const;
+export const EVENT_SOURCES = ['activity', 'goal', 'college', 'exam', 'visit', 'scholarship', 'certification', 'finaid'] as const;
 export type EventSource = (typeof EVENT_SOURCES)[number];
 
 export interface TimelineEvent {
@@ -41,7 +41,7 @@ export interface EventSources {
   activities: readonly Activity[]; // already visibility-filtered by the caller
   goals: readonly Goal[];
   colleges: readonly College[];
-  teas: readonly Teas[];
+  exams: readonly ExamScore[];
   visits: readonly Visit[];
   scholarships: readonly Scholarship[];
   certifications: readonly Certification[];
@@ -66,7 +66,7 @@ export function buildEvents(s: EventSources): TimelineEvent[] {
     if (d?.regularDecision) push({ source: 'college', type: 'regular-decision', title: `${c.name} — regular decision`, date: d.regularDecision, refId: c.collegeId, collegeId: c.collegeId });
     if (d?.programApp) push({ source: 'college', type: 'program-app', title: `${c.name} — program app`, date: d.programApp, refId: c.collegeId, collegeId: c.collegeId });
   }
-  for (const t of s.teas) if (t.type === 'official-exam') push({ source: 'teas', type: 'official-exam', title: 'TEAS official exam', date: t.date, refId: t.recordId });
+  for (const t of s.exams) if (t.type === 'official-exam') push({ source: 'exam', type: 'official-exam', title: 'Official exam', date: t.date, refId: t.recordId });
   for (const v of s.visits) push({ source: 'visit', type: v.visitType ?? 'visit', title: `Campus visit${v.visitType ? ` — ${v.visitType}` : ''}`, date: v.date, refId: v.visitId, collegeId: v.collegeId });
   for (const sc of s.scholarships) if (!['awarded', 'denied', 'expired'].includes(sc.status ?? '') && sc.applicationDeadline) push({ source: 'scholarship', type: 'deadline', title: sc.name, date: sc.applicationDeadline, refId: sc.scholarshipId });
   for (const c of s.certifications) if (c.renewalRequired && c.expirationDate) push({ source: 'certification', type: 'expiration', title: `${c.name} renewal`, date: c.expirationDate, refId: c.certId });

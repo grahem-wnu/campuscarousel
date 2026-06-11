@@ -17,10 +17,10 @@ const throwing: BedrockInvoker = { send: async () => { throw new Error('Throttle
 
 const grounding: GroundingContext = {
   experiences: [
-    { kind: 'clinical', date: '2026-02-01', title: 'County Hospital', detail: 'shadowed an ICU nurse' },
+    { kind: 'experience', date: '2026-02-01', title: 'County Hospital', detail: 'shadowed an ICU professional' },
     { kind: 'activity', date: '2026-01-01', title: 'Hospice volunteering', detail: 'comforted families' },
   ],
-  counts: { activities: 1, clinical: 1, whyNursing: 0 },
+  counts: { activities: 1, experiences: 1, motivations: 0 },
   includesPrivate: false,
 };
 

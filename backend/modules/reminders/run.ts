@@ -11,29 +11,29 @@ import { shouldSendNow } from './settings.js';
 /** Fetch everything the digest needs for the CURRENT student in one pass. Activities stay RAW —
  *  privacy is applied per recipient. */
 export async function gatherForDigest(data: Data): Promise<GatheredData> {
-  const [activities, goals, colleges, teas, scholarships, certifications, finaid] = await Promise.all([
+  const [activities, goals, colleges, exams, scholarships, certifications, finaid] = await Promise.all([
     data.activities.list(),
     data.goals.list(),
     data.colleges.list(),
-    data.teas.list(),
+    data.exams.list(),
     data.scholarships.list(),
     data.certifications.list(),
     data.finaid.list(),
   ]);
   // Visits are sub-entities under COLLEGE#<id>; list per college and flatten (mirrors master-timeline).
   const visitLists = await Promise.all(colleges.map((c) => data.visits.list(c.collegeId)));
-  return { activities, goals, colleges, teas, visits: visitLists.flat(), scholarships, certifications, finaid };
+  return { activities, goals, colleges, exams, visits: visitLists.flat(), scholarships, certifications, finaid };
 }
 
 const EMPTY: GatheredData = {
-  activities: [], goals: [], colleges: [], teas: [], visits: [], scholarships: [], certifications: [], finaid: [],
+  activities: [], goals: [], colleges: [], exams: [], visits: [], scholarships: [], certifications: [], finaid: [],
 };
 
 const mergeGathered = (a: GatheredData, b: GatheredData): GatheredData => ({
   activities: [...a.activities, ...b.activities],
   goals: [...a.goals, ...b.goals],
   colleges: [...a.colleges, ...b.colleges],
-  teas: [...a.teas, ...b.teas],
+  exams: [...a.exams, ...b.exams],
   visits: [...a.visits, ...b.visits],
   scholarships: [...a.scholarships, ...b.scholarships],
   certifications: [...a.certifications, ...b.certifications],

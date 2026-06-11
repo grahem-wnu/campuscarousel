@@ -1,18 +1,18 @@
 // Pure aggregation for the dashboard — read-only roll-ups over the shared data layer. Framework- and
 // AWS-free so it unit-tests for real. Visibility filtering is the CALLER's job (the handler runs
-// activities/clinical through filterForRequester before calling these), so a private entry never
+// activities/experiences through filterForRequester before calling these), so a private entry never
 // reaches a parent's widgets. Date-relative math takes `todayIso` explicitly for determinism.
 
 import type {
   Activity,
   Certification,
-  Clinical,
+  ExperienceEntry,
   College,
   Course,
   Goal,
   Interview,
   Scholarship,
-  Teas,
+  ExamScore,
 } from '../../shared/data/index.js';
 
 const MS_PER_DAY = 86_400_000;
@@ -86,14 +86,14 @@ export function activitySummary(activities: readonly Activity[], todayIso: strin
   return { totalCount: activities.length, totalHours: r2(totalHours), hoursByCategory, weeklyStreak };
 }
 
-export function clinicalTotalHours(clinical: readonly Clinical[]): number {
-  return r2(clinical.reduce((s, c) => s + (c.hours ?? 0), 0));
+export function clinicalTotalHours(experiences: readonly ExperienceEntry[]): number {
+  return r2(experiences.reduce((s, c) => s + (c.hours ?? 0), 0));
 }
 
-// ---- Latest TEAS ----------------------------------------------------------
+// ---- Latest exam ----------------------------------------------------------
 
-export function latestTeas(teas: readonly Teas[]): { date: string; overallScore: number } | null {
-  const scored = teas.filter((t) => t.overallScore !== undefined).slice().sort((a, b) => (a.date < b.date ? 1 : -1));
+export function latestExam(exams: readonly ExamScore[]): { date: string; overallScore: number } | null {
+  const scored = exams.filter((t) => t.overallScore !== undefined).slice().sort((a, b) => (a.date < b.date ? 1 : -1));
   const top = scored[0];
   return top ? { date: top.date, overallScore: top.overallScore! } : null;
 }

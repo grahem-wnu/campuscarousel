@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { InMemoryTableClient, makeData, NotFoundError, type Data } from './index.js';
 import { tableClientFromEnv } from './table-client.js';
-import { buildActivity, buildClinical, seed } from './fixtures.js';
+import { buildActivity, buildExperience, seed } from './fixtures.js';
 
 let client: InMemoryTableClient;
 let data: Data;
@@ -171,21 +171,21 @@ describe('secondary index access patterns', () => {
     expect(clinical.map((a) => a.date)).toEqual(['2026-01-01', '2026-01-02']); // ordered by date
   });
 
-  it('clinical.listByFacility uses GSI3', async () => {
-    await data.clinical.create(buildClinical({ facility: 'CHOC', date: '2026-01-01' }));
-    await data.clinical.create(buildClinical({ facility: 'Mission', date: '2026-01-02' }));
-    await data.clinical.create(buildClinical({ facility: 'CHOC', date: '2026-01-03' }));
-    const choc = await data.clinical.listByFacility('CHOC');
+  it('experiences.listByFacility uses GSI3', async () => {
+    await data.experiences.create(buildExperience({ facility: 'CHOC', date: '2026-01-01' }));
+    await data.experiences.create(buildExperience({ facility: 'Mission', date: '2026-01-02' }));
+    await data.experiences.create(buildExperience({ facility: 'CHOC', date: '2026-01-03' }));
+    const choc = await data.experiences.listByFacility('CHOC');
     expect(choc).toHaveLength(2);
     expect(choc.every((c) => c.facility === 'CHOC')).toBe(true);
   });
 
-  it('teas lists via GSI4 by date', async () => {
-    await data.teas.create({ type: 'practice-test', date: '2026-02-01', overallScore: 70 });
-    await data.teas.create({ type: 'practice-test', date: '2026-01-01', overallScore: 65 });
-    const all = await data.teas.list();
+  it('exams list via GSI4 by date', async () => {
+    await data.exams.create({ type: 'practice-test', date: '2026-02-01', overallScore: 70 });
+    await data.exams.create({ type: 'practice-test', date: '2026-01-01', overallScore: 65 });
+    const all = await data.exams.list();
     expect(all.map((t) => t.date)).toEqual(['2026-01-01', '2026-02-01']);
-    expect(await data.teas.listByDateRange('2026-01-15', '2026-12-31')).toHaveLength(1);
+    expect(await data.exams.listByDateRange('2026-01-15', '2026-12-31')).toHaveLength(1);
   });
 });
 
@@ -321,7 +321,7 @@ describe('fixtures.seed', () => {
     expect(all).toHaveLength(2);
     expect(await data.colleges.get(ids.collegeId)).not.toBeNull();
     expect(await data.scholarships.get(ids.scholarshipId)).not.toBeNull();
-    expect(await data.clinical.get(ids.clinicalId)).not.toBeNull();
+    expect(await data.experiences.get(ids.experienceId)).not.toBeNull();
   });
 });
 

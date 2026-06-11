@@ -7,7 +7,7 @@ const convo = (o: Partial<Conversation>): Conversation =>
 
 describe('moduleFromPath', () => {
   it('returns the first path segment, lowercased', () => {
-    expect(moduleFromPath('/why-nursing/123')).toBe('why-nursing');
+    expect(moduleFromPath('/motivations/123')).toBe('motivations');
     expect(moduleFromPath('/College-Hub')).toBe('college-hub');
   });
   it('is undefined at the root', () => {

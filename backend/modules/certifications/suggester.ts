@@ -5,10 +5,11 @@
 //   • makeBedrockSuggester — calls Bedrock (model/inference-profile from the BEDROCK_MODEL_ID env
 //     var the Lambda role already injects; never hardcoded) and parses the model's JSON. This is
 //     what production wires in routes.manifest.ts.
-//   • curatedSuggester    — a deterministic, career-goal-aware curated list grounded in the spec's
-//     named baseline (CNA, BLS/CPR, First Aid, Stop the Bleed) plus ICU/critical-care additions.
-//     It is the graceful FALLBACK the Bedrock suggester returns on any error/timeout/empty parse,
-//     and the default the handlers use when no suggester is injected (tests).
+//   • curatedSuggester    — a deterministic fallback. The core ships with NO hardcoded
+//     program-specific certs (those belong to future add-on packs), so the curated list is empty;
+//     the real suggestions come from the AI path. It is still the graceful FALLBACK the Bedrock
+//     suggester returns on any error/timeout/empty parse, and the default the handlers use when no
+//     suggester is injected (tests).
 //
 // Either way, certs Keira already holds (`existingNames`) are filtered out via precise token/alias
 // matching (not substrings).
@@ -39,66 +40,12 @@ interface CuratedEntry extends CertSuggestion {
   aliases?: string[];
 }
 
-/** Foundational certs every aspiring nursing student benefits from (the spec's named baseline). */
-const BASELINE: CuratedEntry[] = [
-  {
-    name: 'BLS/CPR Certification',
-    issuingOrganization: 'American Heart Association',
-    why: 'Basic Life Support is required for nearly every clinical placement and nursing program.',
-    typicalCost: 90,
-    renewalFrequency: 'Every 2 years',
-    priority: 1,
-    aliases: ['bls', 'cpr'],
-  },
-  {
-    name: 'Certified Nursing Assistant (CNA)',
-    issuingOrganization: 'State Board of Nursing',
-    why: 'Hands-on patient-care experience that strengthens a BSN application and pays while you learn.',
-    typicalCost: 1200,
-    renewalFrequency: 'Every 2 years',
-    priority: 2,
-    aliases: ['cna'],
-  },
-  {
-    name: 'First Aid Certification',
-    issuingOrganization: 'American Red Cross',
-    why: 'Foundational emergency-response skills; often bundled with BLS/CPR.',
-    typicalCost: 70,
-    renewalFrequency: 'Every 2 years',
-    priority: 3,
-  },
-  {
-    name: 'Stop the Bleed',
-    issuingOrganization: 'American College of Surgeons',
-    why: 'Short, low-cost hemorrhage-control training that shows initiative on an application.',
-    typicalCost: 0,
-    renewalFrequency: 'No formal expiration',
-    priority: 4,
-    aliases: ['stb'],
-  },
-];
+/** The core ships with NO hardcoded program-specific baseline certs — program packs (e.g. a future
+ *  nursing add-on) supply their own. The AI suggester provides goal-relevant suggestions instead. */
+const BASELINE: CuratedEntry[] = [];
 
-/** Certs tied to ICU / critical-care / acute goals — surfaced when the goal mentions them. */
-const ICU_TRACK: CuratedEntry[] = [
-  {
-    name: 'Advanced Cardiovascular Life Support (ACLS)',
-    issuingOrganization: 'American Heart Association',
-    why: 'Core to ICU and critical-care nursing; a clear signal of an ICU-focused goal.',
-    typicalCost: 250,
-    renewalFrequency: 'Every 2 years',
-    priority: 5,
-    aliases: ['acls'],
-  },
-  {
-    name: 'Pediatric Advanced Life Support (PALS)',
-    issuingOrganization: 'American Heart Association',
-    why: 'Valuable if your critical-care interest includes pediatric or NICU/PICU settings.',
-    typicalCost: 250,
-    renewalFrequency: 'Every 2 years',
-    priority: 6,
-    aliases: ['pals'],
-  },
-];
+/** Reserved for a future goal-specific curated track; empty in the generic core. */
+const ICU_TRACK: CuratedEntry[] = [];
 
 const norm = (s: string): string => s.trim().toLowerCase();
 

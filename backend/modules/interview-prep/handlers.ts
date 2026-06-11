@@ -1,6 +1,6 @@
 // Interview Prep handlers. Session records are family-visible; identity comes from the JWT and the
 // router 401s unauthenticated callers. The AI feedback path is PRIVACY-CRITICAL: it grounds in
-// activities/clinical/why-nursing via gatherGrounding(), which filters with aiVisibleSet off the JWT
+// activities/experience/motivation via gatherGrounding(), which filters with aiVisibleSet off the JWT
 // so private entries are surfaced only when keira (student) is the caller. Built from injectable deps
 // so tests supply an in-memory data client, a pinned clock, and stub AI generators.
 

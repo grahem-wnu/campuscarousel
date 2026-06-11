@@ -16,7 +16,7 @@ let finderPools: ExperiencePool[];
 
 const stubFinder: ExperienceFinder = async ({ pool }) => {
   finderPools.push(pool);
-  return { suggestedExperiences: [{ title: 'County Hospital', kind: 'clinical', why: 'vivid' }], angles: ['open with a scene'], source: 'curated' };
+  return { suggestedExperiences: [{ title: 'County Hospital', kind: 'experience', why: 'vivid' }], angles: ['open with a scene'], source: 'curated' };
 };
 const stubReviewer: EssayReviewer = async ({ content }) => ({
   strengths: ['clear'], improvements: ['tighten'], authenticity: 'you', wordCount: content.split(/\s+/).length, onTarget: null, rewrote: false, source: 'curated',

@@ -69,8 +69,8 @@ export default function DashboardPage() {
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Stat icon="course" label="GPA" value={gpaText(d.gpa.weighted, d.gpa.unweighted)} sub={`${d.gpa.courses} courses`} />
         <Stat icon="heart" label="Activity hours" value={String(d.activity.totalHours)} sub={d.activity.weeklyStreak > 0 ? `🔥 ${d.activity.weeklyStreak}-wk streak` : `${d.activity.totalCount} entries`} />
-        <Stat icon="clinical" label="Clinical hours" value={String(d.clinicalHours)} />
-        <Stat icon="teas" label="Latest TEAS" value={d.latestTeas ? String(d.latestTeas.overallScore) : '—'} sub={d.latestTeas?.date} />
+        <Stat icon="clinical" label="Experience hours" value={String(d.clinicalHours)} />
+        <Stat icon="teas" label="Latest exam" value={d.latestExam ? String(d.latestExam.overallScore) : '—'} sub={d.latestExam?.date} />
       </div>
 
       {/* Student motivational / family financial band */}

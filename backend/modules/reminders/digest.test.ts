@@ -18,7 +18,7 @@ const empty: GatheredData = {
   activities: [],
   goals: [],
   colleges: [],
-  teas: [],
+  exams: [],
   visits: [],
   scholarships: [],
   certifications: [],

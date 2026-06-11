@@ -74,7 +74,7 @@ describe('detail (GET /colleges/:id/benchmark)', () => {
       typicalVolunteerHours: 40,
     });
     await data.courses.create({ name: 'AP Bio', gradePoints: 4.0, units: 1 } as Parameters<Data['courses']['create']>[0]);
-    await data.clinical.create({ date: '2026-01-01', facility: 'Hoag', hours: 60, visibility: 'family' } as Parameters<Data['clinical']['create']>[0]);
+    await data.experiences.create({ date: '2026-01-01', facility: 'Hoag', hours: 60, visibility: 'family' } as Parameters<Data['experiences']['create']>[0]);
 
     const res = await h.detail(ctx({ params: { id } }));
     const body = res.body as { comparison: { gpaStatus: string; clinicalHoursStatus: string } };
@@ -150,8 +150,8 @@ describe('gaps (GET /benchmarks/gaps)', () => {
 
 describe('privacy — a parent never has private-entry hours folded into Keira’s stats', () => {
   beforeEach(async () => {
-    await data.clinical.create({ date: '2026-01-01', facility: 'Hoag', hours: 5, visibility: 'family' } as Parameters<Data['clinical']['create']>[0]);
-    await data.clinical.create({ date: '2026-01-02', facility: 'Private', hours: 10, visibility: 'private' } as Parameters<Data['clinical']['create']>[0]);
+    await data.experiences.create({ date: '2026-01-01', facility: 'Hoag', hours: 5, visibility: 'family' } as Parameters<Data['experiences']['create']>[0]);
+    await data.experiences.create({ date: '2026-01-02', facility: 'Private', hours: 10, visibility: 'private' } as Parameters<Data['experiences']['create']>[0]);
     await data.activities.create({ userId: 'keira', date: '2026-01-01', category: 'volunteer', title: 'CHOC', hours: 8, visibility: 'family' } as Parameters<Data['activities']['create']>[0]);
     await data.activities.create({ userId: 'keira', date: '2026-01-02', category: 'volunteer', title: 'Secret', hours: 12, visibility: 'private' } as Parameters<Data['activities']['create']>[0]);
   });

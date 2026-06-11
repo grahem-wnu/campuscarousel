@@ -6,7 +6,7 @@ import type { Visit, VisitType, WouldAttend } from './types';
 
 const VISIT_TYPE_LABELS: Record<VisitType, string> = {
   'campus-tour': 'Campus Tour',
-  'nursing-dept-visit': 'Nursing Dept Visit',
+  'department-visit': 'Department Visit',
   'open-house': 'Open House',
   'admitted-student-day': 'Admitted Student Day',
   overnight: 'Overnight',

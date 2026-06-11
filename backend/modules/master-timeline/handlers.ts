@@ -33,11 +33,11 @@ export function makeHandlers(deps: TimelineDeps): TimelineHandlers {
   // Gather all event sources, visibility-filtering activities for the caller.
   async function gather(requester: Parameters<Handler>[0]['requester']): Promise<EventSources> {
     const data = getData();
-    const [activitiesRaw, goals, colleges, teas, scholarships, certifications, finaid] = await Promise.all([
+    const [activitiesRaw, goals, colleges, exams, scholarships, certifications, finaid] = await Promise.all([
       data.activities.list(),
       data.goals.list(),
       data.colleges.list(),
-      data.teas.list(),
+      data.exams.list(),
       data.scholarships.list(),
       data.certifications.list(),
       data.finaid.list(),
@@ -49,7 +49,7 @@ export function makeHandlers(deps: TimelineDeps): TimelineHandlers {
       activities: filterForRequester(activitiesRaw, requester), // PRIVACY
       goals,
       colleges,
-      teas,
+      exams,
       visits,
       scholarships,
       certifications,

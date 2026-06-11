@@ -47,19 +47,19 @@ export function makeHandlers(getData: () => Data, getAssistant: () => Assistant)
 
       // Assemble grounding context. Visibility-bearing collections are filtered with aiVisibleSet
       // keyed on the caller — this is the privacy boundary for the whole module.
-      const [courses, teas, clinicalRaw, activitiesRaw, colleges, goals, whyRaw, scholarships] = await Promise.all([
+      const [courses, exams, experiencesRaw, activitiesRaw, colleges, goals, motivationsRaw, scholarships] = await Promise.all([
         data.courses.list(),
-        data.teas.list(),
-        data.clinical.list(),
+        data.exams.list(),
+        data.experiences.list(),
         data.activities.list(),
         data.colleges.list(),
         data.goals.list(),
-        data.whyNursing.list(),
+        data.motivations.list(),
         data.scholarships.list(),
       ]);
-      const clinical = aiVisibleSet(clinicalRaw, requester);
+      const experiences = aiVisibleSet(experiencesRaw, requester);
       const activities = aiVisibleSet(activitiesRaw, requester);
-      const whyNursing = aiVisibleSet(whyRaw, requester);
+      const motivations = aiVisibleSet(motivationsRaw, requester);
 
       // The student's intended major(s) make the prompt major-aware (no hardcoded nursing). Tolerate
       // an absent profile — the prompt helpers fall back to neutral "their intended program" language.
@@ -69,8 +69,8 @@ export function makeHandlers(getData: () => Data, getAssistant: () => Assistant)
         role: requester.role,
         mode,
         page: { module: input.context?.module, collegeId: input.context?.collegeId, essayId: input.context?.essayId },
-        summary: buildSummary({ courses, teas, clinical, activities, colleges, goals }),
-        records: selectRecords(mode, { whyNursing, activities, clinical, colleges, scholarships }),
+        summary: buildSummary({ courses, exams, experiences, activities, colleges, goals }),
+        records: selectRecords(mode, { motivations, activities, experiences, colleges, scholarships }),
         majors: studentProfile?.intendedMajors,
       };
 

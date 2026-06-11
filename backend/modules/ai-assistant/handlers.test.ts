@@ -41,13 +41,13 @@ const ctx = (over: Partial<HandlerContext> = {}): HandlerContext => ({
 const expectStatus = (p: Promise<unknown>, status: number) => expect(p).rejects.toMatchObject({ status });
 
 async function seedWhy(over: Record<string, unknown> = {}): Promise<void> {
-  await data.whyNursing.create({
+  await data.motivations.create({
     date: '2026-01-10',
     title: 'A moment',
     content: 'Something meaningful.',
     visibility: 'family',
     ...over,
-  } as Parameters<Data['whyNursing']['create']>[0]);
+  } as Parameters<Data['motivations']['create']>[0]);
 }
 
 describe('chat (POST /ai/chat)', () => {
@@ -120,8 +120,8 @@ describe('privacy — private entries reach the model ONLY for keira', () => {
   });
 
   it('private CLINICAL hours never reach the model summary for a parent (only for keira)', async () => {
-    await data.clinical.create({ date: '2026-02-01', facility: 'Hoag', hours: 5, visibility: 'family' } as Parameters<Data['clinical']['create']>[0]);
-    await data.clinical.create({ date: '2026-02-02', facility: 'Private', hours: 10, visibility: 'private' } as Parameters<Data['clinical']['create']>[0]);
+    await data.experiences.create({ date: '2026-02-01', facility: 'Hoag', hours: 5, visibility: 'family' } as Parameters<Data['experiences']['create']>[0]);
+    await data.experiences.create({ date: '2026-02-02', facility: 'Private', hours: 10, visibility: 'private' } as Parameters<Data['experiences']['create']>[0]);
 
     await h.chat(ctx({ requester: keira, body: { message: 'clinical?' } }));
     await h.chat(ctx({ requester: kate, body: { message: 'clinical?' } }));

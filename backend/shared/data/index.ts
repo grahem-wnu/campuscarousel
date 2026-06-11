@@ -39,13 +39,14 @@ import type {
   Activity,
   Application,
   Certification,
-  Clinical,
+  ExperienceEntry,
   College,
   Contact,
   Course,
   DiscoveryJob,
   Document,
   Essay,
+  ExamScore,
   FinAidItem,
   Goal,
   Opportunity,
@@ -53,9 +54,8 @@ import type {
   Interview,
   Recommendation,
   Scholarship,
-  Teas,
   TestScore,
-  WhyNursing,
+  Motivation,
 } from './types.js';
 
 /**
@@ -90,38 +90,38 @@ export function makeData(
       activitiesBase.listByIndex('GSI2', `CATEGORY#${category}`, range),
   };
 
-  // Clinical hours — collection by date (GSI1) + by facility (GSI3).
-  const clinicalBase = makeDetailsRepo<Clinical, 'entryId'>(client, {
-    prefix: 'CLINICAL',
+  // Experience hours — collection by date (GSI1) + by facility (GSI3).
+  const experiencesBase = makeDetailsRepo<ExperienceEntry, 'entryId'>(client, {
+    prefix: 'EXPERIENCE',
     idField: 'entryId',
-    collection: 'CLINICAL',
+    collection: 'EXPERIENCES',
     sortField: 'date',
     indexProjections: (c) => ({
       GSI3PK: `FACILITY#${c.facility}`,
       GSI3SK: dateSortKey(c.date, c.entryId),
     }),
   });
-  const clinical = {
-    ...clinicalBase,
-    listByFacility: (facility: string, range?: ListRange): Promise<Clinical[]> =>
-      clinicalBase.listByIndex('GSI3', `FACILITY#${facility}`, range),
+  const experiences = {
+    ...experiencesBase,
+    listByFacility: (facility: string, range?: ListRange): Promise<ExperienceEntry[]> =>
+      experiencesBase.listByIndex('GSI3', `FACILITY#${facility}`, range),
   };
 
-  // TEAS — dedicated date index (GSI4) per the spec.
-  const teasBase = makeDetailsRepo<Teas, 'recordId'>(client, {
-    prefix: 'TEAS',
+  // Exams — dedicated date index (GSI4) per the spec.
+  const examsBase = makeDetailsRepo<ExamScore, 'recordId'>(client, {
+    prefix: 'EXAM',
     idField: 'recordId',
     sortField: 'date',
     indexProjections: (t) => ({
-      GSI4PK: 'TEAS_SCORES',
+      GSI4PK: 'EXAM_SCORES',
       GSI4SK: dateSortKey(t.date, t.recordId),
     }),
   });
-  const teas = {
-    ...teasBase,
-    list: (range?: ListRange): Promise<Teas[]> => teasBase.listByIndex('GSI4', 'TEAS_SCORES', range),
-    listByDateRange: (from: string, to: string, range?: Omit<ListRange, 'from' | 'to'>): Promise<Teas[]> =>
-      teasBase.listByIndex('GSI4', 'TEAS_SCORES', { ...range, from, to }),
+  const exams = {
+    ...examsBase,
+    list: (range?: ListRange): Promise<ExamScore[]> => examsBase.listByIndex('GSI4', 'EXAM_SCORES', range),
+    listByDateRange: (from: string, to: string, range?: Omit<ListRange, 'from' | 'to'>): Promise<ExamScore[]> =>
+      examsBase.listByIndex('GSI4', 'EXAM_SCORES', { ...range, from, to }),
   };
 
   const colleges = makeDetailsRepo<College, 'collegeId'>(client, {
@@ -201,10 +201,10 @@ export function makeData(
     sortField: 'date',
   });
 
-  const whyNursing = makeDetailsRepo<WhyNursing, 'entryId'>(client, {
-    prefix: 'WHYNURSING',
+  const motivations = makeDetailsRepo<Motivation, 'entryId'>(client, {
+    prefix: 'MOTIVATION',
     idField: 'entryId',
-    collection: 'WHYNURSING',
+    collection: 'MOTIVATIONS',
     sortField: 'date',
   });
 
@@ -237,8 +237,8 @@ export function makeData(
 
   return {
     activities,
-    clinical,
-    teas,
+    experiences,
+    exams,
     colleges,
     discoveryJobs,
     scholarships,
@@ -247,7 +247,7 @@ export function makeData(
     essays,
     certifications,
     interviews,
-    whyNursing,
+    motivations,
     contacts,
     applications,
     recommendations,

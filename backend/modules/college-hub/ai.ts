@@ -24,7 +24,6 @@ export interface CollegeCandidate {
   state?: string;
   programType?: College['programType'];
   isDirectAdmit?: boolean;
-  hasBSN?: boolean;
   ranking?: string;
   tuitionInState?: number;
   tuitionOutOfState?: number;
@@ -129,7 +128,6 @@ function toCandidate(raw: unknown): CollegeCandidate | null {
     state: str(o.state),
     programType: programType(o.programType),
     isDirectAdmit: bool(o.isDirectAdmit),
-    hasBSN: bool(o.hasBSN),
     ranking: str(o.ranking),
     tuitionInState: num(o.tuitionInState),
     tuitionOutOfState: num(o.tuitionOutOfState),
@@ -156,7 +154,7 @@ function buildDiscoverPrompt(input: DiscoverInput): string {
     'Respond with ONLY a JSON array (no prose, no code fences). Each element:',
     '{"name": string, "location": string, "state": string,',
     '"programType": "direct-admit"|"secondary-application"|"accelerated"|"transfer-pathway",',
-    '"isDirectAdmit": boolean, "hasBSN": boolean, "ranking": string,',
+    '"isDirectAdmit": boolean, "ranking": string,',
     '"tuitionInState": number, "tuitionOutOfState": number, "website": string,',
     '"summary": string (one sentence on how its program fits the student)}.',
   ].join('\n');
@@ -183,12 +181,12 @@ export function makeBedrockDiscoverer(options: AiOptions = {}): Discoverer {
 /** College fields the hydrator is allowed to write (everything AI-discoverable; never ids/stamps/
  *  userEdited/status/isTopPick — those are user/system-owned). */
 const HYDRATABLE_FIELDS = [
-  'location', 'state', 'programType', 'isDirectAdmit', 'hasBSN', 'hasAcceleratedBSN', 'ranking',
-  'overview', 'admissionsDeepDive', 'nclexPassRate', 'employmentRate',
+  'location', 'state', 'programType', 'isDirectAdmit', 'ranking',
+  'overview', 'admissionsDeepDive', 'employmentRate',
   'tuitionInState', 'tuitionOutOfState', 'costOfAttendanceOutOfState', 'estimatedNetPriceAfterAid',
   'percentReceivingAid', 'avgAidAmount', 'applicationFee', 'estimatedTotalCost', 'estimatedCostAfterAid',
   'acceptanceRateProgram', 'acceptanceRateUniversity', 'avgGPAAdmitted', 'prerequisites',
-  'applicationDeadlines', 'essayPrompts', 'requiredTests', 'clinicalPartners',
+  'applicationDeadlines', 'essayPrompts', 'requiredTests',
   'testimonials', 'campusImageUrls', 'specialNotes', 'website', 'dataSources', 'dataAsOf',
   'branding', 'contactInfo', 'appServices', 'usesCAS',
 ] as const;
@@ -266,13 +264,13 @@ function buildHydratePrompt(name: string, state?: string): string {
     'Respond with ONLY a JSON object (no prose, no code fences) using these keys where known:',
     '  overview (string), admissionsDeepDive (string), programType',
     '  ("direct-admit"|"secondary-application"|"accelerated"|"transfer-pathway"), isDirectAdmit (bool),',
-    '  hasBSN (bool), hasAcceleratedBSN (bool), ranking (string), nclexPassRate (string),',
+    '  ranking (string),',
     '  employmentRate (string), tuitionInState (number), tuitionOutOfState (number),',
     '  costOfAttendanceOutOfState (number), estimatedNetPriceAfterAid (number), percentReceivingAid',
     '  (string), avgAidAmount (number), applicationFee (number), acceptanceRateProgram (string),',
     '  acceptanceRateUniversity (string), avgGPAAdmitted (string), prerequisites (string[]),',
     '  applicationDeadlines ({earlyAction, regularDecision, programApp}), essayPrompts (string[]),',
-    '  requiredTests (string[]), clinicalPartners (string[]),',
+    '  requiredTests (string[]),',
     '  testimonials ([{quote, attribution, source}] — verbatim student quotes, each with a source URL),',
     '  campusImageUrls (string[] — direct https URLs to campus/program photos), location (string),',
     '  state (2-letter), website (string), branding ({logoUrl, primaryColor (hex), secondaryColor (hex),',

@@ -27,21 +27,21 @@ describe('pickHydratableFields', () => {
     const out = pickHydratableFields({
       provider: 'ANA',
       amount: 5000,
-      type: 'nursing-specific',
+      type: 'major-specific',
       name: 'should be ignored',
       status: 'awarded',
       awardedAmount: 9999,
       notes: 'user-owned',
     });
-    expect(out).toEqual({ provider: 'ANA', amount: 5000, type: 'nursing-specific' });
+    expect(out).toEqual({ provider: 'ANA', amount: 5000, type: 'major-specific' });
   });
 });
 
 describe('makeBedrockDiscoverer', () => {
   it('parses model output into candidates', async () => {
-    const d = makeBedrockDiscoverer(opts('[{"name":"Nurses Grant","amount":3000,"type":"nursing-specific"}]'));
+    const d = makeBedrockDiscoverer(opts('[{"name":"Nurses Grant","amount":3000,"type":"major-specific"}]'));
     const out = await d.discover({ query: 'nursing' });
-    expect(out).toEqual([{ name: 'Nurses Grant', amount: 3000, type: 'nursing-specific' }]);
+    expect(out).toEqual([{ name: 'Nurses Grant', amount: 3000, type: 'major-specific' }]);
   });
 
   it('returns [] on any failure (e.g. missing model id, never throws)', async () => {
@@ -64,7 +64,7 @@ describe('makeBedrockDiscoverer', () => {
           );
         }
         return new TextEncoder().encode(
-          JSON.stringify({ stop_reason: 'end_turn', content: [{ type: 'text', text: '[{"name":"Nurses Grant","amount":3000,"type":"nursing-specific"}]' }] }),
+          JSON.stringify({ stop_reason: 'end_turn', content: [{ type: 'text', text: '[{"name":"Nurses Grant","amount":3000,"type":"major-specific"}]' }] }),
         );
       },
     };
@@ -74,7 +74,7 @@ describe('makeBedrockDiscoverer', () => {
     };
     const d = makeBedrockDiscoverer({ modelId: 'us.anthropic.test', invoker, searcher, webSearch: true });
     const out = await d.discover({ query: 'nursing' });
-    expect(out).toEqual([{ name: 'Nurses Grant', amount: 3000, type: 'nursing-specific' }]);
+    expect(out).toEqual([{ name: 'Nurses Grant', amount: 3000, type: 'major-specific' }]);
     expect(searched).toEqual(['nursing scholarships 2026']);
     expect(calls).toBe(2);
   });

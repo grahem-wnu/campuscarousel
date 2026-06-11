@@ -12,7 +12,7 @@ import type {
   Goal,
   ReminderRecipient,
   Scholarship,
-  Teas,
+  ExamScore,
   Visit,
 } from '../../shared/data/index.js';
 import {
@@ -28,7 +28,7 @@ export interface GatheredData {
   activities: Activity[];
   goals: Goal[];
   colleges: College[];
-  teas: Teas[];
+  exams: ExamScore[];
   visits: Visit[];
   scholarships: Scholarship[];
   certifications: Certification[];
@@ -42,7 +42,7 @@ export function eventsFor(g: GatheredData, includePrivate: boolean): TimelineEve
     activities,
     goals: g.goals,
     colleges: g.colleges,
-    teas: g.teas,
+    exams: g.exams,
     visits: g.visits,
     scholarships: g.scholarships,
     certifications: g.certifications,
@@ -62,7 +62,7 @@ const SOURCE_LABEL: Record<string, string> = {
   activity: 'Activity',
   goal: 'Goal',
   college: 'Application',
-  teas: 'TEAS',
+  exam: 'Exam',
   visit: 'Campus visit',
   scholarship: 'Scholarship',
   certification: 'Certification',

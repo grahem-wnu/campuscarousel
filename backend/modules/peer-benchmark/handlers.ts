@@ -27,22 +27,22 @@ export interface BenchmarkHandlers {
   gaps: Handler;
 }
 
-/** Aggregate Keira's comparable stats, with clinical/volunteer hours visibility-filtered for the
- *  caller so a parent never sees private-entry hours folded in. Courses/TEAS/certs aren't
+/** Aggregate Keira's comparable stats, with experience/volunteer hours visibility-filtered for the
+ *  caller so a parent never sees private-entry hours folded in. Courses/exams/certs aren't
  *  visibility-bearing. */
 async function gatherStats(data: Data, requester: Requester): Promise<KeiraStats> {
-  const [courses, teas, clinical, activities, certifications] = await Promise.all([
+  const [courses, exams, experiences, activities, certifications] = await Promise.all([
     data.courses.list(),
-    data.teas.list(),
-    data.clinical.list(),
+    data.exams.list(),
+    data.experiences.list(),
     data.activities.list(),
     data.certifications.list(),
   ]);
   return computeKeiraStats({
     courses,
-    teas,
+    exams,
     certifications,
-    clinical: filterForRequester(clinical, requester),
+    experiences: filterForRequester(experiences, requester),
     activities: filterForRequester(activities, requester),
   });
 }

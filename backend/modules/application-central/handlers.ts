@@ -1,6 +1,6 @@
 // Application Central handlers — essay workspace + AI essay partner + a derived application overview.
 // Essays are the student's working documents; identity comes from the JWT and the router 401s
-// unauthenticated callers. PRIVACY: /find-experiences grounds in activities/clinical/why-nursing via
+// unauthenticated callers. PRIVACY: /find-experiences grounds in activities/experience/motivation via
 // gatherExperiences (aiVisibleSet off the JWT) — private entries surface only when keira is the
 // caller — and AI output is returned LIVE (never persisted), so it can't leak through a later read.
 
@@ -185,9 +185,9 @@ export function makeHandlers(deps: AppCentralDeps): AppCentralHandlers {
     // GET /applications/overview — derived per-college status (deadlines, essays, scores).
     overview: async () => {
       const data = getData();
-      const [colleges, essays, teas] = await Promise.all([data.colleges.list(), data.essays.list(), data.teas.list()]);
+      const [colleges, essays, exams] = await Promise.all([data.colleges.list(), data.essays.list(), data.exams.list()]);
       const todayIso = now().toISOString().slice(0, 10);
-      return { status: 200, body: { applications: buildOverview(colleges, essays, teas, todayIso) } };
+      return { status: 200, body: { applications: buildOverview(colleges, essays, exams, todayIso) } };
     },
 
     // --- Application tracker (persisted APPLICATION# rows) ----------------------------------

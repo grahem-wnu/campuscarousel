@@ -18,11 +18,11 @@ const throwing: BedrockInvoker = { send: async () => { throw new Error('Throttle
 
 const pool: ExperiencePool = {
   experiences: [
-    { kind: 'clinical', date: '2026-02-01', title: 'County Hospital', detail: 'shadowed an ICU nurse' },
-    { kind: 'why-nursing', date: '2026-03-01', title: 'A moment with Marcus', detail: 'soup kitchen conversation' },
+    { kind: 'experience', date: '2026-02-01', title: 'County Hospital', detail: 'shadowed an ICU professional' },
+    { kind: 'motivation', date: '2026-03-01', title: 'A moment with Marcus', detail: 'soup kitchen conversation' },
   ],
   includesPrivate: false,
-  counts: { activities: 0, clinical: 1, whyNursing: 1 },
+  counts: { activities: 0, experiences: 1, motivations: 1 },
 };
 
 describe('extractJson / wordCountOf', () => {
@@ -53,7 +53,7 @@ describe('curatedEssayReviewer — never rewrites', () => {
 
 describe('makeBedrockExperienceFinder', () => {
   it('parses model output and falls back on failure', { timeout: 30000 }, async () => {
-    const finder = makeBedrockExperienceFinder({ modelId: MODEL, client: stub(JSON.stringify({ suggestedExperiences: [{ title: 'County Hospital', kind: 'clinical', why: 'vivid' }], angles: ['open with a scene'] })) });
+    const finder = makeBedrockExperienceFinder({ modelId: MODEL, client: stub(JSON.stringify({ suggestedExperiences: [{ title: 'County Hospital', kind: 'experience', why: 'vivid' }], angles: ['open with a scene'] })) });
     const r = await finder({ prompt: 'p', pool });
     expect(r.source).toBe('ai');
     expect(r.suggestedExperiences[0]?.title).toBe('County Hospital');

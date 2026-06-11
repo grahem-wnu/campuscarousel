@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { College, Visit } from '../../shared/data/index.js';
-import { curatedPrep, logisticsFor, makeBedrockPrep, NURSING_QUESTIONS, type BedrockInvoker } from './prep.js';
+import { curatedPrep, logisticsFor, makeBedrockPrep, PROGRAM_QUESTIONS, type BedrockInvoker } from './prep.js';
 
 const college = (over: Partial<College> = {}): College => ({
   collegeId: 'uci',
@@ -36,10 +36,10 @@ describe('logisticsFor', () => {
 });
 
 describe('curatedPrep', () => {
-  it('returns the full nursing-question checklist + logistics, marked curated', async () => {
+  it('returns the full program-question checklist + logistics, marked curated', async () => {
     const p = await curatedPrep({ college: college(), visit: visit() });
     expect(p.source).toBe('curated');
-    expect(p.questions).toEqual([...NURSING_QUESTIONS]);
+    expect(p.questions).toEqual([...PROGRAM_QUESTIONS]);
     expect(p.logistics.contact).toBe('nursing@uci.edu');
     expect(p.bestTime).toMatch(/classes are in session/i);
   });
@@ -68,7 +68,7 @@ describe('makeBedrockPrep', () => {
     expect(p.source).toBe('ai');
     expect(p.bestTime).toBe('Visit during the April open house.');
     expect(p.questions).toContain('Ask about the sim lab');
-    expect(p.questions.length).toBe(NURSING_QUESTIONS.length + 1);
+    expect(p.questions.length).toBe(PROGRAM_QUESTIONS.length + 1);
   });
 
   it('falls back to curated when the model throws', async () => {
@@ -76,7 +76,7 @@ describe('makeBedrockPrep', () => {
     const gen = makeBedrockPrep({ modelId: 'test-model', client });
     const p = await gen({ college: college(), visit: visit() });
     expect(p.source).toBe('curated');
-    expect(p.questions).toEqual([...NURSING_QUESTIONS]);
+    expect(p.questions).toEqual([...PROGRAM_QUESTIONS]);
   });
 
   it('falls back when the model output has no JSON object', async () => {

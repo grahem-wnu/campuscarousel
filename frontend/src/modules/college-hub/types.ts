@@ -32,13 +32,10 @@ export interface College {
   state?: string;
   programType?: ProgramType;
   isDirectAdmit?: boolean;
-  hasBSN?: boolean;
-  hasAcceleratedBSN?: boolean;
   isTopPick?: boolean;
   ranking?: string;
   overview?: string;
   admissionsDeepDive?: string;
-  nclexPassRate?: string;
   employmentRate?: string;
   tuitionInState?: number;
   tuitionOutOfState?: number;
@@ -56,7 +53,6 @@ export interface College {
   applicationDeadlines?: { earlyAction?: string; regularDecision?: string; programApp?: string };
   essayPrompts?: string[];
   requiredTests?: string[];
-  clinicalPartners?: string[];
   testimonials?: { quote: string; attribution?: string; source?: string }[];
   campusImageUrls?: string[];
   specialNotes?: string;
@@ -113,7 +109,6 @@ export interface CollegeCandidate {
   state?: string;
   programType?: ProgramType;
   isDirectAdmit?: boolean;
-  hasBSN?: boolean;
   ranking?: string;
   tuitionInState?: number;
   tuitionOutOfState?: number;

@@ -85,7 +85,7 @@ export function makeHandlers(deps: HandlerDeps): VisitHandlers {
       return { status: 204, body: undefined };
     },
 
-    // POST /colleges/:id/visits/:vid/prep — AI (or curated) nursing-specific visit prep.
+    // POST /colleges/:id/visits/:vid/prep — AI (or curated) program-specific visit prep.
     prep: async (ctx) => {
       const { id, vid } = validateParams(visitParamSchema, ctx);
       const data = getData();

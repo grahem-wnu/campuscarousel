@@ -128,13 +128,12 @@ export default function CollegeHubPage() {
       // Map candidates to editable College inputs — drop discovery-only fields (e.g. `summary`) the
       // strict create schema rejects.
       await bulkAddColleges(
-        chosen.map(({ name, location, state, programType, isDirectAdmit, hasBSN, ranking, tuitionInState, tuitionOutOfState, website }) => ({
+        chosen.map(({ name, location, state, programType, isDirectAdmit, ranking, tuitionInState, tuitionOutOfState, website }) => ({
           name,
           location,
           state,
           programType,
           isDirectAdmit,
-          hasBSN,
           ranking,
           tuitionInState,
           tuitionOutOfState,

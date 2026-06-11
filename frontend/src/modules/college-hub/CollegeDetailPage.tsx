@@ -251,7 +251,6 @@ const yr = (n?: number): string => (n !== undefined ? `${costLabel(n)}/yr` : NOT
 function fieldRows(college: College): { label: string; value: string }[] {
   return [
     { label: 'Ranking', value: college.ranking ?? NOT_FOUND },
-    { label: 'NCLEX pass rate', value: college.nclexPassRate ?? NOT_FOUND },
     { label: 'Acceptance (program)', value: college.acceptanceRateProgram ?? NOT_FOUND },
     { label: 'Acceptance (university)', value: college.acceptanceRateUniversity ?? NOT_FOUND },
     { label: 'Avg admitted GPA', value: college.avgGPAAdmitted ?? NOT_FOUND },
@@ -352,12 +351,6 @@ function OverviewTab({ college, onDelete }: { college: College; onDelete: () => 
           <div>
             <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-500">Required tests</h3>
             <p className="mt-1 text-sm text-ink-700">{college.requiredTests.join(', ')}</p>
-          </div>
-        ) : null}
-        {college.clinicalPartners?.length ? (
-          <div>
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-500">Clinical partners</h3>
-            <p className="mt-1 text-sm text-ink-700">{college.clinicalPartners.join(', ')}</p>
           </div>
         ) : null}
         {college.specialNotes ? <p className="text-sm text-ink-600">{college.specialNotes}</p> : null}

@@ -5,7 +5,7 @@ import { getOverview } from './api';
 import type { ApplicationRow } from './types';
 
 /** Read-only application tracker: one row per active college — deadline countdown, essay progress,
- *  and whether a TEAS score exists. Derived from colleges + essays + TEAS (no separate storage). */
+ *  and whether an exam score exists. Derived from colleges + essays + exams (no separate storage). */
 export function ApplicationOverview() {
   const [rows, setRows] = useState<ApplicationRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -44,7 +44,7 @@ export function ApplicationOverview() {
             <th className="p-2 font-medium">Status</th>
             <th className="p-2 font-medium">Deadline</th>
             <th className="p-2 font-medium">Essays</th>
-            <th className="p-2 font-medium">TEAS</th>
+            <th className="p-2 font-medium">Exam</th>
           </tr>
         </thead>
         <tbody>
@@ -62,7 +62,7 @@ export function ApplicationOverview() {
                 <td className="p-2 text-ink-700">{r.status ?? '—'}</td>
                 <td className="p-2">{dl ? <Badge tone={dl.tone}>{dl.text}</Badge> : <span className="text-ink-400">—</span>}</td>
                 <td className="p-2"><Badge tone={es.tone}>{es.text}</Badge></td>
-                <td className="p-2">{r.hasTeasScore ? <Icon name="check" size={16} className="text-success-600" /> : <span className="text-ink-400">—</span>}</td>
+                <td className="p-2">{r.hasExamScore ? <Icon name="check" size={16} className="text-success-600" /> : <span className="text-ink-400">—</span>}</td>
               </tr>
             );
           })}

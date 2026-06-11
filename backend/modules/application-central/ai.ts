@@ -144,7 +144,7 @@ export const curatedEssayReviewer: EssayReviewer = async ({ content, targetWords
 const SLOT_LABELS: Record<string, string> = {
   'stem-teacher': 'a STEM teacher',
   'humanities-teacher': 'a humanities teacher',
-  'clinical-supervisor': 'a clinical or volunteer supervisor',
+  'clinical-supervisor': 'a work or volunteer supervisor',
   'community-leader': 'a community leader',
   other: 'a recommender',
 };
@@ -159,7 +159,7 @@ export const curatedRecommenderBrief: RecommenderBriefer = async ({ slot, contac
   ];
   const suggestedStories = top.length
     ? top.map((e) => `${e.title}${e.detail ? ` — ${e.detail}` : ''}`)
-    : ['Add some logged activities or clinical hours and they will appear here as concrete stories to mention.'];
+    : ['Add some logged activities or experience hours and they will appear here as concrete stories to mention.'];
   return {
     summary: `A brief for ${who}: the student is pursuing their intended college program. This note collects concrete, family-shareable experiences they can reference in a recommendation.`,
     talkingPoints,
@@ -176,7 +176,7 @@ function buildFindPrompt(input: { prompt: string; pool: ExperiencePool }): strin
     'You are a college-essay brainstorming partner for a college applicant. Given the prompt and the',
     "applicant's REAL logged experiences, suggest which experiences to write about and a few angles.",
     'Respond with ONLY JSON (no prose/fences): {"suggestedExperiences": [{"title": string,',
-    '"kind": "activity"|"clinical"|"why-nursing", "why": string}], "angles": string[]}.',
+    '"kind": "activity"|"experience"|"motivation", "why": string}], "angles": string[]}.',
     `Prompt: ${input.prompt || '(general personal statement)'}`,
     `Experiences:\n${poolToText(input.pool)}`,
   ].join('\n');
@@ -192,7 +192,7 @@ export function makeBedrockExperienceFinder(options: AiOptions = {}, fallback: E
           const o = (s ?? {}) as Record<string, unknown>;
           const title = typeof o.title === 'string' ? o.title : '';
           const why = typeof o.why === 'string' ? o.why : '';
-          const kind = o.kind === 'activity' || o.kind === 'clinical' || o.kind === 'why-nursing' ? o.kind : 'activity';
+          const kind = o.kind === 'activity' || o.kind === 'experience' || o.kind === 'motivation' ? o.kind : 'activity';
           return title ? { title, kind, why } : null;
         })
         .filter((s): s is ExperienceSuggestion => s !== null);

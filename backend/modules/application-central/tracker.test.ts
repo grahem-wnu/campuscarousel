@@ -91,7 +91,7 @@ describe('recommendation strategy board', () => {
 
   it('PRIVACY: recommender brief never includes a private entry, even for keira', async () => {
     await data.activities.create({ userId: 'keira', date: '2026-02-01', category: 'volunteer', title: 'Hospital volunteer shift', visibility: 'family' } as Parameters<Data['activities']['create']>[0]);
-    await data.whyNursing.create({ date: '2026-03-01', title: 'SECRET private reflection', content: 'a private moment', visibility: 'private' } as Parameters<Data['whyNursing']['create']>[0]);
+    await data.motivations.create({ date: '2026-03-01', title: 'SECRET private reflection', content: 'a private moment', visibility: 'private' } as Parameters<Data['motivations']['create']>[0]);
 
     const rec = parse(await dispatch(event('POST', '/recommendations', { as: keira, body: { slot: 'clinical-supervisor' } }))) as { recommendationId: string };
     const res = await dispatch(event('POST', `/recommendations/${rec.recommendationId}/brief`, { as: keira, body: {} }));

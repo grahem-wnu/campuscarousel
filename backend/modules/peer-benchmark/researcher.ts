@@ -85,8 +85,8 @@ export function buildResearchPrompt(college: College, focus?: string): string {
     }.`,
     college.programType ? `Program type: ${college.programType}.` : '',
     focus ? `Focus: ${focus}.` : '',
-    'Report realistic numbers a competitive applicant would target. Use a 0–100 TEAS scale and a 4.0 GPA scale.',
-    'Return ONLY a JSON object, no prose:',
+    'Report realistic numbers a competitive applicant would target. Use a 0–100 entrance-exam scale and a 4.0 GPA scale.',
+    'Return ONLY a JSON object, no prose. (avgTEASScore = typical entrance-exam score; typicalClinicalHours = typical hands-on experience hours):',
     '{"avgGPAAdmitted": number, "avgTEASScore": number, "avgSATScore": number, "typicalClinicalHours": number,',
     ' "typicalVolunteerHours": number, "typicalCertifications": string[], "typicalExtracurriculars": string,',
     ' "competitiveEdges": string[]}',
@@ -122,15 +122,15 @@ export function buildGapsPrompt(stats: KeiraStats, rows: readonly MatrixRow[]): 
     .filter((r) => r.benchmark.hasData)
     .map(
       (r) =>
-        `- ${r.collegeName}: GPA ${r.benchmark.avgGPAAdmitted ?? '?'}, TEAS ${r.benchmark.avgTEASScore ?? '?'}, ` +
-        `clinical ${r.benchmark.typicalClinicalHours ?? '?'}h, volunteer ${r.benchmark.typicalVolunteerHours ?? '?'}h`,
+        `- ${r.collegeName}: GPA ${r.benchmark.avgGPAAdmitted ?? '?'}, entrance exam ${r.benchmark.avgTEASScore ?? '?'}, ` +
+        `experience ${r.benchmark.typicalClinicalHours ?? '?'}h, volunteer ${r.benchmark.typicalVolunteerHours ?? '?'}h`,
     )
     .join('\n');
   return [
     'You advise a student applying to their intended college programs. Identify their biggest competitive gaps',
     'and give specific, actionable recommendations to close them.',
-    `Their current stats: GPA ${stats.gpa ?? 'n/a'}, best TEAS ${stats.teasScore ?? 'not taken'}, ` +
-      `clinical hours ${stats.clinicalHours}, volunteer hours ${stats.volunteerHours}, ` +
+    `Their current stats: GPA ${stats.gpa ?? 'n/a'}, best entrance-exam score ${stats.teasScore ?? 'not taken'}, ` +
+      `experience hours ${stats.clinicalHours}, volunteer hours ${stats.volunteerHours}, ` +
       `certifications: ${stats.certifications.join(', ') || 'none'}.`,
     targets ? `Target schools (typical admitted student):\n${targets}` : 'No school benchmarks available yet.',
     'Return ONLY a JSON object, no prose:',

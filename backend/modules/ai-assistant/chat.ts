@@ -59,7 +59,7 @@ export interface Assistant {
 /** Resolve the active mode: an explicit `context.mode` wins, else derive from the page module. */
 export function resolveMode(context: ChatContext | undefined): Mode {
   if (context?.mode) return context.mode;
-  if (context?.essayId || context?.module === 'why-nursing' || context?.module === 'application-central') {
+  if (context?.essayId || context?.module === 'motivations' || context?.module === 'application-central') {
     return 'essay-partner';
   }
   if (context?.module === 'college-hub') return 'college-discovery';
@@ -99,8 +99,8 @@ export function buildSystemPrompt(bundle: ContextBundle): string {
     '',
     'The student’s progress snapshot:',
     `- GPA: ${fmt(bundle.summary.gpa)}`,
-    `- Best TEAS: ${fmt(bundle.summary.bestTeas)}`,
-    `- Clinical hours: ${bundle.summary.clinicalHours}`,
+    `- Best exam score: ${fmt(bundle.summary.bestTeas)}`,
+    `- Experience hours: ${bundle.summary.clinicalHours}`,
     `- Volunteer hours: ${bundle.summary.volunteerHours}`,
     `- Colleges tracked: ${bundle.summary.collegeCount}`,
     `- Goals: ${bundle.summary.goalCount}`,

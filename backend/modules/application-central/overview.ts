@@ -1,10 +1,10 @@
 // Derived application overview — a read-only tracker assembled from existing entities (colleges +
-// essays + TEAS), so it needs no new storage. Per active college: nearest deadline + countdown, essay
-// progress, and whether a TEAS score exists. The mutable per-application fields the spec also lists
+// essays + exams), so it needs no new storage. Per active college: nearest deadline + countdown, essay
+// progress, and whether an exam score exists. The mutable per-application fields the spec also lists
 // (transcript-sent, rec-board slots, SAT/ACT/AP tracking) need a dedicated APPLICATION# entity that
 // the frozen data layer lacks — escalated on the checkpoint.
 
-import type { College, Essay, Teas } from '../../shared/data/index.js';
+import type { College, Essay, ExamScore } from '../../shared/data/index.js';
 
 const MS_PER_DAY = 86_400_000;
 
@@ -17,7 +17,7 @@ export interface ApplicationRow {
   nextDeadline: { label: string; date: string } | null;
   daysUntilDeadline: number | null;
   essays: { total: number; final: number; statuses: string[] };
-  hasTeasScore: boolean;
+  hasExamScore: boolean;
 }
 
 function daysUntil(dateIso: string, todayIso: string): number | null {
@@ -49,10 +49,10 @@ function nextDeadline(college: College, todayIso: string): { label: string; date
 export function buildOverview(
   colleges: readonly College[],
   essays: readonly Essay[],
-  teas: readonly Teas[],
+  exams: readonly ExamScore[],
   todayIso: string,
 ): ApplicationRow[] {
-  const hasTeas = teas.some((t) => t.overallScore !== undefined);
+  const hasExam = exams.some((t) => t.overallScore !== undefined);
   const rows = colleges
     .filter((c) => c.status !== 'removed')
     .map((c) => {
@@ -71,7 +71,7 @@ export function buildOverview(
           final: mine.filter((e) => e.status === 'final').length,
           statuses: mine.map((e) => e.status ?? 'drafting'),
         },
-        hasTeasScore: hasTeas,
+        hasExamScore: hasExam,
       } satisfies ApplicationRow;
     });
   // Soonest upcoming deadline first; colleges without a deadline sort last.

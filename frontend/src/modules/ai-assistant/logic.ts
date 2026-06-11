@@ -3,8 +3,8 @@
 
 import type { Conversation, ConversationMessage, Turn } from './types';
 
-/** Derive the page-context module from a route path (the first segment), e.g. "/why-nursing/123"
- *  → "why-nursing". Returned to the backend so the assistant tailors its mode. */
+/** Derive the page-context module from a route path (the first segment), e.g. "/motivations/123"
+ *  → "motivations". Returned to the backend so the assistant tailors its mode. */
 export function moduleFromPath(pathname: string): string | undefined {
   const seg = pathname.split('/').filter(Boolean)[0];
   return seg ? seg.toLowerCase() : undefined;

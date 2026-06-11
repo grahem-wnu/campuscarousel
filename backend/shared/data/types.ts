@@ -136,15 +136,12 @@ export interface College extends Timestamped, Hydratable {
     | 'accelerated'
     | 'transfer-pathway';
   isDirectAdmit?: boolean;
-  hasBSN?: boolean;
-  hasAcceleratedBSN?: boolean;
   isTopPick?: boolean;
   ranking?: string;
   /** AI narrative (2-3 paragraphs): what makes this school/program distinctive + who it fits. */
   overview?: string;
   /** AI narrative (1-2 paragraphs): exactly how a student gets in — pathways, timeline, selectivity. */
   admissionsDeepDive?: string;
-  nclexPassRate?: string;
   employmentRate?: string;
   tuitionInState?: number;
   tuitionOutOfState?: number;
@@ -164,7 +161,6 @@ export interface College extends Timestamped, Hydratable {
   applicationDeadlines?: { earlyAction?: string; regularDecision?: string; programApp?: string };
   essayPrompts?: string[];
   requiredTests?: string[];
-  clinicalPartners?: string[];
   /** Authentic student voices, each with a source URL for verification. */
   testimonials?: { quote: string; attribution?: string; source?: string }[];
   /** URLs to campus/program photos for the branded header gallery. */
@@ -210,7 +206,6 @@ export interface DiscoveredCollege {
   state?: string;
   programType?: College['programType'];
   isDirectAdmit?: boolean;
-  hasBSN?: boolean;
   ranking?: string;
   tuitionInState?: number;
   tuitionOutOfState?: number;
@@ -291,7 +286,7 @@ export interface Visit extends Timestamped {
   collegeId: string;
   visitId: string;
   date: string;
-  visitType?: 'campus-tour' | 'nursing-dept-visit' | 'open-house' | 'admitted-student-day' | 'overnight' | 'virtual';
+  visitType?: 'campus-tour' | 'department-visit' | 'open-house' | 'admitted-student-day' | 'overnight' | 'virtual';
   attendees?: string[];
   questionsToAsk?: { question: string; answer?: string; askedTo?: string }[];
   impressions?: string;
@@ -517,7 +512,7 @@ export interface Scholarship extends Timestamped, Hydratable {
   type?:
     | 'merit'
     | 'need-based'
-    | 'nursing-specific'
+    | 'major-specific'
     | 'community-service'
     | 'diversity'
     | 'state-specific'
@@ -536,9 +531,9 @@ export interface Scholarship extends Timestamped, Hydratable {
 }
 
 // ---------------------------------------------------------------------------
-// Clinical hours (PK: CLINICAL#<id>, SK: DETAILS) — GSI3 facility
+// Experience hours (PK: EXPERIENCE#<id>, SK: DETAILS) — GSI3 facility
 // ---------------------------------------------------------------------------
-export interface Clinical extends Timestamped {
+export interface ExperienceEntry extends Timestamped {
   entryId: string;
   date: string;
   facility: string;
@@ -576,10 +571,12 @@ export interface Certification extends Timestamped {
 }
 
 // ---------------------------------------------------------------------------
-// TEAS record (PK: TEAS#<id>, SK: DETAILS) — GSI4 date
+// Exam record (PK: EXAM#<id>, SK: DETAILS) — GSI4 date
 // ---------------------------------------------------------------------------
-export interface Teas extends Timestamped {
+export interface ExamScore extends Timestamped {
   recordId: string;
+  /** Name of the exam this record tracks (e.g. "SAT", "ACT", "TEAS"); unset = generic. */
+  examName?: string;
   type: 'practice-test' | 'study-session' | 'official-exam';
   date: string;
   overallScore?: number;
@@ -616,9 +613,9 @@ export interface Interview extends Timestamped {
 }
 
 // ---------------------------------------------------------------------------
-// Why Nursing (PK: WHYNURSING#<id>, SK: DETAILS)
+// Motivation (PK: MOTIVATION#<id>, SK: DETAILS)
 // ---------------------------------------------------------------------------
-export interface WhyNursing extends Timestamped {
+export interface Motivation extends Timestamped {
   entryId: string;
   date: string;
   title: string;
@@ -638,7 +635,7 @@ export interface Contact extends Timestamped {
   name: string;
   role?: string;
   organization?: string;
-  relationship?: 'mentor' | 'supervisor' | 'teacher' | 'admissions' | 'nurse' | 'recommender' | 'other';
+  relationship?: 'mentor' | 'supervisor' | 'teacher' | 'admissions' | 'professional' | 'recommender' | 'other';
   phone?: string;
   email?: string;
   linkedCollegeId?: string;

@@ -5,7 +5,7 @@
 export const TYPES = [
   'merit',
   'need-based',
-  'nursing-specific',
+  'major-specific',
   'community-service',
   'diversity',
   'state-specific',

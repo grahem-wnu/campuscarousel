@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Activity, Certification, College, Course, Goal, Interview, Scholarship, Teas } from '../../shared/data/index.js';
+import type { Activity, Certification, College, Course, Goal, Interview, Scholarship, ExamScore } from '../../shared/data/index.js';
 import {
   activitySummary,
   budgetSummary,
@@ -9,7 +9,7 @@ import {
   computeGpa,
   goalSummary,
   interviewReadiness,
-  latestTeas,
+  latestExam,
   recentFeed,
   upcomingDeadlines,
 } from './summary.js';
@@ -50,17 +50,17 @@ describe('activitySummary + streak', () => {
   });
 });
 
-describe('clinicalTotalHours / latestTeas', () => {
+describe('clinicalTotalHours / latestExam', () => {
   it('sums clinical hours', () => {
     expect(clinicalTotalHours([{ entryId: '1', date: '2026-01-01', facility: 'A', hours: 4, visibility: 'family', createdAt: 'x', updatedAt: 'x' }])).toBe(4);
   });
-  it('finds the latest scored TEAS', () => {
-    const teas: Teas[] = [
+  it('finds the latest scored exam', () => {
+    const exams: ExamScore[] = [
       { recordId: '1', type: 'practice-test', date: '2026-01-01', overallScore: 60, createdAt: 'x', updatedAt: 'x' },
       { recordId: '2', type: 'practice-test', date: '2026-03-01', overallScore: 75, createdAt: 'x', updatedAt: 'x' },
     ];
-    expect(latestTeas(teas)).toEqual({ date: '2026-03-01', overallScore: 75 });
-    expect(latestTeas([])).toBeNull();
+    expect(latestExam(exams)).toEqual({ date: '2026-03-01', overallScore: 75 });
+    expect(latestExam([])).toBeNull();
   });
 });
 

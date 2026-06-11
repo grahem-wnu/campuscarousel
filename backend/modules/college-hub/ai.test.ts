@@ -56,7 +56,7 @@ describe('pickHydratableFields', () => {
     const out = pickHydratableFields({
       overview: 'A distinctive program.',
       admissionsDeepDive: 'Two pathways.',
-      nclexPassRate: '94%',
+      employmentRate: '94%',
       estimatedNetPriceAfterAid: 45984,
       costOfAttendanceOutOfState: 58860,
       dataAsOf: '2025-2026',
@@ -64,7 +64,7 @@ describe('pickHydratableFields', () => {
     expect(out).toEqual({
       overview: 'A distinctive program.',
       admissionsDeepDive: 'Two pathways.',
-      nclexPassRate: '94%',
+      employmentRate: '94%',
       estimatedNetPriceAfterAid: 45984,
       costOfAttendanceOutOfState: 58860,
       dataAsOf: '2025-2026',

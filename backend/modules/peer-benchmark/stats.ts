@@ -1,9 +1,9 @@
-// Compute Keira's real, comparable stats from the source modules (course-planner GPA, teas-prep
-// TEAS, clinical-hours, activity-journal volunteer hours, certifications). Pure + unit-tested: the
+// Compute Keira's real, comparable stats from the source modules (course-planner GPA, exam-prep
+// scores, experience hours, activity-journal volunteer hours, certifications). Pure + unit-tested: the
 // handler reads the source collections (visibility-filtered for the caller — see handlers.ts) and
 // passes the raw lists here. Nothing in this file touches AWS or the request.
 
-import type { Activity, Certification, Clinical, Course, Teas } from '../../shared/data/index.js';
+import type { Activity, Certification, ExperienceEntry, Course, ExamScore } from '../../shared/data/index.js';
 
 /** Keira's aggregate, benchmark-comparable stats. Hours default to 0; GPA/TEAS are undefined until
  *  there is data (so the comparison can report "insufficient data" / "not-taken" honestly). */
@@ -17,8 +17,8 @@ export interface KeiraStats {
 
 export interface StatSources {
   courses: readonly Course[];
-  teas: readonly Teas[];
-  clinical: readonly Clinical[];
+  exams: readonly ExamScore[];
+  experiences: readonly ExperienceEntry[];
   activities: readonly Activity[];
   certifications: readonly Certification[];
 }
@@ -41,9 +41,9 @@ export function computeGpa(courses: readonly Course[]): number | undefined {
   return units > 0 ? round2(points / units) : undefined;
 }
 
-/** Best (highest) TEAS overall score across all records; undefined if she has never scored one. */
-export function bestTeasScore(teas: readonly Teas[]): number | undefined {
-  const scores = teas
+/** Best (highest) exam overall score across all records; undefined if she has never scored one. */
+export function bestTeasScore(exams: readonly ExamScore[]): number | undefined {
+  const scores = exams
     .map((t) => t.overallScore)
     .filter((s): s is number => typeof s === 'number');
   return scores.length ? Math.max(...scores) : undefined;
@@ -64,8 +64,8 @@ export function computeKeiraStats(s: StatSources): KeiraStats {
   ];
   return {
     gpa: computeGpa(s.courses),
-    teasScore: bestTeasScore(s.teas),
-    clinicalHours: round2(sum(s.clinical.map((c) => (typeof c.hours === 'number' ? c.hours : 0)))),
+    teasScore: bestTeasScore(s.exams),
+    clinicalHours: round2(sum(s.experiences.map((c) => (typeof c.hours === 'number' ? c.hours : 0)))),
     volunteerHours: round2(
       sum(
         s.activities

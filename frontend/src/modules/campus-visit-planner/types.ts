@@ -4,7 +4,7 @@
 
 export const VISIT_TYPES = [
   'campus-tour',
-  'nursing-dept-visit',
+  'department-visit',
   'open-house',
   'admitted-student-day',
   'overnight',

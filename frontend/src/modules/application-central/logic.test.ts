@@ -8,7 +8,7 @@ const row = (over: Partial<ApplicationRow>): ApplicationRow => ({
   nextDeadline: null,
   daysUntilDeadline: null,
   essays: { total: 0, final: 0, statuses: [] },
-  hasTeasScore: false,
+  hasExamScore: false,
   ...over,
 });
 

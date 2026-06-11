@@ -1,11 +1,11 @@
 // Visit prep for POST /colleges/:id/visits/:vid/prep.
 //
-// The spec calls for Bedrock + web search (best time, nursing-specific questions, logistics, contact
+// The spec calls for Bedrock + web search (best time, program-specific questions, logistics, contact
 // info). The generation sits behind an injectable `PrepGenerator` seam with two implementations:
 //   • makeBedrockPrep — calls Bedrock (model/inference-profile from BEDROCK_MODEL_ID, never
 //     hardcoded; lazy SDK import; injectable client) for the "best time" guidance + any extra
 //     questions, layering them on top of the curated baseline. Falls back to curated on any error.
-//   • curatedPrep     — deterministic: the spec's nursing-specific question checklist + logistics
+//   • curatedPrep     — deterministic: the spec's program question checklist + logistics
 //     pulled from the college's own contact info. No network/clock — safe in tests and as the
 //     graceful fallback (and the default the handlers use when nothing is injected).
 //
@@ -23,7 +23,7 @@ export interface VisitLogistics {
 export interface VisitPrep {
   /** Guidance on the best time to visit (open-house windows, term timing). */
   bestTime: string;
-  /** Nursing-specific questions to ask, pre-populated from the spec's checklist. */
+  /** Program-specific questions to ask, pre-populated from the spec's checklist. */
   questions: string[];
   logistics: VisitLogistics;
   source: 'ai' | 'curated';
@@ -37,18 +37,18 @@ export interface PrepInput {
 export type PrepGenerator = (input: PrepInput) => Promise<VisitPrep>;
 
 /**
- * The nursing-specific question checklist from the spec. These are the questions schools notice an
+ * The program question checklist from the spec. These are the questions schools notice an
  * informed applicant asking. Deterministic — the backbone of every prep, AI or curated.
  */
-export const NURSING_QUESTIONS: readonly string[] = [
-  'Which hospitals and clinical sites do nursing students rotate through?',
-  'What is the ICU / critical-care clinical placement rate for students?',
-  'What is the most recent NCLEX-RN first-time pass rate?',
-  'How many clinical hours does the program require, and when do they start?',
-  'Is admission a direct-admit (guaranteed) BSN, or a secondary/competitive nursing application?',
-  'What academic and wellness support services are available to nursing students?',
-  'What are the faculty-to-student and clinical instructor-to-student ratios?',
-  'Are there undergraduate research, simulation-lab, or study-abroad opportunities in nursing?',
+export const PROGRAM_QUESTIONS: readonly string[] = [
+  'What support services (academic, wellness, advising) are available to students?',
+  'What are typical class sizes, and what is the faculty-to-student ratio?',
+  'What hands-on, experiential, or research opportunities exist in this program?',
+  'Is admission direct (guaranteed) or competitive/secondary for this program?',
+  'What internships, co-ops, or placement partnerships does the program offer?',
+  'What does a typical first-year schedule look like in this program?',
+  'Are there study-abroad or honors options tied to this program?',
+  'What outcomes (graduation, employment, further study) do students typically see?',
 ];
 
 const has = (s?: string): s is string => typeof s === 'string' && s.trim().length > 0;
@@ -71,23 +71,23 @@ export function logisticsFor(college: College): VisitLogistics {
 function curatedBestTime(visit: Visit): string {
   switch (visit.visitType) {
     case 'open-house':
-      return 'Aim for an official nursing open-house or admitted-student day — check the campus-visit page for fall/spring dates.';
+      return 'Aim for an official open-house or admitted-student day — check the campus-visit page for fall/spring dates.';
     case 'overnight':
       return 'Schedule an overnight while classes are in session (avoid breaks) so you see real campus and dorm life.';
     case 'virtual':
-      return 'Book a virtual nursing info session; ask for a recording if the live time does not work.';
+      return 'Book a virtual info session; ask for a recording if the live time does not work.';
     default:
-      return 'Visit while classes are in session (not during breaks or finals) so the nursing department and clinical facilities are active.';
+      return 'Visit while classes are in session (not during breaks or finals) so the department and its facilities are active.';
   }
 }
 
 /**
- * Deterministic curated prep: the full nursing-question checklist + logistics from the college's
+ * Deterministic curated prep: the full program-question checklist + logistics from the college's
  * contact info. Safe in tests and as the production fallback.
  */
 export const curatedPrep: PrepGenerator = async ({ college, visit }) => ({
   bestTime: curatedBestTime(visit),
-  questions: [...NURSING_QUESTIONS],
+  questions: [...PROGRAM_QUESTIONS],
   logistics: logisticsFor(college),
   source: 'curated',
 });
