@@ -10,7 +10,9 @@
 # Usage:  bash infra/scripts/cutover-staging.sh
 set -euo pipefail
 
-export AWS_SHARED_CREDENTIALS_FILE="${AWS_SHARED_CREDENTIALS_FILE:-$HOME/.aws/credentials}"
+# Force the real credentials file: the environment redirects AWS_SHARED_CREDENTIALS_FILE elsewhere
+# (which hides the wnu creds), so we override it unconditionally rather than defaulting.
+export AWS_SHARED_CREDENTIALS_FILE="$HOME/.aws/credentials"
 export AWS_PROFILE="${AWS_PROFILE:-wnu}"
 export AWS_REGION="${AWS_REGION:-us-east-2}"
 
@@ -28,10 +30,12 @@ echo "Account OK: $ACCT (wnu). Pool=$POOL Table=$TABLE"
 
 # --- 1. Cognito custom attributes (additive — safe; no pool replacement). -----------------------------
 echo "[1/4] Adding Cognito custom attributes (custom:tenantId, custom:platformAdmin)…"
+# (StringAttributeConstraints omitted — optional for String attrs, and its nested commas break the CLI
+#  shorthand parser. The ` || true` keeps the script idempotent if the attributes already exist.)
 aws cognito-idp add-custom-attributes --user-pool-id "$POOL" --custom-attributes \
-  Name=tenantId,AttributeDataType=String,Mutable=true,StringAttributeConstraints={MinLength=0,MaxLength=256} \
-  Name=platformAdmin,AttributeDataType=String,Mutable=true,StringAttributeConstraints={MinLength=0,MaxLength=16} \
-  2>&1 || echo "  (attributes may already exist — continuing)"
+  Name=tenantId,AttributeDataType=String,Mutable=true \
+  Name=platformAdmin,AttributeDataType=String,Mutable=true \
+  && echo "  attributes added" || echo "  (attributes may already exist — continuing)"
 
 # --- 2. Primary tenant registry record (global; un-prefixed). -----------------------------------------
 echo "[2/4] Creating the 'primary' tenant registry record…"
