@@ -87,9 +87,10 @@ export function makeHandlers(getData: () => Data, getResearcher: () => Benchmark
       const college = await data.colleges.get(id);
       if (!college) throw Errors.notFound('College not found');
 
+      const majors = (await data.studentProfile.get())?.intendedMajors ?? [];
       const [existing, profile, keira] = await Promise.all([
         data.benchmarks.get(id),
-        getResearcher().research(college, input.focus),
+        getResearcher().research(college, input.focus, majors),
         gatherStats(data, ctx.requester),
       ]);
       // Compute the comparison against what will actually be persisted (existing values with the AI
@@ -123,7 +124,8 @@ export function makeHandlers(getData: () => Data, getResearcher: () => Benchmark
       const [colleges, keira] = await Promise.all([data.colleges.list(), gatherStats(data, ctx.requester)]);
       const byId = await benchmarksByCollege(data, colleges.map((c) => c.collegeId));
       const matrix = buildAggregate(keira, colleges, (cid) => byId.get(cid) ?? null);
-      const analysis = await getResearcher().analyzeGaps(keira, matrix.rows);
+      const majors = (await data.studentProfile.get())?.intendedMajors ?? [];
+      const analysis = await getResearcher().analyzeGaps(keira, matrix.rows, majors);
       return { status: 200, body: { keira, ...analysis } };
     },
   };

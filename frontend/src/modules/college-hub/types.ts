@@ -50,6 +50,7 @@ export interface College {
   acceptanceRateUniversity?: string;
   avgGPAAdmitted?: string;
   prerequisites?: string[];
+  programDetails?: { label: string; value: string }[];
   applicationDeadlines?: { earlyAction?: string; regularDecision?: string; programApp?: string };
   essayPrompts?: string[];
   requiredTests?: string[];

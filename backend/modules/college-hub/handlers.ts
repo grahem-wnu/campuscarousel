@@ -26,7 +26,7 @@ import {
 } from './schema.js';
 import { queryColleges } from './query.js';
 import { findActiveByName, normalizeCollegeName } from './dedupe.js';
-import { makeBedrockDiscoverer, type Discoverer } from './ai.js';
+import type { Discoverer } from './ai.js';
 import { makeInlineDispatcher, type HydrationDispatcher } from './hydration.js';
 import { runDiscoveryJob, type DiscoverDispatcher } from './discover.js';
 import { makeAssetsEnqueuer, type AssetsDispatcher } from './assets-enqueue.js';
@@ -64,13 +64,14 @@ export interface CollegeDeps {
 
 export function makeHandlers(deps: CollegeDeps): CollegeHandlers {
   const { getData } = deps;
-  const discoverer = deps.discoverer ?? makeBedrockDiscoverer();
   const dispatch = deps.dispatch ?? makeInlineDispatcher(getData);
   // Default: run the discovery job inline using THIS handler's discoverer (so tests use the stub).
   // Production injects the SQS enqueuer (routes.manifest) so the slow web-grounded search runs on the
   // 300s worker instead of the 30s API request.
+  // Pass deps.discoverer (the test stub, or undefined) so the default inline run resolves the
+  // student's majors and builds a major-aware Bedrock discoverer when none is injected.
   const discoverDispatch =
-    deps.discoverDispatch ?? ((jobId: string) => runDiscoveryJob(getData, discoverer, jobId));
+    deps.discoverDispatch ?? ((jobId: string) => runDiscoveryJob(getData, deps.discoverer, jobId));
   const assetsDispatch = deps.assetsDispatch ?? makeAssetsEnqueuer(getData);
 
   /** Fetch a college or throw 404. */

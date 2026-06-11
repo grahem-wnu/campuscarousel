@@ -12,6 +12,7 @@
 
 import { converseWithSearch, type BedrockInvoker, type WebSearcher } from '../../shared/ai/index.js';
 import { majorPhrase } from '../../shared/ai/major.js';
+import { packFocusBriefs, packProgramDetailsHints } from '../../shared/packs/index.js';
 import type { College } from '../../shared/data/index.js';
 import type { DiscoverInput } from './schema.js';
 
@@ -111,6 +112,20 @@ const testimonialArray = (
   }
   return out.length ? out : undefined;
 };
+/** Coerce generic major-specific facts, keeping only entries with both a label and a value. */
+const programDetailArray = (v: unknown): { label: string; value: string }[] | undefined => {
+  if (!Array.isArray(v)) return undefined;
+  const out: { label: string; value: string }[] = [];
+  for (const raw of v) {
+    if (!raw || typeof raw !== 'object') continue;
+    const o = raw as Record<string, unknown>;
+    const label = str(o.label);
+    const value = str(o.value);
+    if (!label || !value) continue;
+    out.push({ label, value });
+  }
+  return out.length ? out : undefined;
+};
 
 const PROGRAM_TYPES = new Set(['direct-admit', 'secondary-application', 'accelerated', 'transfer-pathway']);
 const programType = (v: unknown): College['programType'] | undefined =>
@@ -136,10 +151,10 @@ function toCandidate(raw: unknown): CollegeCandidate | null {
   };
 }
 
-function buildDiscoverPrompt(input: DiscoverInput): string {
-  // The student's intended major(s) come through the free-text `query` (e.g. "Nursing", "Biology");
-  // with none supplied we research undergraduate programs generically.
-  const program = majorPhrase(undefined, 'undergraduate');
+export function buildDiscoverPrompt(input: DiscoverInput, majors: string[] = []): string {
+  // Search for the student's intended major(s) from their profile (falls back to generic
+  // undergraduate when none are set); the free-text `query` adds any extra steer.
+  const program = majorPhrase(majors, 'undergraduate');
   const wants: string[] = [`strong ${program} programs`];
   if (input.state) wants.push(`in ${input.state}`);
   if (input.programType) wants.push(`of program type ${input.programType}`);
@@ -147,8 +162,10 @@ function buildDiscoverPrompt(input: DiscoverInput): string {
   if (input.maxTuition) wants.push(`with annual tuition under $${input.maxTuition}`);
   if (input.query) wants.push(`matching the student's focus: "${input.query}"`);
   const limit = input.limit ?? 8;
+  const briefs = packFocusBriefs(majors);
   return [
     `List up to ${limit} U.S. colleges with ${wants.join(', ')}.`,
+    ...briefs,
     'Use web_search to verify current programs (a few targeted searches are enough), then STOP',
     'searching and output the result. Include every matching school you can — partial data is fine.',
     'Respond with ONLY a JSON array (no prose, no code fences). Each element:',
@@ -160,14 +177,15 @@ function buildDiscoverPrompt(input: DiscoverInput): string {
   ].join('\n');
 }
 
-/** Bedrock-backed discoverer. Returns [] on any failure so the endpoint never throws. */
-export function makeBedrockDiscoverer(options: AiOptions = {}): Discoverer {
+/** Bedrock-backed discoverer. Returns [] on any failure so the endpoint never throws.
+ *  `majors` (the student's intended majors) steer the search + fold in matching pack guidance. */
+export function makeBedrockDiscoverer(options: AiOptions = {}, majors: string[] = []): Discoverer {
   return async (input) => {
     try {
       // Web-grounded enumeration: give it room to search several sources THEN emit the array. With
       // the default 4 rounds the model burns them all searching and returns nothing. Runs async on
       // the 300s worker, so the extra rounds are affordable.
-      const text = await invokeText(buildDiscoverPrompt(input), options, { maxRounds: 7, maxTokens: 4096 });
+      const text = await invokeText(buildDiscoverPrompt(input, majors), options, { maxRounds: 7, maxTokens: 4096 });
       const json = extractJson(text);
       if (!Array.isArray(json)) return [];
       const limit = input.limit ?? 8;
@@ -186,6 +204,7 @@ const HYDRATABLE_FIELDS = [
   'tuitionInState', 'tuitionOutOfState', 'costOfAttendanceOutOfState', 'estimatedNetPriceAfterAid',
   'percentReceivingAid', 'avgAidAmount', 'applicationFee', 'estimatedTotalCost', 'estimatedCostAfterAid',
   'acceptanceRateProgram', 'acceptanceRateUniversity', 'avgGPAAdmitted', 'prerequisites',
+  'programDetails',
   'applicationDeadlines', 'essayPrompts', 'requiredTests',
   'testimonials', 'campusImageUrls', 'specialNotes', 'website', 'dataSources', 'dataAsOf',
   'branding', 'contactInfo', 'appServices', 'usesCAS',
@@ -197,6 +216,7 @@ const COERCE: Partial<Record<(typeof HYDRATABLE_FIELDS)[number], (v: unknown) =>
   testimonials: testimonialArray,
   campusImageUrls: urlArray,
   dataSources: urlArray,
+  programDetails: programDetailArray,
 };
 
 /** Keep only allowlisted, defined fields from a parsed hydration object, cleaning the structured ones. */
@@ -218,15 +238,18 @@ export function pickHydratableFields(raw: unknown): Partial<College> {
   return out as Partial<College>;
 }
 
-function buildHydratePrompt(name: string, state?: string): string {
+export function buildHydratePrompt(name: string, state?: string, majors: string[] = []): string {
   const where = state ? `, ${state}` : '';
   const year = new Date().getFullYear();
-  // No per-call major is threaded here (hydration runs on the SQS worker, decoupled from the
-  // profile), so keep the language program-agnostic. The narrative covers whichever program the
-  // student is researching.
+  // The student's intended major(s) (from their profile) steer the narrative + which program-
+  // specific facts to capture; with none set we keep the language generic.
+  const program = majorPhrase(majors, 'undergraduate');
+  const briefs = packFocusBriefs(majors);
+  const detailHints = packProgramDetailsHints(majors);
   return [
-    `You are a college research analyst building a rich, decision-ready profile of the undergraduate`,
+    `You are a college research analyst building a rich, decision-ready profile of the ${program}`,
     `program at "${name}"${where} for a prospective applicant and their family.`,
+    ...briefs,
     '',
     'USE THE web_search TOOL to ground every number — do NOT rely on prior knowledge for tuition, GPA,',
     `acceptance rate, deadlines, or rankings; these change yearly and must be verified against ${year}-${year + 1}`,
@@ -260,6 +283,14 @@ function buildHydratePrompt(name: string, state?: string): string {
     '  - admissionsDeepDive: 1-2 paragraphs walking through exactly how a student gets in — every pathway',
     '    (e.g. direct admit vs. secondary application where applicable), what each requires, the real timeline,',
     '    selectivity, and the most important things an applicant must nail.',
+    ...(detailHints.length
+      ? [
+          '',
+          'ALSO capture major-specific facts in a programDetails array of {label, value} objects',
+          '(label = the fact name, value = the figure/answer as a short string). Specifically:',
+          ...detailHints.map((h) => `  - ${h}`),
+        ]
+      : []),
     '',
     'Respond with ONLY a JSON object (no prose, no code fences) using these keys where known:',
     '  overview (string), admissionsDeepDive (string), programType',
@@ -271,6 +302,9 @@ function buildHydratePrompt(name: string, state?: string): string {
     '  acceptanceRateUniversity (string), avgGPAAdmitted (string), prerequisites (string[]),',
     '  applicationDeadlines ({earlyAction, regularDecision, programApp}), essayPrompts (string[]),',
     '  requiredTests (string[]),',
+    ...(detailHints.length
+      ? ['  programDetails ([{label, value}] — the major-specific facts described above),']
+      : []),
     '  testimonials ([{quote, attribution, source}] — verbatim student quotes, each with a source URL),',
     '  campusImageUrls (string[] — direct https URLs to campus/program photos), location (string),',
     '  state (2-letter), website (string), branding ({logoUrl, primaryColor (hex), secondaryColor (hex),',
@@ -305,10 +339,10 @@ function mergeSources(modelListed: string[] | undefined, consulted: string[]): s
  * the outcome). The narrative + many-field prompt needs more room, so we raise the token ceiling.
  * Never throws.
  */
-export function makeBedrockHydrator(options: AiOptions = {}): Hydrator {
+export function makeBedrockHydrator(options: AiOptions = {}, majors: string[] = []): Hydrator {
   return async ({ name, state }) => {
     try {
-      const { text, sources } = await converseWithSearch(buildHydratePrompt(name, state), {
+      const { text, sources } = await converseWithSearch(buildHydratePrompt(name, state, majors), {
         modelId: options.modelId,
         invoker: options.invoker,
         searcher: options.searcher,

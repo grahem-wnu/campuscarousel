@@ -158,6 +158,9 @@ export interface College extends Timestamped, Hydratable {
   acceptanceRateUniversity?: string;
   avgGPAAdmitted?: string;
   prerequisites?: string[];
+  /** Generic major-specific facts as labeled values (e.g. nursing → "NCLEX-RN pass rate" / "92%").
+   *  Populated by major-aware hydration; replaces hardcoded per-major fields. */
+  programDetails?: { label: string; value: string }[];
   applicationDeadlines?: { earlyAction?: string; regularDecision?: string; programApp?: string };
   essayPrompts?: string[];
   requiredTests?: string[];

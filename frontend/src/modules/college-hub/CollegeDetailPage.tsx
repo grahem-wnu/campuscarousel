@@ -325,7 +325,22 @@ function OverviewTab({ college, onDelete }: { college: College; onDelete: () => 
         </Card>
       ) : null}
 
-      {/* 3. Key stats. */}
+      {/* 3. Program details — major-specific labeled facts (e.g. nursing → NCLEX-RN pass rate). */}
+      {college.programDetails?.length ? (
+        <Card className="space-y-3">
+          <h2 className="text-sm font-semibold text-ink-800">Program details</h2>
+          <dl className="grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2">
+            {college.programDetails.map((row) => (
+              <div key={row.label} className="flex justify-between gap-3 border-b border-surface-border py-1.5 text-sm">
+                <dt className="text-ink-500">{row.label}</dt>
+                <dd className="text-ink-800">{row.value}</dd>
+              </div>
+            ))}
+          </dl>
+        </Card>
+      ) : null}
+
+      {/* 4. Key stats. */}
       <Card className="space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold text-ink-800">Key stats</h2>
@@ -356,7 +371,7 @@ function OverviewTab({ college, onDelete }: { college: College; onDelete: () => 
         {college.specialNotes ? <p className="text-sm text-ink-600">{college.specialNotes}</p> : null}
       </Card>
 
-      {/* 4. Sources — let the family verify and dig deeper. */}
+      {/* 5. Sources — let the family verify and dig deeper. */}
       {college.dataSources?.length ? (
         <Card className="space-y-2">
           <div className="flex items-center justify-between">

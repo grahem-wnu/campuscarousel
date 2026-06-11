@@ -29,4 +29,8 @@ export interface MajorPack {
   interviewQuestions?: string[];
   /** Major-specific campus-visit questions (seed the visit prep checklist). */
   visitQuestions?: string[];
+  /** A hint for AI college hydration: the major-specific facts worth gathering about a school's
+   *  program, captured generically into College.programDetails as labeled pairs (e.g. nursing →
+   *  NCLEX pass rate, clinical partners, direct-admit vs secondary). */
+  programDetailsHint?: string;
 }

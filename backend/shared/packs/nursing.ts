@@ -52,4 +52,8 @@ export const nursingPack: MajorPack = {
     'What simulation-lab and clinical resources are available to students?',
     'What academic and wellness support exists specifically for nursing students?',
   ],
+  programDetailsHint:
+    'Capture nursing-program specifics as labeled facts: the NCLEX-RN first-time pass rate, key clinical ' +
+    'placement partners (hospitals / sites), and whether admission is a direct-admit BSN or a competitive ' +
+    'secondary / transfer application.',
 };

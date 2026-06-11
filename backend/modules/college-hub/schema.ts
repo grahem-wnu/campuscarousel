@@ -71,6 +71,13 @@ const testimonial = z
   })
   .strict();
 
+const programDetail = z
+  .object({
+    label: z.string().min(1).max(200),
+    value: z.string().min(1).max(1000),
+  })
+  .strict();
+
 /** The set of College fields a caller may edit. Used (partial) by create and update. */
 const editableCollege = {
   name: z.string().min(1).max(200),
@@ -96,6 +103,7 @@ const editableCollege = {
   acceptanceRateUniversity: z.string().max(60).optional(),
   avgGPAAdmitted: z.string().max(60).optional(),
   prerequisites: z.array(z.string().min(1).max(200)).max(100).optional(),
+  programDetails: z.array(programDetail).max(30).optional(),
   applicationDeadlines: deadlines.optional(),
   essayPrompts: z.array(z.string().min(1).max(2000)).max(50).optional(),
   requiredTests: z.array(z.string().min(1).max(120)).max(50).optional(),

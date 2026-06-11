@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { WebSearcher } from '../../shared/ai/index.js';
 import {
+  buildDiscoverPrompt,
+  buildHydratePrompt,
   extractJson,
   makeBedrockDiscoverer,
   makeBedrockHydrator,
@@ -91,6 +93,39 @@ describe('pickHydratableFields', () => {
   it('drops structured fields entirely when nothing survives cleaning', () => {
     const out = pickHydratableFields({ testimonials: [{ attribution: 'x' }], campusImageUrls: ['nope'] });
     expect(out).toEqual({});
+  });
+
+  it('keeps programDetails (label/value pairs), dropping incomplete entries', () => {
+    const out = pickHydratableFields({
+      programDetails: [
+        { label: 'NCLEX-RN pass rate', value: '92%' },
+        { label: 'missing value' },
+        { value: 'missing label' },
+        'not an object',
+      ],
+    });
+    expect(out.programDetails).toEqual([{ label: 'NCLEX-RN pass rate', value: '92%' }]);
+  });
+});
+
+describe('major-aware prompts', () => {
+  it('hydrate prompt for a Nursing major folds in nursing pack guidance + a programDetails instruction', () => {
+    const p = buildHydratePrompt('Ohio State', 'OH', ['Nursing']);
+    expect(p).toContain('Nursing'); // major in the program language
+    expect(p).toContain('NCLEX-RN'); // pack focusBrief + programDetailsHint
+    expect(p).toContain('programDetails'); // instructed to return the array
+  });
+
+  it('hydrate prompt with no majors stays generic (no programDetails instruction)', () => {
+    const p = buildHydratePrompt('Ohio State', 'OH');
+    expect(p).toContain('undergraduate');
+    expect(p).not.toContain('programDetails');
+  });
+
+  it('discover prompt for a Nursing major folds in nursing pack guidance', () => {
+    const p = buildDiscoverPrompt({}, ['Nursing']);
+    expect(p).toContain('Nursing');
+    expect(p).toContain('direct-admit BSN');
   });
 });
 

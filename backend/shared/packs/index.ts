@@ -58,3 +58,10 @@ export function packCertifications(majors?: readonly string[]): PackCertificatio
 export function packEntranceExam(majors?: readonly string[]): MajorPack['entranceExam'] | undefined {
   return packsForMajors(majors).find((p) => p.entranceExam)?.entranceExam;
 }
+
+/** Hints for AI college hydration: the major-specific facts worth gathering (→ College.programDetails). */
+export function packProgramDetailsHints(majors?: readonly string[]): string[] {
+  return packsForMajors(majors)
+    .map((p) => p.programDetailsHint)
+    .filter((h): h is string => Boolean(h));
+}

@@ -11,6 +11,7 @@
 
 import { ApiError } from '../../shared/api/index.js';
 import { majorPhrase } from '../../shared/ai/major.js';
+import { packFocusBriefs } from '../../shared/packs/index.js';
 import type { College } from '../../shared/data/index.js';
 import type { KeiraStats } from './stats.js';
 import type { MatrixRow } from './compare.js';
@@ -41,8 +42,8 @@ export interface GapsAnalysis {
 
 /** The pluggable AI backend. The production binding calls Bedrock; tests inject a fake. */
 export interface BenchmarkResearcher {
-  research(college: College, focus?: string): Promise<ResearchedProfile>;
-  analyzeGaps(stats: KeiraStats, rows: readonly MatrixRow[]): Promise<GapsAnalysis>;
+  research(college: College, focus?: string, majors?: string[]): Promise<ResearchedProfile>;
+  analyzeGaps(stats: KeiraStats, rows: readonly MatrixRow[], majors?: string[]): Promise<GapsAnalysis>;
 }
 
 /** Raw model invocation: prompt in, completion text out. Keeps the AWS SDK out of the pure
@@ -74,15 +75,17 @@ function firstJsonObject(raw: string): Record<string, unknown> | undefined {
   }
 }
 
-export function buildResearchPrompt(college: College, focus?: string): string {
-  // No major is threaded here (the researcher only gets a college + optional free-text focus), so
-  // keep the language program-agnostic; `focus` carries any program-specific steer the caller adds.
-  const program = majorPhrase(undefined, 'undergraduate');
+export function buildResearchPrompt(college: College, focus?: string, majors: string[] = []): string {
+  // The student's intended major(s) (from their profile) steer the research + fold in matching pack
+  // guidance; with none set we keep the language generic. `focus` carries any extra steer.
+  const program = majorPhrase(majors, 'undergraduate');
+  const briefs = packFocusBriefs(majors);
   const lines = [
     `You research competitive admission profiles for ${program} programs.`,
     `Describe the TYPICAL admitted student to the program at "${college.name}"${
       college.location ? ` (${college.location})` : ''
     }.`,
+    ...briefs,
     college.programType ? `Program type: ${college.programType}.` : '',
     focus ? `Focus: ${focus}.` : '',
     'Report realistic numbers a competitive applicant would target. Use a 0–100 entrance-exam scale and a 4.0 GPA scale.',
@@ -117,7 +120,9 @@ export function parseResearch(raw: string): ResearchedProfile {
   return profile;
 }
 
-export function buildGapsPrompt(stats: KeiraStats, rows: readonly MatrixRow[]): string {
+export function buildGapsPrompt(stats: KeiraStats, rows: readonly MatrixRow[], majors: string[] = []): string {
+  const program = majorPhrase(majors, 'their intended college');
+  const briefs = packFocusBriefs(majors);
   const targets = rows
     .filter((r) => r.benchmark.hasData)
     .map(
@@ -127,8 +132,9 @@ export function buildGapsPrompt(stats: KeiraStats, rows: readonly MatrixRow[]): 
     )
     .join('\n');
   return [
-    'You advise a student applying to their intended college programs. Identify their biggest competitive gaps',
+    `You advise a student applying to ${program} programs. Identify their biggest competitive gaps`,
     'and give specific, actionable recommendations to close them.',
+    ...briefs,
     `Their current stats: GPA ${stats.gpa ?? 'n/a'}, best entrance-exam score ${stats.teasScore ?? 'not taken'}, ` +
       `experience hours ${stats.clinicalHours}, volunteer hours ${stats.volunteerHours}, ` +
       `certifications: ${stats.certifications.join(', ') || 'none'}.`,
@@ -167,18 +173,18 @@ export function parseGaps(raw: string): GapsAnalysis {
  */
 export function makeResearcher(invoke: ModelInvoker): BenchmarkResearcher {
   return {
-    async research(college, focus) {
+    async research(college, focus, majors) {
       try {
-        return parseResearch(await invoke(buildResearchPrompt(college, focus)));
+        return parseResearch(await invoke(buildResearchPrompt(college, focus, majors)));
       } catch (err) {
         if (err instanceof ApiError) throw err; // a configured-but-unavailable 503 must propagate
         console.error('peer-benchmark: AI research failed', err);
         throw new ApiError(502, 'internal', 'Benchmark research could not be completed right now. Please try again.');
       }
     },
-    async analyzeGaps(stats, rows) {
+    async analyzeGaps(stats, rows, majors) {
       try {
-        return parseGaps(await invoke(buildGapsPrompt(stats, rows)));
+        return parseGaps(await invoke(buildGapsPrompt(stats, rows, majors)));
       } catch (err) {
         console.error('peer-benchmark: AI gaps analysis failed', err);
         throw new ApiError(502, 'internal', 'The gaps analysis could not be generated right now. Please try again.');

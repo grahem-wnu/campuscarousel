@@ -1,4 +1,5 @@
-// Async college discovery. Web-grounded discovery (searching the web for matching BSN programs) can
+// Async college discovery. Web-grounded discovery (searching the web for programs matching the
+// student's intended major) can
 // exceed the routing Lambda's 30s budget, so — exactly like hydration — the API creates a job and
 // enqueues it, the 300s SQS worker runs the search and writes the candidates back, and the frontend
 // polls until the job settles.
@@ -21,19 +22,34 @@ export interface CollegeDiscoverMessage {
   studentId: string;
 }
 
+/** Resolve the discoverer for a run: an explicitly-injected one is used as-is (tests); otherwise we
+ *  build the Bedrock discoverer with the student's intended majors so the search is major-aware.
+ *  Discovery runs in the active-student context, so studentProfile is reachable here. */
+async function resolveDiscoverer(getData: () => Data, injected?: Discoverer): Promise<Discoverer> {
+  if (injected) return injected;
+  let majors: string[] = [];
+  try {
+    majors = (await getData().studentProfile.get())?.intendedMajors ?? [];
+  } catch {
+    majors = [];
+  }
+  return makeBedrockDiscoverer({}, majors);
+}
+
 /** Run one discovery job: fetch it, run the (web-grounded) discoverer, write the candidates back.
  *  No-op if the job is gone. The discoverer never throws (returns [] on error); a genuine failure
  *  here marks the job `failed` so the UI can surface it instead of spinning forever. */
 export async function runDiscoveryJob(
   getData: () => Data,
-  discoverer: Discoverer,
+  discoverer: Discoverer | undefined,
   jobId: string,
 ): Promise<void> {
   const data = getData();
   const job = await data.discoveryJobs.get(jobId);
   if (!job) return;
   try {
-    const candidates = await discoverer((job.filters ?? {}) as DiscoverInput);
+    const resolved = await resolveDiscoverer(getData, discoverer);
+    const candidates = await resolved((job.filters ?? {}) as DiscoverInput);
     await data.discoveryJobs.update(jobId, {
       status: 'complete',
       candidates,
@@ -50,7 +66,7 @@ export async function runDiscoveryJob(
 /** Worker-side handler for a discovery job payload (`{ jobId }`). */
 export function makeDiscoverWorkerHandler(
   getData: () => Data,
-  discoverer: Discoverer = makeBedrockDiscoverer(),
+  discoverer?: Discoverer,
 ): (payload: unknown) => Promise<void> {
   return async (payload) => {
     const msg = (payload ?? {}) as Partial<CollegeDiscoverMessage>;
@@ -81,7 +97,7 @@ export function makeSqsDiscoverEnqueuer(
   options: SqsDiscoverEnqueuerOptions = {},
 ): DiscoverDispatcher {
   const fallback =
-    options.fallback ?? ((jobId: string) => runDiscoveryJob(getData, makeBedrockDiscoverer(), jobId));
+    options.fallback ?? ((jobId: string) => runDiscoveryJob(getData, undefined, jobId));
   return async (jobId) => {
     const queueUrl = options.queueUrl ?? process.env.HYDRATION_QUEUE_URL;
     if (!queueUrl) return fallback(jobId);
