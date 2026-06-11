@@ -10,12 +10,12 @@ describe('major-pack resolver', () => {
   });
 
   it('does NOT false-match an alias as a substring (e.g. "rn" inside "Learning")', () => {
-    expect(packsForMajors(['Learning Sciences'])).toEqual([]);
-    expect(packsForMajors(['Biology'])).toEqual([]);
+    expect(packsForMajors(['Learning Sciences'])).toEqual([]); // 'rn' must not match nursing
+    expect(packsForMajors(['Astronomy'])).toEqual([]);
   });
 
   it('returns no pack for an unknown major or empty majors', () => {
-    expect(packsForMajors(['Computer Science'])).toEqual([]);
+    expect(packsForMajors(['Philosophy'])).toEqual([]);
     expect(packsForMajors([])).toEqual([]);
     expect(packsForMajors(undefined)).toEqual([]);
   });
@@ -52,5 +52,47 @@ describe('focusLine integrates pack guidance', () => {
     const line = focusLine(['Anthropology']);
     expect(line).toContain('Anthropology');
     expect(line).not.toMatch(/TEAS/);
+  });
+});
+
+describe('phase-3 packs resolve by major (and do not cross-match)', () => {
+  const cases: [string, string][] = [
+    ['Computer Science', 'computer-science'],
+    ['CS', 'computer-science'],
+    ['Software Development', 'computer-science'],
+    ['Pre-med', 'pre-health'],
+    ['Biology', 'pre-health'],
+    ['Finance', 'business'],
+    ['Business Administration', 'business'],
+    ['Mechanical Engineering', 'engineering'],
+    ['Computer Engineering', 'engineering'], // engineering, NOT computer-science
+    ['Elementary Education', 'education'],
+  ];
+  for (const [major, key] of cases) {
+    it(`${major} → ${key}`, () => {
+      expect(packsForMajors([major]).map((p) => p.key)).toEqual([key]);
+    });
+  }
+
+  it('still resolves nursing, and only nursing carries an entrance exam', () => {
+    expect(packsForMajors(['Nursing']).map((p) => p.key)).toEqual(['nursing']);
+    expect(packEntranceExam(['Nursing'])?.examName).toBe('TEAS');
+    for (const major of ['Computer Science', 'Business', 'Engineering', 'Education', 'Pre-med']) {
+      expect(packEntranceExam([major])).toBeUndefined();
+    }
+  });
+
+  it('an unknown major still matches nothing', () => {
+    expect(packsForMajors(['Philosophy'])).toEqual([]);
+    expect(packsForMajors(['Physics'])).toEqual([]); // not 'cs'
+  });
+
+  it('a multi-major student activates multiple packs', () => {
+    expect(packsForMajors(['Nursing', 'Computer Science']).map((p) => p.key).sort()).toEqual(['computer-science', 'nursing']);
+  });
+
+  it('a genuinely cross-disciplinary major can match more than one pack (by design)', () => {
+    // "Software Engineering" is both CS-ish (software) and engineering — activating both merges guidance.
+    expect(packsForMajors(['Software Engineering']).map((p) => p.key).sort()).toEqual(['computer-science', 'engineering']);
   });
 });

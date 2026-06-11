@@ -2,12 +2,24 @@
 // with no matching pack they return empty, so the generic core behavior is unchanged (fail-soft).
 
 import { nursingPack } from './nursing.js';
+import { computerSciencePack } from './computer-science.js';
+import { preHealthPack } from './pre-health.js';
+import { businessPack } from './business.js';
+import { engineeringPack } from './engineering.js';
+import { educationPack } from './education.js';
 import type { MajorPack, PackCertification } from './types.js';
 
 export type { MajorPack, PackCertification } from './types.js';
 
 /** All authored packs. Add a new major by adding one file + one entry here — no core changes. */
-export const ALL_PACKS: readonly MajorPack[] = [nursingPack];
+export const ALL_PACKS: readonly MajorPack[] = [
+  nursingPack,
+  computerSciencePack,
+  preHealthPack,
+  businessPack,
+  engineeringPack,
+  educationPack,
+];
 
 /** Tokenize a major string into lowercase word tokens (so 'rn' matches "RN", not "learning"). */
 function tokensOf(major: string): Set<string> {
