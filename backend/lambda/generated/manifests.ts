@@ -5,7 +5,53 @@
 // the entry. If you add a module, run the build (or `gen:manifests`) to refresh this list.
 import type { RouteManifest } from '../../shared/api/index.js';
 import { routes as activityJournalRoutes } from '../../modules/activity-journal/routes.manifest.js';
+import { routes as aiAssistantRoutes } from '../../modules/ai-assistant/routes.manifest.js';
+import { routes as applicationCentralRoutes } from '../../modules/application-central/routes.manifest.js';
+import { routes as campusVisitPlannerRoutes } from '../../modules/campus-visit-planner/routes.manifest.js';
+import { routes as certificationsRoutes } from '../../modules/certifications/routes.manifest.js';
+import { routes as clinicalHoursRoutes } from '../../modules/clinical-hours/routes.manifest.js';
+import { routes as collegeHubRoutes } from '../../modules/college-hub/routes.manifest.js';
+import { routes as coursePlannerRoutes } from '../../modules/course-planner/routes.manifest.js';
+import { routes as dashboardRoutes } from '../../modules/dashboard/routes.manifest.js';
+import { routes as demonstratedInterestContactsRoutes } from '../../modules/demonstrated-interest-contacts/routes.manifest.js';
+import { routes as documentsRoutes } from '../../modules/documents/routes.manifest.js';
+import { routes as finaidRoutes } from '../../modules/finaid/routes.manifest.js';
+import { routes as goalTrackerRoutes } from '../../modules/goal-tracker/routes.manifest.js';
+import { routes as interviewPrepRoutes } from '../../modules/interview-prep/routes.manifest.js';
+import { routes as invitesRoutes } from '../../modules/invites/routes.manifest.js';
+import { routes as masterTimelineRoutes } from '../../modules/master-timeline/routes.manifest.js';
+import { routes as opportunitiesRoutes } from '../../modules/opportunities/routes.manifest.js';
+import { routes as peerBenchmarkRoutes } from '../../modules/peer-benchmark/routes.manifest.js';
+import { routes as profileRoutes } from '../../modules/profile/routes.manifest.js';
+import { routes as remindersRoutes } from '../../modules/reminders/routes.manifest.js';
+import { routes as scholarshipTrackerRoutes } from '../../modules/scholarship-tracker/routes.manifest.js';
+import { routes as studentsRoutes } from '../../modules/students/routes.manifest.js';
+import { routes as teasPrepRoutes } from '../../modules/teas-prep/routes.manifest.js';
+import { routes as whyNursingRoutes } from '../../modules/why-nursing/routes.manifest.js';
 
 export const manifests: RouteManifest[] = [
   { routes: activityJournalRoutes },
+  { routes: aiAssistantRoutes },
+  { routes: applicationCentralRoutes },
+  { routes: campusVisitPlannerRoutes },
+  { routes: certificationsRoutes },
+  { routes: clinicalHoursRoutes },
+  { routes: collegeHubRoutes },
+  { routes: coursePlannerRoutes },
+  { routes: dashboardRoutes },
+  { routes: demonstratedInterestContactsRoutes },
+  { routes: documentsRoutes },
+  { routes: finaidRoutes },
+  { routes: goalTrackerRoutes },
+  { routes: interviewPrepRoutes },
+  { routes: invitesRoutes },
+  { routes: masterTimelineRoutes },
+  { routes: opportunitiesRoutes },
+  { routes: peerBenchmarkRoutes },
+  { routes: profileRoutes },
+  { routes: remindersRoutes },
+  { routes: scholarshipTrackerRoutes },
+  { routes: studentsRoutes },
+  { routes: teasPrepRoutes },
+  { routes: whyNursingRoutes },
 ];

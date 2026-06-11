@@ -20,6 +20,7 @@ import {
   makeProfiles,
   makeReminderSettings,
   makeStudentProfile,
+  makeStudents,
   makeTenants,
   makeTouchpoints,
   makeVisits,
@@ -31,7 +32,7 @@ import {
   tableClientFromEnv,
   type TableClient,
 } from './table-client.js';
-import { tenantScoped } from './tenant-client.js';
+import { studentScoped, tenantScoped } from './tenant-client.js';
 import { InMemoryTableClient } from './memory-client.js';
 import type {
   Activity,
@@ -57,11 +58,20 @@ import type {
 } from './types.js';
 
 /**
- * Build the data accessor. `client` is the tenant-SCOPED client used by every per-family repo; `base`
- * is the UN-scoped client used only for the global tenant registry (default: same client, for tests).
- * SaaS isolation: in production `dataFromEnv` passes `tenantScoped(base)` as `client` and `base` raw.
+ * Build the data accessor. Three storage tiers (SaaS multi-student platform):
+ *   - `client` — the PER-CHILD client (`studentScoped(tenantScoped(base))` in prod): every per-child
+ *     repo (activities, colleges, …) is keyed `T#<tenant>#S#<student>#…`.
+ *   - `familyClient` — the FAMILY-LEVEL client (`tenantScoped(base)` in prod): the student roster,
+ *     user profiles, and reminder settings are keyed `T#<tenant>#…` (shared across the family's kids).
+ *   - `base` — the UN-scoped client for the GLOBAL registries (tenants, invites).
+ * Defaults collapse all three to `client` so tests can call `makeData(new InMemoryTableClient())`, and
+ * the existing 2-arg `makeData(scoped, raw)` form keeps `base` as the global client.
  */
-export function makeData(client: TableClient, base: TableClient = client) {
+export function makeData(
+  client: TableClient,
+  base: TableClient = client,
+  familyClient: TableClient = client,
+) {
   // Activities — collection by date (GSI1) + by category (GSI2).
   const activitiesBase = makeDetailsRepo<Activity, 'activityId'>(client, {
     prefix: 'ACTIVITY',
@@ -249,13 +259,15 @@ export function makeData(client: TableClient, base: TableClient = client) {
     benchmarks: makeBenchmarks(client),
     conversations: makeConversations(client),
     budget: makeBudget(client),
-    profiles: makeProfiles(client),
-    reminderSettings: makeReminderSettings(client),
     documents,
     opportunities,
     opportunityDiscoveryJobs,
     studentProfile: makeStudentProfile(client),
     finaid,
+    // FAMILY-LEVEL repos — tenant-scoped but NOT per-child (shared across the family's kids).
+    profiles: makeProfiles(familyClient),
+    reminderSettings: makeReminderSettings(familyClient),
+    students: makeStudents(familyClient),
     // GLOBAL registries — built on the un-scoped base client (never tenant-prefixed).
     tenants: makeTenants(base),
     invites: makeInvites(base),
@@ -266,10 +278,12 @@ export type Data = ReturnType<typeof makeData>;
 
 /** Build the data client from the environment (CDK injects TABLE_NAME). Use in Lambdas. */
 export function dataFromEnv(env: NodeJS.ProcessEnv = process.env): Data {
-  // Production: per-family repos go through the tenant-scoped client (keys prefixed T#<tenantId>#,
-  // resolved from AsyncLocalStorage, fail-closed); the tenant registry uses the raw base client.
+  // Production three-tier wiring: per-child repos go through studentScoped(tenantScoped(base))
+  // (keys `T#<tenant>#S#<student>#…`); family-level repos through tenantScoped(base) (`T#<tenant>#…`);
+  // the global registries through the raw base client. All resolved from AsyncLocalStorage, fail-closed.
   const base = tableClientFromEnv(env);
-  return makeData(tenantScoped(base), base);
+  const family = tenantScoped(base);
+  return makeData(studentScoped(family), base, family);
 }
 
 export { NotFoundError, isoNow, newId } from './repo.js';

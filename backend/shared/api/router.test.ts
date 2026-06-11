@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createRouter, Errors, validate, z } from './index.js';
+import { maybeStudentId } from '../tenant/index.js';
 import type { ApiEvent, ApiResponse } from './event.js';
 import type { RouteDef } from './types.js';
 
@@ -13,14 +14,16 @@ function event(opts: {
   rawBody?: string;
   claims?: Record<string, unknown> | null;
   query?: Record<string, string>;
+  headers?: Record<string, string>;
 }): ApiEvent {
-  const { method = 'GET', path = '/', body, rawBody, claims = KEIRA, query } = opts;
+  const { method = 'GET', path = '/', body, rawBody, claims = KEIRA, query, headers } = opts;
   const serializedBody =
     rawBody !== undefined ? rawBody : body !== undefined ? JSON.stringify(body) : null;
   return {
     rawPath: path,
     body: serializedBody,
     queryStringParameters: query,
+    headers,
     requestContext: {
       http: { method, path },
       authorizer: claims ? { jwt: { claims } } : undefined,
@@ -63,6 +66,8 @@ const routes: RouteDef[] = [
     },
   },
   { method: 'GET', path: '/forbidden', handler: async () => { throw Errors.forbidden('nope'); } },
+  // Echoes the active student resolved into the AsyncLocalStorage context (multi-student).
+  { method: 'GET', path: '/whoami', handler: async () => ({ status: 200, body: { student: maybeStudentId() ?? null } }) },
 ];
 
 const dispatch = createRouter(routes);
@@ -163,6 +168,33 @@ describe('createRouter', () => {
     expect(res.body).toEqual({ error: { code: 'internal', message: 'Internal server error' } });
     expect(spy).toHaveBeenCalled();
     spy.mockRestore();
+  });
+
+  it('sets the active student from the X-Student-Id header (multi-student)', async () => {
+    const res = parse(await dispatch(event({ path: '/whoami', headers: { 'X-Student-Id': 's-keira' } })));
+    expect(res.body).toEqual({ student: 's-keira' });
+  });
+
+  it('reads the X-Student-Id header case-insensitively', async () => {
+    const res = parse(await dispatch(event({ path: '/whoami', headers: { 'x-student-id': 's-milo' } })));
+    expect(res.body).toEqual({ student: 's-milo' });
+  });
+
+  it('leaves the active student unset when no header and no DEFAULT_STUDENT_ID', async () => {
+    const prev = process.env.DEFAULT_STUDENT_ID;
+    delete process.env.DEFAULT_STUDENT_ID;
+    const res = parse(await dispatch(event({ path: '/whoami' })));
+    expect(res.body).toEqual({ student: null });
+    if (prev !== undefined) process.env.DEFAULT_STUDENT_ID = prev;
+  });
+
+  it('falls back to DEFAULT_STUDENT_ID when the header is absent (transition compatibility)', async () => {
+    const prev = process.env.DEFAULT_STUDENT_ID;
+    process.env.DEFAULT_STUDENT_ID = 's-default';
+    const res = parse(await dispatch(event({ path: '/whoami' })));
+    expect(res.body).toEqual({ student: 's-default' });
+    if (prev === undefined) delete process.env.DEFAULT_STUDENT_ID;
+    else process.env.DEFAULT_STUDENT_ID = prev;
   });
 
   it('throws when two routes share method+path', () => {

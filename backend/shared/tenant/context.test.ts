@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { TenantContextError, currentTenantId, maybeTenantId, runWithTenant } from './context.js';
+import {
+  StudentContextError,
+  TenantContextError,
+  currentStudentId,
+  currentTenantId,
+  maybeStudentId,
+  maybeTenantId,
+  runWithStudent,
+  runWithTenant,
+} from './context.js';
 
 describe('tenant context', () => {
   it('returns the tenant set by runWithTenant', async () => {
@@ -37,5 +46,49 @@ describe('tenant context', () => {
       return currentTenantId();
     });
     expect(id).toBe('t2');
+  });
+});
+
+describe('student context (nested under tenant)', () => {
+  it('runWithStudent sets the active student and preserves the tenant', async () => {
+    const result = await runWithTenant('t1', () =>
+      runWithStudent('s1', () => ({ tenant: currentTenantId(), student: currentStudentId() })),
+    );
+    expect(result).toEqual({ tenant: 't1', student: 's1' });
+  });
+
+  it('currentStudentId throws when no student is set, even inside a tenant (fail closed)', async () => {
+    await runWithTenant('t1', () => {
+      expect(() => currentStudentId()).toThrow(StudentContextError);
+    });
+  });
+
+  it('runWithStudent throws TenantContextError when no tenant is set', () => {
+    expect(() => runWithStudent('s1', () => 1)).toThrow(TenantContextError);
+  });
+
+  it('runWithStudent throws StudentContextError when studentId is empty', async () => {
+    await runWithTenant('t1', () => {
+      expect(() => runWithStudent('', () => 1)).toThrow(StudentContextError);
+    });
+  });
+
+  it('maybeStudentId returns undefined when unset, value when set', async () => {
+    expect(maybeStudentId()).toBeUndefined();
+    const got = await runWithTenant('t1', () => runWithStudent('s9', () => maybeStudentId()));
+    expect(got).toBe('s9');
+  });
+
+  it('isolates concurrent student contexts within tenants', async () => {
+    const [a, b] = await Promise.all([
+      runWithTenant('t1', () =>
+        runWithStudent('A', async () => {
+          await Promise.resolve();
+          return currentStudentId();
+        }),
+      ),
+      runWithTenant('t1', () => runWithStudent('B', () => currentStudentId())),
+    ]);
+    expect([a, b]).toEqual(['A', 'B']);
   });
 });

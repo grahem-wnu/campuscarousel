@@ -4,7 +4,7 @@
 // body, and translates any thrown error into the standard envelope.
 
 import { getRequester, requireRole } from '../auth/index.js';
-import { runWithTenant } from '../tenant/index.js';
+import { runWithStudent, runWithTenant } from '../tenant/index.js';
 import { Errors } from './errors.js';
 import { json, responseForError } from './respond.js';
 import type { ApiEvent, ApiResponse, LambdaHandler } from './event.js';
@@ -53,6 +53,16 @@ function matchSegments(compiled: CompiledRoute, pathSegs: string[]): Record<stri
     }
   }
   return params;
+}
+
+/** Case-insensitive header lookup (HTTP API usually lowercases keys, but don't rely on it). */
+function readHeader(headers: Record<string, string | undefined> | undefined, name: string): string | undefined {
+  if (!headers) return undefined;
+  const lower = name.toLowerCase();
+  for (const [key, value] of Object.entries(headers)) {
+    if (key.toLowerCase() === lower && value !== undefined && value !== '') return value;
+  }
+  return undefined;
 }
 
 function normalizeRecord(input?: Record<string, string | undefined>): Record<string, string> {
@@ -139,15 +149,22 @@ export function createRouter(routes: RouteDef[]): LambdaHandler {
       if (!tenantId && !requester.platformAdmin) {
         throw Errors.unauthorized('Missing tenant claim');
       }
+      // Multi-student: per-child data is scoped to the active student the frontend selects, sent as the
+      // `X-Student-Id` header. The router nests `runWithStudent` inside the tenant context so per-child
+      // repos resolve `S#<studentId>#`. Family-level handlers (the roster, reminders) ignore it. A
+      // request with no header falls back to DEFAULT_STUDENT_ID (the legacy single-child migration id)
+      // for transition compatibility; with the env unset, per-child repos fail closed if none is set.
+      const studentId =
+        readHeader(event.headers, 'x-student-id') ?? process.env.DEFAULT_STUDENT_ID ?? undefined;
       const ctx: HandlerContext = {
         requester,
         params: matched.params,
         query: normalizeRecord(event.queryStringParameters),
         body: parseBody(event),
       };
-      const result = tenantId
-        ? await runWithTenant(tenantId, () => matched.route.handler(ctx))
-        : await matched.route.handler(ctx);
+      const invoke = () => matched.route.handler(ctx);
+      const withStudent = () => (studentId ? runWithStudent(studentId, invoke) : invoke());
+      const result = tenantId ? await runWithTenant(tenantId, withStudent) : await invoke();
       return json(result.status, result.body);
     } catch (err) {
       return responseForError(err);

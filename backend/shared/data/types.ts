@@ -55,6 +55,20 @@ export interface Invite extends Timestamped {
 }
 
 // ---------------------------------------------------------------------------
+// Student (PK: STUDENT#<studentId>, SK: DETAILS; collection GSI1PK='STUDENTS') — FAMILY-LEVEL
+// (tenant-scoped, NOT per-child). The roster of children in a family and the source for the
+// active-student switcher. A family has one or more. Per-child data is keyed under the active
+// student id (`T#<tenant>#S#<studentId>#…`); this registry is what enumerates those students.
+// Lightweight on purpose — the rich academic data lives in the per-child StudentProfile singleton.
+// ---------------------------------------------------------------------------
+export interface Student extends Timestamped {
+  studentId: string;
+  name: string;
+  graduationYear?: number;
+  status: 'active' | 'archived';
+}
+
+// ---------------------------------------------------------------------------
 // User profile (PK: USER#<userId>, SK: PROFILE)
 // ---------------------------------------------------------------------------
 export interface Profile extends Timestamped {

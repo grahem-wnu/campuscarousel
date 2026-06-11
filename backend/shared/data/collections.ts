@@ -18,6 +18,7 @@ import type {
   Invite,
   Profile,
   ReminderSettings,
+  Student,
   StudentProfile,
   Tenant,
   Touchpoint,
@@ -427,6 +428,58 @@ export function makeStudentProfile(client: TableClient): StudentProfileRepo {
         SK: SK_DETAILS,
       });
       return domain;
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Student registry (PK: STUDENT#<studentId>) — FAMILY-LEVEL (built on the family-scoped client, so
+// keys become T#<tenant>#STUDENT#… and the GSI1PK='STUDENTS' collection lists one family's kids).
+// The roster + source for the active-student switcher. Distinct from the per-child StudentProfile.
+// ---------------------------------------------------------------------------
+export interface StudentRepo {
+  get(studentId: string): Promise<Student | null>;
+  create(input: Omit<Student, 'studentId' | 'createdAt' | 'updatedAt'>): Promise<Student>;
+  update(
+    studentId: string,
+    patch: Partial<Omit<Student, 'studentId' | 'createdAt' | 'updatedAt'>>,
+  ): Promise<Student>;
+  delete(studentId: string): Promise<void>;
+  list(): Promise<Student[]>;
+}
+
+export function makeStudents(client: TableClient): StudentRepo {
+  const write = async (domain: Student): Promise<Student> => {
+    await client.put({
+      ...(domain as unknown as Record<string, unknown>),
+      PK: `STUDENT#${domain.studentId}`,
+      SK: SK_DETAILS,
+      GSI1PK: 'STUDENTS',
+      GSI1SK: dateSortKey(domain.createdAt, domain.studentId),
+    });
+    return domain;
+  };
+  return {
+    async get(studentId) {
+      const item = await client.get(`STUDENT#${studentId}`, SK_DETAILS);
+      return item ? toDomain<Student>(item) : null;
+    },
+    async create(input) {
+      const now = isoNow();
+      return write({ ...input, studentId: newId(), createdAt: now, updatedAt: now });
+    },
+    async update(studentId, patch) {
+      const existing = await client.get(`STUDENT#${studentId}`, SK_DETAILS);
+      if (!existing) throw new NotFoundError('STUDENT', studentId);
+      const current = toDomain<Student>(existing);
+      return write({ ...current, ...patch, studentId, createdAt: current.createdAt, updatedAt: isoNow() });
+    },
+    async delete(studentId) {
+      await client.delete(`STUDENT#${studentId}`, SK_DETAILS);
+    },
+    async list() {
+      const items = await client.queryIndex('GSI1', 'STUDENTS', { ascending: true });
+      return items.map((i) => toDomain<Student>(i));
     },
   };
 }
