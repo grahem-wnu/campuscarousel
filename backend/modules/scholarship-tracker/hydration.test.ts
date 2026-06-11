@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { InMemoryTableClient, makeData, type Data } from '../../shared/data/index.js';
+import { runWithTenant } from '../../shared/tenant/index.js';
 import type { Hydrator } from './ai.js';
 import {
   buildHydrationMessage,
@@ -24,8 +25,12 @@ async function seed(name = 'Future Nurses'): Promise<string> {
 }
 
 describe('buildHydrationMessage', () => {
-  it('builds a typed scholarship-hydrate message', () => {
-    expect(buildHydrationMessage('sc1')).toEqual({ type: 'scholarship-hydrate', scholarshipId: 'sc1' });
+  it('builds a typed, tenant-stamped scholarship-hydrate message', () => {
+    expect(runWithTenant('fam1', () => buildHydrationMessage('sc1'))).toEqual({
+      type: 'scholarship-hydrate',
+      scholarshipId: 'sc1',
+      tenantId: 'fam1',
+    });
   });
 });
 
@@ -67,10 +72,10 @@ describe('makeSqsEnqueuer', () => {
   it('sends a SendMessageCommand with the message body to the configured queue', async () => {
     const send = vi.fn(async (_c: unknown) => ({}));
     const enqueuer = makeSqsEnqueuer({ queueUrl: 'https://sqs/test', client: { send } as SqsSender });
-    await enqueuer.enqueue('sc9');
+    await runWithTenant('fam1', () => enqueuer.enqueue('sc9'));
     const command = send.mock.calls[0]![0] as unknown as { input: { QueueUrl: string; MessageBody: string } };
     expect(command.input.QueueUrl).toBe('https://sqs/test');
-    expect(JSON.parse(command.input.MessageBody)).toEqual({ type: 'scholarship-hydrate', scholarshipId: 'sc9' });
+    expect(JSON.parse(command.input.MessageBody)).toEqual({ type: 'scholarship-hydrate', scholarshipId: 'sc9', tenantId: 'fam1' });
   });
 
   it('throws when no queue url is configured (bulk-add treats this as best-effort)', async () => {

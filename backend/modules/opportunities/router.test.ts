@@ -9,7 +9,7 @@ import { InMemoryTableClient, makeData, type Data } from '../../shared/data/inde
 import type { Discoverer } from './ai.js';
 import { buildRoutes, makeHandlers } from './handlers.js';
 
-const claimsFor = (r: Requester) => ({ 'cognito:username': r.username, 'custom:role': r.role });
+const claimsFor = (r: Requester) => ({ 'cognito:username': r.username, 'custom:role': r.role, 'custom:tenantId': r.tenantId ?? 'test-tenant' });
 function event(method: string, path: string, opts: { as?: Requester; body?: unknown } = {}): ApiEvent {
   return {
     rawPath: path,

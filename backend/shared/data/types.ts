@@ -25,6 +25,36 @@ export interface Hydratable {
 }
 
 // ---------------------------------------------------------------------------
+// Tenant (PK: TENANT#<tenantId>, SK: DETAILS) — the one intentionally-GLOBAL namespace (SaaS
+// platform). A tenant is a family. Written/read via the un-scoped base client (never tenant-prefixed),
+// and enumerable via a GSI1PK='TENANTS' collection so background jobs can iterate all families.
+// ---------------------------------------------------------------------------
+export interface Tenant extends Timestamped {
+  tenantId: string;
+  familyName: string;
+  plan: 'free' | 'family';
+  status: 'active' | 'suspended' | 'past_due';
+  /** Parental-consent capture (hook for the compliance sub-project). */
+  consent?: { acceptedAt?: string; tosVersion?: string; byEmail?: string };
+}
+
+// ---------------------------------------------------------------------------
+// Invite (PK: INVITE#<code>, SK: DETAILS; collection GSI1PK='INVITES') — GLOBAL namespace, base client.
+// A super-admin (Grahem) issues a single-use code to a family's email; redeeming it provisions a tenant.
+// The v1 front door (sub-project 2). Free comp by default.
+// ---------------------------------------------------------------------------
+export interface Invite extends Timestamped {
+  code: string;
+  email: string;
+  familyName?: string;
+  plan: 'free' | 'family';
+  status: 'pending' | 'accepted' | 'revoked' | 'expired';
+  invitedBy: string; // super-admin username
+  expiresAt?: string;
+  acceptedTenantId?: string;
+}
+
+// ---------------------------------------------------------------------------
 // User profile (PK: USER#<userId>, SK: PROFILE)
 // ---------------------------------------------------------------------------
 export interface Profile extends Timestamped {
@@ -115,6 +145,16 @@ export interface College extends Timestamped, Hydratable {
   usesNursingCAS?: boolean;
   status?: CollegeStatus;
   fitScore?: number;
+  // Campus imagery + cached logo, written by the async assets worker (college-assets) — never the
+  // text hydrator. System-owned: not in the create/update schema; merged so a manual edit is kept.
+  /** CloudFront URL of the cached campus photo (sourced from Wikimedia). */
+  campusImageUrl?: string;
+  /** Attribution/license for the campus photo (Wikimedia Commons expects visible credit). */
+  campusImageCredit?: string;
+  /** CloudFront URL of the cached school logo (sourced from Clearbit by website domain). */
+  logoImageUrl?: string;
+  /** Asset-fetch lifecycle, polled independently of `hydrationStatus`. */
+  assetsStatus?: 'pending' | 'in-progress' | 'complete' | 'failed';
 }
 
 /** One discovered candidate (College-shaped, name required) — the result of a discovery run. */

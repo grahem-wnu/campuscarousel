@@ -6,6 +6,7 @@
 // Unknown types drain (logged); genuine failures report so they retry and ultimately hit the DLQ.
 // CDK ships this as `index.handler` via `Code.fromAsset(backend/dist/hydration)`.
 
+import { runWithTenant } from '../shared/tenant/index.js';
 import { hydrationRegistrations } from './generated/hydration-manifests.js';
 
 /** Minimal structural SQS event/response shapes (typed locally to avoid an aws-lambda types dep). */
@@ -67,7 +68,7 @@ export function makeHandler(registry: Record<string, HydrationHandler>) {
 
     for (const record of event.Records ?? []) {
       try {
-        const message = JSON.parse(record.body) as { type?: string };
+        const message = JSON.parse(record.body) as { type?: string; tenantId?: string };
         const type = typeof message?.type === 'string' ? message.type : undefined;
         const dispatch = type ? registry[type] : undefined;
         if (!dispatch) {
@@ -76,7 +77,16 @@ export function makeHandler(registry: Record<string, HydrationHandler>) {
           console.log('hydration: no handler for message type', type ?? '(none)', '— draining');
           continue;
         }
-        await dispatch(message);
+        // SaaS isolation: every job must carry the tenant it belongs to; we run the handler inside that
+        // tenant's context so the data layer scopes all keys. A message with no tenantId is REFUSED
+        // (reported as a failure → retried → DLQ) rather than processed un-scoped (fail closed).
+        const tenantId = typeof message.tenantId === 'string' && message.tenantId ? message.tenantId : undefined;
+        if (!tenantId) {
+          console.error('hydration: message has no tenantId — refusing to run un-scoped', record.messageId);
+          batchItemFailures.push({ itemIdentifier: record.messageId });
+          continue;
+        }
+        await runWithTenant(tenantId, () => dispatch(message));
       } catch (err) {
         console.error('hydration: record failed', record.messageId, err);
         batchItemFailures.push({ itemIdentifier: record.messageId });

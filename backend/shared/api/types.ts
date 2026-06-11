@@ -58,6 +58,8 @@ export interface RouteDef {
   path: string;
   handler: Handler;
   roles?: Role[];
+  /** Platform super-admin only (Grahem). Runs WITHOUT a tenant context (uses global repos). */
+  platformAdmin?: boolean;
 }
 
 /** Shape a module manifest must export. */

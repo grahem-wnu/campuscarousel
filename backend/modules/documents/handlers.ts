@@ -12,8 +12,9 @@ import {
 } from '../../shared/api/index.js';
 import { assertCanRead, filterForRequester } from '../../shared/auth/index.js';
 import type { Requester } from '../../shared/auth/index.js';
-import { newId, type Data } from '../../shared/data/index.js';
+import type { Data } from '../../shared/data/index.js';
 import { s3DocumentStoreFromEnv, type DocumentStore } from '../../shared/storage/index.js';
+import { tenantDocKey } from './keys.js';
 import { createSchema, idParamSchema, listQuerySchema, updateSchema, uploadUrlSchema } from './schema.js';
 
 export interface DocumentHandlers {
@@ -31,9 +32,6 @@ export interface DocumentDeps {
   getStore?: () => DocumentStore;
 }
 
-function safeName(name: string): string {
-  return name.replace(/[^A-Za-z0-9._-]+/g, '_').slice(0, 120) || 'file';
-}
 
 /** Only Keira (student) may mark a document private — mirrors the journal/clinical rule. */
 function assertCanSetVisibility(visibility: string | undefined, requester: Requester): void {
@@ -74,7 +72,7 @@ export function makeHandlers(deps: DocumentDeps): DocumentHandlers {
     // POST /documents/upload-url — validate, mint the server-owned key + a presigned PUT url.
     uploadUrl: async (ctx) => {
       const input = validateBody(uploadUrlSchema, ctx);
-      const s3Key = `documents/${newId()}/${safeName(input.fileName)}`;
+      const s3Key = tenantDocKey(input.fileName);
       const uploadUrl = await getStore().presignUpload(s3Key, input.contentType);
       return { status: 200, body: { uploadUrl, s3Key } };
     },

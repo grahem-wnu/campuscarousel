@@ -70,6 +70,11 @@ export function getDiscovery(jobId: string): Promise<DiscoveryJob> {
   return api.get<DiscoveryJob>(`/colleges/discover/${encodeURIComponent(jobId)}`);
 }
 
+/** One-time: fetch campus imagery + logos for existing colleges that have no campus photo yet. */
+export function backfillAssets(): Promise<{ requested: number }> {
+  return api.post<{ requested: number }>('/colleges/assets-backfill');
+}
+
 export function bulkAddColleges(colleges: CollegeInput[]): Promise<{ created: College[]; skipped: string[] }> {
   return api.post<{ created: College[]; skipped: string[] }>('/colleges/bulk-add', { colleges });
 }

@@ -4,6 +4,7 @@
 // inline run when no queue is configured (tests/local), so the flow works without AWS.
 
 import type { Data } from '../../shared/data/index.js';
+import { currentTenantId } from '../../shared/tenant/index.js';
 import { makeBedrockDiscoverer, type Discoverer, type DiscoverInput } from './ai.js';
 
 export const DISCOVER_TYPE = 'opportunity-discover';
@@ -79,7 +80,7 @@ export function makeSqsDiscoverEnqueuer(
       await client.send(
         new SendMessageCommand({
           QueueUrl: queueUrl,
-          MessageBody: JSON.stringify({ type: DISCOVER_TYPE, jobId }),
+          MessageBody: JSON.stringify({ type: DISCOVER_TYPE, jobId, tenantId: currentTenantId() }),
         }),
       );
     } catch {

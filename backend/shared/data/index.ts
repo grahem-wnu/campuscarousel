@@ -16,9 +16,11 @@ import {
   makeCollegeChecklist,
   makeCollegeNotes,
   makeConversations,
+  makeInvites,
   makeProfiles,
   makeReminderSettings,
   makeStudentProfile,
+  makeTenants,
   makeTouchpoints,
   makeVisits,
 } from './collections.js';
@@ -29,6 +31,7 @@ import {
   tableClientFromEnv,
   type TableClient,
 } from './table-client.js';
+import { tenantScoped } from './tenant-client.js';
 import { InMemoryTableClient } from './memory-client.js';
 import type {
   Activity,
@@ -53,7 +56,12 @@ import type {
   WhyNursing,
 } from './types.js';
 
-export function makeData(client: TableClient) {
+/**
+ * Build the data accessor. `client` is the tenant-SCOPED client used by every per-family repo; `base`
+ * is the UN-scoped client used only for the global tenant registry (default: same client, for tests).
+ * SaaS isolation: in production `dataFromEnv` passes `tenantScoped(base)` as `client` and `base` raw.
+ */
+export function makeData(client: TableClient, base: TableClient = client) {
   // Activities — collection by date (GSI1) + by category (GSI2).
   const activitiesBase = makeDetailsRepo<Activity, 'activityId'>(client, {
     prefix: 'ACTIVITY',
@@ -248,6 +256,9 @@ export function makeData(client: TableClient) {
     opportunityDiscoveryJobs,
     studentProfile: makeStudentProfile(client),
     finaid,
+    // GLOBAL registries — built on the un-scoped base client (never tenant-prefixed).
+    tenants: makeTenants(base),
+    invites: makeInvites(base),
   };
 }
 
@@ -255,7 +266,10 @@ export type Data = ReturnType<typeof makeData>;
 
 /** Build the data client from the environment (CDK injects TABLE_NAME). Use in Lambdas. */
 export function dataFromEnv(env: NodeJS.ProcessEnv = process.env): Data {
-  return makeData(tableClientFromEnv(env));
+  // Production: per-family repos go through the tenant-scoped client (keys prefixed T#<tenantId>#,
+  // resolved from AsyncLocalStorage, fail-closed); the tenant registry uses the raw base client.
+  const base = tableClientFromEnv(env);
+  return makeData(tenantScoped(base), base);
 }
 
 export { NotFoundError, isoNow, newId } from './repo.js';

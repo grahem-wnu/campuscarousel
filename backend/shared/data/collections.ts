@@ -15,9 +15,11 @@ import type {
   Conversation,
   ConversationMessage,
   Benchmark,
+  Invite,
   Profile,
   ReminderSettings,
   StudentProfile,
+  Tenant,
   Touchpoint,
   Timestamped,
   Visit,
@@ -425,6 +427,100 @@ export function makeStudentProfile(client: TableClient): StudentProfileRepo {
         SK: SK_DETAILS,
       });
       return domain;
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Tenant registry (PK: TENANT#<id>) — the one GLOBAL namespace (SaaS platform). Always built on the
+// UN-scoped base client, so registry keys are never tenant-prefixed. Enumerable via GSI1PK='TENANTS'.
+// ---------------------------------------------------------------------------
+export interface TenantRepo {
+  get(tenantId: string): Promise<Tenant | null>;
+  create(input: Omit<Tenant, 'createdAt' | 'updatedAt'>): Promise<Tenant>;
+  update(
+    tenantId: string,
+    patch: Partial<Omit<Tenant, 'tenantId' | 'createdAt' | 'updatedAt'>>,
+  ): Promise<Tenant>;
+  list(): Promise<Tenant[]>;
+}
+
+export function makeTenants(client: TableClient): TenantRepo {
+  const write = async (domain: Tenant): Promise<Tenant> => {
+    await client.put({
+      ...(domain as unknown as Record<string, unknown>),
+      PK: `TENANT#${domain.tenantId}`,
+      SK: SK_DETAILS,
+      GSI1PK: 'TENANTS',
+      GSI1SK: dateSortKey(domain.createdAt, domain.tenantId),
+    });
+    return domain;
+  };
+  return {
+    async get(tenantId) {
+      const item = await client.get(`TENANT#${tenantId}`, SK_DETAILS);
+      return item ? toDomain<Tenant>(item) : null;
+    },
+    async create(input) {
+      const now = isoNow();
+      return write({ ...input, createdAt: now, updatedAt: now });
+    },
+    async update(tenantId, patch) {
+      const existing = await client.get(`TENANT#${tenantId}`, SK_DETAILS);
+      if (!existing) throw new NotFoundError('TENANT', tenantId);
+      const current = toDomain<Tenant>(existing);
+      return write({ ...current, ...patch, tenantId, createdAt: current.createdAt, updatedAt: isoNow() });
+    },
+    async list() {
+      const items = await client.queryIndex('GSI1', 'TENANTS', { ascending: true });
+      return items.map((i) => toDomain<Tenant>(i));
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Invite registry (PK: INVITE#<code>) — GLOBAL (base client, never tenant-prefixed). Enumerable via
+// GSI1PK='INVITES'. Mirrors the tenant registry. Codes are the partition, so lookup-by-code is O(1).
+// ---------------------------------------------------------------------------
+export interface InviteRepo {
+  get(code: string): Promise<Invite | null>;
+  create(input: Omit<Invite, 'createdAt' | 'updatedAt'>): Promise<Invite>;
+  update(
+    code: string,
+    patch: Partial<Omit<Invite, 'code' | 'createdAt' | 'updatedAt'>>,
+  ): Promise<Invite>;
+  list(): Promise<Invite[]>;
+}
+
+export function makeInvites(client: TableClient): InviteRepo {
+  const write = async (domain: Invite): Promise<Invite> => {
+    await client.put({
+      ...(domain as unknown as Record<string, unknown>),
+      PK: `INVITE#${domain.code}`,
+      SK: SK_DETAILS,
+      GSI1PK: 'INVITES',
+      GSI1SK: dateSortKey(domain.createdAt, domain.code),
+    });
+    return domain;
+  };
+  return {
+    async get(code) {
+      const item = await client.get(`INVITE#${code}`, SK_DETAILS);
+      return item ? toDomain<Invite>(item) : null;
+    },
+    async create(input) {
+      const now = isoNow();
+      return write({ ...input, createdAt: now, updatedAt: now });
+    },
+    async update(code, patch) {
+      const existing = await client.get(`INVITE#${code}`, SK_DETAILS);
+      if (!existing) throw new NotFoundError('INVITE', code);
+      const current = toDomain<Invite>(existing);
+      return write({ ...current, ...patch, code, createdAt: current.createdAt, updatedAt: isoNow() });
+    },
+    async list() {
+      const items = await client.queryIndex('GSI1', 'INVITES', { ascending: false });
+      return items.map((i) => toDomain<Invite>(i));
     },
   };
 }

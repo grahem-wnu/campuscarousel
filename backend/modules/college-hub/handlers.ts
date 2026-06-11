@@ -29,6 +29,7 @@ import { findActiveByName, normalizeCollegeName } from './dedupe.js';
 import { makeBedrockDiscoverer, type Discoverer } from './ai.js';
 import { makeInlineDispatcher, type HydrationDispatcher } from './hydration.js';
 import { runDiscoveryJob, type DiscoverDispatcher } from './discover.js';
+import { makeAssetsEnqueuer, type AssetsDispatcher } from './assets-enqueue.js';
 
 export interface CollegeHandlers {
   list: Handler;
@@ -39,6 +40,7 @@ export interface CollegeHandlers {
   topPick: Handler;
   hydrate: Handler;
   hydrateAll: Handler;
+  assetsBackfill: Handler;
   discover: Handler;
   discoverStatus: Handler;
   bulkAdd: Handler;
@@ -56,6 +58,8 @@ export interface CollegeDeps {
   dispatch?: HydrationDispatcher;
   /** Discovery-job trigger; defaults to running the job inline with the handler's discoverer. */
   discoverDispatch?: DiscoverDispatcher;
+  /** Campus-imagery / logo fetch trigger; defaults to the SQS assets enqueuer (no-op if unconfigured). */
+  assetsDispatch?: AssetsDispatcher;
 }
 
 export function makeHandlers(deps: CollegeDeps): CollegeHandlers {
@@ -67,6 +71,7 @@ export function makeHandlers(deps: CollegeDeps): CollegeHandlers {
   // 300s worker instead of the 30s API request.
   const discoverDispatch =
     deps.discoverDispatch ?? ((jobId: string) => runDiscoveryJob(getData, discoverer, jobId));
+  const assetsDispatch = deps.assetsDispatch ?? makeAssetsEnqueuer(getData);
 
   /** Fetch a college or throw 404. */
   async function requireCollege(id: string): Promise<College> {
@@ -106,8 +111,11 @@ export function makeHandlers(deps: CollegeDeps): CollegeHandlers {
         addedBy: 'manual',
         userEdited,
         hydrationStatus: 'in-progress',
+        assetsStatus: 'in-progress',
       } as Parameters<Data['colleges']['create']>[0]);
+      // Text hydration and imagery fetch run on separate queues/workers — kicked off together.
       await dispatch(created.collegeId);
+      await assetsDispatch(created.collegeId);
       const after = await data.colleges.get(created.collegeId);
       return { status: 201, body: after ?? created };
     },
@@ -144,19 +152,39 @@ export function makeHandlers(deps: CollegeDeps): CollegeHandlers {
       const data = getData();
       await requireCollege(id);
       await data.colleges.update(id, { hydrationStatus: 'in-progress' });
+      // assetsStatus is system-owned — set it via merge (not update) so it's never marked userEdited.
+      await data.colleges.mergePreservingUserEdits(id, { assetsStatus: 'in-progress' });
       await dispatch(id);
+      await assetsDispatch(id);
       const after = await data.colleges.get(id);
       return { status: 202, body: after };
     },
 
-    // POST /colleges/hydrate-all — refresh every non-removed college. 202 with a count.
+    // POST /colleges/hydrate-all — refresh every non-removed college (text + imagery). 202 with a count.
     hydrateAll: async (ctx) => {
       void ctx;
       const data = getData();
       const targets = (await data.colleges.list()).filter((c) => c.status !== 'removed');
       for (const c of targets) {
         await data.colleges.update(c.collegeId, { hydrationStatus: 'in-progress' });
+        await data.colleges.mergePreservingUserEdits(c.collegeId, { assetsStatus: 'in-progress' });
         await dispatch(c.collegeId);
+        await assetsDispatch(c.collegeId);
+      }
+      return { status: 202, body: { requested: targets.length } };
+    },
+
+    // POST /colleges/assets-backfill — one-time: fetch imagery for every non-removed college that
+    // doesn't have a campus photo yet. 202 with the count enqueued.
+    assetsBackfill: async (ctx) => {
+      void ctx;
+      const data = getData();
+      const targets = (await data.colleges.list()).filter(
+        (c) => c.status !== 'removed' && !c.campusImageUrl,
+      );
+      for (const c of targets) {
+        await data.colleges.mergePreservingUserEdits(c.collegeId, { assetsStatus: 'in-progress' });
+        await assetsDispatch(c.collegeId);
       }
       return { status: 202, body: { requested: targets.length } };
     },
@@ -259,6 +287,7 @@ export function buildRoutes(h: CollegeHandlers) {
     { method: 'POST' as const, path: '/colleges/discover', handler: h.discover },
     { method: 'GET' as const, path: '/colleges/discover/:jobId', handler: h.discoverStatus },
     { method: 'POST' as const, path: '/colleges/hydrate-all', handler: h.hydrateAll },
+    { method: 'POST' as const, path: '/colleges/assets-backfill', handler: h.assetsBackfill },
     { method: 'POST' as const, path: '/colleges/bulk-add', handler: h.bulkAdd },
     { method: 'GET' as const, path: '/colleges/:id', handler: h.detail },
     { method: 'PUT' as const, path: '/colleges/:id', handler: h.update },

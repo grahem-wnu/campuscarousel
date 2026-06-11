@@ -3,6 +3,7 @@ import type { HandlerContext } from '../../shared/api/index.js';
 import type { Requester } from '../../shared/auth/index.js';
 import { InMemoryTableClient, makeData, type Data, type Document } from '../../shared/data/index.js';
 import type { DocumentStore } from '../../shared/storage/index.js';
+import { runWithTenant } from '../../shared/tenant/index.js';
 import { makeHandlers, type DocumentHandlers } from './handlers.js';
 
 const keira: Requester = { username: 'keira', role: 'student' };
@@ -46,13 +47,14 @@ async function seed(over: Partial<Document> = {}): Promise<Document> {
 }
 
 describe('POST /documents/upload-url', () => {
-  it('mints a server-owned key + presigned PUT url', async () => {
-    const res = await h.uploadUrl(
-      ctx({ body: { fileName: 'My Cert!.pdf', contentType: 'application/pdf', sizeBytes: 2048 } }),
+  it('mints a server-owned, tenant-scoped key + presigned PUT url', async () => {
+    // uploadUrl builds a tenant-prefixed S3 key, so it runs inside a tenant context (as the router does).
+    const res = await runWithTenant('fam1', () =>
+      h.uploadUrl(ctx({ body: { fileName: 'My Cert!.pdf', contentType: 'application/pdf', sizeBytes: 2048 } })),
     );
     expect(res.status).toBe(200);
     const body = res.body as { uploadUrl: string; s3Key: string };
-    expect(body.s3Key).toMatch(/^documents\/.+\/My_Cert_\.pdf$/);
+    expect(body.s3Key).toMatch(/^T\/fam1\/documents\/.+\/My_Cert_\.pdf$/);
     expect(body.uploadUrl).toContain(body.s3Key);
   });
   it('422 on a disallowed content type', async () => {

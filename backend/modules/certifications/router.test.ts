@@ -19,7 +19,7 @@ beforeEach(() => {
   dispatch = createRouter(buildRoutes(makeHandlers({ getData: () => data, now })));
 });
 
-const claimsFor = (r: Requester) => ({ 'cognito:username': r.username, 'custom:role': r.role });
+const claimsFor = (r: Requester) => ({ 'cognito:username': r.username, 'custom:role': r.role, 'custom:tenantId': r.tenantId ?? 'test-tenant' });
 
 function event(
   method: string,

@@ -23,6 +23,7 @@ export interface ApiStackProps extends StackProps {
   readonly userPool: UserPool;
   readonly userPoolClient: UserPoolClient;
   readonly hydrationQueue: Queue;
+  readonly assetsQueue: Queue;
 }
 
 /**
@@ -46,7 +47,7 @@ export class ApiStack extends Stack {
 
   constructor(scope: Construct, id: string, props: ApiStackProps) {
     super(scope, id, props);
-    const { config, table, documentsBucket, userPool, userPoolClient, hydrationQueue } = props;
+    const { config, table, documentsBucket, userPool, userPoolClient, hydrationQueue, assetsQueue } = props;
 
     const routing = new LambdaFunction(this, "RoutingFn", {
       functionName: `${config.namePrefix}-api-routing`,
@@ -62,7 +63,11 @@ export class ApiStack extends Stack {
       environment: {
         TABLE_NAME: table.tableName,
         DOCUMENTS_BUCKET: documentsBucket.bucketName,
+        // SaaS transition: requests with no tenant claim fall back to this tenant (the legacy single
+        // family, migrated to T#primary#). Existing users keep working before their tokens carry a tenant.
+        DEFAULT_TENANT_ID: "primary",
         HYDRATION_QUEUE_URL: hydrationQueue.queueUrl,
+        ASSETS_QUEUE_URL: assetsQueue.queueUrl,
         USER_POOL_ID: userPool.userPoolId,
         USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId,
         BEDROCK_MODEL_ID: config.bedrockSonnetProfile,
@@ -80,12 +85,36 @@ export class ApiStack extends Stack {
     documentsBucket.grantReadWrite(routing); // presigned PUT/GET of family documents (v2.1 F2)
     documentsBucket.grantDelete(routing);
     hydrationQueue.grantSendMessages(routing);
+    assetsQueue.grantSendMessages(routing);
     routing.addToRolePolicy(bedrockInvokeStatement(this.account, config.bedrockSonnetProfile));
     routing.addToRolePolicy(
       new PolicyStatement({
         sid: "ReadEnvConfig",
         actions: ["ssm:GetParameter", "ssm:GetParameters", "ssm:GetParametersByPath"],
         resources: [`arn:aws:ssm:${this.region}:${this.account}:parameter${config.ssmPrefix}/*`],
+      }),
+    );
+
+    // Public redeem/self-signup Lambda (SaaS sub-project 2) — the ONE unauthenticated endpoint. A new
+    // parent has no token yet, so this is NOT behind the JWT authorizer. It provisions a family tenant +
+    // the parent's Cognito account from a valid invite code. Least-privilege: table CRUD (global invite/
+    // tenant registries) + Cognito AdminCreateUser/AdminSetUserPassword on THIS pool only.
+    const redeem = new LambdaFunction(this, "RedeemFn", {
+      functionName: `${config.namePrefix}-auth-redeem`,
+      runtime: Runtime.NODEJS_20_X,
+      handler: "index.handler",
+      code: Code.fromAsset(join(__dirname, "../../backend/dist/redeem")),
+      timeout: Duration.seconds(30),
+      memorySize: 256,
+      logRetention: RetentionDays.ONE_MONTH,
+      environment: { TABLE_NAME: table.tableName, USER_POOL_ID: userPool.userPoolId },
+    });
+    table.grantReadWriteData(redeem);
+    redeem.addToRolePolicy(
+      new PolicyStatement({
+        sid: "CognitoProvisionFamily",
+        actions: ["cognito-idp:AdminCreateUser", "cognito-idp:AdminSetUserPassword"],
+        resources: [userPool.userPoolArn],
       }),
     );
 
@@ -133,6 +162,13 @@ export class ApiStack extends Stack {
       ],
       integration,
       authorizer,
+    });
+
+    // PUBLIC route — invite redemption / self-signup. NO authorizer (the parent has no token yet).
+    api.addRoutes({
+      path: "/auth/redeem",
+      methods: [HttpMethod.POST],
+      integration: new HttpLambdaIntegration("RedeemIntegration", redeem),
     });
 
     this.httpApiName = `${config.namePrefix}-api`;

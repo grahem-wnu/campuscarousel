@@ -16,6 +16,7 @@
     "lint": "eslint .",
     "test": "vitest run",
     "check:routes": "node scripts/check-routes.mjs",
+    "check:isolation": "node scripts/check-tenant-isolation.mjs",
     "build": "npm run build --workspaces --if-present"
   },
   "devDependencies": {

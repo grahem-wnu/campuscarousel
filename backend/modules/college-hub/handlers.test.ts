@@ -11,12 +11,22 @@ const kate: Requester = { username: 'kate', role: 'parent' };
 let data: Data;
 let h: CollegeHandlers;
 let dispatched: string[];
+let assetsDispatched: string[];
 
 // Stub dispatcher: records the call and simulates hydration (fills a field, marks complete),
 // honoring userEdited via mergePreservingUserEdits.
 const makeDispatch = () => async (id: string) => {
   dispatched.push(id);
   await data.colleges.mergePreservingUserEdits(id, { location: 'AI City', hydrationStatus: 'complete' });
+};
+
+// Stub assets dispatcher: records the call and simulates the imagery worker landing a campus url.
+const makeAssetsDispatch = () => async (id: string) => {
+  assetsDispatched.push(id);
+  await data.colleges.mergePreservingUserEdits(id, {
+    campusImageUrl: `https://cdn.test/colleges/${id}/campus.jpg`,
+    assetsStatus: 'complete',
+  });
 };
 
 const stubDiscoverer: Discoverer = async (input) => [
@@ -26,7 +36,13 @@ const stubDiscoverer: Discoverer = async (input) => [
 beforeEach(() => {
   data = makeData(new InMemoryTableClient());
   dispatched = [];
-  h = makeHandlers({ getData: () => data, discoverer: stubDiscoverer, dispatch: makeDispatch() });
+  assetsDispatched = [];
+  h = makeHandlers({
+    getData: () => data,
+    discoverer: stubDiscoverer,
+    dispatch: makeDispatch(),
+    assetsDispatch: makeAssetsDispatch(),
+  });
 });
 
 const ctx = (over: Partial<HandlerContext> = {}): HandlerContext => ({
@@ -53,6 +69,9 @@ describe('create (POST /colleges)', () => {
     expect(body.addedBy).toBe('manual');
     expect(body.location).toBe('AI City'); // hydration ran via dispatch
     expect(dispatched).toHaveLength(1);
+    // Imagery fetch is kicked off in parallel and lands a campus url.
+    expect(assetsDispatched).toEqual([body.collegeId]);
+    expect(body.campusImageUrl).toBe(`https://cdn.test/colleges/${body.collegeId}/campus.jpg`);
   });
 
   it('marks caller-supplied fields userEdited so hydration cannot overwrite them', async () => {
@@ -146,16 +165,45 @@ describe('hydrate / hydrate-all', () => {
     await expectStatus(h.hydrate(ctx({ params: { id: 'ghost' } })), 404);
   });
 
-  it('hydrate-all dispatches every non-removed college', async () => {
+  it('hydrate-all dispatches every non-removed college (text + imagery)', async () => {
     await create({ name: 'A' });
     await create({ name: 'B' });
     const gone = await create({ name: 'C' });
     await h.remove(ctx({ params: { id: gone.collegeId } }));
     dispatched = [];
+    assetsDispatched = [];
     const res = await h.hydrateAll(ctx());
     expect(res.status).toBe(202);
     expect((res.body as { requested: number }).requested).toBe(2);
     expect(dispatched).toHaveLength(2);
+    expect(assetsDispatched).toHaveLength(2);
+  });
+
+  it('hydrate also kicks off an imagery refresh', async () => {
+    const c = await create({ name: 'Ohio State' });
+    assetsDispatched = [];
+    await h.hydrate(ctx({ params: { id: c.collegeId } }));
+    expect(assetsDispatched).toEqual([c.collegeId]);
+  });
+});
+
+describe('assets-backfill (POST /colleges/assets-backfill)', () => {
+  it('enqueues imagery only for non-removed colleges that lack a campus photo', async () => {
+    // `create` auto-runs the stub assets dispatch, which lands a campusImageUrl — so seed colleges
+    // WITHOUT imagery directly via the data layer to exercise the backfill filter.
+    const withImg = await create({ name: 'Has Image' }); // gets campusImageUrl from the stub
+    const a = await data.colleges.create({ name: 'Needs A', userEdited: [] } as Parameters<Data['colleges']['create']>[0]);
+    const b = await data.colleges.create({ name: 'Needs B', userEdited: [] } as Parameters<Data['colleges']['create']>[0]);
+    const gone = await data.colleges.create({ name: 'Gone', status: 'removed', userEdited: [] } as Parameters<Data['colleges']['create']>[0]);
+    assetsDispatched = [];
+
+    const res = await h.assetsBackfill(ctx());
+
+    expect(res.status).toBe(202);
+    expect((res.body as { requested: number }).requested).toBe(2);
+    expect(assetsDispatched.sort()).toEqual([a.collegeId, b.collegeId].sort());
+    expect(assetsDispatched).not.toContain(withImg.collegeId);
+    expect(assetsDispatched).not.toContain(gone.collegeId);
   });
 });
 

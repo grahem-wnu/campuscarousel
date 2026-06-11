@@ -3,8 +3,8 @@ import { createRouter, Errors, validate, z } from './index.js';
 import type { ApiEvent, ApiResponse } from './event.js';
 import type { RouteDef } from './types.js';
 
-const KEIRA = { 'cognito:username': 'keira', 'custom:role': 'student' };
-const ADMIN = { 'cognito:username': 'grahem', 'custom:role': 'admin' };
+const KEIRA = { 'cognito:username': 'keira', 'custom:role': 'student', 'custom:tenantId': 'fam1' };
+const ADMIN = { 'cognito:username': 'grahem', 'custom:role': 'admin', 'custom:tenantId': 'fam1' };
 
 function event(opts: {
   method?: string;
@@ -122,6 +122,13 @@ describe('createRouter', () => {
 
   it('401s when no JWT claims are present', async () => {
     const res = parse(await dispatch(event({ path: '/activities', claims: null })));
+    expect(res.status).toBe(401);
+    expect(res.body).toMatchObject({ error: { code: 'unauthorized' } });
+  });
+
+  it('401s when the JWT carries no tenant claim (SaaS isolation, fail closed)', async () => {
+    const noTenant = { 'cognito:username': 'keira', 'custom:role': 'student' };
+    const res = parse(await dispatch(event({ path: '/activities', claims: noTenant })));
     expect(res.status).toBe(401);
     expect(res.body).toMatchObject({ error: { code: 'unauthorized' } });
   });
