@@ -30,6 +30,15 @@ export function makeHandlers(deps: TimelineDeps): TimelineHandlers {
   const analyzer = deps.analyzer ?? makeBedrockAnalyzer();
   const today = (): string => now().toISOString().slice(0, 10);
 
+  /** Read the active student's intended major(s) so the planning coach reflects their academic focus. */
+  async function activeMajors(): Promise<string[]> {
+    try {
+      return (await getData().studentProfile.get())?.intendedMajors ?? [];
+    } catch {
+      return [];
+    }
+  }
+
   // Gather all event sources, visibility-filtering activities for the caller.
   async function gather(requester: Parameters<Handler>[0]['requester']): Promise<EventSources> {
     const data = getData();
@@ -79,7 +88,7 @@ export function makeHandlers(deps: TimelineDeps): TimelineHandlers {
       const all = buildEvents(await gather(ctx.requester));
       const todayIso = today();
       const window = upcoming(all, todayIso, body.horizonDays ?? DEFAULT_HORIZON);
-      const analysis = await analyzer({ events: window, allEvents: all, todayIso });
+      const analysis = await analyzer({ events: window, allEvents: all, todayIso, majors: await activeMajors() });
       return { status: 200, body: { analysis } };
     },
   };

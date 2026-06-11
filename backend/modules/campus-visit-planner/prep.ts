@@ -11,6 +11,8 @@
 //
 // Mirrors backend/modules/certifications/suggester.ts (the house pattern for an AI feature).
 
+import { majorPhrase } from '../../shared/ai/major.js';
+import { packFocusBriefs } from '../../shared/packs/index.js';
 import type { College, Visit } from '../../shared/data/index.js';
 
 export interface VisitLogistics {
@@ -32,6 +34,8 @@ export interface VisitPrep {
 export interface PrepInput {
   college: College;
   visit: Visit;
+  /** The active student's intended major(s) — names the academic focus + folds in pack guidance. */
+  majors?: string[];
 }
 
 export type PrepGenerator = (input: PrepInput) => Promise<VisitPrep>;
@@ -108,13 +112,17 @@ export interface BedrockPrepOptions {
   fallback?: PrepGenerator;
 }
 
-/** Prompt asking the model for best-time guidance + a few college-specific questions as JSON. */
-function buildPrompt(college: College, visit: Visit): string {
+/** Prompt asking the model for best-time guidance + a few college-specific questions as JSON. With
+ *  `majors` set, the prep targets that academic focus and folds in any major-pack guidance. */
+function buildPrompt(college: College, visit: Visit, majors: string[] = []): string {
+  const guidance = packFocusBriefs(majors);
+  const focusLine = guidance.length ? ` Major-specific guidance: ${guidance.join(' ')}` : '';
   return [
-    `A prospective college applicant is planning a ${visit.visitType ?? 'campus'} visit to ${college.name}`,
+    `A prospective college applicant pursuing ${majorPhrase(majors, 'their intended college program')} is planning a ${visit.visitType ?? 'campus'} visit to ${college.name}`,
     college.location ? ` (${college.location})` : '',
     ` on ${visit.date}.`,
-    'Give concise, program-focused visit prep. Respond with ONLY a JSON object (no prose, no code fences):',
+    focusLine,
+    ' Give concise, program-focused visit prep. Respond with ONLY a JSON object (no prose, no code fences):',
     '{"bestTime": string (one or two sentences on the best time/season to visit this school),',
     '"extraQuestions": string[] (up to 5 school-specific program questions beyond the standard checklist)}.',
   ].join('');
@@ -139,9 +147,9 @@ function parsePrep(decoded: unknown): { bestTime?: string; extraQuestions: strin
  */
 export function makeBedrockPrep(options: BedrockPrepOptions = {}): PrepGenerator {
   const fallback = options.fallback ?? curatedPrep;
-  return async ({ college, visit }) => {
+  return async ({ college, visit, majors }) => {
     const modelId = options.modelId ?? process.env.BEDROCK_MODEL_ID;
-    if (!modelId) return fallback({ college, visit });
+    if (!modelId) return fallback({ college, visit, majors });
     try {
       const { BedrockRuntimeClient, InvokeModelCommand } = await import('@aws-sdk/client-bedrock-runtime');
       const client: BedrockInvoker = options.client ?? (new BedrockRuntimeClient({}) as unknown as BedrockInvoker);
@@ -153,12 +161,12 @@ export function makeBedrockPrep(options: BedrockPrepOptions = {}): PrepGenerator
           JSON.stringify({
             anthropic_version: 'bedrock-2023-05-31',
             max_tokens: 800,
-            messages: [{ role: 'user', content: buildPrompt(college, visit) }],
+            messages: [{ role: 'user', content: buildPrompt(college, visit, majors) }],
           }),
         ),
       });
       const res = await client.send(command);
-      if (!res.body) return fallback({ college, visit });
+      if (!res.body) return fallback({ college, visit, majors });
       const decoded = JSON.parse(new TextDecoder().decode(res.body)) as unknown;
       const { bestTime, extraQuestions } = parsePrep(decoded);
       const base = await curatedPrep({ college, visit });
@@ -169,7 +177,7 @@ export function makeBedrockPrep(options: BedrockPrepOptions = {}): PrepGenerator
         source: 'ai',
       };
     } catch {
-      return fallback({ college, visit });
+      return fallback({ college, visit, majors });
     }
   };
 }

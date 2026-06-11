@@ -96,6 +96,15 @@ export function makeHandlers(deps: AppCentralDeps): AppCentralHandlers {
     return e;
   }
 
+  /** Read the active student's intended major(s) so AI brainstorm/brief prompts reflect their focus. */
+  async function activeMajors(): Promise<string[]> {
+    try {
+      return (await getData().studentProfile.get())?.intendedMajors ?? [];
+    } catch {
+      return [];
+    }
+  }
+
   const latestDraft = (essay: Essay): Draft | undefined => {
     const drafts = essay.drafts ?? [];
     return drafts.length ? drafts[drafts.length - 1] : undefined;
@@ -165,7 +174,7 @@ export function makeHandlers(deps: AppCentralDeps): AppCentralHandlers {
       const data = getData();
       const essay = await requireEssay(id);
       const pool = await gatherExperiences(data, ctx.requester);
-      const result = await finder({ prompt: body.prompt ?? essay.prompt ?? '', pool });
+      const result = await finder({ prompt: body.prompt ?? essay.prompt ?? '', pool, majors: await activeMajors() });
       return { status: 200, body: { result, basedOn: pool.counts } };
     },
 
@@ -296,6 +305,7 @@ export function makeHandlers(deps: AppCentralDeps): AppCentralHandlers {
         relationship: rec.relationshipStrength,
         focus: body.focus,
         pool,
+        majors: await activeMajors(),
       });
       const aiBrief = [brief.summary, ...brief.talkingPoints, ...brief.suggestedStories].join('\n');
       const updated = await data.recommendations.update(id, { aiBrief });

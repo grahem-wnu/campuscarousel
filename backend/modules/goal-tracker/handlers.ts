@@ -28,6 +28,15 @@ export interface GoalHandlers {
 
 const today = (): string => isoNow().slice(0, 10);
 
+/** Read the active student's intended major(s) so goal suggestions reflect their academic focus. */
+async function activeMajors(data: Data): Promise<string[]> {
+  try {
+    return (await data.studentProfile.get())?.intendedMajors ?? [];
+  } catch {
+    return [];
+  }
+}
+
 export function makeHandlers(getData: () => Data, getSuggester: () => GoalSuggester): GoalHandlers {
   return {
     // GET /goals — whole collection, filtered in-handler by period/status/category.
@@ -108,7 +117,8 @@ export function makeHandlers(getData: () => Data, getSuggester: () => GoalSugges
     // POST /goals/suggest — AI returns an editable suggestion list; nothing is persisted here.
     suggest: async (ctx) => {
       const input = validateBody(suggestSchema, ctx);
-      const suggestions = await getSuggester().suggest(input);
+      const majors = await activeMajors(getData());
+      const suggestions = await getSuggester().suggest(input, majors);
       return { status: 200, body: { suggestions } };
     },
   };

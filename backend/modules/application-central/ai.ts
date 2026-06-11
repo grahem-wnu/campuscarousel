@@ -5,7 +5,15 @@
 // Both receive an already-privacy-filtered ExperiencePool (grounding.ts), so this layer can't leak
 // private entries and its output is returned live (never persisted).
 
+import { majorPhrase } from '../../shared/ai/major.js';
+import { packFocusBriefs } from '../../shared/packs/index.js';
 import { poolToText, type Experience, type ExperiencePool } from './grounding.js';
+
+/** Major-specific guidance line for a prompt — empty when no major or no matching pack. */
+function majorGuidanceLine(majors: string[] = []): string {
+  const guidance = packFocusBriefs(majors);
+  return guidance.length ? `Major-specific guidance: ${guidance.join(' ')}` : '';
+}
 
 export interface BedrockInvoker {
   send(command: unknown): Promise<{ body?: Uint8Array }>;
@@ -25,7 +33,7 @@ export interface FindResult {
   angles: string[];
   source: 'ai' | 'curated';
 }
-export type ExperienceFinder = (input: { prompt: string; pool: ExperiencePool }) => Promise<FindResult>;
+export type ExperienceFinder = (input: { prompt: string; pool: ExperiencePool; majors?: string[] }) => Promise<FindResult>;
 
 export interface EssayReview {
   strengths: string[];
@@ -58,6 +66,7 @@ export type RecommenderBriefer = (input: {
   relationship?: string;
   focus?: string;
   pool: ExperiencePool;
+  majors?: string[];
 }) => Promise<RecommenderBrief>;
 
 // ---- Bedrock plumbing -----------------------------------------------------
@@ -171,15 +180,19 @@ export const curatedRecommenderBrief: RecommenderBriefer = async ({ slot, contac
 
 // ---- Bedrock-backed (with curated fallback) -------------------------------
 
-function buildFindPrompt(input: { prompt: string; pool: ExperiencePool }): string {
+export function buildFindPrompt(input: { prompt: string; pool: ExperiencePool; majors?: string[] }): string {
+  const applicant = `a college applicant pursuing ${majorPhrase(input.majors, 'their intended college program')}`;
   return [
-    'You are a college-essay brainstorming partner for a college applicant. Given the prompt and the',
+    `You are a college-essay brainstorming partner for ${applicant}. Given the prompt and the`,
     "applicant's REAL logged experiences, suggest which experiences to write about and a few angles.",
+    majorGuidanceLine(input.majors),
     'Respond with ONLY JSON (no prose/fences): {"suggestedExperiences": [{"title": string,',
     '"kind": "activity"|"experience"|"motivation", "why": string}], "angles": string[]}.',
     `Prompt: ${input.prompt || '(general personal statement)'}`,
     `Experiences:\n${poolToText(input.pool)}`,
-  ].join('\n');
+  ]
+    .filter(Boolean)
+    .join('\n');
 }
 
 export function makeBedrockExperienceFinder(options: AiOptions = {}, fallback: ExperienceFinder = curatedExperienceFinder): ExperienceFinder {
@@ -239,16 +252,20 @@ export function makeBedrockEssayReviewer(options: AiOptions = {}, fallback: Essa
   };
 }
 
-function buildBriefPrompt(input: { slot: string; contactName?: string; relationship?: string; focus?: string; pool: ExperiencePool }): string {
+export function buildBriefPrompt(input: { slot: string; contactName?: string; relationship?: string; focus?: string; pool: ExperiencePool; majors?: string[] }): string {
+  const applicant = `a college applicant pursuing ${majorPhrase(input.majors, 'their intended college program')}`;
   return [
-    'You help a college applicant prepare a brief to hand to a recommender writing a letter for',
+    `You help ${applicant} prepare a brief to hand to a recommender writing a letter for`,
     'them. Use ONLY the family-shareable experiences provided (never invent details). Respond with ONLY',
     'JSON (no prose/fences): {"summary": string, "talkingPoints": string[], "suggestedStories": string[]}.',
+    majorGuidanceLine(input.majors),
     `Recommender slot: ${input.slot}${input.contactName ? ` (${input.contactName})` : ''}.`,
     input.relationship ? `Relationship strength: ${input.relationship}.` : '',
     input.focus ? `Focus the brief on: ${input.focus}.` : '',
     `Family-shareable experiences:\n${poolToText(input.pool)}`,
-  ].join('\n');
+  ]
+    .filter(Boolean)
+    .join('\n');
 }
 
 export function makeBedrockRecommenderBrief(options: AiOptions = {}, fallback: RecommenderBriefer = curatedRecommenderBrief): RecommenderBriefer {

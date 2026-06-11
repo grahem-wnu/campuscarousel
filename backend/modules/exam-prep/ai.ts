@@ -4,7 +4,18 @@
 // return something useful (mirrors the merged certifications module). The spec notes no web search is
 // needed here (general knowledge keyed to weak areas + exam date + target requirements).
 
+import { majorPhrase } from '../../shared/ai/major.js';
+import { packFocusBriefs } from '../../shared/packs/index.js';
 import { SECTION_LABEL, type ProgressSummary, type Section } from './progress.js';
+
+/** Name the exam (e.g. "TEAS") when the pack supplies one, else a neutral phrase. */
+const examLabel = (examName?: string): string => (examName && examName.trim() ? examName : 'the entrance/standardized exam');
+
+/** Major-specific guidance line for a prompt — empty when no major or no matching pack. */
+function majorGuidanceLine(majors: string[] = []): string {
+  const guidance = packFocusBriefs(majors);
+  return guidance.length ? `Major-specific guidance: ${guidance.join(' ')}` : '';
+}
 
 /** Minimal structural type of the Bedrock client (just `send`) — keeps tests injectable. */
 export interface BedrockInvoker {
@@ -25,6 +36,10 @@ export interface PlanInput {
   hoursPerWeek: number;
   weakSections: string[];
   latestOverall: number | null;
+  /** The exam this plan is for (e.g. "TEAS" from the nursing pack); omitted → neutral phrasing. */
+  examName?: string;
+  /** The active student's intended major(s) — names the academic focus + folds in pack guidance. */
+  majors?: string[];
 }
 export interface StudyWeek {
   week: number;
@@ -46,6 +61,10 @@ export interface AnalyzeContext {
   summary: ProgressSummary;
   targetScore: number;
   examDate?: string;
+  /** The exam being analyzed (e.g. "TEAS"); omitted → neutral phrasing. */
+  examName?: string;
+  /** The active student's intended major(s) — names the academic focus + folds in pack guidance. */
+  majors?: string[];
 }
 export interface Analysis {
   summary: string;
@@ -150,19 +169,23 @@ export const curatedAnalyzer: Analyzer = async ({ summary, targetScore }) => {
 
 // ---- Bedrock-backed (with curated fallback) -------------------------------
 
-function buildPlanPrompt(input: PlanInput): string {
+export function buildPlanPrompt(input: PlanInput): string {
   return [
-    'You are an entrance/standardized exam coach. Build a weekly study plan as STRICT JSON only',
+    `You are a coach for ${examLabel(input.examName)}, the entrance exam for a student pursuing ${majorPhrase(input.majors, 'their intended college program')}.`,
+    'Build a weekly study plan as STRICT JSON only',
     '(no prose/fences):',
     '{"summary": string, "focusAreas": string[], "weeks": [{"week": number, "focus": string[],',
     '"hours": number, "practice": string}]}.',
+    majorGuidanceLine(input.majors),
     `Target overall score: ${input.targetScore}.`,
     input.examDate ? `Exam date: ${input.examDate} (~${input.weeksUntilExam ?? '?'} weeks out).` : 'No exam date set.',
     `Study budget: ~${input.hoursPerWeek} hours/week.`,
     input.latestOverall !== null ? `Latest practice overall: ${input.latestOverall}.` : 'No practice scores yet.',
     input.weakSections.length ? `Weakest sections: ${input.weakSections.join(', ')}.` : 'No weak sections identified yet.',
     input.targetSchools?.length ? `Target schools: ${input.targetSchools.join(', ')}.` : '',
-  ].join('\n');
+  ]
+    .filter(Boolean)
+    .join('\n');
 }
 
 export function makeBedrockPlanner(options: AiOptions = {}, fallback: Planner = curatedPlanner): Planner {
@@ -196,14 +219,18 @@ export function makeBedrockPlanner(options: AiOptions = {}, fallback: Planner = 
   };
 }
 
-function buildAnalyzePrompt(ctx: AnalyzeContext): string {
+export function buildAnalyzePrompt(ctx: AnalyzeContext): string {
   return [
-    'You are an entrance/standardized exam coach. Given this progress summary, respond with STRICT JSON only',
+    `You are a coach for ${examLabel(ctx.examName)}, the entrance exam for a student pursuing ${majorPhrase(ctx.majors, 'their intended college program')}.`,
+    'Given this progress summary, respond with STRICT JSON only',
     '(no prose/fences): {"summary": string, "recommendations": string[], "readiness": string}.',
+    majorGuidanceLine(ctx.majors),
     `Target overall: ${ctx.targetScore}.`,
     ctx.examDate ? `Exam date: ${ctx.examDate}.` : '',
     `Summary: ${JSON.stringify(ctx.summary)}.`,
-  ].join('\n');
+  ]
+    .filter(Boolean)
+    .join('\n');
 }
 
 export function makeBedrockAnalyzer(options: AiOptions = {}, fallback: Analyzer = curatedAnalyzer): Analyzer {

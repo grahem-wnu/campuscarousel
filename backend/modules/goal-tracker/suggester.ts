@@ -8,6 +8,8 @@
 // wiring the real call is a few lines.
 
 import { ApiError } from '../../shared/api/index.js';
+import { majorPhrase } from '../../shared/ai/major.js';
+import { packFocusBriefs } from '../../shared/packs/index.js';
 import { CATEGORIES, type SuggestInput } from './schema.js';
 
 /** One AI-proposed goal. Mirrors the createable shape (a strict subset) so the frontend can drop an
@@ -21,9 +23,10 @@ export interface SuggestedGoal {
   milestones?: string[];
 }
 
-/** The pluggable AI backend. The production binding calls Bedrock; tests inject a fake. */
+/** The pluggable AI backend. The production binding calls Bedrock; tests inject a fake.
+ *  `majors` (the active student's intended major(s)) lets the prompt reflect their academic focus. */
 export interface GoalSuggester {
-  suggest(input: SuggestInput): Promise<SuggestedGoal[]>;
+  suggest(input: SuggestInput, majors?: string[]): Promise<SuggestedGoal[]>;
 }
 
 /** Raw model invocation: prompt in, completion text out. Keeps the AWS SDK out of the pure
@@ -37,9 +40,9 @@ export type ModelInvoker = (prompt: string) => Promise<string>;
  */
 export function makeSuggester(invoke: ModelInvoker): GoalSuggester {
   return {
-    async suggest(input) {
+    async suggest(input, majors = []) {
       try {
-        const raw = await invoke(buildSuggestPrompt(input));
+        const raw = await invoke(buildSuggestPrompt(input, majors));
         return parseSuggestions(raw, input.count ?? 12);
       } catch (err) {
         console.error('goal-tracker: AI suggestion failed', err);
@@ -54,12 +57,14 @@ const isCategory = (v: unknown): v is SuggestedGoal['category'] =>
 
 /** Build the Bedrock prompt from the student's profile context. Deterministic + side-effect free
  *  so it can be asserted in tests. */
-export function buildSuggestPrompt(input: SuggestInput): string {
+export function buildSuggestPrompt(input: SuggestInput, majors: string[] = []): string {
   const count = input.count ?? 6;
   const lines: string[] = [
-    'You are an advisor helping a student plan their path toward their intended college program(s).',
+    `You are an advisor helping a student plan their path toward ${majorPhrase(majors, 'their intended college program(s)')}.`,
     `Suggest ${count} concrete, achievable goals tailored to this student.`,
   ];
+  const guidance = packFocusBriefs(majors);
+  if (guidance.length) lines.push(`Major-specific guidance: ${guidance.join(' ')}`);
   if (input.gradeLevel) lines.push(`Grade level: ${input.gradeLevel}.`);
   if (input.careerGoal) lines.push(`Career goal: ${input.careerGoal}.`);
   if (input.period) lines.push(`Plan these for: ${input.period}.`);

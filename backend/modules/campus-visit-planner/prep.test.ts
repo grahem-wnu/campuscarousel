@@ -87,4 +87,34 @@ describe('makeBedrockPrep', () => {
     const p = await gen({ college: college(), visit: visit() });
     expect(p.source).toBe('curated');
   });
+
+  it('builds a major-aware prompt naming the major + pack guidance', async () => {
+    let sentPrompt = '';
+    const client: BedrockInvoker = {
+      send: async (command: unknown) => {
+        const body = JSON.parse(new TextDecoder().decode((command as { input: { body: Uint8Array } }).input.body));
+        sentPrompt = body.messages[0].content as string;
+        return { body: new TextEncoder().encode(JSON.stringify({ content: [{ text: '{"bestTime":"x","extraQuestions":[]}' }] })) };
+      },
+    };
+    const gen = makeBedrockPrep({ modelId: 'test-model', client });
+    await gen({ college: college(), visit: visit(), majors: ['Nursing'] });
+    expect(sentPrompt).toContain('Nursing');
+    expect(sentPrompt).toContain('Major-specific guidance:');
+  });
+
+  it('builds a neutral prompt with no majors', async () => {
+    let sentPrompt = '';
+    const client: BedrockInvoker = {
+      send: async (command: unknown) => {
+        const body = JSON.parse(new TextDecoder().decode((command as { input: { body: Uint8Array } }).input.body));
+        sentPrompt = body.messages[0].content as string;
+        return { body: new TextEncoder().encode(JSON.stringify({ content: [{ text: '{"bestTime":"x","extraQuestions":[]}' }] })) };
+      },
+    };
+    const gen = makeBedrockPrep({ modelId: 'test-model', client });
+    await gen({ college: college(), visit: visit() });
+    expect(sentPrompt).toContain('their intended college program');
+    expect(sentPrompt).not.toContain('Major-specific guidance:');
+  });
 });

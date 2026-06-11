@@ -11,7 +11,7 @@ import {
   type Handler,
 } from '../../shared/api/index.js';
 import type { Data, Opportunity } from '../../shared/data/index.js';
-import { makeBedrockDiscoverer, type Discoverer } from './ai.js';
+import { type Discoverer } from './ai.js';
 import { runDiscoveryJob, type DiscoverDispatcher } from './discover.js';
 import {
   bulkAddSchema,
@@ -43,9 +43,11 @@ export interface OpportunityDeps {
 
 export function makeHandlers(deps: OpportunityDeps): OpportunityHandlers {
   const { getData } = deps;
-  const discoverer = deps.discoverer ?? makeBedrockDiscoverer();
+  // When no discoverer is injected (production), leave it undefined so runDiscoveryJob resolves a
+  // major-aware Bedrock discoverer at job-run time (where the student's profile is reachable). Tests
+  // inject a stub discoverer, which is used as-is.
   const discoverDispatch =
-    deps.discoverDispatch ?? ((jobId: string) => runDiscoveryJob(getData, discoverer, jobId));
+    deps.discoverDispatch ?? ((jobId: string) => runDiscoveryJob(getData, deps.discoverer, jobId));
 
   return {
     // GET /opportunities — list, filterable by type/status and a free-text search.

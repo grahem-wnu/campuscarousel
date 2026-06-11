@@ -3,6 +3,8 @@
 // the prompt/parse here pure makes them unit-testable with no AWS. The `ScholarshipDiscoverer`
 // interface is the injection seam the handlers consume.
 
+import { majorPhrase } from '../../shared/ai/major.js';
+import { packFocusBriefs } from '../../shared/packs/index.js';
 import { TYPES, type DiscoverInput } from './schema.js';
 
 /** One AI-discovered scholarship candidate — a strict subset of the createable shape so a selected
@@ -19,7 +21,7 @@ export interface DiscoveredScholarship {
 }
 
 export interface ScholarshipDiscoverer {
-  discover(input: DiscoverInput): Promise<DiscoveredScholarship[]>;
+  discover(input: DiscoverInput, majors?: string[]): Promise<DiscoveredScholarship[]>;
 }
 
 const isType = (v: unknown): v is DiscoveredScholarship['type'] =>
@@ -27,13 +29,17 @@ const isType = (v: unknown): v is DiscoveredScholarship['type'] =>
 
 const isoDate = /^\d{4}-\d{2}-\d{2}$/;
 
-/** Build the web-search discovery prompt from the search context. Deterministic + side-effect free. */
-export function buildDiscoverPrompt(input: DiscoverInput): string {
+/** Build the web-search discovery prompt from the search context. Deterministic + side-effect free.
+ *  With `majors` set, the search targets that academic focus and folds in any major-pack guidance;
+ *  with none it stays the neutral "intended college degree" prompt. */
+export function buildDiscoverPrompt(input: DiscoverInput, majors: string[] = []): string {
   const count = input.count ?? 8;
   const lines: string[] = [
-    'You are helping a student find scholarships to fund their intended college degree.',
+    `You are helping a student find scholarships to fund ${majorPhrase(majors, 'their intended college degree')}.`,
     `Use web search to find ${count} real, currently-open scholarships. Do not invent any.`,
   ];
+  const guidance = packFocusBriefs(majors);
+  if (guidance.length) lines.push(`Major-specific guidance: ${guidance.join(' ')}`);
   if (input.query) lines.push(`Focus: ${input.query}.`);
   if (input.type) lines.push(`Prefer type: ${input.type}.`);
   if (input.state) lines.push(`Include ${input.state} state-specific scholarships.`);

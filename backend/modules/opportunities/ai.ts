@@ -4,6 +4,8 @@
 // endpoint never throws. NEVER fabricates — the prompt insists on real, currently-listed programs.
 
 import { converseWithSearch, type BedrockInvoker, type WebSearcher } from '../../shared/ai/index.js';
+import { majorPhrase } from '../../shared/ai/major.js';
+import { packFocusBriefs } from '../../shared/packs/index.js';
 import type { OpportunityCandidate, OpportunityType } from '../../shared/data/index.js';
 
 export interface DiscoverInput {
@@ -77,7 +79,7 @@ function toCandidate(raw: unknown): OpportunityCandidate | null {
   };
 }
 
-function buildDiscoverPrompt(input: DiscoverInput): string {
+export function buildDiscoverPrompt(input: DiscoverInput, majors: string[] = []): string {
   const limit = input.limit ?? 8;
   const kind =
     input.type === 'hospital-volunteer'
@@ -91,9 +93,12 @@ function buildDiscoverPrompt(input: DiscoverInput): string {
             : 'volunteer, shadowing, CNA-training, and summer healthcare programs';
   const where = input.location ? `near ${input.location}` : 'in the United States';
   const extra = input.query ? ` Also match: "${input.query}".` : '';
+  const career = majorPhrase(majors, 'nursing (BSN)');
+  const guidance = packFocusBriefs(majors);
+  const focus = guidance.length ? `\nMajor-specific guidance: ${guidance.join(' ')}` : '';
   return [
     `Find up to ${limit} real ${kind} ${where} suitable for a high-school student preparing for a`,
-    `nursing (BSN) career.${extra}`,
+    `${career} career.${extra}${focus}`,
     'Use web_search to verify they currently exist and accept high-schoolers (a few targeted searches',
     'are enough), then STOP searching and output the result. NEVER invent a program or contact —',
     'omit a field if you cannot verify it; partial data is fine.',
@@ -118,11 +123,12 @@ async function invokeText(prompt: string, options: AiOptions): Promise<string> {
   return text;
 }
 
-/** Bedrock-backed discoverer. Returns [] on any failure so the endpoint never throws. */
-export function makeBedrockDiscoverer(options: AiOptions = {}): Discoverer {
+/** Bedrock-backed discoverer. Returns [] on any failure so the endpoint never throws. With `majors`
+ *  set, the search targets that academic focus (+ pack guidance); with none it stays nursing-default. */
+export function makeBedrockDiscoverer(options: AiOptions = {}, majors: string[] = []): Discoverer {
   return async (input) => {
     try {
-      const text = await invokeText(buildDiscoverPrompt(input), options);
+      const text = await invokeText(buildDiscoverPrompt(input, majors), options);
       const json = extractJson(text);
       if (!Array.isArray(json)) return [];
       const limit = input.limit ?? 8;

@@ -47,9 +47,9 @@ async function invokeText(prompt: string, options: AiOptions): Promise<string> {
  *  Returns [] on any failure so the endpoint never throws. */
 export function makeBedrockDiscoverer(options: AiOptions = {}): ScholarshipDiscoverer {
   return {
-    async discover(input: DiscoverInput): Promise<DiscoveredScholarship[]> {
+    async discover(input: DiscoverInput, majors: string[] = []): Promise<DiscoveredScholarship[]> {
       try {
-        const text = await invokeText(buildDiscoverPrompt(input), options);
+        const text = await invokeText(buildDiscoverPrompt(input, majors), options);
         return parseDiscoverResults(text, input.count ?? 20);
       } catch {
         return [];

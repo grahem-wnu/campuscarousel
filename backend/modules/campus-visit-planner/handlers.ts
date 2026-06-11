@@ -102,10 +102,11 @@ export function makeHandlers(deps: HandlerDeps): VisitHandlers {
       const college = await requireCollege(data, id);
       const visit = await data.visits.get(id, vid);
       if (!visit) throw Errors.notFound('Visit not found');
-      const result = await prep({ college, visit });
+      const majors = await activeMajors(data);
+      const result = await prep({ college, visit, majors });
       // Lead with the student's major-pack visit questions (e.g. nursing → NCLEX pass rate, clinical
       // sites), then the standard checklist; dedupe so the AI/curated overlap doesn't repeat.
-      const packQuestions = packsForMajors(await activeMajors(data)).flatMap((p) => p.visitQuestions ?? []);
+      const packQuestions = packsForMajors(majors).flatMap((p) => p.visitQuestions ?? []);
       const questions = [...packQuestions, ...result.questions].filter((qn, i, arr) => arr.indexOf(qn) === i);
       return { status: 200, body: { ...result, questions } };
     },

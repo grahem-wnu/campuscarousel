@@ -11,6 +11,18 @@ describe('buildDiscoverPrompt', () => {
     expect(p).toContain('Ohio state-specific');
     expect(p).toContain('Prefer type: major-specific.');
   });
+
+  it('is major-aware: names the major and folds in pack guidance', () => {
+    const p = buildDiscoverPrompt({ count: 5 }, ['Nursing']);
+    expect(p).toContain('Nursing');
+    expect(p).toContain('Major-specific guidance:');
+  });
+
+  it('stays neutral with no majors', () => {
+    const p = buildDiscoverPrompt({ count: 5 });
+    expect(p).toContain('their intended college degree');
+    expect(p).not.toContain('Major-specific guidance:');
+  });
 });
 
 describe('parseDiscoverResults', () => {

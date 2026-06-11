@@ -172,6 +172,7 @@ export function makeHandlers(deps: InterviewDeps): InterviewHandlers {
         school: body.school,
         count: body.count ?? DEFAULT_QUESTION_COUNT,
         grounding,
+        majors: await activeMajors(data),
       });
       const session = await data.interviews.create({
         type: 'mock-practice',

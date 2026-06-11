@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildAnalyzePrompt,
+  buildPlanPrompt,
   curatedAnalyzer,
   curatedPlanner,
   extractJson,
@@ -46,6 +48,29 @@ describe('extractJson', () => {
     expect(extractJson('```json\n{"a":1}\n```')).toEqual({ a: 1 });
     expect(extractJson('[1,2]')).toEqual([1, 2]);
     expect(() => extractJson('no json')).toThrow();
+  });
+});
+
+describe('major-aware prompts', () => {
+  it('study-plan names the exam + major and folds in pack guidance', () => {
+    const p = buildPlanPrompt(planInput({ examName: 'TEAS', majors: ['Nursing'] }));
+    expect(p).toContain('TEAS');
+    expect(p).toContain('Nursing');
+    expect(p).toContain('Major-specific guidance:');
+  });
+
+  it('analyze names the exam + major and folds in pack guidance', () => {
+    const p = buildAnalyzePrompt(ctx({ examName: 'TEAS', majors: ['Nursing'] }));
+    expect(p).toContain('TEAS');
+    expect(p).toContain('Nursing');
+    expect(p).toContain('Major-specific guidance:');
+  });
+
+  it('stays neutral with no exam/major', () => {
+    const p = buildPlanPrompt(planInput());
+    expect(p).toContain('the entrance/standardized exam');
+    expect(p).toContain('their intended college program');
+    expect(p).not.toContain('Major-specific guidance:');
   });
 });
 

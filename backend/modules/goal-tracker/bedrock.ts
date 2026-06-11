@@ -52,6 +52,8 @@ const realSuggester = makeSuggester(realInvoker);
  * it tracks the environment rather than import-time state.
  */
 export const bedrockSuggester: GoalSuggester = {
-  suggest: (input) =>
-    process.env.BEDROCK_MODEL_ID ? realSuggester.suggest(input) : unavailableSuggester.suggest(input),
+  suggest: (input, majors) =>
+    process.env.BEDROCK_MODEL_ID
+      ? realSuggester.suggest(input, majors)
+      : unavailableSuggester.suggest(input, majors),
 };

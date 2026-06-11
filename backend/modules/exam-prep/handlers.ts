@@ -147,16 +147,19 @@ export function makeHandlers(deps: ExamDeps): ExamHandlers {
       const body = validateBody(studyPlanSchema, ctx);
       const data = getData();
       const records = await data.exams.list();
-      const packTarget = packEntranceExam(await activeMajors(data))?.competitiveScore;
+      const majors = await activeMajors(data);
+      const exam = packEntranceExam(majors);
       const weakLabels = weakSections(records).map((s) => SECTION_LABEL[s]);
       const plan = await planner({
         weeksUntilExam: weeksUntil(body.examDate, now()),
         examDate: body.examDate,
-        targetScore: body.targetScore ?? packTarget ?? DEFAULT_TARGET,
+        targetScore: body.targetScore ?? exam?.competitiveScore ?? DEFAULT_TARGET,
         targetSchools: body.targetSchools,
         hoursPerWeek: body.hoursPerWeek ?? DEFAULT_HOURS_PER_WEEK,
         weakSections: body.focusAreas ?? weakLabels,
         latestOverall: latest(records)?.overallScore ?? null,
+        examName: exam?.examName,
+        majors,
       });
       return { status: 200, body: { plan } };
     },
@@ -166,11 +169,14 @@ export function makeHandlers(deps: ExamDeps): ExamHandlers {
       const body = validateBody(analyzeSchema, ctx);
       const data = getData();
       const records = await data.exams.list();
-      const packTarget = packEntranceExam(await activeMajors(data))?.competitiveScore;
+      const majors = await activeMajors(data);
+      const exam = packEntranceExam(majors);
       const analysis = await analyzer({
         summary: summarize(records),
-        targetScore: body.targetScore ?? packTarget ?? DEFAULT_TARGET,
+        targetScore: body.targetScore ?? exam?.competitiveScore ?? DEFAULT_TARGET,
         examDate: body.examDate,
+        examName: exam?.examName,
+        majors,
       });
       return { status: 200, body: { analysis } };
     },

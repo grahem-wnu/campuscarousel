@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { BedrockInvoker } from '../../shared/ai/index.js';
-import { makeBedrockDiscoverer } from './ai.js';
+import { buildDiscoverPrompt, makeBedrockDiscoverer } from './ai.js';
 
 const MODEL = 'test-model';
 
@@ -38,5 +38,19 @@ describe('makeBedrockDiscoverer', () => {
   it('returns [] on invoker error (endpoint never throws)', async () => {
     const discover = makeBedrockDiscoverer({ modelId: MODEL, invoker: throwing });
     expect(await discover({})).toEqual([]);
+  });
+});
+
+describe('buildDiscoverPrompt major-awareness', () => {
+  it('names the major and folds in pack guidance for a nursing student', () => {
+    const p = buildDiscoverPrompt({}, ['Nursing']);
+    expect(p).toContain('Nursing');
+    expect(p).toContain('Major-specific guidance:');
+  });
+
+  it('keeps the nursing-default career phrase with no majors', () => {
+    const p = buildDiscoverPrompt({});
+    expect(p).toContain('nursing (BSN) career');
+    expect(p).not.toContain('Major-specific guidance:');
   });
 });

@@ -48,6 +48,15 @@ export function makeHandlers(getData: () => Data, getBriefer: () => Briefer): Di
     if (!(await getData().colleges.get(id))) throw Errors.notFound('College not found');
   }
 
+  /** Read the active student's intended major(s) so the recommender brief reflects their focus. */
+  async function activeMajors(): Promise<string[]> {
+    try {
+      return (await getData().studentProfile.get())?.intendedMajors ?? [];
+    } catch {
+      return [];
+    }
+  }
+
   return {
     // GET /colleges/:id/touchpoints — chronological interaction log for one college.
     listTouchpoints: async (ctx) => {
@@ -161,7 +170,7 @@ export function makeHandlers(getData: () => Data, getBriefer: () => Briefer): Di
       // AI grounding path → use aiVisibleSet (the project's AI-path visibility helper): keira's own
       // private activities are available to her brief; a parent/admin never sees private content.
       const activities = aiVisibleSet(activitiesRaw, ctx.requester);
-      const brief = await getBriefer().brief(contact, { activities, goals }, input.focus);
+      const brief = await getBriefer().brief(contact, { activities, goals }, input.focus, await activeMajors());
       return { status: 200, body: { contactId: id, brief } };
     },
   };

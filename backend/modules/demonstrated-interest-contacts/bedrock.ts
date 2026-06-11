@@ -36,6 +36,8 @@ const realBriefer = makeBriefer(makeBedrockInvoker(() => (cachedClient ??= new B
 
 /** Production briefer: real Bedrock when BEDROCK_MODEL_ID is set, else the clean 503 placeholder. */
 export const bedrockBriefer: Briefer = {
-  brief: (contact, sources, focus) =>
-    process.env.BEDROCK_MODEL_ID ? realBriefer.brief(contact, sources, focus) : unavailableBriefer.brief(contact, sources, focus),
+  brief: (contact, sources, focus, majors) =>
+    process.env.BEDROCK_MODEL_ID
+      ? realBriefer.brief(contact, sources, focus, majors)
+      : unavailableBriefer.brief(contact, sources, focus, majors),
 };

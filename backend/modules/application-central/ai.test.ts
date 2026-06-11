@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildBriefPrompt,
+  buildFindPrompt,
   curatedEssayReviewer,
   curatedExperienceFinder,
   extractJson,
@@ -29,6 +31,26 @@ describe('extractJson / wordCountOf', () => {
   it('extracts JSON and counts words', () => {
     expect(extractJson('```json\n{"a":1}\n```')).toEqual({ a: 1 });
     expect(wordCountOf('  one  two three ')).toBe(3);
+  });
+});
+
+describe('major-aware prompts', () => {
+  it('essay-brainstorm names the major and folds in pack guidance', () => {
+    const p = buildFindPrompt({ prompt: 'Why this field?', pool, majors: ['Nursing'] });
+    expect(p).toContain('Nursing');
+    expect(p).toContain('Major-specific guidance:');
+  });
+
+  it('recommender-brief names the major and folds in pack guidance', () => {
+    const p = buildBriefPrompt({ slot: 'stem-teacher', pool, majors: ['Nursing'] });
+    expect(p).toContain('Nursing');
+    expect(p).toContain('Major-specific guidance:');
+  });
+
+  it('stays neutral with no majors', () => {
+    const p = buildFindPrompt({ prompt: 'p', pool });
+    expect(p).toContain('their intended college program');
+    expect(p).not.toContain('Major-specific guidance:');
   });
 });
 

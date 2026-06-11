@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { curatedAnalyzer, extractJson, makeBedrockAnalyzer, type BedrockInvoker } from './ai.js';
+import { buildPrompt, curatedAnalyzer, extractJson, makeBedrockAnalyzer, type BedrockInvoker } from './ai.js';
 import { buildEvents, upcoming, type EventSources } from './events.js';
 import type { College, Goal, Scholarship } from '../../shared/data/index.js';
 
@@ -19,6 +19,20 @@ function ctx(sources: Partial<EventSources>) {
 describe('extractJson', () => {
   it('extracts JSON tolerating fences', () => {
     expect(extractJson('```json\n{"a":1}\n```')).toEqual({ a: 1 });
+  });
+});
+
+describe('buildPrompt major-awareness', () => {
+  it('names the major and folds in pack guidance', () => {
+    const p = buildPrompt([], TODAY, ['Nursing']);
+    expect(p).toContain('Nursing');
+    expect(p).toContain('Major-specific guidance:');
+  });
+
+  it('stays neutral with no majors', () => {
+    const p = buildPrompt([], TODAY);
+    expect(p).toContain('their intended college program');
+    expect(p).not.toContain('Major-specific guidance:');
   });
 });
 

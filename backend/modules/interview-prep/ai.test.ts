@@ -63,6 +63,20 @@ describe('makeBedrockQuestionGenerator', () => {
     expect(qs[0]).toEqual({ question: 'Tell me about a team conflict.', category: 'behavioral' });
     expect((await makeBedrockQuestionGenerator({ modelId: MODEL, client: throwing })({ count: 3, grounding })).length).toBeGreaterThan(0); // curated
   });
+
+  it('builds a major-aware mock-question prompt naming the major + pack guidance', { timeout: 30000 }, async () => {
+    let sentPrompt = '';
+    const capturing: BedrockInvoker = {
+      send: async (command: unknown) => {
+        const body = JSON.parse(new TextDecoder().decode((command as { input: { body: Uint8Array } }).input.body));
+        sentPrompt = body.messages[0].content as string;
+        return { body: new TextEncoder().encode(JSON.stringify({ content: [{ text: '[{"question":"Q","category":"general"}]' }] })) };
+      },
+    };
+    await makeBedrockQuestionGenerator({ modelId: MODEL, client: capturing })({ count: 2, grounding, majors: ['Nursing'] });
+    expect(sentPrompt).toContain('Nursing');
+    expect(sentPrompt).toContain('Major-specific guidance:');
+  });
 });
 
 describe('makeBedrockFeedbackGenerator', () => {
