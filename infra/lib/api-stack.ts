@@ -149,7 +149,9 @@ export class ApiStack extends Stack {
           CorsHttpMethod.DELETE,
           CorsHttpMethod.OPTIONS,
         ],
-        allowHeaders: ["authorization", "content-type"],
+        // `x-student-id` carries the active child (multi-student); the browser sends a CORS preflight
+        // for it, so it MUST be allow-listed or every per-child request fails with "Failed to fetch".
+        allowHeaders: ["authorization", "content-type", "x-student-id"],
         maxAge: Duration.hours(1),
       },
     });
