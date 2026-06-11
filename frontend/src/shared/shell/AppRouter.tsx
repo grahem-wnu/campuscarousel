@@ -45,13 +45,13 @@ export function AppRouter() {
   const { user } = useAuth();
 
   const { nav, routes } = useMemo(() => {
-    const assembled = assembleNav(loadNavEntries(), user?.role);
+    const assembled = assembleNav(loadNavEntries(), user?.role, user?.platformAdmin);
     const built = assembled.routes.map((entry) => ({
       path: entry.route,
       Component: lazy(entry.element) as ComponentType,
     }));
     return { nav: assembled, routes: built };
-  }, [user?.role]);
+  }, [user?.role, user?.platformAdmin]);
 
   const homeTarget = nav.primary[0]?.route;
 

@@ -37,6 +37,8 @@ export interface NavEntry {
   roles?: Role[];
   /** Hide from the menus but still register the route (e.g. detail pages). */
   hidden?: boolean;
+  /** Platform super-admin only (Grahem). Hidden from the menu AND the router for everyone else. */
+  platformAdmin?: boolean;
 }
 
 /** Result of assembling all module manifests. */
