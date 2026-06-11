@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Spinner } from "../ui/Spinner";
 import { useAuth } from "./AuthContext";
+import { JoinPage } from "./JoinPage";
 import { LoginPage } from "./LoginPage";
 
 /**
@@ -10,6 +11,11 @@ import { LoginPage } from "./LoginPage";
  */
 export function AuthGate({ children }: { children: ReactNode }) {
   const { status } = useAuth();
+
+  // PUBLIC self-signup: /join must work WITHOUT auth (an invited family has no account yet).
+  if (typeof window !== "undefined" && window.location.pathname.startsWith("/join")) {
+    return <JoinPage />;
+  }
 
   if (status === "loading") {
     return (

@@ -95,6 +95,29 @@ export class ApiStack extends Stack {
       }),
     );
 
+    // Public redeem/self-signup Lambda (SaaS sub-project 2) — the ONE unauthenticated endpoint. A new
+    // parent has no token yet, so this is NOT behind the JWT authorizer. It provisions a family tenant +
+    // the parent's Cognito account from a valid invite code. Least-privilege: table CRUD (global invite/
+    // tenant registries) + Cognito AdminCreateUser/AdminSetUserPassword on THIS pool only.
+    const redeem = new LambdaFunction(this, "RedeemFn", {
+      functionName: `${config.namePrefix}-auth-redeem`,
+      runtime: Runtime.NODEJS_20_X,
+      handler: "index.handler",
+      code: Code.fromAsset(join(__dirname, "../../backend/dist/redeem")),
+      timeout: Duration.seconds(30),
+      memorySize: 256,
+      logRetention: RetentionDays.ONE_MONTH,
+      environment: { TABLE_NAME: table.tableName, USER_POOL_ID: userPool.userPoolId },
+    });
+    table.grantReadWriteData(redeem);
+    redeem.addToRolePolicy(
+      new PolicyStatement({
+        sid: "CognitoProvisionFamily",
+        actions: ["cognito-idp:AdminCreateUser", "cognito-idp:AdminSetUserPassword"],
+        resources: [userPool.userPoolArn],
+      }),
+    );
+
     // Cognito JWT authorizer — validates the token against this pool + SPA client.
     const authorizer = new HttpUserPoolAuthorizer("JwtAuthorizer", userPool, {
       userPoolClients: [userPoolClient],
@@ -139,6 +162,13 @@ export class ApiStack extends Stack {
       ],
       integration,
       authorizer,
+    });
+
+    // PUBLIC route — invite redemption / self-signup. NO authorizer (the parent has no token yet).
+    api.addRoutes({
+      path: "/auth/redeem",
+      methods: [HttpMethod.POST],
+      integration: new HttpLambdaIntegration("RedeemIntegration", redeem),
     });
 
     this.httpApiName = `${config.namePrefix}-api`;
