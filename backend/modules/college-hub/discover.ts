@@ -8,7 +8,7 @@
 // hydration.manifest.ts). That keeps one queue/worker and needs no new registry plumbing.
 
 import type { Data } from '../../shared/data/index.js';
-import { currentTenantId } from '../../shared/tenant/index.js';
+import { currentStudentId, currentTenantId } from '../../shared/tenant/index.js';
 import type { DiscoverInput } from './schema.js';
 import { makeBedrockDiscoverer, type Discoverer } from './ai.js';
 import { HYDRATION_TYPE } from './hydration.js';
@@ -18,6 +18,7 @@ export interface CollegeDiscoverMessage {
   type: typeof HYDRATION_TYPE;
   jobId: string;
   tenantId: string;
+  studentId: string;
 }
 
 /** Run one discovery job: fetch it, run the (web-grounded) discoverer, write the candidates back.
@@ -90,7 +91,7 @@ export function makeSqsDiscoverEnqueuer(
       await client.send(
         new SendMessageCommand({
           QueueUrl: queueUrl,
-          MessageBody: JSON.stringify({ type: HYDRATION_TYPE, jobId, tenantId: currentTenantId() } as CollegeDiscoverMessage),
+          MessageBody: JSON.stringify({ type: HYDRATION_TYPE, jobId, tenantId: currentTenantId(), studentId: currentStudentId() } as CollegeDiscoverMessage),
         }),
       );
     } catch {

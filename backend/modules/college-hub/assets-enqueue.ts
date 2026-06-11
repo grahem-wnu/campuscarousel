@@ -5,7 +5,7 @@
 // layout — rather than blocking the request the way hydration's inline fallback does.
 
 import type { Data } from '../../shared/data/index.js';
-import { currentTenantId } from '../../shared/tenant/index.js';
+import { currentStudentId, currentTenantId } from '../../shared/tenant/index.js';
 import type { SqsSender } from './enqueue.js';
 import { ASSETS_TYPE } from './assets.js';
 
@@ -30,7 +30,7 @@ export function makeAssetsEnqueuer(_getData: () => Data, options: AssetsEnqueuer
       await client.send(
         new SendMessageCommand({
           QueueUrl: queueUrl,
-          MessageBody: JSON.stringify({ type: ASSETS_TYPE, collegeId, tenantId: currentTenantId() }),
+          MessageBody: JSON.stringify({ type: ASSETS_TYPE, collegeId, tenantId: currentTenantId(), studentId: currentStudentId() }),
         }),
       );
     } catch {

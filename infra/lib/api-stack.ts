@@ -66,6 +66,12 @@ export class ApiStack extends Stack {
         // SaaS transition: requests with no tenant claim fall back to this tenant (the legacy single
         // family, migrated to T#primary#). Existing users keep working before their tokens carry a tenant.
         DEFAULT_TENANT_ID: "primary",
+        // Multi-student transition: requests with no X-Student-Id header fall back to this child (the
+        // legacy single child, migrated to T#primary#S#keira#). The migration pins this same id. Once
+        // the frontend ships the switcher it always sends the header; this just covers the cutover gap.
+        // NOTE: like DEFAULT_TENANT_ID, this is a STAGING/migration aid — prod must be migrated to
+        // T#primary#S#keira# before a prod deploy or header-less reads resolve to an empty partition.
+        DEFAULT_STUDENT_ID: "keira",
         HYDRATION_QUEUE_URL: hydrationQueue.queueUrl,
         ASSETS_QUEUE_URL: assetsQueue.queueUrl,
         USER_POOL_ID: userPool.userPoolId,

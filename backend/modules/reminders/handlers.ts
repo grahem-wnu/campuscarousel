@@ -7,7 +7,7 @@ import { Errors, validate, validateBody, type Handler } from '../../shared/api/i
 import type { Data, ReminderRecipient } from '../../shared/data/index.js';
 import { sesSenderFromEnv, type EmailSender } from '../../shared/email/index.js';
 import { digestForRecipient } from './digest.js';
-import { gatherForDigest } from './run.js';
+import { gatherForFamily } from './run.js';
 import { sendTestBodySchema, settingsBodySchema } from './schema.js';
 import { DEFAULT_SETTINGS, effectiveSettings } from './settings.js';
 
@@ -72,7 +72,7 @@ export function makeHandlers(deps: ReminderDeps): ReminderHandlers {
       if (!from) throw Errors.conflict('Reminder sender email is not configured on the server.');
       const data = getData();
       const s = effectiveSettings(await data.reminderSettings.get());
-      const g = await gatherForDigest(data);
+      const g = await gatherForFamily(data);
       const todayIso = today();
 
       const targets: ReminderRecipient[] = body.to

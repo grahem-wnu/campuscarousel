@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { InMemoryTableClient, makeData, type Data } from '../../shared/data/index.js';
-import { runWithTenant } from '../../shared/tenant/index.js';
+import { runWithStudent, runWithTenant } from '../../shared/tenant/index.js';
 import { makeSqsEnqueuer, type SqsSender } from './enqueue.js';
 
 let data: Data;
@@ -19,12 +19,13 @@ describe('makeSqsEnqueuer', () => {
       },
     };
     const enqueue = makeSqsEnqueuer(getData, { queueUrl: 'https://sqs.test/q', client });
-    await runWithTenant('fam1', () => enqueue('college-123'));
+    await runWithTenant('fam1', () => runWithStudent('s1', () => enqueue('college-123')));
     expect(captured?.input?.QueueUrl).toBe('https://sqs.test/q');
     expect(JSON.parse(captured?.input?.MessageBody ?? '{}')).toEqual({
       type: 'college-hydrate',
       collegeId: 'college-123',
       tenantId: 'fam1',
+      studentId: 's1',
     });
   });
 

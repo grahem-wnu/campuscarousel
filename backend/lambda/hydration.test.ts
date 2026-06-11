@@ -52,19 +52,30 @@ describe('makeHandler', () => {
     const registry = { 'college-hydrate': async (p: unknown) => void handled.push(p) };
     const handler = makeHandler(registry);
 
-    const res = await handler({ Records: [record({ type: 'college-hydrate', collegeId: 'c1', tenantId: 'fam1' })] });
+    const res = await handler({
+      Records: [record({ type: 'college-hydrate', collegeId: 'c1', tenantId: 'fam1', studentId: 's1' })],
+    });
 
-    expect(handled).toEqual([{ type: 'college-hydrate', collegeId: 'c1', tenantId: 'fam1' }]);
+    expect(handled).toEqual([{ type: 'college-hydrate', collegeId: 'c1', tenantId: 'fam1', studentId: 's1' }]);
     expect(res.batchItemFailures).toEqual([]);
   });
 
   it('refuses a message with no tenantId (fail closed) — reports a batch item failure', async () => {
     const handled: unknown[] = [];
     const res = await makeHandler({ 'college-hydrate': async (p: unknown) => void handled.push(p) })({
-      Records: [record({ type: 'college-hydrate', collegeId: 'c1' }, 'noTen')],
+      Records: [record({ type: 'college-hydrate', collegeId: 'c1', studentId: 's1' }, 'noTen')],
     });
     expect(handled).toEqual([]); // handler never ran un-scoped
     expect(res.batchItemFailures).toEqual([{ itemIdentifier: 'noTen' }]);
+  });
+
+  it('refuses a per-child message with no studentId (fail closed) — reports a batch item failure', async () => {
+    const handled: unknown[] = [];
+    const res = await makeHandler({ 'college-hydrate': async (p: unknown) => void handled.push(p) })({
+      Records: [record({ type: 'college-hydrate', collegeId: 'c1', tenantId: 'fam1' }, 'noStu')],
+    });
+    expect(handled).toEqual([]); // handler never ran without a student
+    expect(res.batchItemFailures).toEqual([{ itemIdentifier: 'noStu' }]);
   });
 
   it('drains an unknown type without failing the batch', async () => {
@@ -79,7 +90,7 @@ describe('makeHandler', () => {
         throw new Error('hydration failed');
       },
     });
-    const res = await handler({ Records: [record({ type: 'boom', tenantId: 'fam1' }, 'mX')] });
+    const res = await handler({ Records: [record({ type: 'boom', tenantId: 'fam1', studentId: 's1' }, 'mX')] });
     expect(res.batchItemFailures).toEqual([{ itemIdentifier: 'mX' }]);
   });
 

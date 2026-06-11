@@ -6,7 +6,7 @@
 // Unknown types drain (logged); genuine failures report so they retry and ultimately hit the DLQ.
 // CDK ships this as `index.handler` via `Code.fromAsset(backend/dist/hydration)`.
 
-import { runWithTenant } from '../shared/tenant/index.js';
+import { runWithStudent, runWithTenant } from '../shared/tenant/index.js';
 import { hydrationRegistrations } from './generated/hydration-manifests.js';
 
 /** Minimal structural SQS event/response shapes (typed locally to avoid an aws-lambda types dep). */
@@ -68,7 +68,7 @@ export function makeHandler(registry: Record<string, HydrationHandler>) {
 
     for (const record of event.Records ?? []) {
       try {
-        const message = JSON.parse(record.body) as { type?: string; tenantId?: string };
+        const message = JSON.parse(record.body) as { type?: string; tenantId?: string; studentId?: string };
         const type = typeof message?.type === 'string' ? message.type : undefined;
         const dispatch = type ? registry[type] : undefined;
         if (!dispatch) {
@@ -86,7 +86,16 @@ export function makeHandler(registry: Record<string, HydrationHandler>) {
           batchItemFailures.push({ itemIdentifier: record.messageId });
           continue;
         }
-        await runWithTenant(tenantId, () => dispatch(message));
+        // Hydration always operates on a specific child's entity (a college / scholarship), so the job
+        // must carry the studentId too. Refuse a per-child job with none rather than run it un-scoped
+        // (the per-child data layer would fail closed anyway). Nested inside the tenant context.
+        const studentId = typeof message.studentId === 'string' && message.studentId ? message.studentId : undefined;
+        if (!studentId) {
+          console.error('hydration: message has no studentId — refusing to run un-scoped', record.messageId);
+          batchItemFailures.push({ itemIdentifier: record.messageId });
+          continue;
+        }
+        await runWithTenant(tenantId, () => runWithStudent(studentId, () => dispatch(message)));
       } catch (err) {
         console.error('hydration: record failed', record.messageId, err);
         batchItemFailures.push({ itemIdentifier: record.messageId });

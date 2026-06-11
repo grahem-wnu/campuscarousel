@@ -4,10 +4,12 @@
 
 import type { Data } from '../../shared/data/index.js';
 import type { EmailSender } from '../../shared/email/index.js';
+import { runWithStudent } from '../../shared/tenant/index.js';
 import { digestForRecipient, type GatheredData } from './digest.js';
 import { shouldSendNow } from './settings.js';
 
-/** Fetch everything the digest needs in one pass. Activities stay RAW — privacy is applied per recipient. */
+/** Fetch everything the digest needs for the CURRENT student in one pass. Activities stay RAW —
+ *  privacy is applied per recipient. */
 export async function gatherForDigest(data: Data): Promise<GatheredData> {
   const [activities, goals, colleges, teas, scholarships, certifications, finaid] = await Promise.all([
     data.activities.list(),
@@ -21,6 +23,38 @@ export async function gatherForDigest(data: Data): Promise<GatheredData> {
   // Visits are sub-entities under COLLEGE#<id>; list per college and flatten (mirrors master-timeline).
   const visitLists = await Promise.all(colleges.map((c) => data.visits.list(c.collegeId)));
   return { activities, goals, colleges, teas, visits: visitLists.flat(), scholarships, certifications, finaid };
+}
+
+const EMPTY: GatheredData = {
+  activities: [], goals: [], colleges: [], teas: [], visits: [], scholarships: [], certifications: [], finaid: [],
+};
+
+const mergeGathered = (a: GatheredData, b: GatheredData): GatheredData => ({
+  activities: [...a.activities, ...b.activities],
+  goals: [...a.goals, ...b.goals],
+  colleges: [...a.colleges, ...b.colleges],
+  teas: [...a.teas, ...b.teas],
+  visits: [...a.visits, ...b.visits],
+  scholarships: [...a.scholarships, ...b.scholarships],
+  certifications: [...a.certifications, ...b.certifications],
+  finaid: [...a.finaid, ...b.finaid],
+});
+
+/**
+ * The family digest spans ALL the family's children (multi-student): gather each child's per-child data
+ * inside that child's context, then merge into one set so a single email covers the whole family. With
+ * no roster yet (e.g. tests, or a family with legacy un-scoped data) it falls back to a single gather in
+ * the current context. The caller must already be inside the tenant context (the digest Lambda sets it).
+ */
+export async function gatherForFamily(data: Data): Promise<GatheredData> {
+  const students = await data.students.list();
+  if (students.length === 0) return gatherForDigest(data);
+  let merged = EMPTY;
+  for (const s of students) {
+    const perChild = await runWithStudent(s.studentId, () => gatherForDigest(data));
+    merged = mergeGathered(merged, perChild);
+  }
+  return merged;
 }
 
 export interface DigestRunDeps {
@@ -48,7 +82,7 @@ export async function runScheduledDigest(deps: DigestRunDeps): Promise<DigestRun
   if (!shouldSendNow(settings, now)) return { sent: 0, recipients: [], skipped: 'not-scheduled' };
 
   const todayIso = now.toISOString().slice(0, 10);
-  const g = await gatherForDigest(deps.data);
+  const g = await gatherForFamily(deps.data);
 
   // "Never repeat": exclude anything already emailed, and remember what we send this round.
   const notified = new Set(settings.notifiedEventIds ?? []);

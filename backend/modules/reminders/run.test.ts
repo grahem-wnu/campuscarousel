@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { InMemoryTableClient, makeData, type Data } from '../../shared/data/index.js';
+import { studentScoped, tenantScoped } from '../../shared/data/tenant-client.js';
+import { runWithStudent, runWithTenant } from '../../shared/tenant/index.js';
 import type { EmailMessage, EmailSender } from '../../shared/email/index.js';
 import { runScheduledDigest } from './run.js';
 
@@ -89,5 +91,44 @@ describe('runScheduledDigest', () => {
     const second = await runScheduledDigest(deps('2026-06-22T13:00:00Z')); // next Monday
     expect(second.sent).toBe(0);
     expect(sent).toHaveLength(0);
+  });
+});
+
+// Multi-student: with the PRODUCTION client composition, one digest spans every child in the family.
+describe('runScheduledDigest spans all children (per-child scoping)', () => {
+  it('includes due items from each child in a single family digest', async () => {
+    const raw = new InMemoryTableClient();
+    const family = tenantScoped(raw);
+    const data = makeData(studentScoped(family), raw, family);
+    const sent: EmailMessage[] = [];
+    const sender: EmailSender = { send: async (m) => void sent.push(m) };
+
+    await runWithTenant('fam', async () => {
+      const keira = await data.students.create({ name: 'Keira', status: 'active' });
+      const milo = await data.students.create({ name: 'Milo', status: 'active' });
+      await data.reminderSettings.put({
+        enabled: true,
+        cadence: 'weekly',
+        sendHourUTC: 13,
+        weeklyDayOfWeek: 1,
+        horizonDays: 30,
+        recipients: [{ label: 'Mom', email: 'mom@x.com', includePrivate: false }],
+      });
+      await runWithStudent(keira.studentId, () =>
+        data.activities.create({ date: '2026-06-20', category: 'volunteer', title: "Keira's shift", visibility: 'family' } as never),
+      );
+      await runWithStudent(milo.studentId, () =>
+        data.activities.create({ date: '2026-06-21', category: 'volunteer', title: "Milo's shift", visibility: 'family' } as never),
+      );
+    });
+
+    const r = await runWithTenant('fam', () =>
+      runScheduledDigest({ data, sender, from: 'noreply@x.com', appUrl: 'https://app', now: () => new Date('2026-06-15T13:00:00Z') }),
+    );
+    expect(r.sent).toBe(1);
+    // One email to Mom covering BOTH kids' due items.
+    const body = `${sent[0]?.text ?? ''} ${sent[0]?.html ?? ''}`;
+    expect(body).toContain("Keira's shift");
+    expect(body).toContain("Milo's shift");
   });
 });
