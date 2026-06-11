@@ -72,6 +72,9 @@ export class ApiStack extends Stack {
         // NOTE: like DEFAULT_TENANT_ID, this is a STAGING/migration aid — prod must be migrated to
         // T#primary#S#keira# before a prod deploy or header-less reads resolve to an empty partition.
         DEFAULT_STUDENT_ID: "keira",
+        // Public app URL for links in invite / family-member emails (sent from the routing Lambda).
+        // Derived from the env hostname so links point at campuscarousel.com, not the code default.
+        APP_URL: `https://${envHostname(config)}`,
         HYDRATION_QUEUE_URL: hydrationQueue.queueUrl,
         ASSETS_QUEUE_URL: assetsQueue.queueUrl,
         USER_POOL_ID: userPool.userPoolId,
