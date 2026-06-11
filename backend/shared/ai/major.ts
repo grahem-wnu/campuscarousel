@@ -1,7 +1,9 @@
 // Major-aware phrasing so AI prompts and copy aren't hardcoded to nursing/BSN. The product is open to
 // families pursuing any major; a student's intended major(s) come from their per-child profile
 // (`StudentProfile.intendedMajors`, which a kid may have more than one of). With none set we fall back
-// to neutral language. Keep these helpers tiny and pure — they're used across many prompt builders.
+// to neutral language. focusLine() also folds in any matching major-pack guidance.
+
+import { packFocusBriefs } from '../packs/index.js';
 
 /** Clean, non-empty major strings. */
 export function majorList(majors?: readonly string[]): string[] {
@@ -28,12 +30,21 @@ export function programNoun(majors?: readonly string[]): string {
   return majorList(majors).length > 1 ? 'programs' : 'program';
 }
 
-/** A system-prompt line stating the student's academic focus (handles 0, 1, or many majors). */
+/**
+ * A system-prompt line stating the student's academic focus (handles 0, 1, or many majors), with any
+ * matching major-pack guidance appended so the AI gives major-specific advice (e.g. nursing → TEAS,
+ * direct-admit BSN, clinical hours). No matching pack → just the generic focus line.
+ */
 export function focusLine(majors?: readonly string[]): string {
   const list = majorList(majors);
+  let line: string;
   if (list.length === 0) {
-    return 'The student is exploring college options and has not locked in a specific major yet.';
+    line = 'The student is exploring college options and has not locked in a specific major yet.';
+  } else if (list.length === 1) {
+    line = `The student is pursuing ${list[0]} programs.`;
+  } else {
+    line = `The student is weighing more than one major: ${majorPhrase(majors)}. Consider all of them.`;
   }
-  if (list.length === 1) return `The student is pursuing ${list[0]} programs.`;
-  return `The student is weighing more than one major: ${majorPhrase(majors)}. Consider all of them.`;
+  const briefs = packFocusBriefs(majors);
+  return briefs.length > 0 ? `${line} ${briefs.join(' ')}` : line;
 }

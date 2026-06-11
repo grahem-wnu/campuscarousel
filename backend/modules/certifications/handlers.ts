@@ -56,6 +56,15 @@ async function careerGoalFromProfile(data: Data, username: string): Promise<stri
   }
 }
 
+/** Read the active student's intended major(s) so a major pack can supply curated certs. */
+async function majorsFromProfile(data: Data): Promise<string[]> {
+  try {
+    return (await data.studentProfile.get())?.intendedMajors ?? [];
+  } catch {
+    return [];
+  }
+}
+
 export function makeHandlers(deps: CertDeps): CertHandlers {
   const { getData } = deps;
   const now = deps.now ?? (() => new Date());
@@ -128,7 +137,8 @@ export function makeHandlers(deps: CertDeps): CertHandlers {
         (await careerGoalFromProfile(data, ctx.requester.username)) ??
         DEFAULT_CAREER_GOAL;
       const existingNames = (await data.certifications.list()).map((c) => c.name);
-      const suggestions = await suggester({ careerGoal, existingNames });
+      const majors = await majorsFromProfile(data);
+      const suggestions = await suggester({ careerGoal, existingNames, majors });
       return { status: 200, body: { careerGoal, suggestions } };
     },
   };

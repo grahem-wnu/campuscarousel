@@ -24,9 +24,18 @@ describe('curatedSuggester', () => {
     expect(out).toEqual([]);
   });
 
-  it('returns empty regardless of the goal or held certs', async () => {
+  it('returns empty regardless of the goal or held certs (no major pack)', async () => {
     expect(await curatedSuggester({ careerGoal: 'biology major', existingNames: [] })).toEqual([]);
     expect(await curatedSuggester({ careerGoal: 'engineering', existingNames: ['First Aid'] })).toEqual([]);
+  });
+
+  it('surfaces a major pack baseline: a nursing major yields CNA/BLS, minus what is held', async () => {
+    const out = await curatedSuggester({ careerGoal: 'nurse', existingNames: [], majors: ['Nursing'] });
+    expect(names(out).some((n) => /BLS/.test(n))).toBe(true);
+    expect(names(out).some((n) => /CNA|Certified Nursing Assistant/.test(n))).toBe(true);
+    // held certs are filtered out
+    const held = await curatedSuggester({ careerGoal: 'nurse', existingNames: ['BLS'], majors: ['Nursing'] });
+    expect(names(held).some((n) => /BLS/.test(n))).toBe(false);
   });
 });
 
