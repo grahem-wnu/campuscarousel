@@ -1,5 +1,5 @@
 /**
- * Design tokens — the single source of truth for Keira's Journey visual language.
+ * Design tokens — the single source of truth for Campus Carousel visual language.
  *
  * Aesthetic (master spec §"Design Notes"): warm, approachable, aspirational — not
  * clinical/corporate. Soft blue-green primary + warm sand secondary on a warm-neutral

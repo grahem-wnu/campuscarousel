@@ -42,7 +42,7 @@ export function AppShell({ nav }: { nav: AssembledNav }) {
             <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-600 text-white">
               <Icon name="school" size={18} />
             </span>
-            <span className="hidden sm:inline">Keira&rsquo;s Journey</span>
+            <span className="hidden sm:inline">Campus Carousel</span>
           </NavLink>
 
           {/* Desktop primary tabs */}

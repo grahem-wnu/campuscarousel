@@ -53,7 +53,7 @@ export default function DashboardPage() {
   if (empty) {
     return (
       <div className="mx-auto max-w-3xl p-4 sm:p-6">
-        <EmptyState icon="home" title="Welcome to Keira’s Journey" description="As you log activities, add colleges, and track your prep, this dashboard fills with your whole story at a glance." />
+        <EmptyState icon="home" title="Welcome to Campus Carousel" description="As you log activities, add colleges, and track your prep, this dashboard fills with your whole story at a glance." />
       </div>
     );
   }

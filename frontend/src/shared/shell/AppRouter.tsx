@@ -20,7 +20,7 @@ function Welcome() {
   return (
     <EmptyState
       icon="school"
-      title="Welcome to Keira's Journey"
+      title="Welcome to Campus Carousel"
       description="Your modules will appear here as they come online. This is the home of the path to a BSN."
     />
   );

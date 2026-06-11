@@ -20,18 +20,22 @@
     "domainName": "keirasjourney.com",
     "bedrockSonnetProfile": "us.anthropic.claude-sonnet-4-6",
     "monthlyBudgetUsd": 75,
-    "_hostedZoneIdNote": "keirasjourney.com was registered via Route53 Domains (2026-06-06); this is its pre-existing authoritative public zone. DnsStack imports it (dnsMode import) rather than creating a new zone, so NS delegation stays intact.",
+    "_domainNote": "PER-ENV domains during the Campus Carousel rename: staging stays on keirasjourney.com (zone Z03683613MXDVX9D5VIUV); prod moves to campuscarousel.com (zone Z026658226B9KAOVTOAIH, auto-created at Route53 registration 2026-06-11). The top-level domainName/hostedZoneId remain as a fallback. Both zones are imported (dnsMode import) so NS delegation stays intact. The prod cutover (cert+alias+records for campuscarousel.com) lands on the next gated prod deploy.",
     "hostedZoneId": "Z03683613MXDVX9D5VIUV",
     "envs": {
       "staging": {
         "stage": "staging",
         "dnsMode": "import",
+        "domainName": "keirasjourney.com",
+        "hostedZoneId": "Z03683613MXDVX9D5VIUV",
         "subdomain": "staging",
         "removalPolicy": "destroy"
       },
       "prod": {
         "stage": "prod",
         "dnsMode": "import",
+        "domainName": "campuscarousel.com",
+        "hostedZoneId": "Z026658226B9KAOVTOAIH",
         "subdomain": "",
         "removalPolicy": "retain"
       }

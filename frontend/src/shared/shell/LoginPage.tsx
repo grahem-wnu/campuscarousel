@@ -58,7 +58,7 @@ export function LoginPage() {
     <div className="flex min-h-full items-center justify-center bg-surface-base px-4 py-12">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
-          <h1 className="text-2xl font-bold text-primary-700">Keira&rsquo;s Journey</h1>
+          <h1 className="text-2xl font-bold text-primary-700">Campus Carousel</h1>
           <p className="mt-1 text-sm text-ink-500">
             {phase === "credentials" ? "Sign in to continue" : "Choose a new password"}
           </p>

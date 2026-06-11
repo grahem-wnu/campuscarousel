@@ -46,7 +46,7 @@ export function JoinPage() {
     <div className="flex min-h-full items-center justify-center bg-surface-base p-4">
       <Card className="w-full max-w-md space-y-4">
         <div className="space-y-1">
-          <h1 className="text-2xl font-bold text-ink-900">Keira's Journey</h1>
+          <h1 className="text-2xl font-bold text-ink-900">Campus Carousel</h1>
           <p className="text-sm text-ink-600">
             {done ? "You're all set." : "Create your family account with the code from your invite."}
           </p>

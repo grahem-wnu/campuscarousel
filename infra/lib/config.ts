@@ -23,8 +23,11 @@ export interface EnvConfig {
   readonly region: string;
   /** Project slug, e.g. "keiras-journey". */
   readonly project: string;
-  /** Bare apex domain, e.g. "keirasjourney.com". */
+  /** Bare apex domain, e.g. "keirasjourney.com". Per-env so prod and staging can differ
+   *  (prod → campuscarousel.com, staging stays keirasjourney.com during the rename cutover). */
   readonly domainName: string;
+  /** Route53 hosted zone id for `domainName` when `dnsMode === "import"` (per-env). */
+  readonly hostedZoneId?: string;
   /** Optional subdomain prefix for this env, e.g. "staging" -> staging.keirasjourney.com. */
   readonly subdomain: string;
   readonly dnsMode: DnsMode;
@@ -106,15 +109,23 @@ export function getEnvConfig(app: App, stage: Stage): EnvConfig {
   const proj = project(app);
   const { org, repo } = github(app);
 
-  const domainName = (app.node.tryGetContext("domainName") as string) || "keirasjourney.com";
+  const envs = (app.node.tryGetContext("envs") as Record<string, Partial<EnvConfig>>) || {};
+  const envCtx = envs[stage] || {};
+
+  // Domain + zone are PER-ENV (with a top-level fallback) so prod can move to campuscarousel.com
+  // while staging stays on keirasjourney.com until the cutover deploy.
+  const domainName =
+    (envCtx.domainName as string) ||
+    (app.node.tryGetContext("domainName") as string) ||
+    "keirasjourney.com";
+  const hostedZoneId =
+    (envCtx.hostedZoneId as string | undefined) ??
+    (app.node.tryGetContext("hostedZoneId") as string | undefined);
   const bedrockSonnetProfile =
     (app.node.tryGetContext("bedrockSonnetProfile") as string) ||
     "us.anthropic.claude-sonnet-4-20250514-v1:0";
   const reminderSenderEmail =
     (app.node.tryGetContext("reminderSenderEmail") as string) || `reminders@${domainName}`;
-
-  const envs = (app.node.tryGetContext("envs") as Record<string, Partial<EnvConfig>>) || {};
-  const envCtx = envs[stage] || {};
 
   const dnsMode = (envCtx.dnsMode as DnsMode) || "defer";
   const subdomain =
@@ -128,6 +139,7 @@ export function getEnvConfig(app: App, stage: Stage): EnvConfig {
     region,
     project: proj,
     domainName,
+    hostedZoneId,
     subdomain,
     dnsMode,
     removalPolicy,

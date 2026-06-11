@@ -64,7 +64,7 @@ describe('digestForRecipient', () => {
     expect(d.model.overdueCount).toBe(1);
     expect(d.subject).toContain('overdue');
     expect(d.text).toContain('Overdue thing');
-    expect(d.text).toContain("Open Keira's Journey");
+    expect(d.text).toContain("Open Campus Carousel");
     expect(d.html).toContain('Overdue thing');
   });
 

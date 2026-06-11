@@ -32,8 +32,11 @@ export class DnsStack extends Stack {
     const { config } = props;
 
     if (config.dnsMode === "import") {
+      // Per-env zone id (config.hostedZoneId), falling back to the top-level context for back-compat.
       const hostedZoneId =
-        (this.node.tryGetContext("hostedZoneId") as string | undefined) ?? "ZONEPLACEHOLDER";
+        config.hostedZoneId ??
+        (this.node.tryGetContext("hostedZoneId") as string | undefined) ??
+        "ZONEPLACEHOLDER";
       this.hostedZone = HostedZone.fromHostedZoneAttributes(this, "Zone", {
         hostedZoneId,
         zoneName: config.domainName,

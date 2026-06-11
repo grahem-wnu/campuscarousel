@@ -110,11 +110,11 @@ function sourceLabel(source: string): string {
 }
 
 export function digestSubject(m: DigestModel): string {
-  if (m.count === 0) return "Keira's Journey — nothing due right now";
+  if (m.count === 0) return "Campus Carousel — nothing due right now";
   if (m.overdueCount > 0) {
-    return `Keira's Journey — ${m.overdueCount} overdue, ${m.count} item${plural(m.count)} to watch`;
+    return `Campus Carousel — ${m.overdueCount} overdue, ${m.count} item${plural(m.count)} to watch`;
   }
-  return `Keira's Journey — ${m.count} upcoming deadline${plural(m.count)}`;
+  return `Campus Carousel — ${m.count} upcoming deadline${plural(m.count)}`;
 }
 
 export interface RenderOpts {
@@ -129,11 +129,11 @@ export function renderText(m: DigestModel, opts: RenderOpts): string {
     lines.push(
       `Nothing is due in the next ${opts.horizonDays} days — you're all caught up. Nice work.`,
       '',
-      `Open Keira's Journey: ${opts.appUrl}`,
+      `Open Campus Carousel: ${opts.appUrl}`,
     );
     return lines.join('\n');
   }
-  lines.push("Here's what needs attention on Keira's journey:", '');
+  lines.push("Here's what needs attention on Campus Carousel:", '');
   for (const s of m.sections) {
     lines.push(`${s.label}`);
     for (const it of s.items) {
@@ -141,7 +141,7 @@ export function renderText(m: DigestModel, opts: RenderOpts): string {
     }
     lines.push('');
   }
-  lines.push(`Open Keira's Journey: ${opts.appUrl}`);
+  lines.push(`Open Campus Carousel: ${opts.appUrl}`);
   return lines.join('\n');
 }
 
@@ -155,7 +155,7 @@ function escapeHtml(s: string): string {
 
 export function renderHtml(m: DigestModel, opts: RenderOpts): string {
   const head = `<p>Hi ${escapeHtml(opts.recipientLabel)},</p>`;
-  const foot = `<p style="margin-top:24px"><a href="${escapeHtml(opts.appUrl)}">Open Keira's Journey</a></p>`;
+  const foot = `<p style="margin-top:24px"><a href="${escapeHtml(opts.appUrl)}">Open Campus Carousel</a></p>`;
   if (m.count === 0) {
     return `<div style="font-family:system-ui,Arial,sans-serif;line-height:1.5">${head}<p>Nothing is due in the next ${opts.horizonDays} days — you're all caught up. Nice work.</p>${foot}</div>`;
   }
@@ -171,7 +171,7 @@ export function renderHtml(m: DigestModel, opts: RenderOpts): string {
       return `<h3 style="color:${color};margin:16px 0 4px">${escapeHtml(s.label)}</h3><ul style="margin:0 0 8px 0;padding-left:20px">${items}</ul>`;
     })
     .join('');
-  return `<div style="font-family:system-ui,Arial,sans-serif;line-height:1.5">${head}<p>Here's what needs attention on Keira's journey:</p>${sections}${foot}</div>`;
+  return `<div style="font-family:system-ui,Arial,sans-serif;line-height:1.5">${head}<p>Here's what needs attention on Campus Carousel:</p>${sections}${foot}</div>`;
 }
 
 export interface RecipientDigest {

@@ -49,9 +49,9 @@ export function makeHandlers(deps: InviteDeps): InviteHandlers {
       await sender.send({
         from,
         to: input.email,
-        subject: "You're invited to Keira's Journey",
-        text: `You've been invited to Keira's Journey — a private space to track a student's path to a nursing (BSN) program.\n\nYour signup code: ${code}\n\nCreate your family account: ${redeemUrl}\n\nThis code expires ${invite.expiresAt}.`,
-        html: `<p>You've been invited to <strong>Keira's Journey</strong> — a private space to track a student's path to a nursing (BSN) program.</p><p>Your signup code: <strong>${code}</strong></p><p><a href="${redeemUrl}">Create your family account</a></p><p style="color:#666;font-size:12px">This code expires ${invite.expiresAt}.</p>`,
+        subject: "You're invited to Campus Carousel",
+        text: `You've been invited to Campus Carousel — a private space to track a student's path to college.\n\nYour signup code: ${code}\n\nCreate your family account: ${redeemUrl}\n\nThis code expires ${invite.expiresAt}.`,
+        html: `<p>You've been invited to <strong>Campus Carousel</strong> — a private space to track a student's path to college.</p><p>Your signup code: <strong>${code}</strong></p><p><a href="${redeemUrl}">Create your family account</a></p><p style="color:#666;font-size:12px">This code expires ${invite.expiresAt}.</p>`,
       });
       return { status: 201, body: invite };
     },

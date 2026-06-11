@@ -99,7 +99,7 @@ async function downloadImage(
   return { bytes: new Uint8Array(buf), contentType, ext: extFromContentType(contentType), credit };
 }
 
-const USER_AGENT = 'KeirasJourney/1.0 (private college tracker; campus imagery)';
+const USER_AGENT = 'CampusCarousel/1.0 (private college tracker; campus imagery)';
 const WIKI_API = 'https://en.wikipedia.org/w/api.php';
 
 /** Ask the Wikimedia API for a college's lead image (a fixed-width thumbnail) + its source filename. */
