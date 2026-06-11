@@ -90,6 +90,25 @@ describe('family members router integration', () => {
     expect((await dispatch(event('POST', '/family/members', member, { email: 'x@x.com', relationship: 'other', accessLevel: 'viewer' }))).statusCode).toBe(403);
   });
 
+  it('still creates the member when the email send fails (SES sandbox), reporting emailed:false', async () => {
+    const data: Data = makeData(new InMemoryTableClient());
+    void data.tenants.create({ tenantId: 'fam1', familyName: 'Cuthbertson', plan: 'free', status: 'active' });
+    const calls: string[] = [];
+    const inviter: FamilyInviter = {
+      inviteMember: async (i) => void calls.push(`invite:${i.email}`),
+      setRole: async () => {},
+      removeMember: async () => {},
+    };
+    const sender: EmailSender = { send: async () => { throw new Error('sandbox: email address not verified'); } };
+    const dispatch = createRouter(
+      buildRoutes(makeHandlers({ getData: () => data, inviter, sender, from: 'noreply@x.com', appUrl: 'https://app', genPassword: () => 'Aa1!t' })),
+    );
+    const res = await dispatch(event('POST', '/family/members', parent, { email: 'g@x.com', relationship: 'grandparent', accessLevel: 'viewer' }));
+    expect(res.statusCode).toBe(201);
+    expect(parse(res)).toMatchObject({ email: 'g@x.com', emailed: false });
+    expect(calls).toContain('invite:g@x.com'); // the login was still created
+  });
+
   it('rejects inviting someone already on the account (409)', async () => {
     const { dispatch } = harness();
     await dispatch(event('POST', '/family/members', parent, { email: 'dup@x.com', relationship: 'other', accessLevel: 'viewer' }));

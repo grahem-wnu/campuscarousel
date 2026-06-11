@@ -45,6 +45,9 @@ export interface FamilyMember {
   invitedBy?: string;
   createdAt: string;
   updatedAt: string;
+  /** Only on the invite response: whether the credential email was sent (false in SES sandbox / on
+   *  mail failure — the account is still created). */
+  emailed?: boolean;
 }
 
 export interface InviteMemberInput {

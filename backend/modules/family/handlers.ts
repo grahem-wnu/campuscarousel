@@ -90,14 +90,23 @@ export function makeHandlers(deps: FamilyDeps): FamilyHandlers {
 
       const family = await getData().tenants.get(tenantId);
       const familyName = family?.familyName ?? 'your family';
-      await sender.send({
-        from,
-        to: input.email,
-        subject: `You've been added to ${familyName}'s account`,
-        text: `${ctx.requester.username} added you to ${familyName}'s account.\n\nSign in at ${appUrl}\nUsername: ${input.email}\nTemporary password: ${temporaryPassword}\n\nYou'll choose your own password the first time you sign in.`,
-        html: `<p><strong>${ctx.requester.username}</strong> added you to <strong>${familyName}</strong>'s account.</p><p><a href="${appUrl}">Sign in</a></p><p>Username: <strong>${input.email}</strong><br/>Temporary password: <strong>${temporaryPassword}</strong></p><p style="color:#666;font-size:12px">You'll choose your own password the first time you sign in.</p>`,
-      });
-      return { status: 201, body: member };
+      // Best-effort email: the login + member record already exist, so a mail failure (e.g. SES sandbox
+      // can't reach an unverified address) must NOT fail the invite. Report whether it went out so the
+      // UI can tell the inviter to share the credentials another way.
+      let emailed = true;
+      try {
+        await sender.send({
+          from,
+          to: input.email,
+          subject: `You've been added to ${familyName}'s account`,
+          text: `${ctx.requester.username} added you to ${familyName}'s account.\n\nSign in at ${appUrl}\nUsername: ${input.email}\nTemporary password: ${temporaryPassword}\n\nYou'll choose your own password the first time you sign in.`,
+          html: `<p><strong>${ctx.requester.username}</strong> added you to <strong>${familyName}</strong>'s account.</p><p><a href="${appUrl}">Sign in</a></p><p>Username: <strong>${input.email}</strong><br/>Temporary password: <strong>${temporaryPassword}</strong></p><p style="color:#666;font-size:12px">You'll choose your own password the first time you sign in.</p>`,
+        });
+      } catch (err) {
+        emailed = false;
+        console.error('family invite: email send failed (member still created)', input.email, err);
+      }
+      return { status: 201, body: { ...member, emailed } };
     },
 
     // PATCH /family/members/:userId — change relationship / access level (admin/parent only).

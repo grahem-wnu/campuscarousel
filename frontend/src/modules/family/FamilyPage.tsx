@@ -512,8 +512,12 @@ function MemberFormModal({
         await updateMember(member.userId, { displayName: displayName.trim() || undefined, relationship, accessLevel });
         toast.success("Updated.");
       } else {
-        await inviteMember({ email: email.trim(), displayName: displayName.trim() || undefined, relationship, accessLevel });
-        toast.success(`Invited ${email.trim()} — we emailed them a sign-in link.`);
+        const created = await inviteMember({ email: email.trim(), displayName: displayName.trim() || undefined, relationship, accessLevel });
+        toast.success(
+          created.emailed === false
+            ? `Added ${email.trim()}, but the email couldn't be sent — share their sign-in details manually.`
+            : `Invited ${email.trim()} — we emailed them a sign-in link.`,
+        );
       }
       await onSaved();
     } catch (err) {
