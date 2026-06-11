@@ -104,6 +104,16 @@ describe('prep (POST /colleges/:id/visits/:vid/prep)', () => {
     expect(body.questions.length).toBeGreaterThanOrEqual(8);
     expect(body.logistics.contact).toBe('nursing@uci.edu');
   });
+
+  it("leads with the student's major-pack visit questions (nursing → NCLEX pass rate)", async () => {
+    await data.studentProfile.put({ intendedMajors: ['Nursing'] });
+    const id = await seedCollege();
+    const created = await h.create(ctx({ params: { id }, body: { date: '2026-04-01' } }));
+    const vid = (created.body as { visitId: string }).visitId;
+    const res = await h.prep(ctx({ params: { id, vid } }));
+    const questions = (res.body as { questions: string[] }).questions;
+    expect(questions.some((q) => /NCLEX/.test(q))).toBe(true);
+  });
 });
 
 describe('trip-plan (POST /visits/trip-plan)', () => {

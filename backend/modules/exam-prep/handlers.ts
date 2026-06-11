@@ -33,9 +33,19 @@ import {
   type Analyzer,
   type Planner,
 } from './ai.js';
+import { packEntranceExam } from '../../shared/packs/index.js';
 
 const DEFAULT_TARGET = 78;
 const DEFAULT_HOURS_PER_WEEK = 8;
+
+/** The active student's intended major(s), for resolving their major pack's entrance exam. */
+async function activeMajors(data: Data): Promise<string[]> {
+  try {
+    return (await data.studentProfile.get())?.intendedMajors ?? [];
+  } catch {
+    return [];
+  }
+}
 
 export interface ExamHandlers {
   list: Handler;
@@ -87,10 +97,12 @@ export function makeHandlers(deps: ExamDeps): ExamHandlers {
       return { status: 200, body: record };
     },
 
-    // POST /exams.
+    // POST /exams. Default the exam name from the student's major pack (nursing → TEAS) when omitted.
     create: async (ctx) => {
       const input = validateBody(createSchema, ctx);
-      const created = await getData().exams.create(input);
+      const exam = packEntranceExam(await activeMajors(getData()));
+      const examName = input.examName ?? exam?.examName;
+      const created = await getData().exams.create({ ...input, ...(examName ? { examName } : {}) });
       return { status: 201, body: created };
     },
 
@@ -112,15 +124,20 @@ export function makeHandlers(deps: ExamDeps): ExamHandlers {
       return { status: 204, body: undefined };
     },
 
-    // GET /exams/progress — progression series + roll-up summary + readiness.
+    // GET /exams/progress — progression series + roll-up summary + readiness. The target + exam come
+    // from the student's major pack (nursing → TEAS, competitive ~78); a generic target otherwise.
     progress: async () => {
-      const records = await getData().exams.list();
+      const data = getData();
+      const records = await data.exams.list();
+      const exam = packEntranceExam(await activeMajors(data));
+      const target = exam?.competitiveScore ?? DEFAULT_TARGET;
       return {
         status: 200,
         body: {
           progression: progression(records),
           summary: summarize(records),
-          readiness: readiness(records, DEFAULT_TARGET),
+          readiness: readiness(records, target),
+          exam: exam ?? null,
         },
       };
     },
@@ -128,12 +145,14 @@ export function makeHandlers(deps: ExamDeps): ExamHandlers {
     // POST /exams/study-plan — AI weekly plan keyed to weak sections + exam date + target.
     studyPlan: async (ctx) => {
       const body = validateBody(studyPlanSchema, ctx);
-      const records = await getData().exams.list();
+      const data = getData();
+      const records = await data.exams.list();
+      const packTarget = packEntranceExam(await activeMajors(data))?.competitiveScore;
       const weakLabels = weakSections(records).map((s) => SECTION_LABEL[s]);
       const plan = await planner({
         weeksUntilExam: weeksUntil(body.examDate, now()),
         examDate: body.examDate,
-        targetScore: body.targetScore ?? DEFAULT_TARGET,
+        targetScore: body.targetScore ?? packTarget ?? DEFAULT_TARGET,
         targetSchools: body.targetSchools,
         hoursPerWeek: body.hoursPerWeek ?? DEFAULT_HOURS_PER_WEEK,
         weakSections: body.focusAreas ?? weakLabels,
@@ -145,10 +164,12 @@ export function makeHandlers(deps: ExamDeps): ExamHandlers {
     // POST /exams/analyze — AI trend analysis + recommendations + readiness.
     analyze: async (ctx) => {
       const body = validateBody(analyzeSchema, ctx);
-      const records = await getData().exams.list();
+      const data = getData();
+      const records = await data.exams.list();
+      const packTarget = packEntranceExam(await activeMajors(data))?.competitiveScore;
       const analysis = await analyzer({
         summary: summarize(records),
-        targetScore: body.targetScore ?? DEFAULT_TARGET,
+        targetScore: body.targetScore ?? packTarget ?? DEFAULT_TARGET,
         examDate: body.examDate,
       });
       return { status: 200, body: { analysis } };

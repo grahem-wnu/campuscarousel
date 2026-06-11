@@ -5,7 +5,17 @@
 
 import { Errors, validate, validateBody, validateParams, type Handler, type RouteDef } from '../../shared/api/index.js';
 import type { Data } from '../../shared/data/index.js';
+import { packsForMajors } from '../../shared/packs/index.js';
 import { curatedPrep, type PrepGenerator } from './prep.js';
+
+/** The active student's intended major(s), for resolving their major pack's visit questions. */
+async function activeMajors(data: Data): Promise<string[]> {
+  try {
+    return (await data.studentProfile.get())?.intendedMajors ?? [];
+  } catch {
+    return [];
+  }
+}
 import { curatedTripPlan, type TripPlanner } from './tripplan.js';
 import {
   collegeParamSchema,
@@ -93,7 +103,11 @@ export function makeHandlers(deps: HandlerDeps): VisitHandlers {
       const visit = await data.visits.get(id, vid);
       if (!visit) throw Errors.notFound('Visit not found');
       const result = await prep({ college, visit });
-      return { status: 200, body: result };
+      // Lead with the student's major-pack visit questions (e.g. nursing → NCLEX pass rate, clinical
+      // sites), then the standard checklist; dedupe so the AI/curated overlap doesn't repeat.
+      const packQuestions = packsForMajors(await activeMajors(data)).flatMap((p) => p.visitQuestions ?? []);
+      const questions = [...packQuestions, ...result.questions].filter((qn, i, arr) => arr.indexOf(qn) === i);
+      return { status: 200, body: { ...result, questions } };
     },
 
     // POST /visits/trip-plan — group nearby schools into itineraries (AI or curated clustering).

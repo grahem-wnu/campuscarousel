@@ -26,6 +26,8 @@ export const createSchema = z
   .object({
     type: z.enum(EXAM_TYPES),
     date: isoDate,
+    /** Which exam (e.g. "TEAS"); defaults from the student's major pack when omitted. */
+    examName: z.string().min(1).max(80).optional(),
     overallScore: score.optional(),
     sectionScores: sectionScores.optional(),
     source: z.string().max(200).optional(),

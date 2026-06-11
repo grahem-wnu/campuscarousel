@@ -126,3 +126,26 @@ describe('analyze', () => {
     expect(analyzeCalls[0]?.summary.attempts).toBe(2);
   });
 });
+
+describe('major-pack entrance exam wiring', () => {
+  it("a nursing student's tracker defaults to TEAS (name + target 78), surfaced on /progress", async () => {
+    await data.studentProfile.put({ intendedMajors: ['Nursing'] });
+
+    const created = await h.create(ctx({ body: { type: 'practice-test', date: '2026-06-01', overallScore: 70 } }));
+    expect((created.body as { examName?: string }).examName).toBe('TEAS'); // defaulted from the pack
+
+    const prog = await h.progress(ctx());
+    const body = prog.body as { exam: { examName: string; competitiveScore: number } | null };
+    expect(body.exam?.examName).toBe('TEAS');
+    expect(body.exam?.competitiveScore).toBe(78);
+
+    await h.studyPlan(ctx({ body: { examDate: '2026-08-01' } }));
+    expect(planCalls.at(-1)?.targetScore).toBe(78); // pack target, no explicit override
+  });
+
+  it('stays generic for a non-pack major (no exam, default target)', async () => {
+    await data.studentProfile.put({ intendedMajors: ['History'] });
+    const prog = await h.progress(ctx());
+    expect((prog.body as { exam: unknown }).exam).toBeNull();
+  });
+});

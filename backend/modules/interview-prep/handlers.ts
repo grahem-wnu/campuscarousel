@@ -26,6 +26,7 @@ import {
 } from './schema.js';
 import { QUESTION_BANK, filterBank, type BankQuestion } from './questionbank.js';
 import { gatherGrounding } from './grounding.js';
+import { packsForMajors } from '../../shared/packs/index.js';
 import {
   makeBedrockFeedbackGenerator,
   makeBedrockQuestionGenerator,
@@ -87,6 +88,15 @@ function scrubForReader(session: Interview, username: string): Interview {
     ...session,
     questions: (session.questions ?? []).map((q) => ({ ...q, answer: undefined, aiFeedback: undefined })),
   };
+}
+
+/** The active student's intended major(s), for resolving their major pack. */
+async function activeMajors(data: Data): Promise<string[]> {
+  try {
+    return (await data.studentProfile.get())?.intendedMajors ?? [];
+  } catch {
+    return [];
+  }
 }
 
 export function makeHandlers(deps: InterviewDeps): InterviewHandlers {
@@ -199,11 +209,22 @@ export function makeHandlers(deps: InterviewDeps): InterviewHandlers {
       return { status: 200, body: { feedback, session: updated } };
     },
 
-    // GET /interviews/questions — curated bank + the caller's custom questions, filterable.
+    // GET /interviews/questions — curated bank + major-pack questions + the caller's custom questions.
     listQuestions: async (ctx) => {
       const q = validateQuery(questionQuerySchema, ctx);
-      const custom = await loadCustomQuestions(getData(), ctx.requester.username);
-      const all = [...QUESTION_BANK, ...custom];
+      const data = getData();
+      const custom = await loadCustomQuestions(data, ctx.requester.username);
+      // Major-specific must-prepare questions from the active student's pack (e.g. nursing → "Why nursing?").
+      const majors = await activeMajors(data);
+      const packQuestions: BankQuestion[] = packsForMajors(majors).flatMap((p) =>
+        (p.interviewQuestions ?? []).map((question, i) => ({
+          id: `pack-${p.key}-${i}`,
+          question,
+          category: 'school-specific' as const,
+          starred: true,
+        })),
+      );
+      const all = [...packQuestions, ...QUESTION_BANK, ...custom];
       return { status: 200, body: { questions: filterBank(all, { category: q.category, search: q.search }) } };
     },
 
