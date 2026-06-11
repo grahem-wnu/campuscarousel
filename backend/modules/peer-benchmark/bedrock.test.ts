@@ -45,4 +45,15 @@ describe('makeWebGroundedInvoker', () => {
     expect(searched).toEqual(['typical BSN admit GPA TEAS']); // searcher actually consulted
     expect(calls).toBe(2);
   });
+
+  it('webSearch:false stays model-only — never consults the searcher (the gaps path, fits the 30s budget)', async () => {
+    let calls = 0;
+    const searched: string[] = [];
+    const invoker: BedrockInvoker = { invoke: async () => { calls += 1; return enc(textRes('biggest gap: clinical hours')); } };
+    const searcher: WebSearcher = async (q) => { searched.push(q); return []; };
+    const invoke = makeWebGroundedInvoker({ invoker, searcher, webSearch: false });
+    expect(await invoke('analyze gaps')).toBe('biggest gap: clinical hours');
+    expect(searched).toEqual([]); // no web search → single fast model call
+    expect(calls).toBe(1);
+  });
 });
