@@ -48,7 +48,12 @@ export class DnsStack extends Stack {
     }
 
     // Cover the apex and a wildcard so every env subdomain (staging.*, etc.) is valid.
-    this.certificate = new Certificate(this, "Cert", {
+    // The construct id is DOMAIN-SPECIFIC: changing domainName then creates a brand-new cert (and a
+    // fresh cross-region export) rather than replacing the cert under a stable id — which the us-east-2
+    // WebStack's cross-region reference caches, leaving CloudFront on the old cert ("certificate doesn't
+    // cover the CNAME"). A new id forces the consumer to read the new ARN.
+    const certId = `Cert-${config.domainName.replace(/[^a-zA-Z0-9]/g, "-")}`;
+    this.certificate = new Certificate(this, certId, {
       domainName: config.domainName,
       subjectAlternativeNames: [`*.${config.domainName}`],
       validation: CertificateValidation.fromDns(this.hostedZone),
