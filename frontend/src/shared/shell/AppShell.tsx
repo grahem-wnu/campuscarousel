@@ -3,6 +3,7 @@ import { NavLink, Outlet } from "react-router-dom";
 import { cn } from "../ui/cn";
 import { Icon, isIconName } from "../ui/Icon";
 import { useAuth } from "./AuthContext";
+import { useActiveStudent } from "./ActiveStudentContext";
 import { SlideOver } from "./SlideOver";
 import { Modal } from "../ui/Modal";
 import { SlotOutlet } from "./SlotOutlet";
@@ -23,6 +24,7 @@ function navIcon(entry: NavEntry, size: number) {
  */
 export function AppShell({ nav }: { nav: AssembledNav }) {
   const { user, signOut } = useAuth();
+  const { activeStudentId } = useActiveStudent();
   const [menuOpen, setMenuOpen] = useState(false); // mobile hamburger (secondary)
   const [moreOpen, setMoreOpen] = useState(false); // desktop "More" dropdown
   const [userOpen, setUserOpen] = useState(false);
@@ -69,6 +71,9 @@ export function AppShell({ nav }: { nav: AssembledNav }) {
           </nav>
 
           <div className="ml-auto flex items-center gap-1">
+            {/* Active-student switcher (multi-student) */}
+            <StudentSwitcher />
+
             {/* User menu */}
             <div className="relative">
               <button
@@ -118,9 +123,12 @@ export function AppShell({ nav }: { nav: AssembledNav }) {
         </div>
       </header>
 
-      {/* Routed content */}
+      {/* Routed content. Keyed by the active student so switching kids remounts the page and each
+          module re-fetches for the newly-selected child — no per-module change needed. */}
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-5 pb-24 md:pb-8">
-        <Outlet />
+        <div key={activeStudentId ?? "no-student"}>
+          <Outlet />
+        </div>
       </main>
 
       {/* Mobile bottom tab bar */}
@@ -285,6 +293,61 @@ function Dropdown({
         {children}
       </div>
     </>
+  );
+}
+
+/**
+ * Active-student picker shown in the top bar. Hidden when the family has only one child (nothing to
+ * switch); a single-child family just sees that name implicitly. Switching updates the API header and
+ * remounts the routed page (see the keyed <main>) so the new child's data loads.
+ */
+function StudentSwitcher() {
+  const { students, activeStudent, setActiveStudentId } = useActiveStudent();
+  const [open, setOpen] = useState(false);
+  const selectable = students.filter((s) => s.status === "active");
+
+  // Nothing to switch between → keep the bar clean. The Family page is where you add the first child.
+  if (selectable.length < 2) return null;
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-medium text-ink-700 hover:bg-ink-100"
+        aria-label="Switch student"
+      >
+        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary-100 text-primary-700">
+          <Icon name="user" size={15} />
+        </span>
+        <span className="hidden max-w-32 truncate sm:inline">{activeStudent?.name ?? "Choose child"}</span>
+        <Icon name="chevron-down" size={14} />
+      </button>
+      {open && (
+        <Dropdown onClose={() => setOpen(false)}>
+          <div className="border-b border-surface-border px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-ink-400">
+            Viewing
+          </div>
+          {selectable.map((s) => (
+            <button
+              key={s.studentId}
+              type="button"
+              onClick={() => {
+                setActiveStudentId(s.studentId);
+                setOpen(false);
+              }}
+              className={cn(
+                "flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-ink-100",
+                s.studentId === activeStudent?.studentId ? "text-primary-700" : "text-ink-700",
+              )}
+            >
+              <span className="truncate">{s.name}</span>
+              {s.studentId === activeStudent?.studentId && <Icon name="check" size={15} />}
+            </button>
+          ))}
+        </Dropdown>
+      )}
+    </div>
   );
 }
 

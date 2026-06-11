@@ -37,6 +37,24 @@ describe("createApiClient", () => {
     expect(init.method).toBe("POST");
   });
 
+  it("sends X-Student-Id from getStudentId, and omits it when none is selected", async () => {
+    const fetchImpl = mockFetch(async () => jsonResponse(200, []));
+    let active: string | null = "s-keira";
+    const client = createApiClient({
+      baseUrl: "https://api.example.com",
+      getToken: async () => "tok",
+      getStudentId: () => active,
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+
+    await client.get("/activities");
+    expect((fetchImpl.mock.calls[0]![1].headers as Record<string, string>)["X-Student-Id"]).toBe("s-keira");
+
+    active = null;
+    await client.get("/activities");
+    expect((fetchImpl.mock.calls[1]![1].headers as Record<string, string>)["X-Student-Id"]).toBeUndefined();
+  });
+
   it("omits Authorization when no token is available", async () => {
     const fetchImpl = mockFetch(async () => jsonResponse(200, []));
     const client = createApiClient({

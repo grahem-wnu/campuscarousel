@@ -5,5 +5,10 @@
 export type { NavEntry, NavGroup, Role, AssembledNav } from "./types";
 export { registerSlot, getSlot, type SlotName } from "./slots";
 export { useAuth, AuthProvider, type AuthStatus } from "./AuthContext";
+export {
+  ActiveStudentProvider,
+  useActiveStudent,
+  type Student,
+} from "./ActiveStudentContext";
 export { AppRouter } from "./AppRouter";
 export { AuthGate } from "./AuthGate";

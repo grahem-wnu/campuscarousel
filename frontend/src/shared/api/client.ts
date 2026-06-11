@@ -18,11 +18,16 @@ import { ApiError, STATUS_TO_CODE, type ApiErrorEnvelope, type Query } from "./t
 /** Returns the current ID token, or null if the user is not authenticated. */
 export type TokenProvider = () => Promise<string | null>;
 
+/** Returns the active student id to scope per-child requests, or null when none is selected. */
+export type StudentIdProvider = () => string | null;
+
 export interface ApiClientConfig {
   /** API base URL, no trailing slash (e.g. https://abc.execute-api.us-east-2.amazonaws.com). */
   baseUrl: string;
   /** How to obtain the bearer token for each request. */
   getToken: TokenProvider;
+  /** How to obtain the active student id (multi-student). Sent as `X-Student-Id` when present. */
+  getStudentId?: StudentIdProvider;
   /** Injectable fetch (defaults to global fetch); used by tests. */
   fetchImpl?: typeof fetch;
 }
@@ -93,6 +98,12 @@ export function createApiClient(config: ApiClientConfig): ApiClient {
     const headers: Record<string, string> = { Accept: "application/json", ...opts.headers };
     const token = await config.getToken();
     if (token) headers["Authorization"] = `Bearer ${token}`;
+
+    // Multi-student: scope per-child requests to the active student. Caller-supplied headers win.
+    if (config.getStudentId && headers["X-Student-Id"] === undefined) {
+      const studentId = config.getStudentId();
+      if (studentId) headers["X-Student-Id"] = studentId;
+    }
 
     const hasBody = opts.body !== undefined;
     if (hasBody) headers["Content-Type"] = "application/json";
