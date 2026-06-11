@@ -124,8 +124,12 @@ export function getEnvConfig(app: App, stage: Stage): EnvConfig {
   const bedrockSonnetProfile =
     (app.node.tryGetContext("bedrockSonnetProfile") as string) ||
     "us.anthropic.claude-sonnet-4-20250514-v1:0";
+  // Sender for all transactional mail (invites, family-member adds, reminder digest). Per-env so
+  // prod sends from noreply@campuscarousel.com while staging keeps its keirasjourney.com sender.
   const reminderSenderEmail =
-    (app.node.tryGetContext("reminderSenderEmail") as string) || `reminders@${domainName}`;
+    (envCtx.reminderSenderEmail as string) ||
+    (app.node.tryGetContext("reminderSenderEmail") as string) ||
+    `noreply@${domainName}`;
 
   const dnsMode = (envCtx.dnsMode as DnsMode) || "defer";
   const subdomain =

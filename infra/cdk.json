@@ -29,6 +29,7 @@
         "domainName": "keirasjourney.com",
         "hostedZoneId": "Z03683613MXDVX9D5VIUV",
         "subdomain": "staging",
+        "reminderSenderEmail": "reminders@keirasjourney.com",
         "removalPolicy": "destroy"
       },
       "prod": {
@@ -37,6 +38,7 @@
         "domainName": "campuscarousel.com",
         "hostedZoneId": "Z026658226B9KAOVTOAIH",
         "subdomain": "",
+        "reminderSenderEmail": "noreply@campuscarousel.com",
         "removalPolicy": "retain"
       }
     },
