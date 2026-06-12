@@ -15,6 +15,7 @@ import type {
   Conversation,
   ConversationMessage,
   Benchmark,
+  FocusOverview,
   Invite,
   FamilyMember,
   Profile,
@@ -426,6 +427,37 @@ export function makeStudentProfile(client: TableClient): StudentProfileRepo {
       await client.put({
         ...(domain as unknown as Record<string, unknown>),
         PK: 'STUDENT_PROFILE',
+        SK: SK_DETAILS,
+      });
+      return domain;
+    },
+  };
+}
+
+// Focus overview: per-student singleton (PK=FOCUS_OVERVIEW) holding the cached, web-grounded AI
+// overview of the student's intended major. Written by the async hydration worker, read by GET /focus.
+export interface FocusOverviewRepo {
+  get(): Promise<FocusOverview | null>;
+  put(input: Omit<FocusOverview, 'createdAt' | 'updatedAt'>): Promise<FocusOverview>;
+}
+
+export function makeFocusOverview(client: TableClient): FocusOverviewRepo {
+  return {
+    async get() {
+      const item = await client.get('FOCUS_OVERVIEW', SK_DETAILS);
+      return item ? toDomain<FocusOverview>(item) : null;
+    },
+    async put(input) {
+      const existing = await client.get('FOCUS_OVERVIEW', SK_DETAILS);
+      const now = isoNow();
+      const domain: FocusOverview = {
+        ...input,
+        createdAt: (existing?.createdAt as string | undefined) ?? now,
+        updatedAt: now,
+      };
+      await client.put({
+        ...(domain as unknown as Record<string, unknown>),
+        PK: 'FOCUS_OVERVIEW',
         SK: SK_DETAILS,
       });
       return domain;

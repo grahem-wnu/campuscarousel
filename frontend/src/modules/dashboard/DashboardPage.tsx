@@ -4,6 +4,32 @@ import { Badge, Button, Card, EmptyState, Icon, Spinner, cn } from '../../shared
 import { categoryRows, deadlineLabel, deadlineTone, gpaText, money, READINESS_TONE, SOURCE_TONE, totalColleges } from './logic';
 import { getDashboard } from './api';
 import type { Dashboard } from './types';
+import { getFocus } from '../focus/api';
+import type { FocusResponse } from '../focus/types';
+
+/** A banner linking to the Focus (major-pack) page — shown only once the student has set a major. It
+ *  makes the otherwise-ambient major pack a visible, clickable destination from the dashboard. */
+function FocusBanner() {
+  const [focus, setFocus] = useState<FocusResponse | null>(null);
+  useEffect(() => {
+    getFocus().then(setFocus).catch(() => setFocus(null));
+  }, []);
+  if (!focus || focus.packs.length === 0) return null;
+  return (
+    <Link to="/focus" className="group block rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300">
+      <Card className="flex items-center gap-3 border border-primary-200 bg-primary-50 transition hover:-translate-y-0.5 hover:shadow-md">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-100 text-primary-600">
+          <Icon name="star" size={20} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold text-primary-800">Your focus: {focus.packs.map((p) => p.label).join(' + ')}</p>
+          <p className="text-xs text-primary-700">Tailored exam, certifications, and prep — plus an AI overview of the path.</p>
+        </div>
+        <Icon name="chevron-right" size={18} className="text-primary-400 transition-transform group-hover:translate-x-0.5" />
+      </Card>
+    </Link>
+  );
+}
 
 /** A dashboard card that navigates to its page on click (keyboard-accessible), with a hover affordance. */
 function LinkCard({ to, className, children }: { to: string; className?: string; children: ReactNode }) {
@@ -89,6 +115,8 @@ export default function DashboardPage() {
         <h1 className="text-2xl font-bold text-ink-900">Dashboard</h1>
         <p className="mt-0.5 text-sm text-ink-500">Your whole journey, at a glance.</p>
       </header>
+
+      <FocusBanner />
 
       {/* Headline stats */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
