@@ -3,7 +3,8 @@ import type { HandlerContext } from '../../shared/api/index.js';
 import type { Requester } from '../../shared/auth/index.js';
 import { InMemoryTableClient, makeData, type Data } from '../../shared/data/index.js';
 import { makeHandlers, type FocusHandlers } from './handlers.js';
-import { makeOverviewWorkerHandler, runOverviewJob, type FocusOverviewer } from './overview.js';
+import { makeOverviewWorkerHandler, runOverviewJob } from './overview.js';
+import { type FocusOverviewer } from './ai.js';
 
 const keira: Requester = { username: 'keira', role: 'student' };
 
@@ -44,7 +45,7 @@ describe('GET /focus', () => {
     const body = res.body as { packs: { key: string; label: string; entranceExam?: { examName: string } }[]; careerGoal: string };
     expect(body.packs).toHaveLength(1);
     expect(body.packs[0]).toMatchObject({ key: 'nursing', label: 'Nursing (BSN)' });
-    expect(body.packs[0].entranceExam?.examName).toBe('TEAS');
+    expect(body.packs[0]!.entranceExam?.examName).toBe('TEAS');
     expect(body.careerGoal).toBe('ICU Nurse');
   });
 });
@@ -59,7 +60,7 @@ describe('POST /focus/overview', () => {
     const body = got.body as { overview: { status: string; overview: string; sources: { url: string }[] } };
     expect(body.overview.status).toBe('complete');
     expect(body.overview.overview).toContain('anatomy');
-    expect(body.overview.sources[0].url).toBe('https://bls.gov/nursing');
+    expect(body.overview.sources[0]!.url).toBe('https://bls.gov/nursing');
   });
 
   it('records failed status when the overviewer throws', async () => {
