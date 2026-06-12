@@ -73,7 +73,7 @@ async function main() {
   }
 
   const { DynamoDBClient } = await import('@aws-sdk/client-dynamodb');
-  const { DynamoDBDocumentClient, ScanCommand, PutCommand, DeleteCommand, GetCommand } = await import(
+  const { DynamoDBDocumentClient, ScanCommand, PutCommand, DeleteCommand } = await import(
     '@aws-sdk/lib-dynamodb'
   );
   const { randomUUID } = await import('node:crypto');

@@ -291,14 +291,29 @@ function EditStudentModal({
 }
 
 /**
- * Academic focus for the ACTIVE child (the switcher's selection). Edits intended major(s), which drive
+ * Intended-major options. Each value must resolve to a backend major pack (backend/shared/packs):
+ * the value is matched against each pack's key/aliases, so keep these strings pack-recognizable.
+ * Source of truth for the packs themselves is the backend registry — add a pack there, add it here.
+ */
+const MAJOR_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
+  { value: "Nursing", label: "Nursing (BSN)" },
+  { value: "Computer Science", label: "Computer Science" },
+  { value: "Pre-health", label: "Pre-med / Pre-health" },
+  { value: "Business", label: "Business" },
+  { value: "Engineering", label: "Engineering" },
+  { value: "Education", label: "Education / Teaching" },
+];
+
+/**
+ * Academic focus for the ACTIVE child (the switcher's selection). Sets the intended major, which drives
  * the AI's college matching, benchmarks, and copy — this is what genericizes the app beyond nursing.
+ * A dropdown of the available major packs (free text invited unrecognized values the backend rejected).
  * Scoped to the active student because /profile resolves to whoever the X-Student-Id header names.
  */
 function AcademicFocusCard() {
   const toast = useToast();
   const { activeStudent, activeStudentId } = useActiveStudent();
-  const [majors, setMajors] = useState("");
+  const [major, setMajor] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
 
@@ -306,9 +321,9 @@ function AcademicFocusCard() {
     setLoading(true);
     try {
       const p = await getStudentProfile();
-      setMajors((p.intendedMajors ?? []).join(", "));
+      setMajor((p.intendedMajors ?? [])[0] ?? "");
     } catch {
-      setMajors("");
+      setMajor("");
     } finally {
       setLoading(false);
     }
@@ -322,8 +337,7 @@ function AcademicFocusCard() {
   async function save() {
     setBusy(true);
     try {
-      const list = majors.split(",").map((m) => m.trim()).filter(Boolean);
-      await putStudentProfile({ intendedMajors: list });
+      await putStudentProfile({ intendedMajors: major ? [major] : [] });
       toast.success("Saved.");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not save.");
@@ -347,15 +361,18 @@ function AcademicFocusCard() {
         ) : (
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
             <Field
-              label="Intended major(s)"
+              label="Intended major"
               className="flex-1"
-              hint="Comma-separated. List more than one if they're still deciding — the AI weighs them all."
+              hint="Drives the AI's college matching, exam prep, certifications, and interview questions."
             >
-              <Input
-                value={majors}
-                onChange={(e) => setMajors(e.target.value)}
-                placeholder="e.g. Nursing, Biology, Psychology"
-              />
+              <Select value={major} onChange={(e) => setMajor(e.target.value)}>
+                <option value="">Undeclared / not sure yet</option>
+                {MAJOR_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </Select>
             </Field>
             <Button onClick={save} disabled={busy}>
               Save
