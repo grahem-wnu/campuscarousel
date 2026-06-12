@@ -345,14 +345,14 @@ function StudentSwitcher() {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-medium text-ink-700 hover:bg-ink-100"
-        aria-label="Switch student"
+        className="flex items-center gap-1.5 rounded-full border border-surface-border bg-surface-raised py-1 pl-1 pr-2 text-sm font-medium text-ink-700 hover:bg-ink-100"
+        aria-label={`Viewing ${activeStudent?.name ?? "—"}. Tap to switch student.`}
       >
-        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary-100 text-primary-700">
-          <Icon name="user" size={15} />
+        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary-100 text-primary-700">
+          <Icon name="user" size={14} />
         </span>
-        <span className="hidden max-w-32 truncate sm:inline">{activeStudent?.name ?? "Choose child"}</span>
-        <Icon name="chevron-down" size={14} />
+        <span className="max-w-[7rem] truncate">{activeStudent?.name ?? "Choose child"}</span>
+        <Icon name="chevron-down" size={14} className="text-ink-400" />
       </button>
       {open && (
         <Dropdown onClose={() => setOpen(false)}>
