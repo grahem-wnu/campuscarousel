@@ -1,19 +1,27 @@
-// First-run onboarding (v2.1 F4). Registered as the shell's "onboarding" slot, so it mounts once on
-// every authenticated load. It fetches the student profile and, when onboarding isn't complete, shows
-// a 3-step wizard (profile → discover colleges → set up goals). Steps 2 & 3 hand off to the existing
-// College Finder / Goal Tracker rather than reimplementing them. Any hand-off or "Finish" marks
-// onboardingComplete so it never nags again.
+// First-run onboarding (v2.1 F4). Registered as the shell's "onboarding" slot, so it mounts on every
+// authenticated load. It fetches the ACTIVE student's profile and, when onboarding isn't complete,
+// shows a 3-step wizard (profile → discover colleges → set up goals). Steps 2 & 3 hand off to the
+// existing College Finder / Goal Tracker rather than reimplementing them. Any hand-off or "Finish"
+// marks onboardingComplete so it never nags again. Re-evaluates on student switch so a newly added
+// sibling gets onboarded too, and re-opens on the dashboard's "Set up the profile" button.
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Button, Field, Input, Modal, Select, Spinner, useToast } from '../../shared/ui';
+import { Button, Field, Input, Modal, Select, useToast } from '../../shared/ui';
+import { useActiveStudent } from '../../shared/shell';
 import { getProfile, putProfile, type StudentProfile } from './api';
 
 export default function OnboardingGate() {
-  const [checked, setChecked] = useState(false);
+  const { activeStudentId } = useActiveStudent();
   const [open, setOpen] = useState(false);
+  // Students whose wizard was dismissed this session — don't re-pop when toggling back to them.
+  const dismissedRef = useRef<Set<string>>(new Set());
 
+  // Re-evaluate per ACTIVE student: switching to a fresh, un-onboarded student (e.g. a newly added
+  // sibling) must surface the setup wizard. The previous mount-once check missed that, so a
+  // switched-to profile just landed on a dead-end empty dashboard.
   useEffect(() => {
+    if (!activeStudentId || dismissedRef.current.has(activeStudentId)) return;
     let alive = true;
     getProfile()
       .then((p) => {
@@ -21,17 +29,31 @@ export default function OnboardingGate() {
       })
       .catch(() => {
         /* if profile can't load, don't block the app */
-      })
-      .finally(() => {
-        if (alive) setChecked(true);
       });
     return () => {
       alive = false;
     };
-  }, []);
+  }, [activeStudentId]);
 
-  if (!checked || !open) return null;
-  return <Wizard onClose={() => setOpen(false)} />;
+  // The dashboard's "Set up the profile" button re-opens the wizard for the active student.
+  useEffect(() => {
+    const reopen = () => {
+      if (activeStudentId) dismissedRef.current.delete(activeStudentId);
+      setOpen(true);
+    };
+    window.addEventListener('open-onboarding', reopen);
+    return () => window.removeEventListener('open-onboarding', reopen);
+  }, [activeStudentId]);
+
+  function handleClose() {
+    // Remember the dismissal for this session so it doesn't re-pop on every switch back (a finish/skip
+    // also persists onboardingComplete, so it won't return in future sessions either).
+    if (activeStudentId) dismissedRef.current.add(activeStudentId);
+    setOpen(false);
+  }
+
+  if (!open) return null;
+  return <Wizard onClose={handleClose} />;
 }
 
 function Wizard({ onClose }: { onClose: () => void }) {
