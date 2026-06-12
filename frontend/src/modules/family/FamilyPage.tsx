@@ -302,6 +302,12 @@ const MAJOR_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
   { value: "Business", label: "Business" },
   { value: "Engineering", label: "Engineering" },
   { value: "Education", label: "Education / Teaching" },
+  { value: "Psychology", label: "Psychology / Mental health" },
+  { value: "Neuroscience", label: "Neuroscience" },
+  // Stored as "Construction" (not "Construction Management") so the "management" token doesn't also
+  // activate the Business pack; the backend construction pack matches the "construction" alias.
+  { value: "Construction", label: "Construction Management" },
+  { value: "Architecture", label: "Architecture" },
 ];
 
 /**

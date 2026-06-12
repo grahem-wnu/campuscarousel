@@ -67,12 +67,30 @@ describe('phase-3 packs resolve by major (and do not cross-match)', () => {
     ['Mechanical Engineering', 'engineering'],
     ['Computer Engineering', 'engineering'], // engineering, NOT computer-science
     ['Elementary Education', 'education'],
+    ['Psychology', 'psychology'],
+    ['Psychiatry', 'psychology'], // psychiatry routes to the Psychology pack (which covers the pre-med path)
+    ['Social Work', 'psychology'],
+    ['Neuroscience', 'neuroscience'],
+    ['Cognitive Science', 'neuroscience'], // not computer-science
+    ['Construction', 'construction-management'],
+    ['Building Construction', 'construction-management'],
+    ['Architecture', 'architecture'],
   ];
   for (const [major, key] of cases) {
     it(`${major} → ${key}`, () => {
       expect(packsForMajors([major]).map((p) => p.key)).toEqual([key]);
     });
   }
+
+  it('Behavioral Neuroscience resolves to neuroscience, not psychology', () => {
+    expect(packsForMajors(['Behavioral Neuroscience']).map((p) => p.key)).toEqual(['neuroscience']);
+  });
+
+  it('loose-looking aliases (arch/psych) do not false-match unrelated majors', () => {
+    for (const m of ['Marching Band', 'Sociology', 'Astronomy']) {
+      expect(packsForMajors([m]).filter((p) => ['architecture', 'psychology', 'neuroscience'].includes(p.key))).toEqual([]);
+    }
+  });
 
   it('still resolves nursing, and only nursing carries an entrance exam', () => {
     expect(packsForMajors(['Nursing']).map((p) => p.key)).toEqual(['nursing']);
