@@ -1,7 +1,9 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { cn } from "../ui/cn";
 import { Icon, isIconName } from "../ui/Icon";
+import { Badge } from "../ui/Badge";
+import { api } from "../api";
 import { useAuth } from "./AuthContext";
 import { useActiveStudent } from "./ActiveStudentContext";
 import { SlideOver } from "./SlideOver";
@@ -71,6 +73,9 @@ export function AppShell({ nav }: { nav: AssembledNav }) {
           </nav>
 
           <div className="ml-auto flex items-center gap-1">
+            {/* Active student's major focus → the Focus page (hidden until a major is set) */}
+            <FocusBadge />
+
             {/* Active-student switcher (multi-student) */}
             <StudentSwitcher />
 
@@ -301,6 +306,32 @@ function Dropdown({
  * switch); a single-child family just sees that name implicitly. Switching updates the API header and
  * remounts the routed page (see the keyed <main>) so the new child's data loads.
  */
+/**
+ * A small "<major> focus" badge in the top bar that links to the Focus page, shown once the active
+ * student has set an intended major. Reads /profile directly (scoped to the active student via the
+ * X-Student-Id header) so the shell stays decoupled from the focus module. Silent on error / no major.
+ */
+function FocusBadge() {
+  const { activeStudentId } = useActiveStudent();
+  const [major, setMajor] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    api
+      .get<{ intendedMajors?: string[] }>("/profile")
+      .then((p) => alive && setMajor(p.intendedMajors?.[0] ?? null))
+      .catch(() => alive && setMajor(null));
+    return () => {
+      alive = false;
+    };
+  }, [activeStudentId]);
+  if (!major) return null;
+  return (
+    <NavLink to="/focus" className="hidden items-center sm:flex" aria-label={`${major} focus`}>
+      <Badge tone="primary">{major} focus</Badge>
+    </NavLink>
+  );
+}
+
 function StudentSwitcher() {
   const { students, activeStudent, setActiveStudentId } = useActiveStudent();
   const [open, setOpen] = useState(false);

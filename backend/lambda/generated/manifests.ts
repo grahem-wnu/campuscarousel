@@ -18,6 +18,7 @@ import { routes as examPrepRoutes } from '../../modules/exam-prep/routes.manifes
 import { routes as experienceRoutes } from '../../modules/experience/routes.manifest.js';
 import { routes as familyRoutes } from '../../modules/family/routes.manifest.js';
 import { routes as finaidRoutes } from '../../modules/finaid/routes.manifest.js';
+import { routes as focusRoutes } from '../../modules/focus/routes.manifest.js';
 import { routes as goalTrackerRoutes } from '../../modules/goal-tracker/routes.manifest.js';
 import { routes as interviewPrepRoutes } from '../../modules/interview-prep/routes.manifest.js';
 import { routes as invitesRoutes } from '../../modules/invites/routes.manifest.js';
@@ -45,6 +46,7 @@ export const manifests: RouteManifest[] = [
   { routes: experienceRoutes },
   { routes: familyRoutes },
   { routes: finaidRoutes },
+  { routes: focusRoutes },
   { routes: goalTrackerRoutes },
   { routes: interviewPrepRoutes },
   { routes: invitesRoutes },

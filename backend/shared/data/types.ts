@@ -869,3 +869,25 @@ export interface StudentProfile extends Timestamped {
   onboardingComplete?: boolean;
   updatedBy?: string;
 }
+
+/** One web source the AI cited when generating the focus overview. */
+export interface FocusSource {
+  title: string;
+  url: string;
+}
+
+/**
+ * Cached AI overview of pursuing the active student's intended major (the "major pack" page). A
+ * per-student singleton (PK=FOCUS_OVERVIEW): generating it is web-grounded and slow, so it's produced
+ * by the async hydration worker and read back by GET /focus. `generatedFor` records the majors it was
+ * written for, so the page can tell the user a refresh is due when they change their major.
+ */
+export interface FocusOverview extends Timestamped {
+  status: 'pending' | 'complete' | 'failed';
+  /** The intended major(s) this overview was generated for (so a major change marks it stale). */
+  generatedFor: string[];
+  /** Markdown prose overview of the major: what it involves, prerequisites, outlook, milestones. */
+  overview?: string;
+  sources?: FocusSource[];
+  error?: string;
+}
