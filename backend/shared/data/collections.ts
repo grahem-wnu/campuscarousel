@@ -434,21 +434,24 @@ export function makeStudentProfile(client: TableClient): StudentProfileRepo {
   };
 }
 
-// Focus overview: per-student singleton (PK=FOCUS_OVERVIEW) holding the cached, web-grounded AI
-// overview of the student's intended major. Written by the async hydration worker, read by GET /focus.
+// Focus singletons: per-student cached, web-grounded AI documents written by the async hydration
+// worker and read by GET /focus. Two of them share the FocusOverview shape:
+//   FOCUS_OVERVIEW — overview of the student's intended major
+//   CAREER_PATH    — roadmap from the student's free-text career goal to that career
 export interface FocusOverviewRepo {
   get(): Promise<FocusOverview | null>;
   put(input: Omit<FocusOverview, 'createdAt' | 'updatedAt'>): Promise<FocusOverview>;
 }
 
-export function makeFocusOverview(client: TableClient): FocusOverviewRepo {
+/** A per-student singleton holding one FocusOverview-shaped document at the given PK. */
+function makeFocusDoc(client: TableClient, pk: string): FocusOverviewRepo {
   return {
     async get() {
-      const item = await client.get('FOCUS_OVERVIEW', SK_DETAILS);
+      const item = await client.get(pk, SK_DETAILS);
       return item ? toDomain<FocusOverview>(item) : null;
     },
     async put(input) {
-      const existing = await client.get('FOCUS_OVERVIEW', SK_DETAILS);
+      const existing = await client.get(pk, SK_DETAILS);
       const now = isoNow();
       const domain: FocusOverview = {
         ...input,
@@ -457,12 +460,20 @@ export function makeFocusOverview(client: TableClient): FocusOverviewRepo {
       };
       await client.put({
         ...(domain as unknown as Record<string, unknown>),
-        PK: 'FOCUS_OVERVIEW',
+        PK: pk,
         SK: SK_DETAILS,
       });
       return domain;
     },
   };
+}
+
+export function makeFocusOverview(client: TableClient): FocusOverviewRepo {
+  return makeFocusDoc(client, 'FOCUS_OVERVIEW');
+}
+
+export function makeCareerPath(client: TableClient): FocusOverviewRepo {
+  return makeFocusDoc(client, 'CAREER_PATH');
 }
 
 // ---------------------------------------------------------------------------

@@ -6,7 +6,7 @@
 // so tests run with no network; any error degrades to a thrown error the caller records as `failed`.
 
 import { converseWithSearch, type BedrockInvoker, type WebSearcher } from '../../shared/ai/index.js';
-import { majorPhrase } from '../../shared/ai/major.js';
+import { majorList, majorPhrase } from '../../shared/ai/major.js';
 import { packFocusBriefs } from '../../shared/packs/index.js';
 import type { FocusSource } from '../../shared/data/index.js';
 
@@ -70,6 +70,52 @@ export function makeBedrockFocusOverviewer(
     });
     const overview = text.trim();
     if (!overview) throw new Error('focus overview: model returned no text');
+    return {
+      overview,
+      sources: sources.map((s) => ({ title: s.title || s.url, url: s.url })).filter((s) => s.url),
+    };
+  };
+}
+
+/** Build the career-path prompt from the student's FREE-TEXT career goal (the entry point) — the major
+ *  is only context. Produces a concrete education→licensure→role roadmap for whatever they typed,
+ *  even unusual careers, grounded in current web sources. */
+export function buildCareerPathPrompt(careerGoal: string, majors: string[] = []): string {
+  const majorContext = majorList(majors).length ? `Their current intended major is ${majorPhrase(majors)}.` : '';
+  return [
+    `A high-school student wants to become: "${careerGoal}". Map the realistic path from where they are now to that career.`,
+    majorContext,
+    'Use web_search to ground the steps (which majors lead there, required degrees and licenses/exams, typical timeline, and outlook) in current, reputable sources.',
+    'Cover, as short markdown sections with `##` headings:',
+    '1. The role — what this career actually does day to day.',
+    '2. Majors that lead here — the best-fit undergraduate major(s), and whether more than one route works.',
+    '3. The full path — degree(s), any graduate/professional school, licenses, certifications, and exams, in order, with rough timing.',
+    '4. Start now — concrete steps a high-schooler can take this year (courses, certs, experience).',
+    '5. Outlook — demand and typical earnings, with a source.',
+    'If the career is vague or could mean several things, note the main interpretations briefly. Keep it under ~450 words, warm and concrete, second person ("you"). Output GitHub-flavored markdown only — no preamble, no code fences.',
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
+/** A Bedrock-backed career-path generator bound to the student's free-text career goal (+ major for
+ *  context). Same web-grounded mechanics as the overviewer; returns the markdown roadmap + sources. */
+export function makeBedrockCareerPathGenerator(
+  options: AiOptions = {},
+  careerGoal = '',
+  majors: string[] = [],
+): FocusOverviewer {
+  return async () => {
+    const { text, sources } = await converseWithSearch(buildCareerPathPrompt(careerGoal, majors), {
+      modelId: options.modelId,
+      invoker: options.invoker,
+      searcher: options.searcher,
+      webSearch: options.webSearch,
+      maxRounds: 6,
+      maxTokens: 2048,
+    });
+    const overview = text.trim();
+    if (!overview) throw new Error('career path: model returned no text');
     return {
       overview,
       sources: sources.map((s) => ({ title: s.title || s.url, url: s.url })).filter((s) => s.url),

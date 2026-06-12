@@ -15,6 +15,7 @@ import {
   makeBudget,
   makeCollegeChecklist,
   makeCollegeNotes,
+  makeCareerPath,
   makeConversations,
   makeFocusOverview,
   makeInvites,
@@ -266,6 +267,7 @@ export function makeData(
     opportunityDiscoveryJobs,
     studentProfile: makeStudentProfile(client),
     focusOverview: makeFocusOverview(client),
+    careerPath: makeCareerPath(client),
     finaid,
     // FAMILY-LEVEL repos — tenant-scoped but NOT per-child (shared across the family's kids).
     profiles: makeProfiles(familyClient),

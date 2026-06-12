@@ -10,3 +10,8 @@ export function getFocus(): Promise<FocusResponse> {
 export function refreshOverview(): Promise<FocusOverview> {
   return api.post<FocusOverview>("/focus/overview", {});
 }
+
+/** Kick off (or refresh) the web-grounded career path from the free-text career goal. */
+export function refreshCareerPath(): Promise<FocusOverview> {
+  return api.post<FocusOverview>("/focus/career-path", {});
+}
