@@ -47,6 +47,12 @@ describe('PUT /profile', () => {
     await expect(h.put(ctx({ body: { nope: 1 } }))).rejects.toMatchObject({ status: 422 });
   });
 
+  it('accepts intendedMajors (drives the major packs)', async () => {
+    const res = await h.put(ctx({ body: { intendedMajors: ['Nursing'] } }));
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ intendedMajors: ['Nursing'] });
+  });
+
   it('422 on an out-of-range graduation year', async () => {
     await expect(h.put(ctx({ body: { graduationYear: 1800 } }))).rejects.toMatchObject({ status: 422 });
   });

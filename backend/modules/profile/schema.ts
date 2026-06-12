@@ -22,6 +22,7 @@ export const profileBodySchema = z
     gpaType: z.enum(['weighted', 'unweighted']).optional(),
     careerGoal: z.string().max(500).optional(),
     dreamSchool: z.string().max(200).optional(),
+    intendedMajors: z.array(z.string().max(80)).max(10).optional(),
     interests: z.array(z.string().max(80)).max(50).optional(),
     currentActivities: z.array(activity).max(50).optional(),
     budget: z
