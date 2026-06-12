@@ -7,13 +7,19 @@ const sig = (r: { method: string; path: string }): string => `${r.method} ${r.pa
 
 describe('routes.manifest ↔ buildRoutes', () => {
   it('register the identical method+path set', () => {
-    const built = buildRoutes(makeHandlers({ getData: () => ({}) as Data, overviewDispatch: async () => {} }))
+    const built = buildRoutes(
+      makeHandlers({ getData: () => ({}) as Data, overviewDispatch: async () => {}, careerDispatch: async () => {} }),
+    )
       .map(sig)
       .sort();
     expect(manifestRoutes.map(sig).sort()).toEqual(built);
   });
 
-  it('expose GET /focus + POST /focus/overview', () => {
-    expect(manifestRoutes.map(sig).sort()).toEqual(['GET /focus', 'POST /focus/overview']);
+  it('expose GET /focus + POST /focus/overview + POST /focus/career-path', () => {
+    expect(manifestRoutes.map(sig).sort()).toEqual([
+      'GET /focus',
+      'POST /focus/career-path',
+      'POST /focus/overview',
+    ]);
   });
 });

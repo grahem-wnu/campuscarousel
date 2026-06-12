@@ -4,20 +4,24 @@
 // off (or refreshes) that overview on the async worker (web search can't run on the 30s request path).
 // Family-visible like the profile it reads; identity comes from the JWT and the router 401s anon callers.
 
-import { type Handler } from '../../shared/api/index.js';
+import { Errors, type Handler } from '../../shared/api/index.js';
 import type { Data, FocusOverview } from '../../shared/data/index.js';
 import { packsForMajors, type MajorPack } from '../../shared/packs/index.js';
 import { type OverviewDispatcher } from './overview.js';
+import { type CareerDispatcher } from './careerpath.js';
 
 export interface FocusHandlers {
   get: Handler;
   refresh: Handler;
+  refreshCareer: Handler;
 }
 
 export interface FocusDeps {
   getData: () => Data;
-  /** Enqueue (or inline-run) the web-grounded overview job. */
+  /** Enqueue (or inline-run) the web-grounded major-overview job. */
   overviewDispatch: OverviewDispatcher;
+  /** Enqueue (or inline-run) the web-grounded career-path job. */
+  careerDispatch: CareerDispatcher;
 }
 
 /** JSON-friendly view of one resolved major pack for the frontend. */
@@ -51,25 +55,31 @@ function sameMajors(a: readonly string[], b: readonly string[]): boolean {
 }
 
 export function makeHandlers(deps: FocusDeps): FocusHandlers {
-  const { getData, overviewDispatch } = deps;
+  const { getData, overviewDispatch, careerDispatch } = deps;
 
   return {
-    // GET /focus — the resolved pack(s) + cached overview + freshness for the active student.
+    // GET /focus — the resolved pack(s) + cached overview + career path + freshness for the student.
     get: async () => {
       const data = getData();
       const profile = await data.studentProfile.get();
       const majors = profile?.intendedMajors ?? [];
+      const careerGoal = profile?.careerGoal ?? null;
       const packs = packsForMajors(majors).map(toPackSummary);
       const overview = await data.focusOverview.get();
       const stale = !!overview && !sameMajors(overview.generatedFor ?? [], majors);
+      const careerPath = await data.careerPath.get();
+      // The career path is stale once the career goal it was generated for no longer matches.
+      const careerStale = !!careerPath && (careerPath.generatedFor ?? [])[0] !== (careerGoal ?? '');
       return {
         status: 200,
         body: {
           majors,
-          careerGoal: profile?.careerGoal ?? null,
+          careerGoal,
           packs,
           overview: overview ?? null,
           stale,
+          careerPath: careerPath ?? null,
+          careerStale,
         },
       };
     },
@@ -85,6 +95,20 @@ export function makeHandlers(deps: FocusDeps): FocusHandlers {
       const after = await data.focusOverview.get();
       return { status: 202, body: after ?? pending };
     },
+
+    // POST /focus/career-path — (re)generate the web-grounded roadmap from the free-text career goal.
+    // Requires a career goal (set on the profile); mark pending, dispatch the async job, return 202.
+    refreshCareer: async () => {
+      const data = getData();
+      const careerGoal = (await data.studentProfile.get())?.careerGoal ?? '';
+      if (!careerGoal.trim()) {
+        throw Errors.validation('Set a career goal first (on the Family page) to generate a path.');
+      }
+      const pending: FocusOverview = await data.careerPath.put({ status: 'pending', generatedFor: [careerGoal] });
+      await careerDispatch();
+      const after = await data.careerPath.get();
+      return { status: 202, body: after ?? pending };
+    },
   };
 }
 
@@ -93,6 +117,7 @@ export function makeHandlers(deps: FocusDeps): FocusHandlers {
 export function buildRoutes(h: FocusHandlers) {
   return [
     { method: 'POST' as const, path: '/focus/overview', handler: h.refresh },
+    { method: 'POST' as const, path: '/focus/career-path', handler: h.refreshCareer },
     { method: 'GET' as const, path: '/focus', handler: h.get },
   ];
 }

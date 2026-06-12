@@ -38,4 +38,8 @@ export interface FocusResponse {
   overview: FocusOverview | null;
   /** True when a cached overview was generated for different majors than are set now. */
   stale: boolean;
+  /** Web-grounded roadmap from the free-text career goal (markdown in `overview`). */
+  careerPath: FocusOverview | null;
+  /** True when the cached career path was generated for a different career goal than is set now. */
+  careerStale: boolean;
 }

@@ -9,12 +9,18 @@ import type { RouteDef } from '../../shared/api/index.js';
 import { dataFromEnv, type Data } from '../../shared/data/index.js';
 import { makeHandlers } from './handlers.js';
 import { makeSqsOverviewEnqueuer } from './overview.js';
+import { makeSqsCareerEnqueuer } from './careerpath.js';
 
 let cached: Data | undefined;
 const getData = (): Data => (cached ??= dataFromEnv());
-const handlers = makeHandlers({ getData, overviewDispatch: makeSqsOverviewEnqueuer(getData) });
+const handlers = makeHandlers({
+  getData,
+  overviewDispatch: makeSqsOverviewEnqueuer(getData),
+  careerDispatch: makeSqsCareerEnqueuer(getData),
+});
 
 export const routes: RouteDef[] = [
   { method: 'POST', path: '/focus/overview', handler: handlers.refresh },
+  { method: 'POST', path: '/focus/career-path', handler: handlers.refreshCareer },
   { method: 'GET', path: '/focus', handler: handlers.get },
 ];
