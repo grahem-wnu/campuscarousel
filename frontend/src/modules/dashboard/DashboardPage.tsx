@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { Badge, Button, Card, EmptyState, Icon, Spinner, cn } from '../../shared/ui';
+import { Badge, Button, Card, Icon, Spinner, cn } from '../../shared/ui';
 import { categoryRows, deadlineLabel, deadlineTone, gpaText, money, READINESS_TONE, SOURCE_TONE, totalColleges } from './logic';
 import { getDashboard } from './api';
 import type { Dashboard } from './types';
@@ -55,6 +55,24 @@ function CardTitle({ children }: { children: ReactNode }) {
   );
 }
 
+/** A first-run quick-start tile: icon + title + one-line body, links into a module. */
+function StartCard({ to, icon, title, body }: { to: string; icon: 'star' | 'school' | 'heart' | 'course'; title: string; body: string }) {
+  return (
+    <LinkCard to={to} className="flex items-start gap-3">
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-50 text-primary-600">
+        <Icon name={icon} size={20} />
+      </span>
+      <div className="min-w-0">
+        <p className="flex items-center gap-1 text-sm font-semibold text-ink-800">
+          {title}
+          <Icon name="chevron-right" size={14} className="text-ink-300 transition-transform group-hover:translate-x-0.5 group-hover:text-primary-500" />
+        </p>
+        <p className="mt-0.5 text-xs text-ink-500">{body}</p>
+      </div>
+    </LinkCard>
+  );
+}
+
 /** A compact stat tile that links to its page. */
 function Stat({ to, label, value, sub, icon }: { to: string; label: string; value: string; sub?: string; icon: 'course' | 'heart' | 'clinical' | 'teas' }) {
   return (
@@ -103,8 +121,29 @@ export default function DashboardPage() {
   const empty = d.activity.totalCount === 0 && totalColleges(d.collegeCounts) === 0 && d.gpa.courses === 0;
   if (empty) {
     return (
-      <div className="mx-auto max-w-3xl p-4 sm:p-6">
-        <EmptyState icon="home" title="Welcome to Campus Carousel" description="As you log activities, add colleges, and track your prep, this dashboard fills with your whole story at a glance." />
+      <div className="mx-auto max-w-3xl space-y-5 p-4 sm:p-6">
+        <header>
+          <h1 className="text-2xl font-bold text-ink-900">Let&rsquo;s get started</h1>
+          <p className="mt-1 text-sm text-ink-500">
+            Nothing here yet. Run the quick setup, or jump into any one of these — your dashboard fills in as you go.
+          </p>
+        </header>
+
+        {/* Primary path: build the profile via the setup wizard (dispatched to the shell's OnboardingGate). */}
+        <Card className="flex flex-wrap items-center justify-between gap-3 border border-primary-200 bg-primary-50">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-primary-800">Build the profile</p>
+            <p className="text-xs text-primary-700">A few basics — major, career goal, GPA — power the AI, benchmarks, and your whole dashboard.</p>
+          </div>
+          <Button onClick={() => window.dispatchEvent(new Event('open-onboarding'))}>Set up the profile</Button>
+        </Card>
+
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <StartCard to="/family" icon="star" title="Set the academic focus" body="Pick an intended major and career goal — this personalizes everything." />
+          <StartCard to="/colleges" icon="school" title="Add your first college" body="Search programs and pull tuition, deadlines, and rankings." />
+          <StartCard to="/journal" icon="heart" title="Log an activity" body="Track clubs, volunteering, and clinical hours." />
+          <StartCard to="/courses" icon="course" title="Add your courses" body="Enter classes to track GPA over time." />
+        </div>
       </div>
     );
   }
