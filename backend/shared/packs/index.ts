@@ -7,6 +7,10 @@ import { preHealthPack } from './pre-health.js';
 import { businessPack } from './business.js';
 import { engineeringPack } from './engineering.js';
 import { educationPack } from './education.js';
+import { psychologyPack } from './psychology.js';
+import { neurosciencePack } from './neuroscience.js';
+import { constructionManagementPack } from './construction-management.js';
+import { architecturePack } from './architecture.js';
 import type { MajorPack, PackCertification } from './types.js';
 
 export type { MajorPack, PackCertification } from './types.js';
@@ -19,6 +23,10 @@ export const ALL_PACKS: readonly MajorPack[] = [
   businessPack,
   engineeringPack,
   educationPack,
+  psychologyPack,
+  neurosciencePack,
+  constructionManagementPack,
+  architecturePack,
 ];
 
 /** Tokenize a major string into lowercase word tokens (so 'rn' matches "RN", not "learning"). */
