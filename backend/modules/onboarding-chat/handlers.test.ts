@@ -103,6 +103,9 @@ describe('POST /onboarding/finish', () => {
     expect(body.goalsCreated).toBe(2);
     expect(body.collegesCreated).toBe(2);
     expect(hydrated).toHaveLength(2); // hydration dispatched for each seeded college
+
+    // Budget reaches the canonical (dashboard/FinAid) budget, not just the profile note.
+    expect((await data.budget.get())?.totalBudget).toBe(200000);
   });
 
   it('does not duplicate a college that already exists', async () => {

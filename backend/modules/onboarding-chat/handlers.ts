@@ -130,6 +130,21 @@ export function makeHandlers(deps: OnboardingDeps): OnboardingHandlers {
         /* college seeding is non-fatal — the family can run the College Finder later */
       }
 
+      // Seed the canonical budget so it shows on the dashboard + FinAid (profile.budget alone doesn't
+      // reach them). Best-effort; update if a budget already exists, else create.
+      if (saved.budget?.total != null) {
+        try {
+          const existingBudget = await data.budget.get();
+          if (existingBudget) {
+            await data.budget.update({ totalBudget: saved.budget.total });
+          } else {
+            await data.budget.put({ totalBudget: saved.budget.total } as Parameters<Data['budget']['put']>[0]);
+          }
+        } catch {
+          /* non-fatal — the family can set the budget on the FinAid page */
+        }
+      }
+
       return { status: 200, body: { profile: saved, goalsCreated, collegesCreated } };
     },
 
