@@ -260,6 +260,15 @@ describe('notes / checklist', () => {
     expect((list.body as { notes: { content: string }[] }).notes.map((n) => n.content)).toEqual(['Visited!']);
   });
 
+  it('ignores a client-supplied author (no identity spoofing)', async () => {
+    const c = await create({ name: 'Kent State' });
+    // kate tries to forge a note as keira; the extra key is rejected by .strict() (422).
+    await expectStatus(
+      h.addNote(ctx({ requester: kate, params: { id: c.collegeId }, body: { content: 'x', author: 'keira' } })),
+      422,
+    );
+  });
+
   it('note add 404s for a missing college', async () => {
     await expectStatus(h.addNote(ctx({ params: { id: 'ghost' }, body: { content: 'x' } })), 404);
   });

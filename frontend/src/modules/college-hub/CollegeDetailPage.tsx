@@ -11,6 +11,7 @@ import {
   Spinner,
   Tabs,
   Textarea,
+  safeHref,
   type TabItem,
 } from '../../shared/ui';
 import { CollegeLogo } from './CollegeLogo';
@@ -176,14 +177,14 @@ export default function CollegeDetailPage() {
             {college.branding?.mascot ? ` · ${college.branding.mascot}` : ''}
           </p>
           <div className="mt-2 flex flex-wrap gap-2 text-sm">
-            {college.contactInfo?.programAdmissionsUrl ? (
-              <a className="text-primary-600 hover:underline" href={college.contactInfo.programAdmissionsUrl} target="_blank" rel="noreferrer">Program admissions</a>
+            {safeHref(college.contactInfo?.programAdmissionsUrl) ? (
+              <a className="text-primary-600 hover:underline" href={safeHref(college.contactInfo?.programAdmissionsUrl)} target="_blank" rel="noreferrer">Program admissions</a>
             ) : null}
-            {college.contactInfo?.campusVisitUrl ? (
-              <a className="text-primary-600 hover:underline" href={college.contactInfo.campusVisitUrl} target="_blank" rel="noreferrer">Plan a visit</a>
+            {safeHref(college.contactInfo?.campusVisitUrl) ? (
+              <a className="text-primary-600 hover:underline" href={safeHref(college.contactInfo?.campusVisitUrl)} target="_blank" rel="noreferrer">Plan a visit</a>
             ) : null}
-            {college.website ? (
-              <a className="text-primary-600 hover:underline" href={college.website} target="_blank" rel="noreferrer">Website</a>
+            {safeHref(college.website) ? (
+              <a className="text-primary-600 hover:underline" href={safeHref(college.website)} target="_blank" rel="noreferrer">Website</a>
             ) : null}
           </div>
         </div>
@@ -330,10 +331,10 @@ function OverviewTab({ college, onDelete }: { college: College; onDelete: () => 
                 {(t.attribution || t.source) && (
                   <figcaption className="mt-1 text-xs text-ink-400">
                     {t.attribution ?? 'Student'}
-                    {t.source ? (
+                    {safeHref(t.source) ? (
                       <>
                         {' · '}
-                        <a className="text-primary-600 hover:underline" href={t.source} target="_blank" rel="noreferrer">source</a>
+                        <a className="text-primary-600 hover:underline" href={safeHref(t.source)} target="_blank" rel="noreferrer">source</a>
                       </>
                     ) : null}
                   </figcaption>
@@ -404,20 +405,32 @@ function OverviewTab({ college, onDelete }: { college: College; onDelete: () => 
                 const parsed = sourceLabel(src);
                 const title = titleByUrl.get(src) ?? parsed.title; // hydration-resolved title, else URL-parsed
                 const site = parsed.site;
-                return (
-                <li key={src}>
-                  <a
-                    className="group block rounded-lg border border-surface-border px-3 py-2 transition hover:border-primary-200 hover:bg-surface-sunken"
-                    href={src}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
+                // Sources are AI/web-sourced URLs — only link out when the href is a safe http(s)
+                // URL; otherwise show the card inert (no clickable javascript:/data: target).
+                const href = safeHref(src);
+                const body = (
+                  <>
                     <p className="flex items-center gap-1 truncate text-sm font-medium text-ink-800 group-hover:text-primary-700">
                       {title}
                       <Icon name="chevron-right" size={13} className="text-ink-300 transition-transform group-hover:translate-x-0.5 group-hover:text-primary-500" />
                     </p>
                     {site && site !== title ? <p className="truncate text-xs text-ink-400">{site}</p> : null}
-                  </a>
+                  </>
+                );
+                return (
+                <li key={src}>
+                  {href ? (
+                    <a
+                      className="group block rounded-lg border border-surface-border px-3 py-2 transition hover:border-primary-200 hover:bg-surface-sunken"
+                      href={href}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      {body}
+                    </a>
+                  ) : (
+                    <div className="block rounded-lg border border-surface-border px-3 py-2">{body}</div>
+                  )}
                 </li>
                 );
               });

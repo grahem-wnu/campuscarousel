@@ -6,7 +6,7 @@ import { HttpLambdaIntegration } from "aws-cdk-lib/aws-apigatewayv2-integrations
 import type { Table } from "aws-cdk-lib/aws-dynamodb";
 import type { Bucket } from "aws-cdk-lib/aws-s3";
 import type { UserPool, UserPoolClient } from "aws-cdk-lib/aws-cognito";
-import { Code, Function as LambdaFunction, Runtime } from "aws-cdk-lib/aws-lambda";
+import { Code, Function as LambdaFunction, Runtime, Tracing } from "aws-cdk-lib/aws-lambda";
 import { RetentionDays } from "aws-cdk-lib/aws-logs";
 import { PolicyStatement } from "aws-cdk-lib/aws-iam";
 import type { Queue } from "aws-cdk-lib/aws-sqs";
@@ -59,6 +59,8 @@ export class ApiStack extends Stack {
       // CRUD default timeout — hydration is offloaded to the SQS worker.
       timeout: Duration.seconds(30),
       memorySize: 512,
+      // Active tracing for end-to-end latency visibility (API -> SQS -> worker -> Bedrock).
+      tracing: Tracing.ACTIVE,
       logRetention: RetentionDays.ONE_MONTH,
       environment: {
         TABLE_NAME: table.tableName,
@@ -153,10 +155,17 @@ export class ApiStack extends Stack {
     // check and the browser blocks the real request ("Failed to fetch"). API Gateway only
     // auto-answers preflight (204) when NO route matches the OPTIONS request, so we leave
     // OPTIONS unrouted and let the corsPreflight config handle it.
+    // Prod only trusts its real origin; localhost (Vite dev) is allowed on staging only so a
+    // developer's machine can't be a CORS-trusted origin against the production API.
+    const allowOrigins =
+      config.stage === "prod"
+        ? [`https://${envHostname(config)}`]
+        : [`https://${envHostname(config)}`, "http://localhost:5173"];
+
     const api = new HttpApi(this, "HttpApi", {
       apiName: `${config.namePrefix}-api`,
       corsPreflight: {
-        allowOrigins: [`https://${envHostname(config)}`, "http://localhost:5173"],
+        allowOrigins,
         allowMethods: [
           CorsHttpMethod.GET,
           CorsHttpMethod.POST,

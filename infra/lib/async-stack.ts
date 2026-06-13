@@ -3,7 +3,7 @@ import { CfnOutput, Duration, Stack, type StackProps } from "aws-cdk-lib";
 import type { Table } from "aws-cdk-lib/aws-dynamodb";
 import { Rule, Schedule } from "aws-cdk-lib/aws-events";
 import { LambdaFunction as LambdaFunctionTarget } from "aws-cdk-lib/aws-events-targets";
-import { Code, Function as LambdaFunction, Runtime } from "aws-cdk-lib/aws-lambda";
+import { Code, Function as LambdaFunction, Runtime, Tracing } from "aws-cdk-lib/aws-lambda";
 import { SqsEventSource } from "aws-cdk-lib/aws-lambda-event-sources";
 import { RetentionDays } from "aws-cdk-lib/aws-logs";
 import { Queue } from "aws-cdk-lib/aws-sqs";
@@ -54,8 +54,9 @@ export class AsyncStack extends Stack {
 
     this.hydrationQueue = new Queue(this, "HydrationQueue", {
       queueName: `${config.namePrefix}-hydration`,
-      // Must be >= the worker timeout so a message isn't redelivered mid-processing.
-      visibilityTimeout: Duration.seconds(360),
+      // AWS guidance for SQS event sources is visibility timeout >= 6x the function timeout
+      // (300s) so a slow/retried Bedrock hydration is never redelivered mid-processing.
+      visibilityTimeout: Duration.seconds(1800),
       retentionPeriod: Duration.days(4),
       enforceSSL: true,
       deadLetterQueue: { queue: this.deadLetterQueue, maxReceiveCount: 3 },
@@ -70,6 +71,12 @@ export class AsyncStack extends Stack {
       code: Code.fromAsset(join(__dirname, "../../backend/dist/hydration")),
       timeout: Duration.seconds(300),
       memorySize: 512,
+      // Cap concurrent workers so an SQS burst can't fan out to hundreds of simultaneous
+      // ~140s Bedrock calls (throttling + runaway cost). batchSize:1 limits per-invocation,
+      // NOT concurrency — this is the real throttle/cost guard.
+      reservedConcurrentExecutions: 3,
+      // Active tracing across the API -> SQS -> worker -> Bedrock chain for latency debugging.
+      tracing: Tracing.ACTIVE,
       logRetention: RetentionDays.ONE_MONTH,
       environment: {
         TABLE_NAME: table.tableName,

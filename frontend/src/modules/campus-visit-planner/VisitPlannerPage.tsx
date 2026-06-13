@@ -12,6 +12,7 @@ import {
   Table,
   Tabs,
   useToast,
+  safeHref,
   type Column,
   type TabItem,
 } from '../../shared/ui';
@@ -294,10 +295,10 @@ export default function VisitPlannerPage() {
                 <ul className="mt-1 space-y-0.5 text-sm text-ink-700">
                   {prep.data.logistics.address ? <li>📍 {prep.data.logistics.address}</li> : null}
                   {prep.data.logistics.contact ? <li>✉️ {prep.data.logistics.contact}</li> : null}
-                  {prep.data.logistics.campusVisitUrl ? (
+                  {safeHref(prep.data.logistics.campusVisitUrl) ? (
                     <li>
                       🔗{' '}
-                      <a className="text-primary-600 underline" href={prep.data.logistics.campusVisitUrl} target="_blank" rel="noreferrer">
+                      <a className="text-primary-600 underline" href={safeHref(prep.data.logistics.campusVisitUrl)} target="_blank" rel="noreferrer">
                         Campus visit page
                       </a>
                     </li>

@@ -7,3 +7,5 @@ export type { ConverseOptions, ConverseResult, BedrockInvoker } from './bedrock.
 
 export { tavilySearch, getTavilyKey, SearchNotConfiguredError } from './search.js';
 export type { SearchResult, SearchOptions, WebSearcher } from './search.js';
+
+export { promptLiteral } from './sanitize.js';

@@ -45,6 +45,12 @@ export interface EnvConfig {
   /** Verified SES sender for the reminder digest (v2.1 F1). Context `reminderSenderEmail`;
    *  defaults to reminders@<domainName>. Must be a verified SES identity before sends succeed. */
   readonly reminderSenderEmail: string;
+  /**
+   * Email to subscribe to the CloudWatch alarm SNS topic (errors/throttles/5xx). Resolved
+   * from context `alertEmail` (falls back to `budgetNotifyEmail`). When unset, alarms still
+   * fire to the SNS topic but no one is emailed — set it so failures actually page someone.
+   */
+  readonly alertEmail?: string;
 }
 
 /**
@@ -137,6 +143,11 @@ export function getEnvConfig(app: App, stage: Stage): EnvConfig {
   const removalPolicy =
     (envCtx.removalPolicy as "retain" | "destroy") || (stage === "prod" ? "retain" : "destroy");
 
+  const alertEmail =
+    (app.node.tryGetContext("alertEmail") as string) ||
+    (app.node.tryGetContext("budgetNotifyEmail") as string) ||
+    undefined;
+
   return {
     stage,
     account,
@@ -153,6 +164,7 @@ export function getEnvConfig(app: App, stage: Stage): EnvConfig {
     ssmPrefix: `/${proj}/${stage}`,
     namePrefix: `${proj}-${stage}`,
     reminderSenderEmail,
+    alertEmail,
   };
 }
 

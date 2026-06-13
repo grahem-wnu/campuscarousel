@@ -246,14 +246,14 @@ export function makeHandlers(deps: CollegeDeps): CollegeHandlers {
       return { status: 200, body: { notes } };
     },
 
-    // POST /colleges/:id/notes — author defaults to the JWT username.
+    // POST /colleges/:id/notes — author is always the JWT identity, never client-supplied.
     addNote: async (ctx) => {
       const { id } = validateParams(idParamSchema, ctx);
       const input = validateBody(noteSchema, ctx);
       const data = getData();
       await requireCollege(id);
       const note = await data.collegeNotes.add(id, {
-        author: input.author ?? ctx.requester.username,
+        author: ctx.requester.username,
         content: input.content,
         noteType: input.noteType,
       });
