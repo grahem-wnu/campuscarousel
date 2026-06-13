@@ -6,6 +6,7 @@ import { getDashboard } from './api';
 import type { Dashboard } from './types';
 import { getFocus } from '../focus/api';
 import type { FocusResponse } from '../focus/types';
+import { getProfile } from '../onboarding/api';
 
 /** A banner linking to the Focus (major-pack) page — shown only once the student has set a major. It
  *  makes the otherwise-ambient major pack a visible, clickable destination from the dashboard. */
@@ -93,6 +94,7 @@ function Stat({ to, label, value, sub, icon }: { to: string; label: string; valu
  *  entries in any widget). */
 export default function DashboardPage() {
   const [d, setD] = useState<Dashboard | null>(null);
+  const [onboarded, setOnboarded] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -103,8 +105,18 @@ export default function DashboardPage() {
       .then(setD)
       .catch((e) => setError(e instanceof Error ? e.message : 'Could not load your dashboard.'))
       .finally(() => setLoading(false));
+    // Whether setup is done decides empty-state vs the real (blank-tile) dashboard. Non-blocking.
+    getProfile()
+      .then((p) => setOnboarded(p.onboardingComplete === true))
+      .catch(() => setOnboarded(false));
   };
   useEffect(load, []);
+
+  // After conversational onboarding finishes, refetch so the seeded dashboard shows immediately.
+  useEffect(() => {
+    window.addEventListener('onboarding-finished', load);
+    return () => window.removeEventListener('onboarding-finished', load);
+  }, []);
 
   if (loading) return <div className="flex justify-center py-24"><Spinner size={28} /></div>;
   if (error || !d) {
@@ -118,8 +130,10 @@ export default function DashboardPage() {
     );
   }
 
+  // Guided first-run only until setup is done; once onboarded, show the real dashboard (blank tiles
+  // that invite a click) even before any data is logged.
   const empty = d.activity.totalCount === 0 && totalColleges(d.collegeCounts) === 0 && d.gpa.courses === 0;
-  if (empty) {
+  if (empty && !onboarded) {
     return (
       <div className="mx-auto max-w-3xl space-y-5 p-4 sm:p-6">
         <header>

@@ -10,10 +10,14 @@ import { useNavigate } from 'react-router-dom';
 import { Button, Field, Input, Modal, Select, useToast } from '../../shared/ui';
 import { useActiveStudent } from '../../shared/shell';
 import { getProfile, putProfile, type StudentProfile } from './api';
+import OnboardingChat from './OnboardingChat';
 
 export default function OnboardingGate() {
   const { activeStudentId } = useActiveStudent();
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
+  // The conversational chat is the default FTUE; "Prefer a form?" switches to the legacy wizard.
+  const [mode, setMode] = useState<'chat' | 'form'>('chat');
   // Students whose wizard was dismissed this session — don't re-pop when toggling back to them.
   const dismissedRef = useRef<Set<string>>(new Set());
 
@@ -35,10 +39,11 @@ export default function OnboardingGate() {
     };
   }, [activeStudentId]);
 
-  // The dashboard's "Set up the profile" button re-opens the wizard for the active student.
+  // The dashboard's "Set up the profile" button re-opens onboarding (chat) for the active student.
   useEffect(() => {
     const reopen = () => {
       if (activeStudentId) dismissedRef.current.delete(activeStudentId);
+      setMode('chat');
       setOpen(true);
     };
     window.addEventListener('open-onboarding', reopen);
@@ -52,8 +57,22 @@ export default function OnboardingGate() {
     setOpen(false);
   }
 
+  // Onboarding finished (profile saved + seeded): close, and land on a freshly-loaded dashboard.
+  function handleComplete() {
+    if (activeStudentId) dismissedRef.current.add(activeStudentId);
+    setOpen(false);
+    // Tell an already-mounted dashboard to refetch; navigate covers the not-on-dashboard case.
+    window.dispatchEvent(new Event('onboarding-finished'));
+    navigate('/dashboard');
+  }
+
   if (!open) return null;
-  return <Wizard onClose={handleClose} />;
+  if (mode === 'form') return <Wizard onClose={handleClose} />;
+  return (
+    <Modal open onClose={handleClose} title="Let's set things up" size="lg">
+      <OnboardingChat onComplete={handleComplete} onUseForm={() => setMode('form')} />
+    </Modal>
+  );
 }
 
 function Wizard({ onClose }: { onClose: () => void }) {
