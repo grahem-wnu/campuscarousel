@@ -207,23 +207,39 @@ export default function DashboardPage() {
       ) : null}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        {/* Upcoming deadlines → master timeline */}
+        {/* Colleges → college hub (tracked count). Above deadlines: the list drives the deadlines. */}
+        <LinkCard to="/colleges">
+          <CardTitle>Colleges ({totalColleges(d.collegeCounts)})</CardTitle>
+          <div className="flex flex-wrap gap-1.5">
+            {Object.entries(d.collegeCounts).map(([status, n]) => (
+              <Badge key={status} tone="neutral">{status}: {n}</Badge>
+            ))}
+            {totalColleges(d.collegeCounts) === 0 ? <p className="text-sm text-ink-500">No colleges tracked.</p> : null}
+          </div>
+        </LinkCard>
+
+        {/* Upcoming deadlines → master timeline. A clean preview (next 3); the full list lives on the timeline. */}
         <LinkCard to="/timeline">
           <CardTitle>Upcoming deadlines</CardTitle>
           {d.upcomingDeadlines.length === 0 ? (
             <p className="text-sm text-ink-500">Nothing dated yet — add colleges, exams, or visits and their deadlines appear here automatically.</p>
           ) : (
-            <ul className="divide-y divide-surface-border">
-              {d.upcomingDeadlines.map((dl, i) => (
-                <li key={i} className="flex items-center justify-between gap-3 py-1.5 text-sm">
-                  <span className="flex items-center gap-2 truncate">
-                    <Badge tone={SOURCE_TONE[dl.source]}>{dl.source}</Badge>
-                    <span className="truncate text-ink-800">{dl.label}</span>
-                  </span>
-                  <Badge tone={deadlineTone(dl.daysUntil)}>{deadlineLabel(dl)}</Badge>
-                </li>
-              ))}
-            </ul>
+            <>
+              <ul className="divide-y divide-surface-border">
+                {d.upcomingDeadlines.slice(0, 3).map((dl, i) => (
+                  <li key={i} className="flex items-center justify-between gap-3 py-1.5 text-sm">
+                    <span className="flex items-center gap-2 truncate">
+                      <Badge tone={SOURCE_TONE[dl.source]}>{dl.source}</Badge>
+                      <span className="truncate text-ink-800">{dl.label}</span>
+                    </span>
+                    <Badge tone={deadlineTone(dl.daysUntil)}>{deadlineLabel(dl)}</Badge>
+                  </li>
+                ))}
+              </ul>
+              {d.upcomingDeadlines.length > 3 ? (
+                <p className="mt-2 text-xs font-medium text-primary-600">+{d.upcomingDeadlines.length - 3} more on your timeline →</p>
+              ) : null}
+            </>
           )}
         </LinkCard>
 
@@ -242,17 +258,6 @@ export default function DashboardPage() {
               ))}
             </ul>
           )}
-        </LinkCard>
-
-        {/* Colleges → college hub */}
-        <LinkCard to="/colleges">
-          <CardTitle>Colleges ({totalColleges(d.collegeCounts)})</CardTitle>
-          <div className="flex flex-wrap gap-1.5">
-            {Object.entries(d.collegeCounts).map(([status, n]) => (
-              <Badge key={status} tone="neutral">{status}: {n}</Badge>
-            ))}
-            {totalColleges(d.collegeCounts) === 0 ? <p className="text-sm text-ink-500">No colleges tracked.</p> : null}
-          </div>
         </LinkCard>
 
         {/* Hours by category → journal */}
