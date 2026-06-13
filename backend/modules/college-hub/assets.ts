@@ -58,6 +58,15 @@ function domainOf(website?: string): string | undefined {
   return m && m.includes('.') ? m : undefined;
 }
 
+/** Registrable root domain (last two labels) — logo providers want the root, not a subdomain
+ *  (dornsife.usc.edu → usc.edu). */
+function rootDomainOf(website?: string): string | undefined {
+  const d = domainOf(website);
+  if (!d) return undefined;
+  const parts = d.split('.');
+  return parts.length > 2 ? parts.slice(-2).join('.') : d;
+}
+
 /** Strip HTML tags / collapse whitespace from a Wikimedia extmetadata field. */
 function plainText(html: string): string {
   return html.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
@@ -139,16 +148,25 @@ async function wikimediaCredit(fetchFn: FetchLike, fileName: string): Promise<st
   }
 }
 
-/** Default image source: campus photo from Wikimedia, logo from Clearbit (by website domain). */
+/** Fetch a college logo to cache: try Clearbit on the ROOT domain (a real logo when available), then
+ *  the site favicon (very high availability — for .edu schools that's typically the crest). Returns
+ *  undefined if both fail, so the worker simply stores no logo. */
+async function fetchLogo(fetchFn: FetchLike, website?: string): Promise<FetchedImage | undefined> {
+  const root = rootDomainOf(website);
+  if (!root) return undefined;
+  return (
+    (await downloadImage(fetchFn, `https://logo.clearbit.com/${root}`).catch(() => undefined)) ??
+    (await downloadImage(fetchFn, `https://www.google.com/s2/favicons?domain=${root}&sz=128`).catch(() => undefined))
+  );
+}
+
+/** Default image source: campus photo from Wikimedia, logo cached from Clearbit/favicon. */
 export function makeWikimediaImageSource(options: WikimediaSourceOptions = {}): ImageSource {
   const fetchFn = options.fetchFn ?? withTimeout((globalThis.fetch as unknown) as FetchLike, options.timeoutMs ?? 8000);
   return async ({ name, website }) => {
     const [campus, logo] = await Promise.all([
       wikimediaCampusImage(fetchFn, name).catch(() => undefined),
-      (async () => {
-        const domain = domainOf(website);
-        return domain ? downloadImage(fetchFn, `https://logo.clearbit.com/${domain}`).catch(() => undefined) : undefined;
-      })(),
+      fetchLogo(fetchFn, website),
     ]);
     return { campus, logo };
   };
