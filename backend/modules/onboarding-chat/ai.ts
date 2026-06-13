@@ -111,9 +111,9 @@ export function makeBedrockCollegeSeeder(options: AiOptions = {}): CollegeSeeder
   return async (majors, location) => {
     const focus = majors.length ? majors.join(' / ') : 'undergraduate';
     const prompt = [
-      `List 4 real, currently-operating US colleges or universities with strong ${focus} programs.`,
-      'Give a realistic mix — one reach, a couple of solid targets, one accessible option.',
-      location ? `The student is in ${location}; include at least one strong in-state public option if it fits.` : '',
+      `List 12 real, currently-operating US colleges or universities with strong ${focus} programs.`,
+      'Give a balanced starter list: ~3 reaches, ~6 solid targets, and ~3 accessible/safety options. No duplicates.',
+      location ? `The student is in ${location}; include a few strong in-state public options if they fit.` : '',
       'Respond with ONLY a JSON array — no prose, no code fences:',
       '[{"name":"Full College Name","state":"CA"}]',
     ]

@@ -110,7 +110,7 @@ export function makeHandlers(deps: OnboardingDeps): OnboardingHandlers {
         const suggestions = await collegeSeeder(majors, saved.location ?? undefined);
         const existing = await data.colleges.list();
         const seen = new Set(existing.map((c) => c.name.trim().toLowerCase()));
-        for (const s of suggestions.slice(0, 4)) {
+        for (const s of suggestions.slice(0, 12)) {
           if (seen.has(s.name.trim().toLowerCase())) continue;
           seen.add(s.name.trim().toLowerCase());
           const created = await data.colleges.create({
