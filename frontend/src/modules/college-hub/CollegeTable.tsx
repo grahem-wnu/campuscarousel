@@ -1,6 +1,7 @@
 import { Badge, Icon } from '../../shared/ui';
 import { CollegeLogo } from './CollegeLogo';
-import { PROGRAM_TYPE_LABEL, STATUS_META, bestCost, costLabel, hydrationMeta } from './logic';
+import { PROGRAM_TYPE_LABEL, STATUS_META, bestCost, costLabel } from './logic';
+import { HydrationBadge } from './HydrationBadge';
 import type { College } from './types';
 
 interface Props {
@@ -26,7 +27,6 @@ export function CollegeTable({ colleges, onOpen, onToggleTopPick }: Props) {
         </thead>
         <tbody>
           {colleges.map((c) => {
-            const hyd = hydrationMeta(c.hydrationStatus);
             const cost = bestCost(c);
             return (
               <tr key={c.collegeId} className="border-t border-surface-border hover:bg-surface-sunken">
@@ -44,7 +44,7 @@ export function CollegeTable({ colleges, onOpen, onToggleTopPick }: Props) {
                   <button type="button" onClick={() => onOpen(c)} className="flex items-center gap-2 text-left">
                     <CollegeLogo college={c} size={24} />
                     <span className="font-medium text-ink-900">{c.name}</span>
-                    {hyd ? <Badge tone={hyd.tone}>{hyd.label}</Badge> : null}
+                    <HydrationBadge status={c.hydrationStatus} />
                   </button>
                 </td>
                 <td className="p-2">

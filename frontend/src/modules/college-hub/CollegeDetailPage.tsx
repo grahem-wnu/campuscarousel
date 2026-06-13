@@ -14,6 +14,7 @@ import {
 } from '../../shared/ui';
 import { CollegeLogo } from './CollegeLogo';
 import { CollegeForm } from './CollegeForm';
+import { HydrationBadge } from './HydrationBadge';
 import {
   PROGRAM_TYPE_LABEL,
   STATUS_META,
@@ -119,7 +120,6 @@ export default function CollegeDetailPage() {
   }
 
   const status = STATUS_META[college.status ?? 'researching'];
-  const hyd = hydrationMeta(college.hydrationStatus);
   const fit = fitBand(college.fitScore);
   const accent = college.branding?.primaryColor;
   const campus = campusImageSrc(college);
@@ -166,7 +166,7 @@ export default function CollegeDetailPage() {
             <h1 className="text-xl font-bold text-ink-900">{college.name}</h1>
             <Badge tone={status.tone}>{status.label}</Badge>
             {college.isTopPick ? <Badge tone="warn">★ Top pick</Badge> : null}
-            {hyd ? <Badge tone={hyd.tone}>{hyd.label}</Badge> : null}
+            <HydrationBadge status={college.hydrationStatus} />
           </div>
           <p className="mt-0.5 text-sm text-ink-500">
             {[college.location ?? college.state, college.programType ? PROGRAM_TYPE_LABEL[college.programType] : undefined]
