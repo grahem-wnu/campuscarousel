@@ -125,14 +125,25 @@ export function clearbitLogoFromWebsite(website?: string): string | undefined {
   return root ? `https://logo.clearbit.com/${root}` : undefined;
 }
 
-/** Best-effort logo URL candidates, highest-quality first: explicit branding/cached logo, then a
- *  Clearbit hotlink from the root domain. The UI tries each in order, advancing on a load error. */
+/** A high-availability favicon for a website's root domain (Google's S2 service almost always returns
+ *  the site's icon — for .edu schools that's typically the crest). Reliable fallback when a real logo
+ *  source fails. */
+export function faviconFromWebsite(website?: string): string | undefined {
+  const root = rootDomainOf(website);
+  return root ? `https://www.google.com/s2/favicons?domain=${root}&sz=128` : undefined;
+}
+
+/** Best-effort logo URL candidates, highest-quality first: explicit branding/cached logo, a Clearbit
+ *  hotlink (real logo when available), then the site favicon (very high availability). The UI tries
+ *  each in order, advancing on a load error; the graduation-cap is the final fallback. */
 export function logoCandidates(c: College): string[] {
   const out: string[] = [];
+  if (c.logoImageUrl) out.push(c.logoImageUrl); // our cached copy (assets worker) — most reliable
   if (c.branding?.logoUrl) out.push(c.branding.logoUrl);
-  if (c.logoImageUrl) out.push(c.logoImageUrl);
   const clearbit = clearbitLogoFromWebsite(c.website);
   if (clearbit) out.push(clearbit);
+  const favicon = faviconFromWebsite(c.website);
+  if (favicon) out.push(favicon);
   return [...new Set(out)];
 }
 

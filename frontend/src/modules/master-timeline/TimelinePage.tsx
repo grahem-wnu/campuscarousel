@@ -13,7 +13,7 @@ import {
   monthLabel,
 } from './logic';
 import type { Analysis, TimelineEvent, UpcomingEvent } from './types';
-import { clearbitLogoFromWebsite } from '../college-hub/logic';
+import { clearbitLogoFromWebsite, faviconFromWebsite } from '../college-hub/logic';
 
 type TabId = 'upcoming' | 'calendar';
 const nowDate = new Date();
@@ -22,7 +22,9 @@ const nowDate = new Date();
  *  hotlink from the website), falling back to a school glyph (college) or the source-colored dot.
  *  Advances through the logo candidates on load error, so a broken URL never shows as broken. */
 function EventIcon({ e }: { e: UpcomingEvent }) {
-  const candidates = [e.logoUrl, clearbitLogoFromWebsite(e.website)].filter((u): u is string => !!u);
+  const candidates = [e.logoUrl, clearbitLogoFromWebsite(e.website), faviconFromWebsite(e.website)].filter(
+    (u): u is string => !!u,
+  );
   const [idx, setIdx] = useState(0);
   const src = candidates[idx];
   if (src) {
