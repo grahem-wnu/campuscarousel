@@ -4,6 +4,7 @@
  * path) — never re-implement a button/card/modal in a module.
  */
 export { cn, type ClassValue } from "./cn";
+export { safeHref } from "./safeHref";
 export { Icon, isIconName, type IconName, type IconProps } from "./Icon";
 export { Spinner, type SpinnerProps } from "./Spinner";
 export { Button, type ButtonProps, type ButtonVariant, type ButtonSize } from "./Button";

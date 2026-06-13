@@ -20,6 +20,8 @@
     "domainName": "campuscarousel.com",
     "bedrockSonnetProfile": "us.anthropic.claude-sonnet-4-6",
     "monthlyBudgetUsd": 75,
+    "_alertEmailNote": "Subscribed to the per-env CloudWatch alarm SNS topic AND the account budget alarm. SNS sends a one-time confirmation email that must be clicked. Change/remove to reroute ops alerts.",
+    "alertEmail": "grahem@weneedushealth.com",
     "_domainNote": "Everything runs on campuscarousel.com (zone Z026658226B9KAOVTOAIH): staging → staging.campuscarousel.com, prod → campuscarousel.com (apex). keirasjourney.com (zone Z03683613MXDVX9D5VIUV) is PARKED — no longer used by the app. The legacy single-tenant prod stack still serves keirasjourney.com until it's retired after the data migration; do not point new infra at it. Zones imported (dnsMode import) so NS delegation stays intact.",
     "hostedZoneId": "Z026658226B9KAOVTOAIH",
     "envs": {

@@ -2,8 +2,11 @@ import { CfnOutput, Duration, RemovalPolicy, Stack, type StackProps } from "aws-
 import {
   AllowedMethods,
   Distribution,
+  HeadersFrameOption,
+  HeadersReferrerPolicy,
   HttpVersion,
   PriceClass,
+  ResponseHeadersPolicy,
   SecurityPolicyProtocol,
   ViewerProtocolPolicy,
 } from "aws-cdk-lib/aws-cloudfront";
@@ -60,6 +63,42 @@ export class WebStack extends Stack {
     const useCustomDomain = Boolean(certificate && hostedZone);
     const domainNames = useCustomDomain ? [envHostname(config)] : undefined;
 
+    // Security headers on every response. The CSP is scoped to what the SPA actually loads:
+    // self-hosted Vite bundles (no inline scripts), Google Fonts (stylesheet + woff2), and
+    // https/data images (logos + AI-hydrated campus photos from arbitrary hosts). connect-src
+    // covers Cognito + the API over https. Tightening script-src later needs a browser QA pass.
+    const securityHeaders = new ResponseHeadersPolicy(this, "SecurityHeaders", {
+      responseHeadersPolicyName: `${config.namePrefix}-security-headers`,
+      securityHeadersBehavior: {
+        contentTypeOptions: { override: true },
+        frameOptions: { frameOption: HeadersFrameOption.DENY, override: true },
+        referrerPolicy: {
+          referrerPolicy: HeadersReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN,
+          override: true,
+        },
+        strictTransportSecurity: {
+          accessControlMaxAge: Duration.days(365),
+          includeSubdomains: true,
+          preload: true,
+          override: true,
+        },
+        contentSecurityPolicy: {
+          contentSecurityPolicy: [
+            "default-src 'self'",
+            "script-src 'self'",
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+            "font-src 'self' https://fonts.gstatic.com data:",
+            "img-src 'self' data: https:",
+            "connect-src 'self' https:",
+            "frame-ancestors 'none'",
+            "base-uri 'self'",
+            "object-src 'none'",
+          ].join("; "),
+          override: true,
+        },
+      },
+    });
+
     const distribution = new Distribution(this, "Distribution", {
       comment: `${config.namePrefix} SPA`,
       defaultRootObject: "index.html",
@@ -73,6 +112,7 @@ export class WebStack extends Stack {
         origin: S3BucketOrigin.withOriginAccessControl(bucket),
         viewerProtocolPolicy: ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         allowedMethods: AllowedMethods.ALLOW_GET_HEAD_OPTIONS,
+        responseHeadersPolicy: securityHeaders,
         compress: true,
       },
       // SPA client-side routing: serve index.html for unknown paths.

@@ -129,7 +129,11 @@ export class CicdStack extends Stack {
     });
 
     const monthlyBudgetUsd = Number(this.node.tryGetContext("monthlyBudgetUsd") ?? 75);
-    const budgetEmail = this.node.tryGetContext("budgetNotifyEmail") as string | undefined;
+    // Fall back to the shared `alertEmail` so the runaway-cost budget actually emails someone
+    // even when `budgetNotifyEmail` isn't set explicitly.
+    const budgetEmail =
+      (this.node.tryGetContext("budgetNotifyEmail") as string | undefined) ??
+      (this.node.tryGetContext("alertEmail") as string | undefined);
 
     const subscribers: CfnBudget.SubscriberProperty[] = [
       { subscriptionType: "SNS", address: budgetTopic.topicArn },

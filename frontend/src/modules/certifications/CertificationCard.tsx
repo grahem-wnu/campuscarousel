@@ -1,4 +1,4 @@
-import { Badge, Button, Card, Icon } from '../../shared/ui';
+import { Badge, Button, Card, Icon, safeHref } from '../../shared/ui';
 import { STATUS_META, countdownLabel, costLabel } from './logic';
 import type { Certification } from './types';
 
@@ -65,9 +65,9 @@ export function CertificationCard({ cert, onEdit, onRenew }: Props) {
             Renew
           </Button>
         ) : null}
-        {cert.documentUrl ? (
+        {safeHref(cert.documentUrl) ? (
           <a
-            href={cert.documentUrl}
+            href={safeHref(cert.documentUrl)}
             target="_blank"
             rel="noreferrer"
             className="ml-auto inline-flex items-center gap-1 text-sm text-primary-600 hover:text-primary-700"

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Badge, Button, Icon, Select } from '../../shared/ui';
+import { Badge, Button, Icon, Select, safeHref } from '../../shared/ui';
 import { deleteScholarship, hydrateScholarship, updateScholarship } from './api';
 import { STATUS_META, TYPE_META, deadlineInfo, formatAmount } from './logic';
 import { STATUSES, type Scholarship, type Status } from './types';
@@ -132,9 +132,9 @@ export function ScholarshipDetail({ scholarship: s, today, onUpdated, onDeleted,
             ))}
           </Select>
         </div>
-        {s.applicationUrl ? (
+        {safeHref(s.applicationUrl) ? (
           <div className="flex items-end">
-            <a href={s.applicationUrl} target="_blank" rel="noopener noreferrer" className="w-full">
+            <a href={safeHref(s.applicationUrl)} target="_blank" rel="noopener noreferrer" className="w-full">
               <Button variant="outline" icon="application" block>
                 Open application
               </Button>

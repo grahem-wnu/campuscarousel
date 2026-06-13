@@ -159,11 +159,14 @@ export const bulkAddSchema = z
   })
   .strict();
 
-/** POST /colleges/:id/notes. */
+/**
+ * POST /colleges/:id/notes. `author` is NOT accepted from the client — it is always
+ * stamped server-side from the JWT identity (a client-supplied author would let one
+ * family member forge a note as another). `.strict()` rejects any extra keys.
+ */
 export const noteSchema = z
   .object({
     content: z.string().min(1).max(10000),
-    author: z.string().max(120).optional(),
     noteType: z.enum(NOTE_TYPES).optional(),
   })
   .strict();
