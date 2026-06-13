@@ -398,9 +398,13 @@ function OverviewTab({ college, onDelete }: { college: College; onDelete: () => 
             {college.dataAsOf ? <span className="text-xs text-ink-400">{college.dataAsOf}</span> : null}
           </div>
           <ul className="space-y-2">
-            {college.dataSources.map((src) => {
-              const { title, site } = sourceLabel(src);
-              return (
+            {(() => {
+              const titleByUrl = new Map((college.dataSourceTitles ?? []).map((t) => [t.url, t.title]));
+              return college.dataSources.map((src) => {
+                const parsed = sourceLabel(src);
+                const title = titleByUrl.get(src) ?? parsed.title; // hydration-resolved title, else URL-parsed
+                const site = parsed.site;
+                return (
                 <li key={src}>
                   <a
                     className="group block rounded-lg border border-surface-border px-3 py-2 transition hover:border-primary-200 hover:bg-surface-sunken"
@@ -415,8 +419,9 @@ function OverviewTab({ college, onDelete }: { college: College; onDelete: () => 
                     {site && site !== title ? <p className="truncate text-xs text-ink-400">{site}</p> : null}
                   </a>
                 </li>
-              );
-            })}
+                );
+              });
+            })()}
           </ul>
         </Card>
       ) : null}

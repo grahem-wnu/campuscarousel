@@ -59,6 +59,8 @@ export interface College {
   specialNotes?: string;
   website?: string;
   dataSources?: string[];
+  /** Readable titles for some `dataSources` (resolved during hydration); the rest fall back to URL parsing. */
+  dataSourceTitles?: { url: string; title: string }[];
   dataAsOf?: string;
   branding?: { logoUrl?: string; primaryColor?: string; secondaryColor?: string; mascot?: string };
   contactInfo?: {
