@@ -8,8 +8,8 @@ import {
   campusImageSrc,
   costLabel,
   fitBand,
-  hydrationMeta,
 } from './logic';
+import { HydrationBadge } from './HydrationBadge';
 import type { College } from './types';
 
 interface Props {
@@ -25,7 +25,6 @@ interface Props {
  *  program-type, status, top-pick, hydration indicator, cost + fit. Click opens the detail view. */
 export function CollegeCard({ college, selectedForCompare, onOpen, onToggleTopPick, onToggleCompare }: Props) {
   const status = STATUS_META[college.status ?? 'researching'];
-  const hyd = hydrationMeta(college.hydrationStatus);
   const fit = fitBand(college.fitScore);
   const cost = bestCost(college);
   const subtitle = [college.location ?? college.state, college.ranking].filter(Boolean).join(' · ') || '—';
@@ -97,7 +96,7 @@ export function CollegeCard({ college, selectedForCompare, onOpen, onToggleTopPi
           <Badge tone={status.tone}>{status.label}</Badge>
           {college.programType ? <Badge tone="neutral">{PROGRAM_TYPE_LABEL[college.programType]}</Badge> : null}
           {fit ? <Badge tone={fit.tone}>{fit.label}</Badge> : null}
-          {hyd ? <Badge tone={hyd.tone}>{hyd.label}</Badge> : null}
+          <HydrationBadge status={college.hydrationStatus} />
         </div>
 
         <div className="mt-auto flex items-center justify-between gap-2 pt-1 text-sm text-ink-600">
