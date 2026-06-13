@@ -41,14 +41,15 @@ export interface AiOptions {
 export function gradYearGuide(now: Date): string {
   const y = now.getUTCFullYear();
   const month = now.getUTCMonth(); // 0=Jan
-  // School year runs ~Aug–May. In spring/summer (before August) a 12th grader graduates THIS year;
-  // once the next school year has started (August+), they graduate next year.
-  const g12 = month >= 7 ? y + 1 : y;
+  // From June onward (school's out for summer) a stated grade is the one the student is ENTERING this
+  // fall; Jan–May they're currently in it. So a 12th grader graduates: Jun–Dec → next year, Jan–May →
+  // this year. (e.g. "10th grade" in June 2026 = a rising sophomore → graduates 2029.)
+  const g12 = month >= 5 ? y + 1 : y;
   return [
     `Today is ${now.toISOString().slice(0, 10)}.`,
-    'Convert a US grade to graduation year (spring graduation, school year ~Aug–May) using exactly:',
+    'A US student graduates at the end of 12th grade (spring). From a stated grade, the graduation year is exactly:',
     `12th/senior → ${g12}, 11th/junior → ${g12 + 1}, 10th/sophomore → ${g12 + 2}, 9th/freshman → ${g12 + 3}.`,
-    'Do the math from these — never guess the year.',
+    'Use these exactly — never guess the year.',
   ].join(' ');
 }
 
