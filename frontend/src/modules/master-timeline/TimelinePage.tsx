@@ -17,6 +17,30 @@ import type { Analysis, TimelineEvent, UpcomingEvent } from './types';
 type TabId = 'upcoming' | 'calendar';
 const nowDate = new Date();
 
+/** Leading icon for an upcoming event: the college logo when it loads, else a school glyph (college)
+ *  or the source-colored dot. Never shows a broken-image placeholder. */
+function EventIcon({ e }: { e: UpcomingEvent }) {
+  const [errored, setErrored] = useState(false);
+  if (e.logoUrl && !errored) {
+    return (
+      <img
+        src={e.logoUrl}
+        alt=""
+        className="mt-0.5 h-6 w-6 shrink-0 rounded bg-white object-contain"
+        onError={() => setErrored(true)}
+      />
+    );
+  }
+  if (e.source === 'college') {
+    return (
+      <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded bg-primary-50 text-primary-600">
+        <Icon name="school" size={14} />
+      </span>
+    );
+  }
+  return <span className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${SOURCE_DOT[e.source]}`} aria-hidden />;
+}
+
 /** A "where dated items come from" link in the empty-state guide. */
 function TimelineSource({
   to,
@@ -156,19 +180,16 @@ export default function TimelinePage() {
               <h2 className={`mb-2 text-sm font-semibold ${group === 'overdue' ? 'text-error-700' : 'text-ink-800'}`}>{GROUP_LABEL[group]}</h2>
               <ul className="divide-y divide-surface-border">
                 {events.map((e) => (
-                  <li key={e.id} className="flex items-center justify-between gap-3 py-1.5 text-sm">
-                    <span className="flex items-center gap-2 truncate">
-                      {e.logoUrl ? (
-                        <img src={e.logoUrl} alt="" className="h-5 w-5 shrink-0 rounded object-contain" />
-                      ) : (
-                        <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${SOURCE_DOT[e.source]}`} aria-hidden />
-                      )}
-                      <span className="truncate text-ink-800">{e.title}</span>
-                      <Badge tone="neutral">{SOURCE_LABEL[e.source]}</Badge>
-                    </span>
-                    <span className={`shrink-0 text-xs ${e.daysUntil < 0 ? 'font-medium text-error-600' : 'text-ink-500'}`}>
-                      {e.date} · {countdownLabel(e.daysUntil)}
-                    </span>
+                  <li key={e.id} className="flex items-start gap-3 py-2.5">
+                    <EventIcon e={e} />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium leading-snug text-ink-800">{e.title}</p>
+                      <p className="mt-0.5 text-xs text-ink-400">
+                        {e.source !== 'college' ? `${SOURCE_LABEL[e.source]} · ` : ''}
+                        {e.date} ·{' '}
+                        <span className={e.daysUntil < 0 ? 'font-medium text-error-600' : ''}>{countdownLabel(e.daysUntil)}</span>
+                      </p>
+                    </div>
                   </li>
                 ))}
               </ul>
