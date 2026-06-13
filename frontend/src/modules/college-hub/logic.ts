@@ -51,13 +51,13 @@ export interface HydrationMeta {
 export function hydrationMeta(status: HydrationStatus | undefined): HydrationMeta | null {
   switch (status) {
     case 'in-progress':
-      return { label: 'Refreshing…', tone: 'info', busy: true };
+      return { label: 'Researching…', tone: 'info', busy: true };
     case 'pending':
       return { label: 'Queued', tone: 'neutral', busy: true };
     case 'partial':
       return { label: 'Partial data', tone: 'warn', busy: false };
     case 'failed':
-      return { label: 'Refresh failed', tone: 'error', busy: false };
+      return { label: 'Research failed', tone: 'error', busy: false };
     case 'complete':
     default:
       return null; // healthy / fully hydrated → no badge
