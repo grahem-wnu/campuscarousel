@@ -5,6 +5,7 @@ import {
   Button,
   Card,
   Field,
+  Icon,
   Input,
   Modal,
   Spinner,
@@ -246,6 +247,24 @@ function CampusGallery({ urls }: { urls?: string[] }) {
 const NOT_FOUND = 'Data not found';
 const yr = (n?: number): string => (n !== undefined ? `${costLabel(n)}/yr` : NOT_FOUND);
 
+/** A readable label for a source URL: a title de-slugged from the last path segment, plus the site
+ *  (host without 'www.'). Sources are stored as bare URLs, so this is derived heuristically. */
+function sourceLabel(url: string): { title: string; site: string } {
+  try {
+    const u = new URL(url);
+    const site = u.hostname.replace(/^www\./, '');
+    const seg = u.pathname.split('/').filter(Boolean).pop() ?? '';
+    const cleaned = decodeURIComponent(seg)
+      .replace(/\.[a-z0-9]+$/i, '') // drop a file extension (.html, .htm, .php…)
+      .replace(/[-_]+/g, ' ')
+      .trim();
+    const title = cleaned ? cleaned.charAt(0).toUpperCase() + cleaned.slice(1) : site;
+    return { title, site };
+  } catch {
+    return { title: url, site: '' };
+  }
+}
+
 /** The structured stat grid — net price is the REAL after-aid figure (never tuition), shown alongside
  *  sticker tuition and full cost of attendance so the three are never conflated. */
 function fieldRows(college: College): { label: string; value: string }[] {
@@ -378,12 +397,26 @@ function OverviewTab({ college, onDelete }: { college: College; onDelete: () => 
             <h2 className="text-sm font-semibold text-ink-800">Sources</h2>
             {college.dataAsOf ? <span className="text-xs text-ink-400">{college.dataAsOf}</span> : null}
           </div>
-          <ul className="space-y-1 text-sm">
-            {college.dataSources.map((src) => (
-              <li key={src}>
-                <a className="break-all text-primary-600 hover:underline" href={src} target="_blank" rel="noreferrer">{src}</a>
-              </li>
-            ))}
+          <ul className="space-y-2">
+            {college.dataSources.map((src) => {
+              const { title, site } = sourceLabel(src);
+              return (
+                <li key={src}>
+                  <a
+                    className="group block rounded-lg border border-surface-border px-3 py-2 transition hover:border-primary-200 hover:bg-surface-sunken"
+                    href={src}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    <p className="flex items-center gap-1 truncate text-sm font-medium text-ink-800 group-hover:text-primary-700">
+                      {title}
+                      <Icon name="chevron-right" size={13} className="text-ink-300 transition-transform group-hover:translate-x-0.5 group-hover:text-primary-500" />
+                    </p>
+                    {site && site !== title ? <p className="truncate text-xs text-ink-400">{site}</p> : null}
+                  </a>
+                </li>
+              );
+            })}
           </ul>
         </Card>
       ) : null}
