@@ -119,8 +119,12 @@ describe('POST /onboarding/finish', () => {
     expect(profile?.graduationYear).toBe(2030);
   });
 
-  it('reset (admin) clears the profile + wipes goals/colleges; non-admin is forbidden', async () => {
-    await makeOnboarding().finish(ctx({ body: { profile: { intendedMajors: ['Nursing'], careerGoal: 'ICU Nurse' } } }));
+  it('reset (admin) clears setup but PRESERVES factual data; non-admin is forbidden', async () => {
+    await makeOnboarding().finish(
+      ctx({ body: { profile: { intendedMajors: ['Nursing'], careerGoal: 'ICU Nurse', currentGPA: 3.9 } } }),
+    );
+    // A manually-added college (real research) must survive the reset.
+    await data.colleges.create({ name: 'My Dream U', status: 'researching', addedBy: 'manual' } as Parameters<Data['colleges']['create']>[0]);
     expect((await data.studentProfile.get())?.onboardingComplete).toBe(true);
     expect((await data.goals.list()).length).toBeGreaterThan(0);
 
@@ -128,9 +132,14 @@ describe('POST /onboarding/finish', () => {
 
     const res = await makeOnboarding().reset(ctx());
     expect(res.status).toBe(200);
-    expect((await data.studentProfile.get())?.onboardingComplete).toBe(false);
-    expect((await data.studentProfile.get())?.careerGoal).toBeUndefined();
-    expect(await data.goals.list()).toEqual([]);
+    const profile = await data.studentProfile.get();
+    expect(profile?.onboardingComplete).toBe(false);
+    expect(profile?.intendedMajors).toEqual([]); // major cleared
+    expect(profile?.currentGPA).toBe(3.9); // factual: PRESERVED
+    expect(profile?.careerGoal).toBe('ICU Nurse'); // PRESERVED
+    expect(await data.goals.list()).toEqual([]); // path regenerated
+    const colleges = await data.colleges.list();
+    expect(colleges.map((c) => c.name)).toEqual(['My Dream U']); // only the manual one survives
   });
 
   it('still finishes (profile saved) even if seeding throws', async () => {

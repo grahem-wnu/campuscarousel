@@ -133,34 +133,42 @@ export function makeHandlers(deps: OnboardingDeps): OnboardingHandlers {
       return { status: 200, body: { profile: saved, goalsCreated, collegesCreated } };
     },
 
-    // POST /onboarding/reset — TESTING aid (admin only): wipe the ACTIVE student so onboarding can be
-    // re-run from scratch. Clears the profile (→ onboardingComplete:false) and deletes that student's
-    // goals + colleges. Scoped to the active student via the X-Student-Id header, so it can't touch
-    // another child. Deletions are best-effort.
+    // POST /onboarding/reset — TESTING aid (admin only): reset the ACTIVE student's SETUP so onboarding
+    // can be re-run, WITHOUT touching factual history. Clears the major + re-arms onboarding, deletes
+    // the onboarding-built path (goals) and AI-discovered colleges. KEEPS GPA, courses, journal,
+    // activities, exams, and manually-added colleges. Scoped to the active student via X-Student-Id.
     reset: async (ctx) => {
       if (ctx.requester.role !== 'admin') {
         throw Errors.forbidden('Only an admin can reset a student.');
       }
       const data = getData();
-      await data.studentProfile.put({ onboardingComplete: false });
-      let deleted = 0;
+      // Re-arm onboarding + clear the major, but PRESERVE the rest of the profile (GPA, name, grad
+      // year, career goal). put replaces, so spread the existing profile first.
+      const existing = await data.studentProfile.get();
+      await data.studentProfile.put({ ...(existing ?? {}), onboardingComplete: false, intendedMajors: [] });
+
+      // The onboarding-built "path" — suggested goals — is regenerated, so clear it.
+      let goalsRemoved = 0;
       for (const g of await data.goals.list()) {
         try {
           await data.goals.delete(g.goalId);
-          deleted++;
+          goalsRemoved++;
         } catch {
           /* best-effort */
         }
       }
+      // Only the AI-discovered/seeded colleges; manually-added research is real and kept.
+      let collegesRemoved = 0;
       for (const c of await data.colleges.list()) {
+        if (c.addedBy !== 'ai-discovered') continue;
         try {
           await data.colleges.delete(c.collegeId);
-          deleted++;
+          collegesRemoved++;
         } catch {
           /* best-effort */
         }
       }
-      return { status: 200, body: { ok: true, deleted } };
+      return { status: 200, body: { ok: true, goalsRemoved, collegesRemoved } };
     },
   };
 }
