@@ -65,7 +65,9 @@ export default function TimelinePage() {
   const load = useCallback(async () => {
     setError(null);
     try {
-      const [up, ev] = await Promise.all([getUpcoming(90), getTimeline()]);
+      // Wide horizon (~5 yrs): an underclassman's application deadlines are 1–3 years out, so a 90-day
+      // window would show nothing. Grouping ('Later') keeps near-term items on top.
+      const [up, ev] = await Promise.all([getUpcoming(1825), getTimeline()]);
       setUpcoming(up);
       setAll(ev);
     } catch (e) {
@@ -165,7 +167,7 @@ export default function TimelinePage() {
                       <Badge tone="neutral">{SOURCE_LABEL[e.source]}</Badge>
                     </span>
                     <span className={`shrink-0 text-xs ${e.daysUntil < 0 ? 'font-medium text-error-600' : 'text-ink-500'}`}>
-                      {e.date.slice(5)} · {countdownLabel(e.daysUntil)}
+                      {e.date} · {countdownLabel(e.daysUntil)}
                     </span>
                   </li>
                 ))}

@@ -23,11 +23,13 @@ describe('groupUpcoming', () => {
 });
 
 describe('countdownLabel', () => {
-  it('phrases overdue/today/tomorrow/days', () => {
+  it('phrases overdue/today/tomorrow/days, and months/years for far-out dates', () => {
     expect(countdownLabel(-3)).toBe('3d overdue');
     expect(countdownLabel(0)).toBe('today');
     expect(countdownLabel(1)).toBe('tomorrow');
     expect(countdownLabel(9)).toBe('in 9d');
+    expect(countdownLabel(90)).toBe('in 3 mo');
+    expect(countdownLabel(880)).toBe('in ~2 yr'); // a sophomore's application deadline
   });
 });
 

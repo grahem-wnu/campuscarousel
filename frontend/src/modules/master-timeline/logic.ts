@@ -43,7 +43,10 @@ export function countdownLabel(daysUntil: number): string {
   if (daysUntil < 0) return `${Math.abs(daysUntil)}d overdue`;
   if (daysUntil === 0) return 'today';
   if (daysUntil === 1) return 'tomorrow';
-  return `in ${daysUntil}d`;
+  if (daysUntil < 45) return `in ${daysUntil}d`;
+  if (daysUntil < 365) return `in ${Math.round(daysUntil / 30)} mo`;
+  const years = daysUntil / 365;
+  return `in ~${years < 2 ? years.toFixed(1) : Math.round(years)} yr`;
 }
 
 /** Events keyed by ISO date (for a calendar grid). */

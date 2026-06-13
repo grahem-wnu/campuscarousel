@@ -13,9 +13,10 @@ export const timelineQuerySchema = z.object({
   type: z.string().max(60).optional(),
 });
 
-/** GET /timeline/upcoming — horizon in days (default 90). */
+/** GET /timeline/upcoming — horizon in days (default 90). Capped at ~5 years so an underclassman's
+ *  college application deadlines (1–3 years out) still surface in the Upcoming view. */
 export const upcomingQuerySchema = z.object({
-  horizon: z.coerce.number().int().positive().max(730).optional(),
+  horizon: z.coerce.number().int().positive().max(1825).optional(),
 });
 
 /** POST /timeline/analyze — optional horizon for the AI window. */
