@@ -37,7 +37,7 @@ export function makeHandlers(deps: DashboardDeps): DashboardHandlers {
     // GET /dashboard — the authenticated user's role-appropriate, visibility-filtered overview.
     get: async (ctx) => {
       const data = getData();
-      const [courses, activitiesRaw, experiencesRaw, exams, certs, colleges, goals, scholarships, budget, interviews] =
+      const [courses, activitiesRaw, experiencesRaw, exams, certs, colleges, goals, scholarships, budget, interviews, profile] =
         await Promise.all([
           data.courses.list(),
           data.activities.list(),
@@ -49,6 +49,7 @@ export function makeHandlers(deps: DashboardDeps): DashboardHandlers {
           data.scholarships.list(),
           data.budget.get(),
           data.interviews.list(),
+          data.studentProfile.get(),
         ]);
 
       // PRIVACY: drop entries the caller may not see BEFORE aggregating.
@@ -56,7 +57,7 @@ export function makeHandlers(deps: DashboardDeps): DashboardHandlers {
       const experiences = filterForRequester(experiencesRaw, ctx.requester);
       const todayIso = now().toISOString().slice(0, 10);
 
-      const deadlines = upcomingDeadlines({ colleges, goals, scholarships, certifications: certs }, todayIso);
+      const deadlines = upcomingDeadlines({ colleges, goals, scholarships, certifications: certs }, todayIso, 8, profile?.graduationYear);
       const examLatest = latestExam(exams);
 
       // Shown to everyone.
