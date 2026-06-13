@@ -97,6 +97,54 @@ export function parseTurn(text: string): OnboardingTurn {
   }
 }
 
+export interface SeedCollege {
+  name: string;
+  state?: string;
+}
+
+/** Names a few real colleges for the major (model-only — naming well-known schools needs no web; the
+ *  college hydration pipeline enriches each afterward). Returns [] on any error. */
+export type CollegeSeeder = (majors: string[], location?: string) => Promise<SeedCollege[]>;
+
+export function makeBedrockCollegeSeeder(options: AiOptions = {}): CollegeSeeder {
+  return async (majors, location) => {
+    const focus = majors.length ? majors.join(' / ') : 'undergraduate';
+    const prompt = [
+      `List 4 real, currently-operating US colleges or universities with strong ${focus} programs.`,
+      'Give a realistic mix — one reach, a couple of solid targets, one accessible option.',
+      location ? `The student is in ${location}; include at least one strong in-state public option if it fits.` : '',
+      'Respond with ONLY a JSON array — no prose, no code fences:',
+      '[{"name":"Full College Name","state":"CA"}]',
+    ]
+      .filter(Boolean)
+      .join('\n');
+    try {
+      const { text } = await converseWithSearch(prompt, {
+        system: 'You name real, currently-operating US colleges. Never invent schools.',
+        webSearch: false,
+        maxTokens: 500,
+        temperature: 0.4,
+        modelId: options.modelId,
+        invoker: options.invoker,
+        searcher: options.searcher,
+      });
+      const start = text.indexOf('[');
+      const end = text.lastIndexOf(']');
+      if (start === -1 || end <= start) return [];
+      const arr = JSON.parse(text.slice(start, end + 1)) as unknown;
+      if (!Array.isArray(arr)) return [];
+      return arr
+        .map((c) => {
+          const obj = (c ?? {}) as { name?: unknown; state?: unknown };
+          return { name: String(obj.name ?? '').trim(), state: obj.state ? String(obj.state).trim() : undefined };
+        })
+        .filter((c) => c.name.length > 0);
+    } catch {
+      return [];
+    }
+  };
+}
+
 export function makeBedrockOnboardingChatter(options: AiOptions = {}): OnboardingChatter {
   const now = options.now ?? (() => new Date());
   return async (messages) => {

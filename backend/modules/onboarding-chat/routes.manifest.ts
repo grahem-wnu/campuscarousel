@@ -5,8 +5,9 @@
 import type { RouteDef } from '../../shared/api/index.js';
 import { dataFromEnv, type Data } from '../../shared/data/index.js';
 import { bedrockSuggester } from '../goal-tracker/bedrock.js';
-import { makeSqsDiscoverEnqueuer } from '../college-hub/discover.js';
-import { makeBedrockOnboardingChatter } from './ai.js';
+import { makeSqsEnqueuer } from '../college-hub/enqueue.js';
+import { makeAssetsEnqueuer } from '../college-hub/assets-enqueue.js';
+import { makeBedrockCollegeSeeder, makeBedrockOnboardingChatter } from './ai.js';
 import { makeHandlers } from './handlers.js';
 
 let cached: Data | undefined;
@@ -15,7 +16,9 @@ const handlers = makeHandlers({
   getData,
   chatter: makeBedrockOnboardingChatter(),
   suggester: bedrockSuggester,
-  discoverDispatch: makeSqsDiscoverEnqueuer(getData),
+  collegeSeeder: makeBedrockCollegeSeeder(),
+  hydrateDispatch: makeSqsEnqueuer(getData),
+  assetsDispatch: makeAssetsEnqueuer(getData),
 });
 
 export const routes: RouteDef[] = [

@@ -3,14 +3,14 @@ import type { HandlerContext } from '../../shared/api/index.js';
 import type { Requester } from '../../shared/auth/index.js';
 import { InMemoryTableClient, makeData, type Data } from '../../shared/data/index.js';
 import { makeHandlers, type OnboardingHandlers } from './handlers.js';
-import type { OnboardingChatter } from './ai.js';
+import type { CollegeSeeder, OnboardingChatter } from './ai.js';
 import type { GoalSuggester } from '../goal-tracker/suggester.js';
 
 const grahem: Requester = { username: 'grahem', role: 'admin' };
 const kate: Requester = { username: 'kate', role: 'parent' };
 
 let data: Data;
-let dispatched: string[];
+let hydrated: string[];
 
 const ctx = (over: Partial<HandlerContext> = {}): HandlerContext => ({
   requester: grahem,
@@ -34,20 +34,31 @@ const stubSuggester: GoalSuggester = {
   ],
 };
 
-function makeOnboarding(chatter: OnboardingChatter = stubChatter): OnboardingHandlers {
+const stubCollegeSeeder: CollegeSeeder = async () => [
+  { name: 'State University', state: 'CA' },
+  { name: 'Tech Institute' },
+];
+
+function makeOnboarding(
+  chatter: OnboardingChatter = stubChatter,
+  suggester: GoalSuggester = stubSuggester,
+  collegeSeeder: CollegeSeeder = stubCollegeSeeder,
+): OnboardingHandlers {
   return makeHandlers({
     getData: () => data,
     chatter,
-    suggester: stubSuggester,
-    discoverDispatch: async (jobId: string) => {
-      dispatched.push(jobId);
+    suggester,
+    collegeSeeder,
+    hydrateDispatch: async (collegeId: string) => {
+      hydrated.push(collegeId);
     },
+    assetsDispatch: async () => {},
   });
 }
 
 beforeEach(() => {
   data = makeData(new InMemoryTableClient());
-  dispatched = [];
+  hydrated = [];
 });
 
 describe('POST /onboarding/chat', () => {
@@ -69,7 +80,7 @@ describe('POST /onboarding/chat', () => {
 });
 
 describe('POST /onboarding/finish', () => {
-  it('saves the profile (onboardingComplete + budget mapping), seeds goals, and kicks off discovery', async () => {
+  it('saves the profile (onboardingComplete + budget mapping), seeds goals, and seeds + hydrates colleges', async () => {
     const res = await makeOnboarding().finish(
       ctx({ body: { profile: { intendedMajors: ['Nursing'], careerGoal: 'ICU Nurse', currentGPA: 3.8, budgetTotal: 200000 } } }),
     );
@@ -84,10 +95,21 @@ describe('POST /onboarding/finish', () => {
     expect(goals.length).toBe(2);
     expect(goals.some((g) => g.title === 'Shadow a nurse')).toBe(true);
 
-    const body = res.body as { goalsCreated: number; discoveryJobId: string | null };
+    const colleges = await data.colleges.list();
+    expect(colleges.map((c) => c.name).sort()).toEqual(['State University', 'Tech Institute']);
+    expect(colleges.every((c) => c.addedBy === 'ai-discovered' && c.hydrationStatus === 'in-progress')).toBe(true);
+
+    const body = res.body as { goalsCreated: number; collegesCreated: number };
     expect(body.goalsCreated).toBe(2);
-    expect(body.discoveryJobId).toBeTruthy();
-    expect(dispatched).toHaveLength(1);
+    expect(body.collegesCreated).toBe(2);
+    expect(hydrated).toHaveLength(2); // hydration dispatched for each seeded college
+  });
+
+  it('does not duplicate a college that already exists', async () => {
+    await data.colleges.create({ name: 'State University', status: 'researching' } as Parameters<Data['colleges']['create']>[0]);
+    await makeOnboarding().finish(ctx({ body: { profile: { intendedMajors: ['Nursing'] } } }));
+    const names = (await data.colleges.list()).map((c) => c.name.toLowerCase());
+    expect(names.filter((n) => n === 'state university')).toHaveLength(1);
   });
 
   it('coerces a stringified GPA from the model JSON', async () => {
@@ -117,17 +139,15 @@ describe('POST /onboarding/finish', () => {
         throw new Error('suggester down');
       },
     };
-    const handlers = makeHandlers({
-      getData: () => data,
-      chatter: stubChatter,
-      suggester: angry,
-      discoverDispatch: async (jobId) => {
-        dispatched.push(jobId);
-      },
-    });
-    const res = await handlers.finish(ctx({ body: { profile: { intendedMajors: ['Biology'] } } }));
+    const angryCollegeSeeder: CollegeSeeder = async () => {
+      throw new Error('seeder down');
+    };
+    const res = await makeOnboarding(stubChatter, angry, angryCollegeSeeder).finish(
+      ctx({ body: { profile: { intendedMajors: ['Biology'] } } }),
+    );
     expect(res.status).toBe(200);
     expect((await data.studentProfile.get())?.onboardingComplete).toBe(true);
-    expect((res.body as { goalsCreated: number }).goalsCreated).toBe(0);
+    expect((res.body as { goalsCreated: number; collegesCreated: number }).goalsCreated).toBe(0);
+    expect((res.body as { collegesCreated: number }).collegesCreated).toBe(0);
   });
 });
