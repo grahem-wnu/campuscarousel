@@ -6,7 +6,7 @@ import { getDashboard } from './api';
 import type { Dashboard } from './types';
 import { getFocus } from '../focus/api';
 import type { FocusResponse } from '../focus/types';
-import { getProfile } from '../onboarding/api';
+import { getProfile, type StudentProfile } from '../onboarding/api';
 
 /** A banner linking to the Focus (major-pack) page — shown only once the student has set a major. It
  *  makes the otherwise-ambient major pack a visible, clickable destination from the dashboard. */
@@ -94,7 +94,7 @@ function Stat({ to, label, value, sub, icon }: { to: string; label: string; valu
  *  entries in any widget). */
 export default function DashboardPage() {
   const [d, setD] = useState<Dashboard | null>(null);
-  const [onboarded, setOnboarded] = useState(false);
+  const [profile, setProfile] = useState<StudentProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -105,10 +105,10 @@ export default function DashboardPage() {
       .then(setD)
       .catch((e) => setError(e instanceof Error ? e.message : 'Could not load your dashboard.'))
       .finally(() => setLoading(false));
-    // Whether setup is done decides empty-state vs the real (blank-tile) dashboard. Non-blocking.
+    // Profile decides empty-state vs the real dashboard, and supplies the self-reported GPA. Non-blocking.
     getProfile()
-      .then((p) => setOnboarded(p.onboardingComplete === true))
-      .catch(() => setOnboarded(false));
+      .then(setProfile)
+      .catch(() => setProfile(null));
   };
   useEffect(load, []);
 
@@ -132,6 +132,7 @@ export default function DashboardPage() {
 
   // Guided first-run only until setup is done; once onboarded, show the real dashboard (blank tiles
   // that invite a click) even before any data is logged.
+  const onboarded = profile?.onboardingComplete === true;
   const empty = d.activity.totalCount === 0 && totalColleges(d.collegeCounts) === 0 && d.gpa.courses === 0;
   if (empty && !onboarded) {
     return (
@@ -171,9 +172,16 @@ export default function DashboardPage() {
 
       <FocusBanner />
 
-      {/* Headline stats */}
+      {/* Headline stats. GPA prefers entered courses; before any courses, falls back to the
+          self-reported GPA from onboarding so it isn't blank. */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Stat to="/courses" icon="course" label="GPA" value={gpaText(d.gpa.weighted, d.gpa.unweighted)} sub={`${d.gpa.courses} courses`} />
+        <Stat
+          to="/courses"
+          icon="course"
+          label="GPA"
+          value={d.gpa.courses > 0 ? gpaText(d.gpa.weighted, d.gpa.unweighted) : profile?.currentGPA != null ? profile.currentGPA.toFixed(2) : '—'}
+          sub={d.gpa.courses > 0 ? `${d.gpa.courses} courses` : profile?.currentGPA != null ? 'self-reported' : '0 courses'}
+        />
         <Stat to="/journal" icon="heart" label="Activity hours" value={String(d.activity.totalHours)} sub={d.activity.weeklyStreak > 0 ? `🔥 ${d.activity.weeklyStreak}-wk streak` : `${d.activity.totalCount} entries`} />
         <Stat to="/experience" icon="clinical" label="Experience hours" value={String(d.clinicalHours)} />
         <Stat to="/exams" icon="teas" label="Latest exam" value={d.latestExam ? String(d.latestExam.overallScore) : '—'} sub={d.latestExam?.date} />

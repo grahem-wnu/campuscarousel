@@ -21,4 +21,5 @@ const handlers = makeHandlers({
 export const routes: RouteDef[] = [
   { method: 'POST', path: '/onboarding/chat', handler: handlers.chat },
   { method: 'POST', path: '/onboarding/finish', handler: handlers.finish },
+  { method: 'POST', path: '/onboarding/reset', handler: handlers.reset },
 ];

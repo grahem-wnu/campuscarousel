@@ -5,7 +5,7 @@
 //                             job for the intended major. Seeding is best-effort: a failure there never
 //                             blocks finishing onboarding. Family-visible; identity from the JWT.
 
-import { validateBody, type Handler } from '../../shared/api/index.js';
+import { Errors, validateBody, type Handler } from '../../shared/api/index.js';
 import type { Data, StudentProfile } from '../../shared/data/index.js';
 import type { GoalSuggester } from '../goal-tracker/suggester.js';
 import type { DiscoverDispatcher } from '../college-hub/discover.js';
@@ -15,6 +15,7 @@ import { type OnboardingChatter, type OnboardingProfile } from './ai.js';
 export interface OnboardingHandlers {
   chat: Handler;
   finish: Handler;
+  reset: Handler;
 }
 
 export interface OnboardingDeps {
@@ -112,6 +113,36 @@ export function makeHandlers(deps: OnboardingDeps): OnboardingHandlers {
 
       return { status: 200, body: { profile: saved, goalsCreated, discoveryJobId: discoveryJobId ?? null } };
     },
+
+    // POST /onboarding/reset — TESTING aid (admin only): wipe the ACTIVE student so onboarding can be
+    // re-run from scratch. Clears the profile (→ onboardingComplete:false) and deletes that student's
+    // goals + colleges. Scoped to the active student via the X-Student-Id header, so it can't touch
+    // another child. Deletions are best-effort.
+    reset: async (ctx) => {
+      if (ctx.requester.role !== 'admin') {
+        throw Errors.forbidden('Only an admin can reset a student.');
+      }
+      const data = getData();
+      await data.studentProfile.put({ onboardingComplete: false });
+      let deleted = 0;
+      for (const g of await data.goals.list()) {
+        try {
+          await data.goals.delete(g.goalId);
+          deleted++;
+        } catch {
+          /* best-effort */
+        }
+      }
+      for (const c of await data.colleges.list()) {
+        try {
+          await data.colleges.delete(c.collegeId);
+          deleted++;
+        } catch {
+          /* best-effort */
+        }
+      }
+      return { status: 200, body: { ok: true, deleted } };
+    },
   };
 }
 
@@ -120,5 +151,6 @@ export function buildRoutes(h: OnboardingHandlers) {
   return [
     { method: 'POST' as const, path: '/onboarding/chat', handler: h.chat },
     { method: 'POST' as const, path: '/onboarding/finish', handler: h.finish },
+    { method: 'POST' as const, path: '/onboarding/reset', handler: h.reset },
   ];
 }
