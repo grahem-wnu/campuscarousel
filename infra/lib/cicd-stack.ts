@@ -129,11 +129,12 @@ export class CicdStack extends Stack {
     });
 
     const monthlyBudgetUsd = Number(this.node.tryGetContext("monthlyBudgetUsd") ?? 75);
-    // Fall back to the shared `alertEmail` so the runaway-cost budget actually emails someone
-    // even when `budgetNotifyEmail` isn't set explicitly.
-    const budgetEmail =
-      (this.node.tryGetContext("budgetNotifyEmail") as string | undefined) ??
-      (this.node.tryGetContext("alertEmail") as string | undefined);
+    // NOTE: intentionally NOT falling back to the shared `alertEmail` here. Adding an EMAIL
+    // subscriber to this fixed-name account budget makes CloudFormation replace the
+    // AWS::Budgets::Budget, which fails ("a budget with the same name already exists"). Ops
+    // alerting for errors/throttles/5xx is handled by the per-env SNS topic in ObservabilityStack
+    // (subscribed to `alertEmail`); the budget keeps just its SNS subscriber.
+    const budgetEmail = this.node.tryGetContext("budgetNotifyEmail") as string | undefined;
 
     const subscribers: CfnBudget.SubscriberProperty[] = [
       { subscriptionType: "SNS", address: budgetTopic.topicArn },
