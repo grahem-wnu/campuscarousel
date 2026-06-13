@@ -2,18 +2,24 @@ import { describe, expect, it } from 'vitest';
 import { gradYearGuide, parseTurn } from './ai.js';
 
 describe('gradYearGuide (grade → graduation year)', () => {
-  it('spring: a sophomore in June 2026 graduates 2028 (the reported bug)', () => {
+  it('summer: in June 2026 a stated 10th grade = rising sophomore → graduates 2029', () => {
     const g = gradYearGuide(new Date('2026-06-13T00:00:00Z'));
-    expect(g).toContain('12th/senior → 2026');
-    expect(g).toContain('10th/sophomore → 2028');
-    expect(g).toContain('9th/freshman → 2029');
+    expect(g).toContain('12th/senior → 2027');
+    expect(g).toContain('10th/sophomore → 2029');
+    expect(g).toContain('9th/freshman → 2030');
     expect(g).toContain('2026-06-13');
   });
 
-  it('fall: once the next school year started (Sept), grades roll forward a year', () => {
+  it('fall (Sept) uses the same upcoming-grade basis', () => {
     const g = gradYearGuide(new Date('2026-09-01T00:00:00Z'));
     expect(g).toContain('12th/senior → 2027');
     expect(g).toContain('10th/sophomore → 2029');
+  });
+
+  it('spring (during the school year) treats the grade as current', () => {
+    const g = gradYearGuide(new Date('2026-03-01T00:00:00Z'));
+    expect(g).toContain('12th/senior → 2026');
+    expect(g).toContain('10th/sophomore → 2028');
   });
 });
 
