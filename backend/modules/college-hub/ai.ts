@@ -304,7 +304,12 @@ export function buildHydratePrompt(name: string, state?: string, majors: string[
     '  costOfAttendanceOutOfState (number), estimatedNetPriceAfterAid (number), percentReceivingAid',
     '  (string), avgAidAmount (number), applicationFee (number), acceptanceRateProgram (string),',
     '  acceptanceRateUniversity (string), avgGPAAdmitted (string), prerequisites (string[]),',
-    '  applicationDeadlines ({earlyAction, regularDecision, programApp}), essayPrompts (string[]),',
+    '  applicationDeadlines ({earlyAction, regularDecision, programApp}) — CRITICAL: search specifically',
+    '    for these. For each type the school offers, START the value with the deadline\'s ISO date',
+    '    (YYYY-MM-DD), then " — " and a brief note; ALWAYS resolve the real calendar year for the',
+    '    upcoming application cycle (never leave the year out). If a type isn\'t offered, give a short',
+    '    note with NO date. e.g. "2026-11-01 — Early Action, non-binding; decisions mid-January".',
+    '  essayPrompts (string[]),',
     '  requiredTests (string[]),',
     ...(detailHints.length
       ? ['  programDetails ([{label, value}] — the major-specific facts described above),']

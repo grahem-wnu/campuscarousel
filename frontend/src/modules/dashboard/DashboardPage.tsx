@@ -211,7 +211,7 @@ export default function DashboardPage() {
         <LinkCard to="/timeline">
           <CardTitle>Upcoming deadlines</CardTitle>
           {d.upcomingDeadlines.length === 0 ? (
-            <p className="text-sm text-ink-500">No upcoming deadlines.</p>
+            <p className="text-sm text-ink-500">Nothing dated yet — add colleges, exams, or visits and their deadlines appear here automatically.</p>
           ) : (
             <ul className="divide-y divide-surface-border">
               {d.upcomingDeadlines.map((dl, i) => (

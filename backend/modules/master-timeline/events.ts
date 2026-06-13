@@ -17,6 +17,30 @@ import type {
 export const EVENT_SOURCES = ['activity', 'goal', 'college', 'exam', 'visit', 'scholarship', 'certification', 'finaid'] as const;
 export type EventSource = (typeof EVENT_SOURCES)[number];
 
+const MONTHS: Record<string, number> = {
+  january: 1, february: 2, march: 3, april: 4, may: 5, june: 6,
+  july: 7, august: 8, september: 9, october: 10, november: 11, december: 12,
+};
+const pad = (n: number): string => String(n).padStart(2, '0');
+
+/**
+ * Hydrated college application deadlines are stored as human strings (e.g. "2026-11-01 — Early Action"
+ * or "November 1, 2026 (non-binding)"). The timeline needs a real date, so extract an ISO date:
+ * an ISO substring if present, else a "Month D, YYYY". Returns '' (→ no event) when there's no
+ * resolvable full date (e.g. "Not offered", or a month/day with no year).
+ */
+export function parseDeadlineDate(s?: string): string {
+  if (!s) return '';
+  const iso = s.match(/\b(\d{4})-(\d{2})-(\d{2})\b/);
+  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+  const m = s.match(/\b([A-Za-z]+)\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})\b/);
+  if (m) {
+    const month = MONTHS[m[1]!.toLowerCase()];
+    if (month) return `${m[3]}-${pad(month)}-${pad(Number(m[2]))}`;
+  }
+  return '';
+}
+
 export interface TimelineEvent {
   id: string;
   date: string;
@@ -62,9 +86,9 @@ export function buildEvents(s: EventSources): TimelineEvent[] {
   for (const c of s.colleges) {
     if (c.status === 'removed') continue;
     const d = c.applicationDeadlines;
-    if (d?.earlyAction) push({ source: 'college', type: 'early-action', title: `${c.name} — early action`, date: d.earlyAction, refId: c.collegeId, collegeId: c.collegeId });
-    if (d?.regularDecision) push({ source: 'college', type: 'regular-decision', title: `${c.name} — regular decision`, date: d.regularDecision, refId: c.collegeId, collegeId: c.collegeId });
-    if (d?.programApp) push({ source: 'college', type: 'program-app', title: `${c.name} — program app`, date: d.programApp, refId: c.collegeId, collegeId: c.collegeId });
+    if (d?.earlyAction) push({ source: 'college', type: 'early-action', title: `${c.name} — early action`, date: parseDeadlineDate(d.earlyAction), refId: c.collegeId, collegeId: c.collegeId });
+    if (d?.regularDecision) push({ source: 'college', type: 'regular-decision', title: `${c.name} — regular decision`, date: parseDeadlineDate(d.regularDecision), refId: c.collegeId, collegeId: c.collegeId });
+    if (d?.programApp) push({ source: 'college', type: 'program-app', title: `${c.name} — program app`, date: parseDeadlineDate(d.programApp), refId: c.collegeId, collegeId: c.collegeId });
   }
   for (const t of s.exams) if (t.type === 'official-exam') push({ source: 'exam', type: 'official-exam', title: 'Official exam', date: t.date, refId: t.recordId });
   for (const v of s.visits) push({ source: 'visit', type: v.visitType ?? 'visit', title: `Campus visit${v.visitType ? ` — ${v.visitType}` : ''}`, date: v.date, refId: v.visitId, collegeId: v.collegeId });
