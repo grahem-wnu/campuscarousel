@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Badge, Button, Card, EmptyState, Modal, Spinner, Tabs, type TabItem } from '../../shared/ui';
+import { Link } from 'react-router-dom';
+import { Badge, Button, Card, Icon, Modal, Spinner, Tabs, type TabItem } from '../../shared/ui';
 import { analyzeTimeline, getTimeline, getUpcoming } from './api';
 import {
   GROUP_LABEL,
@@ -15,6 +16,35 @@ import type { Analysis, TimelineEvent, UpcomingEvent } from './types';
 
 type TabId = 'upcoming' | 'calendar';
 const nowDate = new Date();
+
+/** A "where dated items come from" link in the empty-state guide. */
+function TimelineSource({
+  to,
+  icon,
+  label,
+  hint,
+}: {
+  to: string;
+  icon: 'school' | 'teas' | 'calendar' | 'scholarship' | 'application' | 'goal';
+  label: string;
+  hint: string;
+}) {
+  return (
+    <Link
+      to={to}
+      className="group flex items-start gap-2 rounded-lg border border-surface-border px-3 py-2 transition hover:border-primary-200 hover:bg-surface-sunken"
+    >
+      <span className="mt-0.5 text-primary-600"><Icon name={icon} size={16} /></span>
+      <span className="min-w-0">
+        <span className="flex items-center gap-1 text-sm font-medium text-ink-800 group-hover:text-primary-700">
+          {label}
+          <Icon name="chevron-right" size={12} className="text-ink-300 group-hover:text-primary-500" />
+        </span>
+        <span className="block text-xs text-ink-400">{hint}</span>
+      </span>
+    </Link>
+  );
+}
 
 /** Master Timeline — one unified calendar across every module: upcoming (prioritized) + a month
  *  calendar color-coded by source, plus AI focus/conflict analysis. */
@@ -80,7 +110,7 @@ export default function TimelinePage() {
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-ink-900">Timeline</h1>
-          <p className="mt-0.5 text-sm text-ink-500">Every deadline, goal, test, visit, and milestone in one place.</p>
+          <p className="mt-0.5 text-sm text-ink-500">Every deadline, exam, visit, goal, and renewal across the app — collected here automatically.</p>
         </div>
         <Button variant="outline" icon="chat" onClick={() => void runAnalyze()}>What should I focus on?</Button>
       </header>
@@ -95,7 +125,28 @@ export default function TimelinePage() {
       ) : loading ? (
         <div className="flex justify-center py-16"><Spinner /></div>
       ) : all.length === 0 ? (
-        <EmptyState icon="calendar" title="Your timeline is empty" description="As you add college deadlines, goals, test dates, and campus visits across the app, they’ll all appear here in one calendar." />
+        <Card className="space-y-4">
+          <div className="flex items-start gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-50 text-primary-600">
+              <Icon name="calendar" size={20} />
+            </span>
+            <div>
+              <h2 className="text-sm font-semibold text-ink-800">Nothing dated yet</h2>
+              <p className="mt-0.5 text-sm text-ink-500">
+                You don’t add things here directly — this calendar fills itself from dated items across the app.
+                Add any of these and they’ll show up automatically:
+              </p>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <TimelineSource to="/colleges" icon="school" label="Add a college" hint="Application deadlines appear once it finishes refreshing." />
+            <TimelineSource to="/exams" icon="teas" label="Add an exam date" hint="Official test dates land on the calendar." />
+            <TimelineSource to="/visits" icon="calendar" label="Plan a campus visit" hint="Visit dates show here too." />
+            <TimelineSource to="/scholarships" icon="scholarship" label="Track a scholarship" hint="Its deadline joins the timeline." />
+            <TimelineSource to="/finaid" icon="application" label="Add a financial-aid item" hint="FAFSA/CSS and aid deadlines." />
+            <TimelineSource to="/goals" icon="goal" label="Set a goal" hint="Goals with a target date appear." />
+          </div>
+        </Card>
       ) : tab === 'upcoming' ? (
         <div className="space-y-4">
           {grouped.map(({ group, events }) => (
