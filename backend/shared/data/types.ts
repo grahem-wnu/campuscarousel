@@ -172,6 +172,9 @@ export interface College extends Timestamped, Hydratable {
   website?: string;
   /** URLs the AI relied on during the most recent hydration (shown as "Sources"). */
   dataSources?: string[];
+  /** Readable titles for `dataSources`, resolved during hydration (search-result title, else the page
+   *  <title>). Only entries we could title; the UI falls back to URL parsing for any not listed. */
+  dataSourceTitles?: { url: string; title: string }[];
   /** Academic year the hydrated figures reflect, e.g. "2025-2026". */
   dataAsOf?: string;
   branding?: { logoUrl?: string; primaryColor?: string; secondaryColor?: string; mascot?: string };

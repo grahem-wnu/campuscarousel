@@ -15,6 +15,7 @@ import { majorPhrase } from '../../shared/ai/major.js';
 import { packFocusBriefs, packProgramDetailsHints } from '../../shared/packs/index.js';
 import type { College } from '../../shared/data/index.js';
 import type { DiscoverInput } from './schema.js';
+import { defaultTitleFetcher, resolveSourceTitles, type FetchLike, type SourceTitle } from './source-titles.js';
 
 export type { BedrockInvoker };
 
@@ -43,6 +44,9 @@ export interface AiOptions {
   searcher?: WebSearcher;
   /** Force web search on/off; defaults to the `AI_WEB_SEARCH` env flag. */
   webSearch?: boolean;
+  /** Inject the page-title fetcher (tests); else the global fetch with a timeout. Used to title any
+   *  source URL the web search didn't already return a title for. */
+  titleFetcher?: FetchLike;
 }
 
 /** Run a prompt through the shared web-grounded Bedrock loop and return the model's final text.
@@ -355,7 +359,23 @@ export function makeBedrockHydrator(options: AiOptions = {}, majors: string[] = 
       const fields = pickHydratableFields(extractJson(text));
       const consulted = sources.map((s) => s.url).filter((u): u is string => typeof u === 'string' && !!u);
       const dataSources = mergeSources(fields.dataSources, consulted);
-      return { ...fields, ...(dataSources ? { dataSources } : {}), hydrationStatus: 'complete' };
+      // Title the sources: reuse the search-result titles (free), fetch <title> for the rest.
+      let dataSourceTitles: SourceTitle[] | undefined;
+      if (dataSources?.length) {
+        const searchTitles = new Map<string, string>();
+        for (const s of sources) {
+          if (s.url && s.title) searchTitles.set(s.url, s.title);
+        }
+        const fetcher = options.titleFetcher ?? defaultTitleFetcher();
+        const titles = await resolveSourceTitles(dataSources, searchTitles, fetcher);
+        if (titles.length) dataSourceTitles = titles;
+      }
+      return {
+        ...fields,
+        ...(dataSources ? { dataSources } : {}),
+        ...(dataSourceTitles ? { dataSourceTitles } : {}),
+        hydrationStatus: 'complete',
+      };
     } catch {
       return { hydrationStatus: 'failed' };
     }

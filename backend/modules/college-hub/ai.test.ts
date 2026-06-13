@@ -252,5 +252,10 @@ describe('makeBedrockHydrator', () => {
     expect(out.estimatedNetPriceAfterAid).toBe(45984);
     // model-listed first, consulted appended, deduped (nursing.osu.edu appears once).
     expect(out.dataSources).toEqual(['https://nursing.osu.edu', 'https://nces.ed.gov/osu']);
+    // Source titles reuse the search-result titles (no page fetch needed here).
+    expect(out.dataSourceTitles).toEqual([
+      { url: 'https://nursing.osu.edu', title: 'OSU Nursing' },
+      { url: 'https://nces.ed.gov/osu', title: 'College Navigator' },
+    ]);
   });
 });
