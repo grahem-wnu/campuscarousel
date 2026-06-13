@@ -33,24 +33,46 @@ export interface AiOptions {
   modelId?: string;
   invoker?: BedrockInvoker;
   searcher?: WebSearcher;
+  /** Clock for the grade→graduation-year guide (injectable for tests). */
+  now?: () => Date;
 }
 
-const SYSTEM = [
-  'You are a warm, encouraging college-prep guide onboarding a family on Campus Carousel. Your job is a',
-  'short, friendly conversation that builds the student’s starting profile — not an interrogation.',
-  'Gather, a couple of things at a time and reacting naturally to answers: the student’s first name,',
-  'graduation year (or current grade), intended major(s), career goal, current GPA (and weighted vs',
-  'unweighted), city & state, a few interests/activities, and a rough family college budget. It is fine',
-  'if they don’t know something — skip it gracefully and move on. Keep each message brief.',
-  'When you have a reasonable picture (at least a major or career goal, plus grade/grad year and a couple',
-  'more details), wrap up: warmly summarize what you heard in one or two sentences and set done=true.',
-  '',
-  'ALWAYS respond with ONLY a single JSON object — no prose outside it, no code fences:',
-  '{"reply": "<your next message to the family>", "profile": { <all fields gathered so far, CUMULATIVE> }, "done": <true once setup is complete>}',
-  'profile keys (include ONLY what you actually know): name (string), graduationYear (number),',
-  'currentGPA (number), gpaType ("weighted"|"unweighted"), careerGoal (string), intendedMajors (string[]),',
-  'location (string), highSchool (string), interests (string[]), budgetTotal (number, USD).',
-].join(' ');
+/** Grade → graduation year for TODAY, computed exactly so the model never has to guess the year. */
+export function gradYearGuide(now: Date): string {
+  const y = now.getUTCFullYear();
+  const month = now.getUTCMonth(); // 0=Jan
+  // School year runs ~Aug–May. In spring/summer (before August) a 12th grader graduates THIS year;
+  // once the next school year has started (August+), they graduate next year.
+  const g12 = month >= 7 ? y + 1 : y;
+  return [
+    `Today is ${now.toISOString().slice(0, 10)}.`,
+    'Convert a US grade to graduation year (spring graduation, school year ~Aug–May) using exactly:',
+    `12th/senior → ${g12}, 11th/junior → ${g12 + 1}, 10th/sophomore → ${g12 + 2}, 9th/freshman → ${g12 + 3}.`,
+    'Do the math from these — never guess the year.',
+  ].join(' ');
+}
+
+function buildSystem(now: Date): string {
+  return [
+    'You are a warm, encouraging college-prep guide onboarding a family on Campus Carousel. Your job is a',
+    'short, friendly conversation that builds the student’s starting profile — not an interrogation.',
+    'Gather, a couple of things at a time and reacting naturally to answers: the student’s name,',
+    'graduation year (or current grade), intended major(s), career goal, current GPA (and weighted vs',
+    'unweighted), city & state, a few interests/activities, and a rough family college budget. It is fine',
+    'if they don’t know something — skip it gracefully and move on. Keep each message brief.',
+    'Record the student’s NAME exactly as the family writes it — never correct spelling, change it, or add',
+    'a last name they didn’t give. If unsure, ask; do not assume.',
+    gradYearGuide(now),
+    'When you have a reasonable picture (at least a major or career goal, plus grade/grad year and a couple',
+    'more details), wrap up: warmly summarize what you heard in one or two sentences and set done=true.',
+    '',
+    'ALWAYS respond with ONLY a single JSON object — no prose outside it, no code fences:',
+    '{"reply": "<your next message to the family>", "profile": { <all fields gathered so far, CUMULATIVE> }, "done": <true once setup is complete>}',
+    'profile keys (include ONLY what you actually know): name (string), graduationYear (number),',
+    'currentGPA (number), gpaType ("weighted"|"unweighted"), careerGoal (string), intendedMajors (string[]),',
+    'location (string), highSchool (string), interests (string[]), budgetTotal (number, USD).',
+  ].join(' ');
+}
 
 function renderTranscript(messages: ChatMsg[]): string {
   const lines = messages.map((m) => `${m.role === 'user' ? 'Family' : 'Guide'}: ${m.content}`).join('\n');
@@ -76,9 +98,10 @@ export function parseTurn(text: string): OnboardingTurn {
 }
 
 export function makeBedrockOnboardingChatter(options: AiOptions = {}): OnboardingChatter {
+  const now = options.now ?? (() => new Date());
   return async (messages) => {
     const { text } = await converseWithSearch(renderTranscript(messages), {
-      system: SYSTEM,
+      system: buildSystem(now()),
       webSearch: false,
       maxTokens: 900,
       temperature: 0.6,

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Badge, Button, Card, EmptyState, Field, Icon, Input, Modal, Select, Spinner, useToast } from "../../shared/ui";
-import { useActiveStudent, type Student } from "../../shared/shell";
+import { useActiveStudent, useAuth, type Student } from "../../shared/shell";
+import { resetStudent } from "../onboarding/api";
 import {
   RELATIONSHIP_LABELS,
   createStudent,
@@ -318,10 +319,29 @@ const MAJOR_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
  */
 function AcademicFocusCard() {
   const toast = useToast();
+  const { user } = useAuth();
   const { activeStudent, activeStudentId } = useActiveStudent();
   const [major, setMajor] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [resetting, setResetting] = useState(false);
+
+  async function reset() {
+    const who = activeStudent?.name ?? "this student";
+    if (!window.confirm(`Reset ${who}? This wipes their profile, goals, and colleges so you can re-run onboarding from scratch.`)) {
+      return;
+    }
+    setResetting(true);
+    try {
+      await resetStudent();
+      toast.success("Reset — starting onboarding.");
+      window.dispatchEvent(new Event("open-onboarding"));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not reset.");
+    } finally {
+      setResetting(false);
+    }
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -385,6 +405,14 @@ function AcademicFocusCard() {
             </Button>
           </div>
         )}
+        {user?.role === "admin" ? (
+          <div className="mt-4 border-t border-surface-border pt-3">
+            <Button variant="ghost" size="sm" onClick={reset} loading={resetting} disabled={resetting}>
+              Reset {activeStudent?.name ?? "student"} (testing)
+            </Button>
+            <p className="mt-1 text-xs text-ink-400">Wipes this student&rsquo;s profile, goals, and colleges, then re-runs onboarding.</p>
+          </div>
+        ) : null}
       </div>
     </Card>
   );

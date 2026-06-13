@@ -79,3 +79,8 @@ export interface FinishResult {
 export function finishOnboarding(profile: OnboardingProfile): Promise<FinishResult> {
   return api.post<FinishResult>('/onboarding/finish', { profile });
 }
+
+/** TESTING (admin): wipe the active student (profile + goals + colleges) so onboarding can re-run. */
+export function resetStudent(): Promise<{ ok: boolean; deleted: number }> {
+  return api.post<{ ok: boolean; deleted: number }>('/onboarding/reset', {});
+}

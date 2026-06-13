@@ -7,6 +7,7 @@ import type { OnboardingChatter } from './ai.js';
 import type { GoalSuggester } from '../goal-tracker/suggester.js';
 
 const grahem: Requester = { username: 'grahem', role: 'admin' };
+const kate: Requester = { username: 'kate', role: 'parent' };
 
 let data: Data;
 let dispatched: string[];
@@ -94,6 +95,20 @@ describe('POST /onboarding/finish', () => {
     const profile = await data.studentProfile.get();
     expect(profile?.currentGPA).toBe(4.0);
     expect(profile?.graduationYear).toBe(2030);
+  });
+
+  it('reset (admin) clears the profile + wipes goals/colleges; non-admin is forbidden', async () => {
+    await makeOnboarding().finish(ctx({ body: { profile: { intendedMajors: ['Nursing'], careerGoal: 'ICU Nurse' } } }));
+    expect((await data.studentProfile.get())?.onboardingComplete).toBe(true);
+    expect((await data.goals.list()).length).toBeGreaterThan(0);
+
+    await expect(makeOnboarding().reset(ctx({ requester: kate }))).rejects.toMatchObject({ status: 403 });
+
+    const res = await makeOnboarding().reset(ctx());
+    expect(res.status).toBe(200);
+    expect((await data.studentProfile.get())?.onboardingComplete).toBe(false);
+    expect((await data.studentProfile.get())?.careerGoal).toBeUndefined();
+    expect(await data.goals.list()).toEqual([]);
   });
 
   it('still finishes (profile saved) even if seeding throws', async () => {

@@ -20,7 +20,11 @@ describe('routes.manifest ↔ buildRoutes', () => {
     expect(manifestRoutes.map(sig).sort()).toEqual(built);
   });
 
-  it('expose POST /onboarding/chat + POST /onboarding/finish', () => {
-    expect(manifestRoutes.map(sig).sort()).toEqual(['POST /onboarding/chat', 'POST /onboarding/finish']);
+  it('expose the chat, finish, and reset endpoints', () => {
+    expect(manifestRoutes.map(sig).sort()).toEqual([
+      'POST /onboarding/chat',
+      'POST /onboarding/finish',
+      'POST /onboarding/reset',
+    ]);
   });
 });
