@@ -13,21 +13,25 @@ import {
   monthLabel,
 } from './logic';
 import type { Analysis, TimelineEvent, UpcomingEvent } from './types';
+import { clearbitLogoFromWebsite } from '../college-hub/logic';
 
 type TabId = 'upcoming' | 'calendar';
 const nowDate = new Date();
 
-/** Leading icon for an upcoming event: the college logo when it loads, else a school glyph (college)
- *  or the source-colored dot. Never shows a broken-image placeholder. */
+/** Leading icon for an upcoming event: a best-effort college logo (the hydrated URL, then a Clearbit
+ *  hotlink from the website), falling back to a school glyph (college) or the source-colored dot.
+ *  Advances through the logo candidates on load error, so a broken URL never shows as broken. */
 function EventIcon({ e }: { e: UpcomingEvent }) {
-  const [errored, setErrored] = useState(false);
-  if (e.logoUrl && !errored) {
+  const candidates = [e.logoUrl, clearbitLogoFromWebsite(e.website)].filter((u): u is string => !!u);
+  const [idx, setIdx] = useState(0);
+  const src = candidates[idx];
+  if (src) {
     return (
       <img
-        src={e.logoUrl}
+        src={src}
         alt=""
         className="mt-0.5 h-6 w-6 shrink-0 rounded bg-white object-contain"
-        onError={() => setErrored(true)}
+        onError={() => setIdx((i) => i + 1)}
       />
     );
   }
