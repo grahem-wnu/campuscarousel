@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Badge, Button, Card, Icon, Spinner, cn } from '../../shared/ui';
 import { categoryRows, deadlineLabel, deadlineTone, gpaText, money, READINESS_TONE, SOURCE_TONE, totalColleges } from './logic';
@@ -7,6 +7,8 @@ import type { Dashboard } from './types';
 import { getFocus } from '../focus/api';
 import type { FocusResponse } from '../focus/types';
 import { getProfile, type StudentProfile } from '../onboarding/api';
+import { listColleges } from '../college-hub/api';
+import type { College } from '../college-hub/types';
 
 /** A banner linking to the Focus (major-pack) page — shown only once the student has set a major. It
  *  makes the otherwise-ambient major pack a visible, clickable destination from the dashboard. */
@@ -29,6 +31,123 @@ function FocusBanner() {
         <Icon name="chevron-right" size={18} className="text-primary-400 transition-transform group-hover:translate-x-0.5" />
       </Card>
     </Link>
+  );
+}
+
+/** A small pill link used for the "what to do next" row in the setup banner. */
+function NextStep({ to, children }: { to: string; children: ReactNode }) {
+  return (
+    <Link
+      to={to}
+      className="inline-flex items-center gap-1 rounded-full border border-primary-200 bg-white px-3 py-1 text-xs font-medium text-primary-700 transition hover:border-primary-300 hover:bg-primary-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300"
+    >
+      {children}
+      <Icon name="chevron-right" size={12} />
+    </Link>
+  );
+}
+
+/**
+ * Post-onboarding orientation. After setup the app silently seeds ~12 colleges and researches each
+ * one in the background (tuition, deadlines, fit) — which left families unsure what was happening or
+ * what to do next. This banner narrates that work: it appears right after onboarding (the
+ * `onboarding-finished` event) and any time colleges are actively hydrating, shows live progress
+ * while polling, flips to an "all set" state when research finishes, and points to the next steps.
+ * It self-hides when there's nothing to report, and is dismissible.
+ */
+function SetupProgressBanner() {
+  const [colleges, setColleges] = useState<College[] | null>(null);
+  const [justOnboarded, setJustOnboarded] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
+
+  const refresh = useCallback(() => {
+    listColleges()
+      .then(setColleges)
+      .catch(() => {
+        /* best-effort — the banner just won't show if we can't read the list */
+      });
+  }, []);
+
+  useEffect(refresh, [refresh]);
+
+  // When onboarding finishes, frame this as a welcome and refetch the freshly-seeded colleges.
+  useEffect(() => {
+    const onFinished = () => {
+      setJustOnboarded(true);
+      setDismissed(false);
+      refresh();
+    };
+    window.addEventListener('onboarding-finished', onFinished);
+    return () => window.removeEventListener('onboarding-finished', onFinished);
+  }, [refresh]);
+
+  const researching = colleges
+    ? colleges.filter((c) => c.hydrationStatus === 'in-progress' || c.hydrationStatus === 'pending').length
+    : 0;
+
+  // Poll while research is in flight so the count ticks up live, then stop.
+  useEffect(() => {
+    if (researching === 0) return;
+    const id = window.setInterval(refresh, 4000);
+    return () => window.clearInterval(id);
+  }, [researching, refresh]);
+
+  if (dismissed || !colleges) return null;
+  const total = colleges.length;
+  const done = total - researching;
+  const active = researching > 0;
+  // Nothing timely to say: not freshly onboarded and no research running.
+  if (!active && !justOnboarded) return null;
+
+  return (
+    <Card className="relative border border-primary-200 bg-primary-50">
+      <button
+        type="button"
+        onClick={() => setDismissed(true)}
+        aria-label="Dismiss"
+        className="absolute right-3 top-3 text-primary-400 transition hover:text-primary-600"
+      >
+        <Icon name="close" size={16} />
+      </button>
+      <div className="flex items-start gap-3 pr-6">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-100 text-primary-600">
+          {active ? <Spinner size={18} /> : <Icon name="check" size={20} />}
+        </span>
+        <div className="min-w-0 flex-1">
+          {active ? (
+            <>
+              <p className="text-sm font-semibold text-primary-800">
+                {justOnboarded ? "You're all set — we're researching your colleges" : 'Researching your colleges'}
+              </p>
+              <p className="mt-0.5 text-xs text-primary-700">
+                {done} of {total} ready. We&rsquo;re pulling tuition, deadlines, and fit in the background — keep
+                exploring, this updates on its own.
+              </p>
+              {total > 0 ? (
+                <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-primary-100">
+                  <div
+                    className="h-full rounded-full bg-primary-500 transition-all"
+                    style={{ width: `${Math.round((done / total) * 100)}%` }}
+                  />
+                </div>
+              ) : null}
+            </>
+          ) : (
+            <>
+              <p className="text-sm font-semibold text-primary-800">
+                You&rsquo;re all set{total > 0 ? ` — ${total} colleges researched` : ''}
+              </p>
+              <p className="mt-0.5 text-xs text-primary-700">Here&rsquo;s where to pick up next.</p>
+            </>
+          )}
+          <div className="mt-2.5 flex flex-wrap gap-2">
+            <NextStep to="/focus">See your focus</NextStep>
+            <NextStep to="/colleges">Browse colleges</NextStep>
+            <NextStep to="/timeline">View your timeline</NextStep>
+          </div>
+        </div>
+      </div>
+    </Card>
   );
 }
 
@@ -169,6 +288,8 @@ export default function DashboardPage() {
         <h1 className="text-2xl font-bold text-ink-900">Dashboard</h1>
         <p className="mt-0.5 text-sm text-ink-500">Your whole journey, at a glance.</p>
       </header>
+
+      <SetupProgressBanner />
 
       <FocusBanner />
 
