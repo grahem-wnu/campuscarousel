@@ -110,6 +110,32 @@ export function logoSrc(c: College): string | null {
   return domain ? `https://logo.clearbit.com/${domain}` : null;
 }
 
+/** Registrable root domain (last two labels) for logo lookups — Clearbit wants the root, not a
+ *  subdomain (dornsife.usc.edu → usc.edu). */
+export function rootDomainOf(website?: string): string | undefined {
+  const d = domainOf(website);
+  if (!d) return undefined;
+  const parts = d.split('.');
+  return parts.length > 2 ? parts.slice(-2).join('.') : d;
+}
+
+/** A best-effort Clearbit logo hotlink from a website's root domain (undefined if none). */
+export function clearbitLogoFromWebsite(website?: string): string | undefined {
+  const root = rootDomainOf(website);
+  return root ? `https://logo.clearbit.com/${root}` : undefined;
+}
+
+/** Best-effort logo URL candidates, highest-quality first: explicit branding/cached logo, then a
+ *  Clearbit hotlink from the root domain. The UI tries each in order, advancing on a load error. */
+export function logoCandidates(c: College): string[] {
+  const out: string[] = [];
+  if (c.branding?.logoUrl) out.push(c.branding.logoUrl);
+  if (c.logoImageUrl) out.push(c.logoImageUrl);
+  const clearbit = clearbitLogoFromWebsite(c.website);
+  if (clearbit) out.push(clearbit);
+  return [...new Set(out)];
+}
+
 /** Cached campus photo url, or null. Drives the card/detail hero banner when present. */
 export function campusImageSrc(c: College): string | null {
   return c.campusImageUrl ?? null;

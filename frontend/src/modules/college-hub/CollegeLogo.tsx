@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Icon } from '../../shared/ui';
-import { logoSrc } from './logic';
+import { logoCandidates } from './logic';
 import type { College } from './types';
 
 interface Props {
@@ -9,15 +9,17 @@ interface Props {
   className?: string;
 }
 
-/** College logo with the spec's fallback chain: branding URL → Clearbit hotlink → graduation-cap.
- *  Swaps to the cap on an <img> load error (broken/hotlink-blocked logos never show as broken). */
+/** College logo with a best-effort fallback chain: branding/cached URL → Clearbit (root domain) →
+ *  graduation-cap. Advances through the candidates on each <img> load error, so a broken or
+ *  hotlink-blocked logo quietly tries the next source rather than showing as broken. */
 export function CollegeLogo({ college, size = 40, className }: Props) {
-  const src = logoSrc(college);
-  const [errored, setErrored] = useState(false);
-  useEffect(() => setErrored(false), [src]); // reset when the college (src) changes
+  const candidates = logoCandidates(college);
+  const [idx, setIdx] = useState(0);
+  useEffect(() => setIdx(0), [college.collegeId]); // restart the chain when the college changes
+  const src = candidates[idx];
 
   const box = `inline-flex items-center justify-center overflow-hidden rounded-lg bg-surface-sunken ${className ?? ''}`;
-  if (!src || errored) {
+  if (!src) {
     return (
       <span className={box} style={{ width: size, height: size }} aria-hidden>
         <Icon name="school" size={Math.round(size * 0.55)} className="text-ink-400" />
@@ -32,7 +34,7 @@ export function CollegeLogo({ college, size = 40, className }: Props) {
         width={size}
         height={size}
         className="h-full w-full object-contain"
-        onError={() => setErrored(true)}
+        onError={() => setIdx((i) => i + 1)}
       />
     </span>
   );

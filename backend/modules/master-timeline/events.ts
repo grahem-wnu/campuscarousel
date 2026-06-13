@@ -30,6 +30,8 @@ export interface TimelineEvent {
   collegeId?: string;
   /** College logo (college-sourced events only) so the UI can show which school a deadline is for. */
   logoUrl?: string;
+  /** College website (college events) — lets the UI derive a best-effort logo when `logoUrl` fails. */
+  website?: string;
 }
 
 const MS_PER_DAY = 86_400_000;
@@ -69,9 +71,10 @@ export function buildEvents(s: EventSources): TimelineEvent[] {
     if (c.status === 'removed') continue;
     const d = c.applicationDeadlines;
     const logoUrl = c.branding?.logoUrl;
-    if (d?.earlyAction) push({ source: 'college', type: 'early-action', title: `${c.name} — early action`, date: collegeDeadlineDate(d.earlyAction, s.graduationYear), refId: c.collegeId, collegeId: c.collegeId, logoUrl });
-    if (d?.regularDecision) push({ source: 'college', type: 'regular-decision', title: `${c.name} — regular decision`, date: collegeDeadlineDate(d.regularDecision, s.graduationYear), refId: c.collegeId, collegeId: c.collegeId, logoUrl });
-    if (d?.programApp) push({ source: 'college', type: 'program-app', title: `${c.name} — program app`, date: collegeDeadlineDate(d.programApp, s.graduationYear), refId: c.collegeId, collegeId: c.collegeId, logoUrl });
+    const website = c.website;
+    if (d?.earlyAction) push({ source: 'college', type: 'early-action', title: `${c.name} — early action`, date: collegeDeadlineDate(d.earlyAction, s.graduationYear), refId: c.collegeId, collegeId: c.collegeId, logoUrl, website });
+    if (d?.regularDecision) push({ source: 'college', type: 'regular-decision', title: `${c.name} — regular decision`, date: collegeDeadlineDate(d.regularDecision, s.graduationYear), refId: c.collegeId, collegeId: c.collegeId, logoUrl, website });
+    if (d?.programApp) push({ source: 'college', type: 'program-app', title: `${c.name} — program app`, date: collegeDeadlineDate(d.programApp, s.graduationYear), refId: c.collegeId, collegeId: c.collegeId, logoUrl, website });
   }
   for (const t of s.exams) if (t.type === 'official-exam') push({ source: 'exam', type: 'official-exam', title: 'Official exam', date: t.date, refId: t.recordId });
   for (const v of s.visits) push({ source: 'visit', type: v.visitType ?? 'visit', title: `Campus visit${v.visitType ? ` — ${v.visitType}` : ''}`, date: v.date, refId: v.visitId, collegeId: v.collegeId });
