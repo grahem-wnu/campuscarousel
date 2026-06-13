@@ -24,6 +24,7 @@ import { routes as interviewPrepRoutes } from '../../modules/interview-prep/rout
 import { routes as invitesRoutes } from '../../modules/invites/routes.manifest.js';
 import { routes as masterTimelineRoutes } from '../../modules/master-timeline/routes.manifest.js';
 import { routes as motivationRoutes } from '../../modules/motivation/routes.manifest.js';
+import { routes as onboardingChatRoutes } from '../../modules/onboarding-chat/routes.manifest.js';
 import { routes as opportunitiesRoutes } from '../../modules/opportunities/routes.manifest.js';
 import { routes as peerBenchmarkRoutes } from '../../modules/peer-benchmark/routes.manifest.js';
 import { routes as profileRoutes } from '../../modules/profile/routes.manifest.js';
@@ -52,6 +53,7 @@ export const manifests: RouteManifest[] = [
   { routes: invitesRoutes },
   { routes: masterTimelineRoutes },
   { routes: motivationRoutes },
+  { routes: onboardingChatRoutes },
   { routes: opportunitiesRoutes },
   { routes: peerBenchmarkRoutes },
   { routes: profileRoutes },
