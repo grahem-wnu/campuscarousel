@@ -1,37 +1,33 @@
 import { describe, expect, it } from 'vitest';
 import type { Activity, Certification, College, Goal, Scholarship, ExamScore, Visit } from '../../shared/data/index.js';
-import { buildEvents, filterEvents, parseDeadlineDate, upcoming, type EventSources } from './events.js';
+import { buildEvents, filterEvents, upcoming, type EventSources } from './events.js';
 
-describe('parseDeadlineDate', () => {
-  it('extracts an ISO date (the new hydration format)', () => {
-    expect(parseDeadlineDate('2026-11-01 — Early Action, non-binding')).toBe('2026-11-01');
-  });
-  it('extracts a "Month D, YYYY" date (older prose)', () => {
-    expect(parseDeadlineDate('November 1, 2026 (non-binding; decisions mid-January)')).toBe('2026-11-01');
-    expect(parseDeadlineDate('December 15th, 2026')).toBe('2026-12-15');
-  });
-  it('returns "" when there is no resolvable full date', () => {
-    expect(parseDeadlineDate('Not offered — no Early Action')).toBe('');
-    expect(parseDeadlineDate('November 30 (no year given)')).toBe('');
-    expect(parseDeadlineDate(undefined)).toBe('');
-  });
-});
+describe('buildEvents — college deadlines projected onto the student cycle', () => {
+  const college = {
+    collegeId: 'c1',
+    name: 'USC',
+    status: 'researching',
+    branding: { logoUrl: 'https://logo' },
+    applicationDeadlines: {
+      earlyAction: '2026-11-01 — Early Action', // Nov → senior fall
+      regularDecision: 'November 30 (no year given)', // year supplied from the cycle
+    },
+  } as unknown as College;
 
-describe('buildEvents — college deadlines parse to real dates', () => {
-  it('only emits college deadline events with a parseable date', () => {
-    const college = {
-      collegeId: 'c1',
-      name: 'USC',
-      status: 'researching',
-      applicationDeadlines: {
-        earlyAction: '2026-11-01 — Early Action',
-        regularDecision: 'November 30 (no year)', // unparseable → skipped
-      },
-    } as unknown as College;
+  it('dates deadlines to the senior-year cycle (grad year) and carries the logo', () => {
+    const events = buildEvents({
+      activities: [], goals: [], colleges: [college], exams: [], visits: [], scholarships: [], certifications: [],
+      graduationYear: 2029, // applies fall 2028
+    });
+    const collegeEvents = events.filter((e) => e.source === 'college');
+    expect(collegeEvents.map((e) => e.date).sort()).toEqual(['2028-11-01', '2028-11-30']);
+    expect(collegeEvents.every((e) => e.logoUrl === 'https://logo')).toBe(true);
+  });
+
+  it('without a grad year, keeps an explicit year and skips year-less deadlines', () => {
     const events = buildEvents({ activities: [], goals: [], colleges: [college], exams: [], visits: [], scholarships: [], certifications: [] });
     const collegeEvents = events.filter((e) => e.source === 'college');
-    expect(collegeEvents).toHaveLength(1);
-    expect(collegeEvents[0]).toMatchObject({ type: 'early-action', date: '2026-11-01' });
+    expect(collegeEvents.map((e) => e.date)).toEqual(['2026-11-01']); // EA has a year; the year-less RD is skipped
   });
 });
 

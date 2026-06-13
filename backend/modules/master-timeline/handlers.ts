@@ -42,7 +42,7 @@ export function makeHandlers(deps: TimelineDeps): TimelineHandlers {
   // Gather all event sources, visibility-filtering activities for the caller.
   async function gather(requester: Parameters<Handler>[0]['requester']): Promise<EventSources> {
     const data = getData();
-    const [activitiesRaw, goals, colleges, exams, scholarships, certifications, finaid] = await Promise.all([
+    const [activitiesRaw, goals, colleges, exams, scholarships, certifications, finaid, profile] = await Promise.all([
       data.activities.list(),
       data.goals.list(),
       data.colleges.list(),
@@ -50,6 +50,7 @@ export function makeHandlers(deps: TimelineDeps): TimelineHandlers {
       data.scholarships.list(),
       data.certifications.list(),
       data.finaid.list(),
+      data.studentProfile.get(),
     ]);
     // Visits are sub-entities under COLLEGE#<id> — list per college and flatten.
     const visitLists = await Promise.all(colleges.map((c) => data.visits.list(c.collegeId)));
@@ -63,6 +64,7 @@ export function makeHandlers(deps: TimelineDeps): TimelineHandlers {
       scholarships,
       certifications,
       finaid,
+      graduationYear: profile?.graduationYear,
     };
   }
 

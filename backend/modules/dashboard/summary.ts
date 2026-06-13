@@ -14,6 +14,7 @@ import type {
   Scholarship,
   ExamScore,
 } from '../../shared/data/index.js';
+import { collegeDeadlineDate } from '../../shared/college-deadline.js';
 
 const MS_PER_DAY = 86_400_000;
 const r2 = (n: number): number => Math.round(n * 100) / 100;
@@ -138,6 +139,7 @@ export function upcomingDeadlines(
   data: { colleges: readonly College[]; goals: readonly Goal[]; scholarships: readonly Scholarship[]; certifications: readonly Certification[] },
   todayIso: string,
   limit = 8,
+  graduationYear?: number,
 ): Deadline[] {
   const out: Deadline[] = [];
   const push = (source: DeadlineSource, label: string, date?: string | null) => {
@@ -148,9 +150,10 @@ export function upcomingDeadlines(
   };
   for (const c of data.colleges) {
     if (c.status === 'removed') continue;
-    push('college', `${c.name}: early action`, c.applicationDeadlines?.earlyAction);
-    push('college', `${c.name}: regular decision`, c.applicationDeadlines?.regularDecision);
-    push('college', `${c.name}: program app`, c.applicationDeadlines?.programApp);
+    // College deadlines are stored as prose; project the month/day onto the student's own cycle.
+    push('college', `${c.name}: early action`, collegeDeadlineDate(c.applicationDeadlines?.earlyAction, graduationYear) || null);
+    push('college', `${c.name}: regular decision`, collegeDeadlineDate(c.applicationDeadlines?.regularDecision, graduationYear) || null);
+    push('college', `${c.name}: program app`, collegeDeadlineDate(c.applicationDeadlines?.programApp, graduationYear) || null);
   }
   for (const g of data.goals) if (g.status !== 'completed' && g.status !== 'dropped') push('goal', g.title, g.targetDate);
   for (const s of data.scholarships) if (s.status !== 'awarded' && s.status !== 'denied' && s.status !== 'expired') push('scholarship', s.name, s.applicationDeadline);

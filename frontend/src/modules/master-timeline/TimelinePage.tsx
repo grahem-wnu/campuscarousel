@@ -156,7 +156,11 @@ export default function TimelinePage() {
                 {events.map((e) => (
                   <li key={e.id} className="flex items-center justify-between gap-3 py-1.5 text-sm">
                     <span className="flex items-center gap-2 truncate">
-                      <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${SOURCE_DOT[e.source]}`} aria-hidden />
+                      {e.logoUrl ? (
+                        <img src={e.logoUrl} alt="" className="h-5 w-5 shrink-0 rounded object-contain" />
+                      ) : (
+                        <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${SOURCE_DOT[e.source]}`} aria-hidden />
+                      )}
                       <span className="truncate text-ink-800">{e.title}</span>
                       <Badge tone="neutral">{SOURCE_LABEL[e.source]}</Badge>
                     </span>

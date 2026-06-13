@@ -11,6 +11,8 @@ export interface TimelineEvent {
   title: string;
   refId?: string;
   collegeId?: string;
+  /** College logo for college-sourced deadline events (so the school is identifiable at a glance). */
+  logoUrl?: string;
 }
 
 export type UpcomingGroup = 'overdue' | 'this-week' | 'next-week' | 'this-month' | 'later';
