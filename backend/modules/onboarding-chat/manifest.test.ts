@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Data } from '../../shared/data/index.js';
 import { buildRoutes, makeHandlers } from './handlers.js';
 import { routes as manifestRoutes } from './routes.manifest.js';
-import type { OnboardingChatter } from './ai.js';
+import type { CollegeSeeder, OnboardingChatter } from './ai.js';
 import type { GoalSuggester } from '../goal-tracker/suggester.js';
 
 const sig = (r: { method: string; path: string }): string => `${r.method} ${r.path}`;
@@ -11,7 +11,9 @@ const stubs = {
   getData: () => ({}) as Data,
   chatter: (async () => ({ reply: '', profile: {}, done: false })) as OnboardingChatter,
   suggester: { suggest: async () => [] } as GoalSuggester,
-  discoverDispatch: async () => {},
+  collegeSeeder: (async () => []) as CollegeSeeder,
+  hydrateDispatch: async () => {},
+  assetsDispatch: async () => {},
 };
 
 describe('routes.manifest ↔ buildRoutes', () => {

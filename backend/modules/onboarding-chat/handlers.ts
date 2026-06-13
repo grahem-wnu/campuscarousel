@@ -8,9 +8,11 @@
 import { Errors, validateBody, type Handler } from '../../shared/api/index.js';
 import type { Data, StudentProfile } from '../../shared/data/index.js';
 import type { GoalSuggester } from '../goal-tracker/suggester.js';
-import type { DiscoverDispatcher } from '../college-hub/discover.js';
 import { chatSchema, finishSchema } from './schema.js';
-import { type OnboardingChatter, type OnboardingProfile } from './ai.js';
+import { type CollegeSeeder, type OnboardingChatter, type OnboardingProfile } from './ai.js';
+
+/** A college job dispatcher (hydration or assets) — `(collegeId) => Promise<void>`. */
+type CollegeJobDispatcher = (collegeId: string) => Promise<void>;
 
 export interface OnboardingHandlers {
   chat: Handler;
@@ -22,8 +24,12 @@ export interface OnboardingDeps {
   getData: () => Data;
   chatter: OnboardingChatter;
   suggester: GoalSuggester;
-  /** Enqueue (or inline-run) a college-discovery job. */
-  discoverDispatch: DiscoverDispatcher;
+  /** Names a few starter colleges for the major (model-only). */
+  collegeSeeder: CollegeSeeder;
+  /** Kick off text hydration for a newly-seeded college. */
+  hydrateDispatch: CollegeJobDispatcher;
+  /** Kick off imagery/assets for a newly-seeded college. */
+  assetsDispatch: CollegeJobDispatcher;
 }
 
 /** Map the chat's gathered profile onto a StudentProfile patch (budgetTotal → budget object). */
@@ -43,7 +49,7 @@ function toProfilePatch(p: OnboardingProfile): Partial<StudentProfile> {
 }
 
 export function makeHandlers(deps: OnboardingDeps): OnboardingHandlers {
-  const { getData, chatter, suggester, discoverDispatch } = deps;
+  const { getData, chatter, suggester, collegeSeeder, hydrateDispatch, assetsDispatch } = deps;
 
   return {
     // POST /onboarding/chat — one conversational turn. Never 500s on a model hiccup; the chat keeps
@@ -96,22 +102,35 @@ export function makeHandlers(deps: OnboardingDeps): OnboardingHandlers {
         /* seeding is non-fatal — the family can add goals later */
       }
 
-      // Kick off async college discovery for the major (best-effort).
-      let discoveryJobId: string | undefined;
+      // Seed a few real starter colleges for the major and hydrate them, so the dashboard + Colleges
+      // page aren't empty on arrival (best-effort). Names come model-only; the async hydration pipeline
+      // fills in tuition/deadlines/etc. Skips any name already in the list (idempotent across re-runs).
+      let collegesCreated = 0;
       try {
-        const query = majors[0]
-          ? `${majors[0]} programs`
-          : saved.careerGoal
-            ? `${saved.careerGoal} college programs`
-            : undefined;
-        const job = await data.discoveryJobs.create({ status: 'pending', filters: { query, limit: 6 } });
-        await discoverDispatch(job.jobId);
-        discoveryJobId = job.jobId;
+        const suggestions = await collegeSeeder(majors, saved.location ?? undefined);
+        const existing = await data.colleges.list();
+        const seen = new Set(existing.map((c) => c.name.trim().toLowerCase()));
+        for (const s of suggestions.slice(0, 4)) {
+          if (seen.has(s.name.trim().toLowerCase())) continue;
+          seen.add(s.name.trim().toLowerCase());
+          const created = await data.colleges.create({
+            name: s.name,
+            state: s.state,
+            status: 'researching',
+            addedBy: 'ai-discovered',
+            userEdited: [],
+            hydrationStatus: 'in-progress',
+            assetsStatus: 'in-progress',
+          } as Parameters<Data['colleges']['create']>[0]);
+          await hydrateDispatch(created.collegeId);
+          await assetsDispatch(created.collegeId);
+          collegesCreated++;
+        }
       } catch {
-        /* discovery is non-fatal — the family can run the College Finder later */
+        /* college seeding is non-fatal — the family can run the College Finder later */
       }
 
-      return { status: 200, body: { profile: saved, goalsCreated, discoveryJobId: discoveryJobId ?? null } };
+      return { status: 200, body: { profile: saved, goalsCreated, collegesCreated } };
     },
 
     // POST /onboarding/reset — TESTING aid (admin only): wipe the ACTIVE student so onboarding can be

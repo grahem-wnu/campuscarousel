@@ -72,7 +72,7 @@ export function onboardingChat(messages: ChatMsg[]): Promise<OnboardingTurn> {
 export interface FinishResult {
   profile: StudentProfile;
   goalsCreated: number;
-  discoveryJobId: string | null;
+  collegesCreated: number;
 }
 
 /** Save the gathered profile (marks onboarding complete) and seed starter goals + college discovery. */
