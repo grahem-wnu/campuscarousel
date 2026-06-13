@@ -6,6 +6,15 @@ import { getFocus, refreshOverview, refreshCareerPath } from "./api";
 import type { FocusOverview, FocusResponse, PackSummary } from "./types";
 import { Markdown } from "./Markdown";
 
+/** Hostname (without www.) of a URL, for the source sub-line; empty string if unparseable. */
+function hostOf(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return "";
+  }
+}
+
 /**
  * One web-grounded AI document (the major overview or the career path), with its full lifecycle:
  * empty → generate, pending → spinner (or a stalled "try again" after the poll cap), complete →
@@ -52,13 +61,24 @@ function AsyncDocCard(props: {
           {doc.overview ? <Markdown text={doc.overview} /> : null}
           {doc.sources && doc.sources.length > 0 ? (
             <div className="mt-4 border-t border-surface-border pt-3">
-              <p className="mb-1 text-xs font-medium uppercase tracking-wide text-ink-400">Sources</p>
-              <ul className="space-y-1">
-                {doc.sources.map((s, i) => (
-                  <li key={i} className="truncate text-xs">
-                    <a href={s.url} target="_blank" rel="noreferrer" className="text-primary-600 hover:text-primary-700">{s.title}</a>
-                  </li>
-                ))}
+              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-ink-400">Sources</p>
+              <ul className="space-y-2">
+                {doc.sources.map((s, i) => {
+                  const host = hostOf(s.url);
+                  return (
+                    <li key={i}>
+                      <a
+                        href={s.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="group block rounded-lg border border-surface-border px-3 py-2 transition hover:border-primary-200 hover:bg-surface-sunken"
+                      >
+                        <p className="truncate text-sm font-medium text-ink-800 group-hover:text-primary-700">{s.title || host}</p>
+                        {host && host !== s.title ? <p className="truncate text-xs text-ink-400">{host}</p> : null}
+                      </a>
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           ) : null}
