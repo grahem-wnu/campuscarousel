@@ -328,7 +328,11 @@ function AcademicFocusCard() {
 
   async function reset() {
     const who = activeStudent?.name ?? "this student";
-    if (!window.confirm(`Reset ${who}? This wipes their profile, goals, and colleges so you can re-run onboarding from scratch.`)) {
+    if (
+      !window.confirm(
+        `Reset ${who}'s setup? This clears their major, AI-built goals, and AI-discovered colleges and re-runs onboarding. GPA, courses, journal, and any colleges you added yourself are kept.`,
+      )
+    ) {
       return;
     }
     setResetting(true);
@@ -376,10 +380,15 @@ function AcademicFocusCard() {
 
   return (
     <Card>
-      <div className="border-b border-surface-border px-4 py-3">
+      <div className="flex items-center justify-between gap-2 border-b border-surface-border px-4 py-3">
         <h2 className="font-semibold text-ink-800">
           Academic focus{activeStudent ? ` — ${activeStudent.name}` : ""}
         </h2>
+        {user?.role === "admin" ? (
+          <Button variant="outline" size="sm" onClick={reset} loading={resetting} disabled={resetting}>
+            Reset setup
+          </Button>
+        ) : null}
       </div>
       <div className="p-4">
         {loading ? (
@@ -406,12 +415,9 @@ function AcademicFocusCard() {
           </div>
         )}
         {user?.role === "admin" ? (
-          <div className="mt-4 border-t border-surface-border pt-3">
-            <Button variant="ghost" size="sm" onClick={reset} loading={resetting} disabled={resetting}>
-              Reset {activeStudent?.name ?? "student"} (testing)
-            </Button>
-            <p className="mt-1 text-xs text-ink-400">Wipes this student&rsquo;s profile, goals, and colleges, then re-runs onboarding.</p>
-          </div>
+          <p className="mt-3 text-xs text-ink-400">
+            &ldquo;Reset setup&rdquo; clears the major, AI-built goals, and discovered colleges and re-runs onboarding. GPA, courses, and journal are kept.
+          </p>
         ) : null}
       </div>
     </Card>

@@ -80,7 +80,8 @@ export function finishOnboarding(profile: OnboardingProfile): Promise<FinishResu
   return api.post<FinishResult>('/onboarding/finish', { profile });
 }
 
-/** TESTING (admin): wipe the active student (profile + goals + colleges) so onboarding can re-run. */
-export function resetStudent(): Promise<{ ok: boolean; deleted: number }> {
-  return api.post<{ ok: boolean; deleted: number }>('/onboarding/reset', {});
+/** TESTING (admin): reset the active student's SETUP (major, AI goals, discovered colleges) and re-run
+ *  onboarding — factual data (GPA, courses, journal) is kept. */
+export function resetStudent(): Promise<{ ok: boolean; goalsRemoved: number; collegesRemoved: number }> {
+  return api.post<{ ok: boolean; goalsRemoved: number; collegesRemoved: number }>('/onboarding/reset', {});
 }
