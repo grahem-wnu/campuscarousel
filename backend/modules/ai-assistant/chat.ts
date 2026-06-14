@@ -114,6 +114,8 @@ export function buildSystemPrompt(bundle: ContextBundle): string {
   lines.push(
     '',
     'Be warm, specific, and concise. Ground answers in the data above; if you lack data, say so rather than inventing it. Never reveal another user’s private information.',
+    // The chat UI renders plain text, NOT markdown — so tables/headings/bold show as raw symbols.
+    'Write for a plain-text chat that does NOT render markdown. Never use markdown tables (pipes/dashes), "#" headings, or "**bold**" — they appear as raw symbols. Use short paragraphs and simple "- " bullets; present figures or comparisons as compact labeled lines, e.g. "Tuition: ~$63,000/yr".',
   );
   return lines.join('\n');
 }

@@ -42,9 +42,26 @@ describe('selectRecords', () => {
     expect(recs.some((r) => r.kind === 'motivation' && r.text.includes('Why'))).toBe(true);
     expect(recs.some((r) => r.kind === 'activity')).toBe(true);
   });
-  it('college-discovery pulls colleges', () => {
+  it('college-discovery pulls colleges (bare name when not yet hydrated)', () => {
     const recs = selectRecords('college-discovery', sources);
     expect(recs).toEqual([{ kind: 'college', text: 'UCLA' }]);
+  });
+  it('grounds tracked colleges with hydrated cost + deadline facts', () => {
+    const duke = {
+      collegeId: 'd', name: 'Duke University', location: 'Durham, NC',
+      estimatedNetPriceAfterAid: 22000, costOfAttendanceOutOfState: 86000,
+      applicationDeadlines: { earlyAction: 'Nov 1', regularDecision: 'Jan 2' },
+      createdAt: '2026-06-01', updatedAt: '',
+    } as College;
+    const recs = selectRecords('college-discovery', { ...sources, colleges: [duke] });
+    expect(recs[0]?.text).toContain('Duke University');
+    expect(recs[0]?.text).toContain('net price after aid ~$22,000/yr');
+    expect(recs[0]?.text).toContain('cost of attendance ~$86,000/yr');
+    expect(recs[0]?.text).toContain('regular decision Jan 2');
+  });
+  it('ask mode includes the tracked colleges (so cost questions are grounded)', () => {
+    const recs = selectRecords('ask', sources);
+    expect(recs.some((r) => r.kind === 'college' && r.text.includes('UCLA'))).toBe(true);
   });
   it('scholarship-discovery pulls scholarships', () => {
     const recs = selectRecords('scholarship-discovery', sources);
