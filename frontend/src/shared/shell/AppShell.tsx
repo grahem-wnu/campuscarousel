@@ -335,8 +335,8 @@ function FocusBadge() {
   }, [activeStudentId]);
   if (!major) return null;
   return (
-    <NavLink to="/focus" className="hidden shrink-0 items-center xl:flex" aria-label={`${major} focus`}>
-      <Badge tone="primary" className="max-w-[12rem] truncate whitespace-nowrap">{major} focus</Badge>
+    <NavLink to="/focus" className="hidden shrink-0 items-center xl:ml-3 xl:flex" aria-label={`${major} focus`}>
+      <Badge tone="primary" className="max-w-[12rem] truncate whitespace-nowrap">{major}</Badge>
     </NavLink>
   );
 }
