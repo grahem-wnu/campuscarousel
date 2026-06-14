@@ -2,16 +2,39 @@
 // is the only part that touches the data client; the rest is pure (digest.ts). Deps are injected so
 // tests run with in-memory data, a pinned clock, and a fake email sender.
 
-import type { Data } from '../../shared/data/index.js';
+import type { College, Data } from '../../shared/data/index.js';
 import type { EmailSender } from '../../shared/email/index.js';
 import { runWithStudent } from '../../shared/tenant/index.js';
+import { collegeDeadlineDate } from '../../shared/college-deadline.js';
 import { digestForRecipient, type GatheredData } from './digest.js';
 import { shouldSendNow } from './settings.js';
 
+/** Project each college's application-deadline strings onto THIS student's senior-year cycle, so an
+ *  underclassman (e.g. class of 2029) doesn't see the colleges' current published cycle as "overdue".
+ *  collegeDeadlineDate is idempotent on an ISO date, so the downstream timeline builder keeps these.
+ *  With no graduation year we leave the deadlines untouched (the stated-year behaviour). */
+function projectDeadlines(colleges: College[], graduationYear?: number): College[] {
+  if (!graduationYear) return colleges;
+  const proj = (v?: string): string | undefined => (v ? collegeDeadlineDate(v, graduationYear) || undefined : undefined);
+  return colleges.map((c) =>
+    c.applicationDeadlines
+      ? {
+          ...c,
+          applicationDeadlines: {
+            earlyAction: proj(c.applicationDeadlines.earlyAction),
+            regularDecision: proj(c.applicationDeadlines.regularDecision),
+            programApp: proj(c.applicationDeadlines.programApp),
+          },
+        }
+      : c,
+  );
+}
+
 /** Fetch everything the digest needs for the CURRENT student in one pass. Activities stay RAW —
- *  privacy is applied per recipient. */
+ *  privacy is applied per recipient. College deadlines are projected onto the student's own
+ *  application cycle (from their profile graduationYear) so they aren't falsely flagged overdue. */
 export async function gatherForDigest(data: Data): Promise<GatheredData> {
-  const [activities, goals, colleges, exams, scholarships, certifications, finaid] = await Promise.all([
+  const [activities, goals, colleges, exams, scholarships, certifications, finaid, profile] = await Promise.all([
     data.activities.list(),
     data.goals.list(),
     data.colleges.list(),
@@ -19,10 +42,20 @@ export async function gatherForDigest(data: Data): Promise<GatheredData> {
     data.scholarships.list(),
     data.certifications.list(),
     data.finaid.list(),
+    data.studentProfile.get(),
   ]);
   // Visits are sub-entities under COLLEGE#<id>; list per college and flatten (mirrors master-timeline).
   const visitLists = await Promise.all(colleges.map((c) => data.visits.list(c.collegeId)));
-  return { activities, goals, colleges, exams, visits: visitLists.flat(), scholarships, certifications, finaid };
+  return {
+    activities,
+    goals,
+    colleges: projectDeadlines(colleges, profile?.graduationYear),
+    exams,
+    visits: visitLists.flat(),
+    scholarships,
+    certifications,
+    finaid,
+  };
 }
 
 const EMPTY: GatheredData = {
