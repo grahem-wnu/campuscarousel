@@ -14,6 +14,10 @@ import type { AssembledNav, NavEntry } from "./types";
 /** Number of primary entries shown in the mobile bottom bar. */
 const MOBILE_PRIMARY_MAX = 5;
 
+/** Primary tabs shown inline on desktop before the rest fold into "More" — keeps the top bar on a
+ *  single line even if modules add more primary entries later. */
+const DESKTOP_PRIMARY_MAX = 6;
+
 function navIcon(entry: NavEntry, size: number) {
   const name = isIconName(entry.icon) ? entry.icon : "home";
   return <Icon name={name} size={size} />;
@@ -34,36 +38,39 @@ export function AppShell({ nav }: { nav: AssembledNav }) {
   const [quickAddOpen, setQuickAddOpen] = useState(false);
 
   const mobilePrimary = nav.primary.slice(0, MOBILE_PRIMARY_MAX);
+  const desktopPrimary = nav.primary.slice(0, DESKTOP_PRIMARY_MAX);
+  // Any primary tabs beyond the cap fold into "More" alongside the secondary entries.
+  const desktopOverflow = [...nav.primary.slice(DESKTOP_PRIMARY_MAX), ...nav.secondary];
 
   return (
     <div className="flex min-h-full flex-col bg-surface-base">
       {/* Top navigation */}
       <header className="sticky top-0 z-nav border-b border-surface-border bg-surface-raised/95 backdrop-blur">
         <div className="mx-auto flex h-nav-h max-w-6xl items-center gap-4 px-4">
-          <NavLink to="/" className="flex items-center gap-2 font-bold text-primary-700">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-600 text-white">
+          <NavLink to="/" className="flex shrink-0 items-center gap-2 font-bold text-primary-700">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary-600 text-white">
               <Icon name="school" size={18} />
             </span>
-            <span className="hidden sm:inline">Campus Carousel</span>
+            <span className="hidden whitespace-nowrap sm:inline">Campus Carousel</span>
           </NavLink>
 
-          {/* Desktop primary tabs */}
-          <nav className="hidden flex-1 items-center gap-1 md:flex">
-            {nav.primary.map((e) => (
+          {/* Desktop primary tabs (capped to keep the bar on one line; the rest fold into More) */}
+          <nav className="hidden min-w-0 flex-1 items-center gap-1 md:flex">
+            {desktopPrimary.map((e) => (
               <TopTab key={e.id} entry={e} />
             ))}
-            {nav.secondary.length > 0 && (
-              <div className="relative">
+            {desktopOverflow.length > 0 && (
+              <div className="relative shrink-0">
                 <button
                   type="button"
                   onClick={() => setMoreOpen((v) => !v)}
-                  className="flex items-center gap-1 rounded-lg px-3 py-2 text-sm font-medium text-ink-600 hover:bg-ink-100"
+                  className="flex items-center gap-1 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium text-ink-600 hover:bg-ink-100"
                 >
                   More <Icon name="chevron-down" size={14} />
                 </button>
                 {moreOpen && (
                   <Dropdown onClose={() => setMoreOpen(false)}>
-                    {nav.secondary.map((e) => (
+                    {desktopOverflow.map((e) => (
                       <DropdownLink key={e.id} entry={e} onNavigate={() => setMoreOpen(false)} />
                     ))}
                   </Dropdown>
@@ -72,7 +79,7 @@ export function AppShell({ nav }: { nav: AssembledNav }) {
             )}
           </nav>
 
-          <div className="ml-auto flex items-center gap-1">
+          <div className="ml-auto flex shrink-0 items-center gap-1">
             {/* Active student's major focus → the Focus page (hidden until a major is set) */}
             <FocusBadge />
 
@@ -84,13 +91,11 @@ export function AppShell({ nav }: { nav: AssembledNav }) {
               <button
                 type="button"
                 onClick={() => setUserOpen((v) => !v)}
-                className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-ink-100"
+                aria-label={`Account: ${user?.username ?? "menu"}`}
+                className="flex shrink-0 items-center rounded-lg p-1 hover:bg-ink-100"
               >
                 <span className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary-100 text-secondary-700">
                   <Icon name="user" size={18} />
-                </span>
-                <span className="hidden text-sm font-medium text-ink-700 sm:inline">
-                  {user?.username}
                 </span>
               </button>
               {userOpen && (
@@ -212,7 +217,7 @@ function TopTab({ entry }: { entry: NavEntry }) {
       to={entry.route}
       className={({ isActive }) =>
         cn(
-          "flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+          "flex shrink-0 items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium transition-colors",
           isActive ? "bg-primary-50 text-primary-700" : "text-ink-600 hover:bg-ink-100",
         )
       }
@@ -326,8 +331,8 @@ function FocusBadge() {
   }, [activeStudentId]);
   if (!major) return null;
   return (
-    <NavLink to="/focus" className="hidden items-center sm:flex" aria-label={`${major} focus`}>
-      <Badge tone="primary">{major} focus</Badge>
+    <NavLink to="/focus" className="hidden shrink-0 items-center sm:flex" aria-label={`${major} focus`}>
+      <Badge tone="primary" className="max-w-[12rem] truncate whitespace-nowrap">{major} focus</Badge>
     </NavLink>
   );
 }
