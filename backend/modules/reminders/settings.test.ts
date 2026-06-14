@@ -4,7 +4,7 @@ import { DEFAULT_SETTINGS, effectiveSettings, shouldSendNow } from './settings.j
 
 const base = (over: Partial<ReminderSettings> = {}): ReminderSettings => ({
   ...DEFAULT_SETTINGS,
-  recipients: [{ label: 'Mom', email: 'mom@example.com', includePrivate: false }],
+  recipients: [{ label: 'Mom', email: 'mom@example.com' }],
   createdAt: '2026-06-01T00:00:00.000Z',
   updatedAt: '2026-06-01T00:00:00.000Z',
   ...over,

@@ -35,7 +35,7 @@ async function settings(over: Record<string, unknown> = {}): Promise<void> {
     sendHourUTC: 13,
     weeklyDayOfWeek: 1,
     horizonDays: 30,
-    recipients: [{ label: 'Mom', email: 'mom@x.com', includePrivate: false }],
+    recipients: [{ label: 'Mom', email: 'mom@x.com' }],
     ...over,
   });
 }
@@ -112,7 +112,7 @@ describe('runScheduledDigest spans all children (per-child scoping)', () => {
         sendHourUTC: 13,
         weeklyDayOfWeek: 1,
         horizonDays: 30,
-        recipients: [{ label: 'Mom', email: 'mom@x.com', includePrivate: false }],
+        recipients: [{ label: 'Mom', email: 'mom@x.com' }],
       });
       await runWithStudent(keira.studentId, () =>
         data.activities.create({ date: '2026-06-20', category: 'volunteer', title: "Keira's shift", visibility: 'family' } as never),

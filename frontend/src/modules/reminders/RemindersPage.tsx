@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Button, Card, Field, Select, Spinner, TextField, useToast } from '../../shared/ui';
 import { getSettings, putSettings, sendTest } from './api';
-import { dayName, hourLabel, validateRecipients } from './logic';
+import { dayName, localHourFromUtc, utcHourFromLocal, localHourLabel, validateRecipients } from './logic';
 import type { ReminderRecipient, ReminderSettingsInput } from './types';
 
 const HOURS = Array.from({ length: 24 }, (_, h) => h);
@@ -50,7 +50,7 @@ export default function RemindersPage() {
     );
   }
   function addRecipient() {
-    patch({ recipients: [...(settings?.recipients ?? []), { label: '', email: '', includePrivate: false }] });
+    patch({ recipients: [...(settings?.recipients ?? []), { label: '', email: '' }] });
   }
   function removeRecipient(i: number) {
     patch({ recipients: (settings?.recipients ?? []).filter((_, idx) => idx !== i) });
@@ -90,10 +90,9 @@ export default function RemindersPage() {
   return (
     <div className="mx-auto max-w-2xl space-y-5 p-4 sm:p-6">
       <header className="space-y-1">
-        <h1 className="text-2xl font-bold text-ink-900">Reminders</h1>
+        <h1 className="text-2xl font-bold text-ink-900">Email Reminders</h1>
         <p className="text-sm text-ink-600">
-          A digest of upcoming and overdue deadlines, emailed automatically. Each item is sent once
-          and never repeated, so it&rsquo;s a nudge, not a nag.
+          A digest of upcoming and overdue deadlines, emailed automatically on the schedule you set.
         </p>
       </header>
 
@@ -147,14 +146,14 @@ export default function RemindersPage() {
                 </Field>
               ) : null}
 
-              <Field label="Send time" hint="When the digest goes out.">
+              <Field label="Send time" hint="When the digest goes out, in your local time.">
                 <Select
-                  value={settings.sendHourUTC}
-                  onChange={(e) => patch({ sendHourUTC: Number(e.target.value) })}
+                  value={localHourFromUtc(settings.sendHourUTC)}
+                  onChange={(e) => patch({ sendHourUTC: utcHourFromLocal(Number(e.target.value)) })}
                 >
                   {HOURS.map((h) => (
                     <option key={h} value={h}>
-                      {hourLabel(h)}
+                      {localHourLabel(h)}
                     </option>
                   ))}
                 </Select>
@@ -184,7 +183,7 @@ export default function RemindersPage() {
             ) : (
               <div className="space-y-3">
                 {settings.recipients.map((r, i) => (
-                  <div key={i} className="grid grid-cols-1 gap-2 rounded-md bg-surface-sunken p-3 sm:grid-cols-[1fr,1.4fr,auto]">
+                  <div key={i} className="grid grid-cols-1 items-end gap-2 rounded-md bg-surface-sunken p-3 sm:grid-cols-[1fr,1.4fr,auto]">
                     <TextField
                       label="Name"
                       value={r.label}
@@ -196,27 +195,16 @@ export default function RemindersPage() {
                       value={r.email}
                       onChange={(e) => updateRecipient(i, { email: e.target.value })}
                     />
-                    <div className="flex items-end justify-between gap-3 sm:flex-col sm:items-start">
-                      <label className="flex items-center gap-2 text-xs text-ink-600">
-                        <input
-                          type="checkbox"
-                          checked={r.includePrivate}
-                          onChange={(e) => updateRecipient(i, { includePrivate: e.target.checked })}
-                          className="h-4 w-4 rounded border-surface-border text-primary-600"
-                        />
-                        Include Keira&rsquo;s private items
-                      </label>
-                      <Button size="sm" variant="ghost" onClick={() => removeRecipient(i)}>
-                        Remove
-                      </Button>
-                    </div>
+                    <Button size="sm" variant="ghost" onClick={() => removeRecipient(i)}>
+                      Remove
+                    </Button>
                   </div>
                 ))}
               </div>
             )}
             <p className="text-xs text-ink-500">
-              Only check &ldquo;private items&rdquo; for Keira&rsquo;s own address — parents never see
-              deadlines sourced from her private journal entries.
+              Keira&rsquo;s private journal, clinical-hours, and &ldquo;Why Nursing&rdquo; entries are
+              never included in any reminder email.
             </p>
           </Card>
 

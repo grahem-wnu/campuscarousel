@@ -47,17 +47,23 @@ describe('PUT /reminders/settings', () => {
     const res = await h.putSettings(
       ctx({
         requester: kate,
-        body: { cadence: 'daily', recipients: [{ label: 'Mom', email: 'mom@x.com', includePrivate: true }] },
+        body: { cadence: 'daily', recipients: [{ label: 'Mom', email: 'mom@x.com' }] },
       }),
     );
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ cadence: 'daily', updatedBy: 'kate' });
     const stored = await data.reminderSettings.get();
-    expect(stored?.recipients[0]).toMatchObject({ email: 'mom@x.com', includePrivate: true });
+    expect(stored?.recipients[0]).toMatchObject({ email: 'mom@x.com' });
   });
 
   it('422 on an unknown field', async () => {
     await expect(h.putSettings(ctx({ body: { nope: 1 } }))).rejects.toMatchObject({ status: 422 });
+  });
+
+  it('422 if a recipient still sends the removed includePrivate field', async () => {
+    await expect(
+      h.putSettings(ctx({ body: { recipients: [{ label: 'Mom', email: 'm@x.com', includePrivate: true }] } })),
+    ).rejects.toMatchObject({ status: 422 });
   });
 });
 
@@ -78,8 +84,8 @@ describe('POST /reminders/send-test', () => {
       weeklyDayOfWeek: 1,
       horizonDays: 30,
       recipients: [
-        { label: 'Mom', email: 'm@x.com', includePrivate: false },
-        { label: 'Dad', email: 'd@x.com', includePrivate: false },
+        { label: 'Mom', email: 'm@x.com' },
+        { label: 'Dad', email: 'd@x.com' },
       ],
     });
     const res = await h.sendTest(ctx({ body: {} }));

@@ -7,7 +7,6 @@ const recipientSchema = z
   .object({
     label: z.string().min(1).max(60),
     email: z.string().email().max(320),
-    includePrivate: z.boolean().optional(),
   })
   .strict();
 

@@ -1,8 +1,9 @@
 // Pure digest assembly + rendering for the deadline-reminder email (v2.1 F1). It reuses the
 // master-timeline aggregation (buildEvents/upcoming) as the single source of truth for "what's due",
-// then groups and renders it as text + HTML. PRIVACY: per-recipient, items sourced from Keira's
-// PRIVATE activities are included only when that recipient has `includePrivate` (i.e. Keira herself).
-// AWS-free so it unit-tests for real; the Lambda/handler just gather data and hand it in.
+// then groups and renders it as text + HTML. PRIVACY: items sourced from Keira's PRIVATE activities
+// are ALWAYS excluded from every digest — an outbound email is never a place private content may
+// appear, so there is deliberately no per-recipient opt-in. AWS-free so it unit-tests for real; the
+// Lambda/handler just gather data and hand it in.
 
 import type {
   Activity,
@@ -35,9 +36,10 @@ export interface GatheredData {
   finaid: FinAidItem[];
 }
 
-/** Build the event stream for one recipient, honoring whether they may see private-sourced items. */
-export function eventsFor(g: GatheredData, includePrivate: boolean): TimelineEvent[] {
-  const activities = includePrivate ? g.activities : g.activities.filter((a) => a.visibility !== 'private');
+/** Build the event stream for the digest. Private-sourced items are ALWAYS dropped — they never
+ *  belong in an outbound email, regardless of who the recipient is. */
+export function eventsFor(g: GatheredData): TimelineEvent[] {
+  const activities = g.activities.filter((a) => a.visibility !== 'private');
   return buildEvents({
     activities,
     goals: g.goals,
@@ -194,7 +196,7 @@ export function digestForRecipient(
   appUrl: string,
   excludeIds: ReadonlySet<string> = new Set(),
 ): RecipientDigest {
-  const fresh = eventsFor(g, recipient.includePrivate).filter((e) => !excludeIds.has(e.id));
+  const fresh = eventsFor(g).filter((e) => !excludeIds.has(e.id));
   const events = upcoming(fresh, todayIso, horizonDays);
   const model = buildDigestModel(events);
   const opts: RenderOpts = { recipientLabel: recipient.label, appUrl, horizonDays };

@@ -62,7 +62,7 @@ describe('reminders router integration', () => {
     const put = await dispatch(
       event('PUT', '/reminders/settings', {
         as: keira,
-        body: { cadence: 'daily', recipients: [{ label: 'Mom', email: 'mom@x.com', includePrivate: false }] },
+        body: { cadence: 'daily', recipients: [{ label: 'Mom', email: 'mom@x.com' }] },
       }),
     );
     expect(put.statusCode).toBe(200);
