@@ -15,8 +15,10 @@ import type { AssembledNav, NavEntry } from "./types";
 const MOBILE_PRIMARY_MAX = 5;
 
 /** Primary tabs shown inline on desktop before the rest fold into "More" — keeps the top bar on a
- *  single line even if modules add more primary entries later. */
-const DESKTOP_PRIMARY_MAX = 6;
+ *  single line even if modules add more primary entries later. Sized so 5 tabs + the logo + "More" +
+ *  the user cluster fit at the `lg` breakpoint where the inline bar turns on; the rest (and any extra
+ *  primary entries added later) fold into "More" rather than overflowing into the right cluster. */
+const DESKTOP_PRIMARY_MAX = 5;
 
 function navIcon(entry: NavEntry, size: number) {
   const name = isIconName(entry.icon) ? entry.icon : "home";
@@ -46,7 +48,7 @@ export function AppShell({ nav }: { nav: AssembledNav }) {
     <div className="flex min-h-full flex-col bg-surface-base">
       {/* Top navigation */}
       <header className="sticky top-0 z-nav border-b border-surface-border bg-surface-raised/95 backdrop-blur">
-        <div className="mx-auto flex h-nav-h max-w-6xl items-center gap-4 px-4">
+        <div className="mx-auto flex h-nav-h max-w-6xl items-center gap-3 px-4">
           <NavLink to="/" className="flex shrink-0 items-center gap-2 font-bold text-primary-700">
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary-600 text-white">
               <Icon name="school" size={18} />
@@ -54,8 +56,10 @@ export function AppShell({ nav }: { nav: AssembledNav }) {
             <span className="hidden whitespace-nowrap sm:inline">Campus Carousel</span>
           </NavLink>
 
-          {/* Desktop primary tabs (capped to keep the bar on one line; the rest fold into More) */}
-          <nav className="hidden min-w-0 flex-1 items-center gap-1 md:flex">
+          {/* Desktop primary tabs (capped to keep the bar on one line; the rest fold into More).
+              Turns on at `lg`; below that the mobile bottom bar + hamburger take over so the bar
+              never crowds at tablet / small-laptop widths. */}
+          <nav className="hidden min-w-0 flex-1 items-center gap-1 lg:flex">
             {desktopPrimary.map((e) => (
               <TopTab key={e.id} entry={e} />
             ))}
@@ -123,7 +127,7 @@ export function AppShell({ nav }: { nav: AssembledNav }) {
               <button
                 type="button"
                 aria-label="Menu"
-                className="rounded-lg p-2 text-ink-600 hover:bg-ink-100 md:hidden"
+                className="rounded-lg p-2 text-ink-600 hover:bg-ink-100 lg:hidden"
                 onClick={() => setMenuOpen(true)}
               >
                 <Icon name="menu" size={22} />
@@ -135,7 +139,7 @@ export function AppShell({ nav }: { nav: AssembledNav }) {
 
       {/* Routed content. Keyed by the active student so switching kids remounts the page and each
           module re-fetches for the newly-selected child — no per-module change needed. */}
-      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-5 pb-24 md:pb-8">
+      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-5 pb-24 lg:pb-8">
         <div key={activeStudentId ?? "no-student"}>
           <Outlet />
         </div>
@@ -143,7 +147,7 @@ export function AppShell({ nav }: { nav: AssembledNav }) {
 
       {/* Mobile bottom tab bar */}
       {mobilePrimary.length > 0 && (
-        <nav className="fixed inset-x-0 bottom-0 z-bottombar flex h-bottombar-h items-stretch border-t border-surface-border bg-surface-raised pb-safe md:hidden">
+        <nav className="fixed inset-x-0 bottom-0 z-bottombar flex h-bottombar-h items-stretch border-t border-surface-border bg-surface-raised pb-safe lg:hidden">
           {mobilePrimary.map((e) => (
             <BottomTab key={e.id} entry={e} />
           ))}
@@ -331,7 +335,7 @@ function FocusBadge() {
   }, [activeStudentId]);
   if (!major) return null;
   return (
-    <NavLink to="/focus" className="hidden shrink-0 items-center sm:flex" aria-label={`${major} focus`}>
+    <NavLink to="/focus" className="hidden shrink-0 items-center xl:flex" aria-label={`${major} focus`}>
       <Badge tone="primary" className="max-w-[12rem] truncate whitespace-nowrap">{major} focus</Badge>
     </NavLink>
   );
