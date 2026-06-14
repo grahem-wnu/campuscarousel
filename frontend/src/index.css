@@ -34,7 +34,10 @@
   .pb-safe {
     padding-bottom: env(safe-area-inset-bottom);
   }
-  .bottom-safe {
-    bottom: calc(env(safe-area-inset-bottom) + 1rem);
+  /* Floating-action stack sits ABOVE the mobile bottom tab bar (h-bottombar-h = 4rem) plus a
+     1rem gap and the iOS safe-area inset, so the FABs never overlap a nav item. On desktop the
+     bar is hidden and md:bottom-6 takes over. */
+  .bottom-fabstack {
+    bottom: calc(env(safe-area-inset-bottom) + 5rem);
   }
 }
