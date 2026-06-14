@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { Badge, Button, Card, EmptyState, Icon, Spinner } from "../../shared/ui";
 import { useActiveStudent } from "../../shared/shell";
 import { getFocus, refreshOverview, refreshCareerPath } from "./api";
-import type { FocusOverview, FocusResponse, PackSummary } from "./types";
+import type { FocusOverview, FocusResponse, PackCertification, PackSummary } from "./types";
 import { Markdown } from "./Markdown";
 
 /** Hostname (without www.) of a URL, for the source sub-line; empty string if unparseable. */
@@ -103,31 +103,77 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
   return <h2 className="mb-2 text-sm font-semibold text-ink-800">{children}</h2>;
 }
 
+/** The merged, instant pack content shown on the focus page. The spec ("major packs") says a student
+ *  with two majors activates two packs whose *contributions merge* — so we render one set of cards, not
+ *  one set per major. See {@link mergePackContent}. */
+interface MergedPackContent {
+  entranceExam?: PackSummary["entranceExam"];
+  certifications: PackCertification[];
+  interviewQuestions: string[];
+  visitQuestions: string[];
+}
+
+/** Fold the resolved packs into a single set of contributions: certifications deduped by name,
+ *  questions deduped by text, and the entrance exam from the first pack that defines one (mirrors the
+ *  backend folds `packCertifications` / `packEntranceExam`). Without this, a two-major student sees the
+ *  same section titles (certs, interview, visit questions) repeated once per major. */
+function mergePackContent(packs: PackSummary[]): MergedPackContent {
+  const certs: PackCertification[] = [];
+  const certSeen = new Set<string>();
+  for (const p of packs) {
+    for (const c of p.certifications) {
+      const key = c.name.trim().toLowerCase();
+      if (!key || certSeen.has(key)) continue;
+      certSeen.add(key);
+      certs.push(c);
+    }
+  }
+  const dedupeText = (lists: string[][]): string[] => {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const list of lists) {
+      for (const v of list) {
+        const key = v.trim().toLowerCase();
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        out.push(v);
+      }
+    }
+    return out;
+  };
+  return {
+    entranceExam: packs.find((p) => p.entranceExam)?.entranceExam,
+    certifications: certs,
+    interviewQuestions: dedupeText(packs.map((p) => p.interviewQuestions)),
+    visitQuestions: dedupeText(packs.map((p) => p.visitQuestions)),
+  };
+}
+
 /** The curated, instant pack content (exam, certs, questions) — what's tailored, with deep links. */
-function PackDetails({ pack }: { pack: PackSummary }) {
+function PackDetails({ content }: { content: MergedPackContent }) {
   return (
     <div className="space-y-4">
-      {pack.entranceExam ? (
+      {content.entranceExam ? (
         <Card>
           <SectionTitle>Entrance exam</SectionTitle>
           <Link to="/exams" className="group flex items-center justify-between gap-2">
             <div>
-              <p className="font-semibold text-ink-900">{pack.entranceExam.examName}</p>
-              {pack.entranceExam.competitiveScore != null ? (
-                <p className="text-xs text-ink-500">Competitive score ≈ {pack.entranceExam.competitiveScore}</p>
+              <p className="font-semibold text-ink-900">{content.entranceExam.examName}</p>
+              {content.entranceExam.competitiveScore != null ? (
+                <p className="text-xs text-ink-500">Competitive score ≈ {content.entranceExam.competitiveScore}</p>
               ) : null}
-              {pack.entranceExam.note ? <p className="mt-0.5 text-xs text-ink-500">{pack.entranceExam.note}</p> : null}
+              {content.entranceExam.note ? <p className="mt-0.5 text-xs text-ink-500">{content.entranceExam.note}</p> : null}
             </div>
             <Badge tone="primary">Test Prep <Icon name="chevron-right" size={13} /></Badge>
           </Link>
         </Card>
       ) : null}
 
-      {pack.certifications.length > 0 ? (
+      {content.certifications.length > 0 ? (
         <Card>
           <SectionTitle>Recommended certifications</SectionTitle>
           <ul className="divide-y divide-surface-border">
-            {pack.certifications.map((c) => (
+            {content.certifications.map((c) => (
               <li key={c.name} className="py-2">
                 <p className="text-sm font-medium text-ink-900">
                   {c.name}
@@ -143,11 +189,11 @@ function PackDetails({ pack }: { pack: PackSummary }) {
         </Card>
       ) : null}
 
-      {pack.interviewQuestions.length > 0 ? (
+      {content.interviewQuestions.length > 0 ? (
         <Card>
           <SectionTitle>Interview questions to prepare</SectionTitle>
           <ul className="list-disc space-y-1 pl-5 text-sm text-ink-700">
-            {pack.interviewQuestions.map((q) => <li key={q}>{q}</li>)}
+            {content.interviewQuestions.map((q) => <li key={q}>{q}</li>)}
           </ul>
           <Link to="/interviews" className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-primary-600 hover:text-primary-700">
             Practice interviews <Icon name="chevron-right" size={13} />
@@ -155,11 +201,11 @@ function PackDetails({ pack }: { pack: PackSummary }) {
         </Card>
       ) : null}
 
-      {pack.visitQuestions.length > 0 ? (
+      {content.visitQuestions.length > 0 ? (
         <Card>
           <SectionTitle>Ask on campus visits</SectionTitle>
           <ul className="list-disc space-y-1 pl-5 text-sm text-ink-700">
-            {pack.visitQuestions.map((q) => <li key={q}>{q}</li>)}
+            {content.visitQuestions.map((q) => <li key={q}>{q}</li>)}
           </ul>
           <Link to="/visits" className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-primary-600 hover:text-primary-700">
             Plan a visit <Icon name="chevron-right" size={13} />
@@ -327,7 +373,8 @@ export default function FocusPage() {
         </Card>
       )}
 
-      {data.packs.map((p) => <PackDetails key={p.key} pack={p} />)}
+      {/* One merged set of cards across all active majors (spec: contributions merge), not one per pack. */}
+      <PackDetails content={mergePackContent(data.packs)} />
     </div>
   );
 }
