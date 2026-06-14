@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { categoryRows, deadlineLabel, deadlineTone, gpaText, money, totalColleges } from './logic';
+import { categoryRows, deadlineLabel, deadlineTone, formatDeadlineDate, gpaText, money, totalColleges } from './logic';
 import type { Deadline } from './types';
 
 const dl = (daysUntil: number, date = '2026-12-01'): Deadline => ({ source: 'college', label: 'x', date, daysUntil });
@@ -12,7 +12,19 @@ describe('deadlineTone / deadlineLabel', () => {
     expect(deadlineLabel(dl(0))).toBe('today');
     expect(deadlineLabel(dl(1))).toBe('tomorrow');
     expect(deadlineLabel(dl(10))).toBe('in 10d');
-    expect(deadlineLabel(dl(90, '2026-12-01'))).toBe('2026-12-01');
+    // Beyond the relative window, a compact human date (not the raw ISO) that won't wrap on mobile.
+    expect(deadlineLabel(dl(90, '2028-10-01'))).toBe('Oct 1, 2028');
+  });
+});
+
+describe('formatDeadlineDate', () => {
+  it('renders an ISO date as a compact, timezone-stable human date', () => {
+    expect(formatDeadlineDate('2028-10-01')).toBe('Oct 1, 2028');
+    expect(formatDeadlineDate('2026-01-31')).toBe('Jan 31, 2026');
+  });
+  it('returns the input unchanged when it is not an ISO date', () => {
+    expect(formatDeadlineDate('rolling')).toBe('rolling');
+    expect(formatDeadlineDate('2028-13-01')).toBe('2028-13-01'); // invalid month → untouched
   });
 });
 

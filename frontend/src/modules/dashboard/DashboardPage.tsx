@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Badge, Button, Card, Icon, Spinner, cn } from '../../shared/ui';
-import { categoryRows, deadlineLabel, deadlineTone, gpaText, money, READINESS_TONE, SOURCE_TONE, totalColleges } from './logic';
+import { categoryRows, deadlineLabel, deadlineTone, gpaText, money, READINESS_TONE, SOURCE_ICON, SOURCE_TONE, totalColleges } from './logic';
 import { getDashboard } from './api';
 import type { Dashboard } from './types';
 import { getFocus } from '../focus/api';
@@ -343,17 +343,20 @@ export default function DashboardPage() {
         <LinkCard to="/timeline">
           <CardTitle>Upcoming deadlines</CardTitle>
           {d.upcomingDeadlines.length === 0 ? (
-            <p className="text-sm text-ink-500">Nothing dated yet — add colleges, exams, or visits and their deadlines appear here automatically.</p>
+            <p className="text-sm text-ink-500">Nothing dated yet — add colleges, scholarships, goals, or certifications and their deadlines appear here automatically.</p>
           ) : (
             <>
               <ul className="divide-y divide-surface-border">
                 {d.upcomingDeadlines.slice(0, 3).map((dl, i) => (
-                  <li key={i} className="flex items-center justify-between gap-3 py-1.5 text-sm">
-                    <span className="flex items-center gap-2 truncate">
-                      <Badge tone={SOURCE_TONE[dl.source]}>{dl.source}</Badge>
-                      <span className="truncate text-ink-800">{dl.label}</span>
-                    </span>
-                    <Badge tone={deadlineTone(dl.daysUntil)}>{deadlineLabel(dl)}</Badge>
+                  <li key={i} className="flex items-center gap-2.5 py-2">
+                    {/* Compact type indicator (icon, not a wide text tag) — disambiguates when
+                        deadlines come from different sources (colleges, scholarships, goals, certs). */}
+                    <Badge tone={SOURCE_TONE[dl.source]} className="shrink-0">
+                      <Icon name={SOURCE_ICON[dl.source]} size={13} />
+                      <span className="sr-only">{dl.source}</span>
+                    </Badge>
+                    <span className="min-w-0 flex-1 truncate text-sm text-ink-800" title={dl.label}>{dl.label}</span>
+                    <Badge tone={deadlineTone(dl.daysUntil)} className="shrink-0 whitespace-nowrap">{deadlineLabel(dl)}</Badge>
                   </li>
                 ))}
               </ul>
