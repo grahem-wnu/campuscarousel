@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Badge, Button, Card, Icon, Spinner, cn } from '../../shared/ui';
-import { categoryRows, deadlineLabel, deadlineTone, gpaText, money, READINESS_TONE, SOURCE_ICON, SOURCE_TONE, totalColleges } from './logic';
+import { deadlineLabel, deadlineTone, gpaText, money, READINESS_TONE, SOURCE_ICON, SOURCE_TONE, totalColleges } from './logic';
 import { getDashboard } from './api';
 import type { Dashboard } from './types';
 import { getFocus } from '../focus/api';
@@ -379,20 +379,6 @@ export default function DashboardPage() {
                   <span className="truncate text-ink-800">{f.title}</span>
                   <span className="shrink-0 text-xs text-ink-400">{f.category} · {f.date.slice(5)}</span>
                 </li>
-              ))}
-            </ul>
-          )}
-        </LinkCard>
-
-        {/* Hours by category → journal */}
-        <LinkCard to="/journal">
-          <CardTitle>Hours by category</CardTitle>
-          {categoryRows(d.activity.hoursByCategory).length === 0 ? (
-            <p className="text-sm text-ink-500">No hours logged yet.</p>
-          ) : (
-            <ul className="space-y-0.5 text-sm text-ink-700">
-              {categoryRows(d.activity.hoursByCategory).map((r) => (
-                <li key={r.category} className="flex justify-between"><span>{r.category}</span><span>{r.hours}h</span></li>
               ))}
             </ul>
           )}

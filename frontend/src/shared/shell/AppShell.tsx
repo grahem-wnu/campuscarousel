@@ -146,7 +146,7 @@ export function AppShell({ nav }: { nav: AssembledNav }) {
       )}
 
       {/* Floating actions: Quick-add FAB + AI chat */}
-      <div className="bottom-safe fixed right-4 z-fab flex flex-col items-end gap-3 md:bottom-6">
+      <div className="bottom-fabstack fixed right-4 z-fab flex flex-col items-end gap-3 md:bottom-6">
         <button
           type="button"
           aria-label="Open AI assistant"
