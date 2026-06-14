@@ -57,6 +57,31 @@ export function buildSummary(s: SummarySources): DataSummary {
 
 const clip = (text: string, max = 280): string => (text.length <= max ? text : `${text.slice(0, max).trimEnd()}…`);
 
+const money = (n: number | undefined): string | undefined =>
+  typeof n === 'number' ? `$${Math.round(n).toLocaleString('en-US')}` : undefined;
+
+/** Compact, model-friendly facts for a tracked college — so the assistant can answer "what's the cost
+ *  of Duke?" from the student's own hydrated data instead of claiming it has none. Falls back to just
+ *  the name (+ location) when financials haven't been hydrated yet. */
+function collegeFacts(c: College): string {
+  const parts: string[] = [];
+  if (c.location) parts.push(c.location);
+  const net = money(c.estimatedNetPriceAfterAid);
+  const coa = money(c.costOfAttendanceOutOfState);
+  const tuition = money(c.tuitionOutOfState ?? c.tuitionInState);
+  if (net) parts.push(`net price after aid ~${net}/yr`);
+  if (coa) parts.push(`cost of attendance ~${coa}/yr`);
+  if (tuition && !coa) parts.push(`tuition ~${tuition}/yr`);
+  const d = c.applicationDeadlines;
+  const deadlines = [
+    d?.earlyAction && `early action ${d.earlyAction}`,
+    d?.regularDecision && `regular decision ${d.regularDecision}`,
+    d?.programApp && `program app ${d.programApp}`,
+  ].filter(Boolean);
+  if (deadlines.length) parts.push(`deadlines: ${deadlines.join(', ')}`);
+  return parts.length ? `${c.name} — ${parts.join('; ')}` : c.name;
+}
+
 export interface RecordSources {
   motivations: readonly Motivation[];
   activities: readonly Activity[];
@@ -89,16 +114,20 @@ export function selectRecords(mode: Mode, s: RecordSources): GroundingRecord[] {
       kind: 'activity',
       text: `${a.title}${a.description ? ` — ${clip(a.description, 160)}` : ''}`,
     }));
+  const cols = (n: number) =>
+    recent(s.colleges, n).map((c) => ({ kind: 'college', text: collegeFacts(c) }));
 
   switch (mode) {
     case 'essay-partner':
       records.push(...why(6), ...acts(4));
       break;
     case 'ask':
-      records.push(...why(3), ...acts(4));
+      // Include the tracked colleges with their hydrated cost/deadline facts so general questions
+      // ("what's the cost of Duke?") are answered from the student's own data, not a web search.
+      records.push(...why(3), ...acts(4), ...cols(12));
       break;
     case 'college-discovery':
-      records.push(...recent(s.colleges, 8).map((c) => ({ kind: 'college', text: c.name })));
+      records.push(...cols(12));
       break;
     case 'scholarship-discovery':
       records.push(
