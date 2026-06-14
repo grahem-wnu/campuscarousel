@@ -325,7 +325,11 @@ export function buildHydratePrompt(name: string, state?: string, majors: string[
       ? ['  programDetails ([{label, value}] — the major-specific facts described above),']
       : []),
     '  testimonials ([{quote, attribution, source}] — verbatim student quotes, each with a source URL),',
-    '  campusImageUrls (string[] — direct https URLs to campus/program photos), location (string),',
+    '  campusImageUrls (string[] — 4-8 direct https image URLs (ending in .jpg/.png/.webp) of REAL',
+    '    campus photos. Search the web beyond Wikipedia: the official .edu site, the school',
+    '    newsroom/flickr, campus-tour and local-news pages. Each MUST be a direct image link that loads',
+    '    on its own — never a page/article URL. Skip any you are unsure resolves to an image.),',
+    '  location (string),',
     '  state (2-letter), website (string), branding ({logoUrl, primaryColor (hex), secondaryColor (hex),',
     '  mascot}), contactInfo ({programAdmissionsUrl, programAdmissionsPhone, programAdmissionsEmail,',
     '  financialAidUrl, financialAidPhone, campusVisitUrl, netPriceCalculatorUrl}),',
