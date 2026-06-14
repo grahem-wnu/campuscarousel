@@ -197,7 +197,11 @@ export function digestForRecipient(
   excludeIds: ReadonlySet<string> = new Set(),
 ): RecipientDigest {
   const fresh = eventsFor(g).filter((e) => !excludeIds.has(e.id));
-  const events = upcoming(fresh, todayIso, horizonDays);
+  // Activities are logs of things already done, not deadlines — so they should never read as
+  // "overdue". Keep today/upcoming ones (e.g. a planned shift) and drop past activity logs.
+  const events = upcoming(fresh, todayIso, horizonDays).filter(
+    (e) => !(e.source === 'activity' && e.group === 'overdue'),
+  );
   const model = buildDigestModel(events);
   const opts: RenderOpts = { recipientLabel: recipient.label, appUrl, horizonDays };
   return {

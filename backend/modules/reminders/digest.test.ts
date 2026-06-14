@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Activity, ReminderRecipient } from '../../shared/data/index.js';
+import type { Activity, College, ReminderRecipient } from '../../shared/data/index.js';
 import { digestForRecipient, eventsFor, type GatheredData } from './digest.js';
 
 const activity = (o: Partial<Activity>): Activity => ({
@@ -13,6 +13,9 @@ const activity = (o: Partial<Activity>): Activity => ({
   updatedAt: 'x',
   ...o,
 });
+
+const college = (o: Partial<College>): College =>
+  ({ collegeId: 'c1', name: 'College', status: 'researching', addedBy: 'ai-discovered', userEdited: [], createdAt: 'x', updatedAt: 'x', ...o }) as College;
 
 const empty: GatheredData = {
   activities: [],
@@ -47,23 +50,27 @@ describe('digestForRecipient', () => {
   // today = 2026-06-15, horizon 30 days.
   const g: GatheredData = {
     ...empty,
+    // Overdue is a real DEADLINE (a past college application date) — activities can't be overdue.
+    colleges: [college({ collegeId: 'od', name: 'Overdue U', applicationDeadlines: { regularDecision: '2026-06-10' } })],
     activities: [
-      activity({ activityId: 'overdue', date: '2026-06-10', title: 'Overdue thing' }),
       activity({ activityId: 'soon', date: '2026-06-20', title: 'Soon thing' }),
+      activity({ activityId: 'pastlog', date: '2026-06-10', title: 'Past log' }), // past activity → dropped (never overdue)
       activity({ activityId: 'private', date: '2026-06-21', visibility: 'private', title: 'Private thing' }),
       activity({ activityId: 'far', date: '2026-09-01', title: 'Far thing' }),
     ],
   };
 
-  it('groups overdue + upcoming within horizon and drops far-future + private items', () => {
+  it('groups overdue + upcoming, drops far-future/private, and never marks a past activity overdue', () => {
     const d = digestForRecipient(g, keira, '2026-06-15', 30, 'https://app');
-    expect(d.model.count).toBe(2); // overdue + soon; private always excluded, far (78d) past 30-day horizon
+    expect(d.model.count).toBe(2); // overdue college + soon activity; private/far excluded; past activity dropped
     expect(d.text).not.toContain('Private thing');
+    expect(d.text).not.toContain('Past log'); // a logged activity in the past is not a deadline
+    expect(d.text).toContain('Soon thing'); // today/upcoming activities still appear
     expect(d.model.overdueCount).toBe(1);
     expect(d.subject).toContain('overdue');
-    expect(d.text).toContain('Overdue thing');
-    expect(d.text).toContain("Open Campus Carousel");
-    expect(d.html).toContain('Overdue thing');
+    expect(d.text).toContain('Overdue U'); // the overdue item is the college deadline
+    expect(d.text).toContain('Open Campus Carousel');
+    expect(d.html).toContain('Overdue U');
   });
 
   it("a parent's digest excludes private-sourced items", () => {
