@@ -14,7 +14,7 @@ import type { Construct } from "constructs";
 import type { EnvConfig } from "./config";
 import { envHostname } from "./config";
 import { putOutput } from "./ssm";
-import { bedrockInvokeStatement } from "./policies";
+import { bedrockInvokeStatement, sesSendStatement } from "./policies";
 
 export interface ApiStackProps extends StackProps {
   readonly config: EnvConfig;
@@ -77,6 +77,9 @@ export class ApiStack extends Stack {
         // Public app URL for links in invite / family-member emails (sent from the routing Lambda).
         // Derived from the env hostname so links point at campuscarousel.com, not the code default.
         APP_URL: `https://${envHostname(config)}`,
+        // Verified SES sender for reminder "send test" + invite/family emails served by this Lambda
+        // (the digest worker gets this too). Without it the reminders handler 409s "not configured".
+        REMINDER_SENDER_EMAIL: config.reminderSenderEmail,
         HYDRATION_QUEUE_URL: hydrationQueue.queueUrl,
         ASSETS_QUEUE_URL: assetsQueue.queueUrl,
         USER_POOL_ID: userPool.userPoolId,
@@ -98,6 +101,8 @@ export class ApiStack extends Stack {
     hydrationQueue.grantSendMessages(routing);
     assetsQueue.grantSendMessages(routing);
     routing.addToRolePolicy(bedrockInvokeStatement(this.account, config.bedrockSonnetProfile));
+    // Send reminder test emails + invite/family-member emails via SES (verified domain identity).
+    routing.addToRolePolicy(sesSendStatement(this.region, this.account));
     routing.addToRolePolicy(
       new PolicyStatement({
         sid: "ReadEnvConfig",
