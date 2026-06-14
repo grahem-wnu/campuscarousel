@@ -34,7 +34,11 @@ export interface AiOptions {
 export function buildOverviewPrompt(majors: string[], careerGoal?: string): string {
   const phrase = majorPhrase(majors, 'an undergraduate college program');
   const briefs = packFocusBriefs(majors);
-  const goalLine = careerGoal ? `The student's stated career goal is "${careerGoal}".` : '';
+  // When there's a career goal, be explicit that this major is ONE route, not a requirement — the
+  // student shouldn't feel locked into it (the Career Path doc enumerates the alternatives).
+  const goalLine = careerGoal
+    ? `The student's stated career goal is "${careerGoal}". ${phrase} is ONE route to that goal, not the only one — say so plainly and do NOT imply this major is required; their Career Path covers the other routes.`
+    : '';
   return [
     `Write a clear, encouraging overview for a high-school student (and their family) about pursuing ${phrase} in college.`,
     goalLine,
@@ -81,18 +85,20 @@ export function makeBedrockFocusOverviewer(
  *  is only context. Produces a concrete education→licensure→role roadmap for whatever they typed,
  *  even unusual careers, grounded in current web sources. */
 export function buildCareerPathPrompt(careerGoal: string, majors: string[] = []): string {
-  const majorContext = majorList(majors).length ? `Their current intended major is ${majorPhrase(majors)}.` : '';
+  const majorContext = majorList(majors).length
+    ? `Their current intended major is ${majorPhrase(majors)} — treat it as ONE option among several, never the required route.`
+    : '';
   return [
-    `A high-school student wants to become: "${careerGoal}". Map the realistic path from where they are now to that career.`,
+    `A high-school student wants to become: "${careerGoal}". Map the realistic ROUTES from where they are now to that career — they should see their options, not feel locked into one major.`,
     majorContext,
-    'Use web_search to ground the steps (which majors lead there, required degrees and licenses/exams, typical timeline, and outlook) in current, reputable sources.',
+    'Use web_search to ground the routes (which majors lead there, required degrees and licenses/exams, typical timeline, and outlook) in current, reputable sources.',
     'Cover, as short markdown sections with `##` headings:',
-    '1. The role — what this career actually does day to day.',
-    '2. Majors that lead here — the best-fit undergraduate major(s), and whether more than one route works.',
-    '3. The full path — degree(s), any graduate/professional school, licenses, certifications, and exams, in order, with rough timing.',
-    '4. Start now — concrete steps a high-schooler can take this year (courses, certs, experience).',
+    '1. The role — what this career actually does day to day (2–3 sentences).',
+    '2. Your options — the realistic undergraduate majors/routes that lead here. List EACH as its own bullet: the major (or route) in bold, one line on why it fits, and any trade-off. When several majors work (they usually do), include the common ones and say plainly that no single major is required; mention where their current major fits. Aim for 3–5 options when they exist.',
+    '3. What every route shares — the requirements that are the same regardless of major (prerequisites, any graduate/professional school, licenses, certifications, exams), in order with rough timing.',
+    '4. Start now — concrete steps a high-schooler can take this year (courses, certs, experience) that keep these routes open.',
     '5. Outlook — demand and typical earnings, with a source.',
-    'If the career is vague or could mean several things, note the main interpretations briefly. Keep it under ~450 words, warm and concrete, second person ("you"). Output GitHub-flavored markdown only — no preamble, no code fences.',
+    'If the career is vague or could mean several things, note the main interpretations briefly. Keep it under ~500 words, warm and concrete, second person ("you"). Output GitHub-flavored markdown only — no preamble, no code fences.',
   ]
     .filter(Boolean)
     .join('\n');
