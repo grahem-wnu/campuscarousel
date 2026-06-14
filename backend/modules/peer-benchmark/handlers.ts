@@ -14,9 +14,10 @@ import {
   type RouteDef,
 } from '../../shared/api/index.js';
 import { filterForRequester, type Requester } from '../../shared/auth/index.js';
-import type { Benchmark, Data } from '../../shared/data/index.js';
+import type { Benchmark, BenchmarkSnapshot, College, Data } from '../../shared/data/index.js';
 import { buildAggregate, compareToBenchmark } from './compare.js';
 import { computeKeiraStats, type KeiraStats } from './stats.js';
+import { buildSnapshot, mergeSnapshot, monthOf } from './snapshots.js';
 import type { BenchmarkResearcher } from './researcher.js';
 import { collegeParamSchema, refreshSchema } from './schema.js';
 
@@ -45,6 +46,49 @@ async function gatherStats(data: Data, requester: Requester): Promise<KeiraStats
     experiences: filterForRequester(experiences, requester),
     activities: filterForRequester(activities, requester),
   });
+}
+
+/** Family-visible stats: private entries ALWAYS excluded, regardless of caller. This is the basis
+ *  for the PERSISTED monthly trend, which is family-visible and must never embed Keira's
+ *  private-entry hours (a parent viewing the trend later would otherwise see them). */
+async function gatherFamilyVisibleStats(data: Data): Promise<KeiraStats> {
+  const [courses, exams, experiences, activities, certifications] = await Promise.all([
+    data.courses.list(),
+    data.exams.list(),
+    data.experiences.list(),
+    data.activities.list(),
+    data.certifications.list(),
+  ]);
+  return computeKeiraStats({
+    courses,
+    exams,
+    certifications,
+    experiences: experiences.filter((e) => e.visibility !== 'private'),
+    activities: activities.filter((a) => a.visibility !== 'private'),
+  });
+}
+
+/** Record at most one snapshot for the current calendar month and return the rolling trend. Uses
+ *  family-visible stats (never private). Best-effort: a history write must never break the read, and
+ *  an all-empty matrix (no benchmark data yet) isn't worth a point. */
+async function recordMonthlySnapshot(
+  data: Data,
+  colleges: readonly College[],
+  benchmarkOf: (collegeId: string) => Benchmark | null,
+): Promise<BenchmarkSnapshot[]> {
+  let snapshots: BenchmarkSnapshot[] = [];
+  try {
+    snapshots = (await data.benchmarkHistory.get())?.snapshots ?? [];
+    const familyStats = await gatherFamilyVisibleStats(data);
+    const rows = buildAggregate(familyStats, colleges, benchmarkOf).rows;
+    if (!rows.some((r) => r.benchmark.hasData)) return snapshots;
+    const nowIso = new Date().toISOString();
+    const snap = buildSnapshot(monthOf(nowIso), nowIso, familyStats, rows);
+    const saved = await data.benchmarkHistory.put(mergeSnapshot(snapshots, snap));
+    return saved.snapshots;
+  } catch {
+    return snapshots;
+  }
 }
 
 /** Read every college's benchmark once and index by collegeId. */
@@ -111,11 +155,15 @@ export function makeHandlers(getData: () => Data, getResearcher: () => Benchmark
     },
 
     // GET /benchmarks/aggregate — the matrix: every college × metrics, with Keira's stats compared.
+    // Also lazily records one snapshot per month and returns the progress-over-time `trend`.
     aggregate: async (ctx) => {
       const data = getData();
       const [colleges, keira] = await Promise.all([data.colleges.list(), gatherStats(data, ctx.requester)]);
       const byId = await benchmarksByCollege(data, colleges.map((c) => c.collegeId));
-      return { status: 200, body: buildAggregate(keira, colleges, (cid) => byId.get(cid) ?? null) };
+      const benchmarkOf = (cid: string): Benchmark | null => byId.get(cid) ?? null;
+      const matrix = buildAggregate(keira, colleges, benchmarkOf);
+      const trend = await recordMonthlySnapshot(data, colleges, benchmarkOf);
+      return { status: 200, body: { ...matrix, trend } };
     },
 
     // GET /benchmarks/gaps — AI biggest-gaps analysis with specific recommendations.

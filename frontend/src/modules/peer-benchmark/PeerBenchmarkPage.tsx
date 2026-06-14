@@ -4,6 +4,7 @@ import { getAggregate, getGaps } from './api';
 import { AggregateMatrix } from './AggregateMatrix';
 import { BenchmarkCard } from './BenchmarkCard';
 import { GapsCallout } from './GapsCallout';
+import { ProgressTrend } from './ProgressTrend';
 import { fmtGpa, fmtNum, READINESS_META } from './logic';
 import type { AggregateMatrix as Matrix, GapsAnalysis, Readiness } from './types';
 
@@ -54,10 +55,10 @@ export default function PeerBenchmarkPage() {
 
   const rows = matrix?.rows ?? [];
   const keira = matrix?.keira;
+  const trend = matrix?.trend ?? [];
 
-  // Current-standing rollup (a "progress" snapshot of now). Persisted month-over-month history
-  // would need a benchmark-snapshot store in the shared data layer, which is out of this module's
-  // lane — see the PR notes; this gives the at-a-glance distribution today.
+  // Current-standing rollup: the at-a-glance readiness distribution right now. Month-over-month
+  // history is shown separately by <ProgressTrend> from the persisted monthly snapshots.
   const standing = useMemo(() => {
     const counts: Record<Readiness, number> = { strong: 0, competitive: 0, 'needs-work': 0, 'insufficient-data': 0 };
     for (const r of rows) counts[r.comparison.overallReadiness ?? 'insufficient-data'] += 1;
@@ -127,6 +128,8 @@ export default function PeerBenchmarkPage() {
           </Card>
 
           <GapsCallout analysis={gaps} loading={gapsLoading} error={gapsError} onRetry={() => void loadGaps()} />
+
+          {trend.length > 0 ? <ProgressTrend trend={trend} /> : null}
         </>
       )}
 

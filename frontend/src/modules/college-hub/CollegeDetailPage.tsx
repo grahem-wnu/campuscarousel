@@ -17,6 +17,7 @@ import {
 import { CollegeLogo } from './CollegeLogo';
 import { CollegeForm } from './CollegeForm';
 import { HydrationBadge } from './HydrationBadge';
+import { BenchmarkCard } from '../peer-benchmark/BenchmarkCard';
 import {
   PROGRAM_TYPE_LABEL,
   STATUS_META,
@@ -206,14 +207,19 @@ export default function CollegeDetailPage() {
       ) : tab === 'photos' ? (
         <PhotosTab college={college} busy={busy} onRefresh={() => void onRefresh()} />
       ) : (
-        <Card className="space-y-2">
-          <h2 className="text-sm font-semibold text-ink-800">Fit analysis</h2>
-          {fit ? <Badge tone={fit.tone}>{fit.label}</Badge> : <p className="text-sm text-ink-500">No fit score yet.</p>}
-          <p className="text-sm text-ink-600">
-            Fit is scored by AI against Keira’s profile (GPA, clinical hours, test scores) during hydration.
-            Use <strong>Refresh</strong> to recompute it as her profile grows.
-          </p>
-        </Card>
+        <div className="space-y-4">
+          <Card className="space-y-2">
+            <h2 className="text-sm font-semibold text-ink-800">Fit analysis</h2>
+            {fit ? <Badge tone={fit.tone}>{fit.label}</Badge> : <p className="text-sm text-ink-500">No fit score yet.</p>}
+            <p className="text-sm text-ink-600">
+              The fit score is set by AI against Keira’s profile during hydration; use <strong>Refresh</strong> to
+              recompute it. The breakdown below compares each of her metrics to this school’s typical admitted
+              student.
+            </p>
+          </Card>
+          {/* Detailed per-metric comparison (GPA / TEAS / clinical + volunteer hours / certs vs this school). */}
+          <BenchmarkCard collegeId={college.collegeId} />
+        </div>
       )}
 
       <Modal open={showEdit} onClose={() => setShowEdit(false)} title="Edit college" size="lg">

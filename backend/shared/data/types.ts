@@ -323,6 +323,36 @@ export interface Benchmark extends Timestamped, Hydratable {
   };
 }
 
+/** One month's point-in-time snapshot of the student's competitive readiness, for the
+ *  progress-over-time trend ("are gaps closing?"). Captured lazily — at most once per calendar
+ *  month, when the benchmark dashboard is loaded — so the series builds without a scheduler. */
+export interface BenchmarkSnapshot {
+  month: string; // 'YYYY-MM' — the calendar month this snapshot represents (one per month)
+  capturedAt: string; // ISO timestamp it was recorded
+  // The student's own stats at capture time (these rise objectively as she progresses).
+  gpa?: number;
+  teasScore?: number;
+  clinicalHours: number;
+  volunteerHours: number;
+  certCount: number;
+  // Across the colleges that have benchmark data at capture time:
+  collegesWithData: number;
+  /** How many of those colleges she is BELOW on each metric — the gap count that should shrink. */
+  belowGpa: number;
+  belowTeas: number;
+  belowClinicalHours: number;
+  belowVolunteerHours: number;
+  /** Readiness mix across those colleges. */
+  strongCount: number;
+  competitiveCount: number;
+  needsWorkCount: number;
+}
+
+/** Per-student rolling history of monthly benchmark snapshots (newest last; capped). Singleton. */
+export interface BenchmarkHistory extends Timestamped {
+  snapshots: BenchmarkSnapshot[];
+}
+
 // ---------------------------------------------------------------------------
 // Activity / Journal (PK: ACTIVITY#<id>, SK: DETAILS) — GSI1 date, GSI2 category
 // ---------------------------------------------------------------------------

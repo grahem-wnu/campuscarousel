@@ -1,6 +1,21 @@
 import { describe, expect, it } from 'vitest';
-import { answeredQuestions, historyStats, mockProgress, ratingTone } from './logic';
+import { answeredQuestions, appendDictation, historyStats, mockProgress, ratingTone } from './logic';
 import type { Interview } from './types';
+
+describe('appendDictation', () => {
+  it('joins a dictated phrase to existing text with a single space', () => {
+    expect(appendDictation('I shadowed a nurse', 'in the ICU')).toBe('I shadowed a nurse in the ICU');
+  });
+  it('does not lead with a space on an empty field', () => {
+    expect(appendDictation('', 'My answer')).toBe('My answer');
+  });
+  it('collapses trailing whitespace before joining and trims the addition', () => {
+    expect(appendDictation('Hello   ', '  world  ')).toBe('Hello world');
+  });
+  it('ignores an empty/whitespace-only addition', () => {
+    expect(appendDictation('unchanged', '   ')).toBe('unchanged');
+  });
+});
 
 let n = 0;
 function session(over: Partial<Interview> = {}): Interview {

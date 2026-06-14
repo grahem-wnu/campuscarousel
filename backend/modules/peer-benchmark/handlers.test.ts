@@ -131,6 +131,24 @@ describe('aggregate (GET /benchmarks/aggregate)', () => {
     expect(body.rows).toHaveLength(2);
     expect(body.keira).toBeDefined();
   });
+
+  it('records one monthly snapshot and returns the trend; re-loading the same month does not duplicate', async () => {
+    const a = await seedCollege('UCLA');
+    await data.benchmarks.put(a, { avgGPAAdmitted: 3.8, typicalClinicalHours: 40 });
+    const first = (await h.aggregate(ctx())).body as { trend: { month: string }[] };
+    expect(first.trend).toHaveLength(1);
+    expect(first.trend[0]?.month).toMatch(/^\d{4}-\d{2}$/);
+    const second = (await h.aggregate(ctx())).body as { trend: unknown[] };
+    expect(second.trend).toHaveLength(1); // same calendar month → replaced, not appended
+    expect((await data.benchmarkHistory.get())?.snapshots).toHaveLength(1);
+  });
+
+  it('does not record a snapshot when no college has benchmark data yet', async () => {
+    await seedCollege('UCLA'); // no benchmark put
+    const res = (await h.aggregate(ctx())).body as { trend: unknown[] };
+    expect(res.trend).toHaveLength(0);
+    expect(await data.benchmarkHistory.get()).toBeNull();
+  });
 });
 
 describe('gaps (GET /benchmarks/gaps)', () => {
@@ -183,5 +201,16 @@ describe('privacy — a parent never has private-entry hours folded into Keira�
     const res = await h.gaps(ctx({ requester: kate }));
     const stats = (res.body as { keira: { clinicalHours: number } }).keira;
     expect(stats.clinicalHours).toBe(5);
+  });
+
+  it('the PERSISTED trend snapshot excludes private hours even when Keira triggers it', async () => {
+    const a = await seedCollege('UCLA');
+    await data.benchmarks.put(a, { avgGPAAdmitted: 3.8, typicalClinicalHours: 40 });
+    // Keira (owner) loads the dashboard — her live view includes private hours, but the family-visible
+    // snapshot written to history must not, since a parent can later read that trend.
+    const res = (await h.aggregate(ctx({ requester: keira }))).body as { keira: { clinicalHours: number }; trend: { clinicalHours: number; volunteerHours: number }[] };
+    expect(res.keira.clinicalHours).toBe(15); // live view (owner) includes private
+    expect(res.trend[0]?.clinicalHours).toBe(5); // persisted snapshot is family-visible only
+    expect(res.trend[0]?.volunteerHours).toBe(8);
   });
 });
