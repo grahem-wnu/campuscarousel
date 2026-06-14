@@ -8,8 +8,8 @@ export const nav: NavEntry[] = [
   {
     id: 'motivation',
     label: 'Why This Path',
-    group: 'primary',
-    order: 30,
+    group: 'secondary',
+    order: 35,
     route: '/motivations',
     icon: 'heart',
     element: () => import('./MotivationPage'),

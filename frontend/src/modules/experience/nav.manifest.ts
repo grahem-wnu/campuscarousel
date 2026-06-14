@@ -8,8 +8,8 @@ export const nav: NavEntry[] = [
   {
     id: 'experience',
     label: 'Experience Hours',
-    group: 'primary',
-    order: 30,
+    group: 'secondary',
+    order: 45,
     route: '/experience',
     icon: 'clinical',
     element: () => import('./ExperiencePage'),
