@@ -3,7 +3,7 @@ import { InMemoryTableClient, makeData, type Data } from '../../shared/data/inde
 import { studentScoped, tenantScoped } from '../../shared/data/tenant-client.js';
 import { runWithStudent, runWithTenant } from '../../shared/tenant/index.js';
 import type { EmailMessage, EmailSender } from '../../shared/email/index.js';
-import { runScheduledDigest } from './run.js';
+import { gatherForDigest, runScheduledDigest } from './run.js';
 
 let data: Data;
 let sent: EmailMessage[];
@@ -39,6 +39,34 @@ async function settings(over: Record<string, unknown> = {}): Promise<void> {
     ...over,
   });
 }
+
+describe('gatherForDigest', () => {
+  it('projects college deadlines onto the student grad-year cycle (no false overdue for underclassmen)', async () => {
+    await data.studentProfile.put({ graduationYear: 2029 } as never);
+    await data.colleges.create({
+      name: 'UC Riverside',
+      status: 'researching',
+      addedBy: 'ai-discovered',
+      userEdited: [],
+      applicationDeadlines: { regularDecision: '2025-12-01' },
+    } as never);
+    const g = await gatherForDigest(data);
+    // 2025 cycle → projected to the class-of-2029 senior cycle (Dec → graduationYear-1).
+    expect(g.colleges[0]?.applicationDeadlines?.regularDecision).toBe('2028-12-01');
+  });
+
+  it('leaves deadlines untouched when no graduation year is set', async () => {
+    await data.colleges.create({
+      name: 'State U',
+      status: 'researching',
+      addedBy: 'ai-discovered',
+      userEdited: [],
+      applicationDeadlines: { regularDecision: '2025-12-01' },
+    } as never);
+    const g = await gatherForDigest(data);
+    expect(g.colleges[0]?.applicationDeadlines?.regularDecision).toBe('2025-12-01');
+  });
+});
 
 describe('runScheduledDigest', () => {
   it('skips when no settings are stored', async () => {
