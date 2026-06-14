@@ -25,8 +25,8 @@ const empty: GatheredData = {
   finaid: [],
 };
 
-const keira: ReminderRecipient = { label: 'Keira', email: 'k@x.com', includePrivate: true };
-const mom: ReminderRecipient = { label: 'Mom', email: 'm@x.com', includePrivate: false };
+const keira: ReminderRecipient = { label: 'Keira', email: 'k@x.com' };
+const mom: ReminderRecipient = { label: 'Mom', email: 'm@x.com' };
 
 describe('eventsFor — privacy', () => {
   const g: GatheredData = {
@@ -36,11 +36,8 @@ describe('eventsFor — privacy', () => {
       activity({ activityId: 'priv', visibility: 'private', title: 'Private event' }),
     ],
   };
-  it('includes private activities when includePrivate', () => {
-    expect(eventsFor(g, true).map((e) => e.refId)).toEqual(expect.arrayContaining(['fam', 'priv']));
-  });
-  it('excludes private activities otherwise', () => {
-    const ids = eventsFor(g, false).map((e) => e.refId);
+  it('ALWAYS excludes private activities — they are never emailed to anyone', () => {
+    const ids = eventsFor(g).map((e) => e.refId);
     expect(ids).toContain('fam');
     expect(ids).not.toContain('priv');
   });
@@ -58,9 +55,10 @@ describe('digestForRecipient', () => {
     ],
   };
 
-  it('groups overdue + upcoming within horizon and drops far-future items', () => {
+  it('groups overdue + upcoming within horizon and drops far-future + private items', () => {
     const d = digestForRecipient(g, keira, '2026-06-15', 30, 'https://app');
-    expect(d.model.count).toBe(3); // overdue + soon + private; far (78d) excluded at 30-day horizon
+    expect(d.model.count).toBe(2); // overdue + soon; private always excluded, far (78d) past 30-day horizon
+    expect(d.text).not.toContain('Private thing');
     expect(d.model.overdueCount).toBe(1);
     expect(d.subject).toContain('overdue');
     expect(d.text).toContain('Overdue thing');

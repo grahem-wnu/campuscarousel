@@ -6,7 +6,6 @@ export type Cadence = 'daily' | 'weekly';
 export interface ReminderRecipient {
   label: string;
   email: string;
-  includePrivate: boolean;
 }
 
 export interface ReminderSettings {

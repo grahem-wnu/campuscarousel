@@ -688,12 +688,12 @@ export interface Budget extends Timestamped {
 // Drives the scheduled email digest of upcoming/overdue deadlines (v2.1 F1).
 // ---------------------------------------------------------------------------
 
-/** One person the digest emails. `includePrivate` is true ONLY for Keira's own address — it
- *  gates whether items sourced from her private journal entries appear in that recipient's email. */
+/** One person the digest emails. PRIVATE items (Keira's private journal/clinical/why-nursing
+ *  entries) are NEVER included in any email — an outbound digest is not the AI helping Keira
+ *  interactively, so private content must never leave the app this way. No per-recipient toggle. */
 export interface ReminderRecipient {
   label: string; // "Keira", "Mom", "Dad"
   email: string;
-  includePrivate: boolean;
 }
 
 export interface ReminderSettings extends Timestamped {

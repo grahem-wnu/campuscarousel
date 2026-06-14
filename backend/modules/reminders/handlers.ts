@@ -49,7 +49,6 @@ export function makeHandlers(deps: ReminderDeps): ReminderHandlers {
       const recipients: ReminderRecipient[] = (patch.recipients ?? base.recipients).map((r) => ({
         label: r.label,
         email: r.email,
-        includePrivate: r.includePrivate ?? false,
       }));
       const saved = await data.reminderSettings.put({
         enabled: patch.enabled ?? base.enabled,
@@ -66,7 +65,8 @@ export function makeHandlers(deps: ReminderDeps): ReminderHandlers {
     },
 
     // POST /reminders/send-test — send the digest now (bypasses cadence). With { to }, sends a single
-    // test to that address using the CALLER's privacy; otherwise sends to all configured recipients.
+    // test to that address; otherwise sends to all configured recipients. Private items are never
+    // included in any digest, so a test is safe to send to any address.
     sendTest: async (ctx) => {
       const body = validate(sendTestBodySchema, ctx.body ?? {});
       if (!from) throw Errors.conflict('Reminder sender email is not configured on the server.');
@@ -76,7 +76,7 @@ export function makeHandlers(deps: ReminderDeps): ReminderHandlers {
       const todayIso = today();
 
       const targets: ReminderRecipient[] = body.to
-        ? [{ label: 'there', email: body.to, includePrivate: ctx.requester.role === 'student' }]
+        ? [{ label: 'there', email: body.to }]
         : s.recipients.filter((r) => r.email);
       if (targets.length === 0) {
         throw Errors.conflict('No reminder recipients configured — add an address or pass { "to": "..." }.');
