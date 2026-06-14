@@ -1,0 +1,16 @@
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Campus Carousel">
+  <defs>
+    <linearGradient id="cc-bg" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1fa8a6"/>
+      <stop offset="1" stop-color="#15686f"/>
+    </linearGradient>
+  </defs>
+  <!-- Rounded tile in the brand teal -->
+  <rect width="32" height="32" rx="7" fill="url(#cc-bg)"/>
+  <!-- The path: a winding route climbing toward the goal -->
+  <path d="M9 24.5C9 19 22 21 22 13.5" stroke="#ffffff" stroke-width="3.4" stroke-linecap="round" fill="none"/>
+  <!-- Start marker -->
+  <circle cx="9" cy="24.5" r="2.1" fill="#ffffff"/>
+  <!-- Goal marker (warm terracotta accent) -->
+  <circle cx="22" cy="11" r="3.6" fill="#e08947" stroke="#ffffff" stroke-width="1.6"/>
+</svg>
