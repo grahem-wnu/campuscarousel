@@ -2,7 +2,7 @@
 // can be unit-tested in the node environment (the repo has no jsdom; the logic is what's tested).
 
 import type { BadgeTone } from '../../shared/ui';
-import type { Readiness, TeasStatus } from './types';
+import type { BenchmarkSnapshot, Readiness, TeasStatus } from './types';
 
 export interface ReadinessMeta {
   label: string;
@@ -72,4 +72,37 @@ const SEVERITY_TONE: Record<'high' | 'medium' | 'low', BadgeTone> = {
 
 export function severityTone(severity: 'high' | 'medium' | 'low'): BadgeTone {
   return SEVERITY_TONE[severity];
+}
+
+/** Total "below" gaps in a snapshot — the number that should shrink as she catches up. */
+export function totalGaps(s: BenchmarkSnapshot): number {
+  return s.belowGpa + s.belowTeas + s.belowClinicalHours + s.belowVolunteerHours;
+}
+
+export interface TrendSummary {
+  points: number;
+  first: BenchmarkSnapshot;
+  last: BenchmarkSnapshot;
+  gapsFrom: number;
+  gapsTo: number;
+  /** Negative = gaps closing (good), positive = widening. */
+  gapsDelta: number;
+}
+
+/** Summarize a monthly trend (first vs latest). Null when there aren't yet two points to compare. */
+export function summarizeTrend(trend: readonly BenchmarkSnapshot[]): TrendSummary | null {
+  if (trend.length < 2) return null;
+  const first = trend[0]!;
+  const last = trend[trend.length - 1]!;
+  const gapsFrom = totalGaps(first);
+  const gapsTo = totalGaps(last);
+  return { points: trend.length, first, last, gapsFrom, gapsTo, gapsDelta: gapsTo - gapsFrom };
+}
+
+/** 'YYYY-MM' → "Jun 2026" for axis labels. */
+export function monthLabel(month: string): string {
+  const [y, m] = month.split('-').map(Number);
+  if (!y || !m) return month;
+  const name = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][m - 1] ?? month;
+  return `${name} ${y}`;
 }

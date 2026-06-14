@@ -63,10 +63,31 @@ export interface MatrixRow {
   comparison: Comparison;
 }
 
+/** One month's point-in-time snapshot of competitive readiness (progress over time). */
+export interface BenchmarkSnapshot {
+  month: string; // 'YYYY-MM'
+  capturedAt: string;
+  gpa?: number;
+  teasScore?: number;
+  clinicalHours: number;
+  volunteerHours: number;
+  certCount: number;
+  collegesWithData: number;
+  belowGpa: number;
+  belowTeas: number;
+  belowClinicalHours: number;
+  belowVolunteerHours: number;
+  strongCount: number;
+  competitiveCount: number;
+  needsWorkCount: number;
+}
+
 /** GET /benchmarks/aggregate. */
 export interface AggregateMatrix {
   keira: KeiraStats;
   rows: MatrixRow[];
+  /** Monthly snapshots, oldest → newest (one per calendar month). */
+  trend: BenchmarkSnapshot[];
 }
 
 export interface Gap {

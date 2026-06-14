@@ -12,6 +12,7 @@
 
 import {
   makeBenchmarks,
+  makeBenchmarkHistory,
   makeBudget,
   makeCollegeChecklist,
   makeCollegeNotes,
@@ -260,6 +261,7 @@ export function makeData(
     visits: makeVisits(client),
     collegeChecklist: makeCollegeChecklist(client),
     benchmarks: makeBenchmarks(client),
+    benchmarkHistory: makeBenchmarkHistory(client),
     conversations: makeConversations(client),
     budget: makeBudget(client),
     documents,

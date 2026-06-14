@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { Button, Card, Field, Input, Spinner, Textarea } from '../../shared/ui';
 import { FeedbackCard } from './FeedbackCard';
 import { startMock, submitAnswer } from './api';
+import { appendDictation } from './logic';
+import { useDictation } from './useDictation';
 import type { AnswerFeedback, Interview } from './types';
 
 interface Props {
@@ -20,6 +22,8 @@ export function MockInterview({ onSessionChanged }: Props) {
   const [feedback, setFeedback] = useState<AnswerFeedback | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Voice answers: dictated phrases append to the typed answer; both paths feed the same field.
+  const dictation = useDictation((text) => setAnswer((a) => appendDictation(a, text)));
 
   async function begin() {
     setStarting(true);
@@ -40,6 +44,7 @@ export function MockInterview({ onSessionChanged }: Props) {
 
   async function submit() {
     if (!session || !answer.trim()) return;
+    dictation.stop();
     setSubmitting(true);
     setError(null);
     try {
@@ -55,6 +60,7 @@ export function MockInterview({ onSessionChanged }: Props) {
   }
 
   function next() {
+    dictation.stop();
     setIndex((i) => i + 1);
     setAnswer('');
     setFeedback(null);
@@ -113,9 +119,30 @@ export function MockInterview({ onSessionChanged }: Props) {
             </>
           ) : (
             <Card className="space-y-2">
-              <Field label="Your answer">
-                <Textarea rows={5} value={answer} onChange={(e) => setAnswer(e.target.value)} placeholder="Answer out loud, then type the key points…" />
-              </Field>
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-ink-700">Your answer</span>
+                {dictation.supported ? (
+                  <Button
+                    size="sm"
+                    variant={dictation.listening ? 'secondary' : 'ghost'}
+                    icon="chat"
+                    onClick={dictation.toggle}
+                  >
+                    {dictation.listening ? 'Stop' : 'Speak'}
+                  </Button>
+                ) : null}
+              </div>
+              <Textarea
+                rows={5}
+                value={answer}
+                onChange={(e) => setAnswer(e.target.value)}
+                placeholder={dictation.supported ? 'Tap Speak to answer out loud, or type here…' : 'Answer out loud, then type the key points…'}
+              />
+              {dictation.listening ? (
+                <p className="text-xs italic text-ink-400" aria-live="polite">
+                  Listening… {dictation.interim}
+                </p>
+              ) : null}
               {error ? <p className="text-sm text-error-600">{error}</p> : null}
               <Button loading={submitting} disabled={!answer.trim()} onClick={() => void submit()}>
                 {submitting ? 'Coaching…' : 'Get feedback'}

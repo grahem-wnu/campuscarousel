@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { packCertifications, packEntranceExam, packFocusBriefs, packsForMajors } from './index.js';
+import { packCertifications, packEntranceExam, packFocusBriefs, packInterviewQuestions, packsForMajors } from './index.js';
 import { focusLine } from '../ai/major.js';
 
 describe('major-pack resolver', () => {
@@ -34,10 +34,17 @@ describe('pack folds', () => {
     expect(packEntranceExam(['Nursing'])?.examName).toBe('TEAS');
   });
 
+  it('nursing supplies seed interview questions (deduped)', () => {
+    const qs = packInterviewQuestions(['Nursing']);
+    expect(qs.some((q) => /why our nursing program/i.test(q))).toBe(true);
+    expect(new Set(qs).size).toBe(qs.length); // no duplicates
+  });
+
   it('no fold for a non-pack major', () => {
     expect(packFocusBriefs(['History'])).toEqual([]);
     expect(packCertifications(['History'])).toEqual([]);
     expect(packEntranceExam(['History'])).toBeUndefined();
+    expect(packInterviewQuestions(['History'])).toEqual([]);
   });
 });
 

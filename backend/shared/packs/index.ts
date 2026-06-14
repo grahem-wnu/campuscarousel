@@ -79,6 +79,22 @@ export function packEntranceExam(majors?: readonly string[]): MajorPack['entranc
   return packsForMajors(majors).find((p) => p.entranceExam)?.entranceExam;
 }
 
+/** Major-specific interview questions the active pack(s) seed (deduped, in registry order). */
+export function packInterviewQuestions(majors?: readonly string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const pack of packsForMajors(majors)) {
+    for (const q of pack.interviewQuestions ?? []) {
+      const key = q.toLowerCase().trim();
+      if (key && !seen.has(key)) {
+        seen.add(key);
+        out.push(q);
+      }
+    }
+  }
+  return out;
+}
+
 /** Hints for AI college hydration: the major-specific facts worth gathering (→ College.programDetails). */
 export function packProgramDetailsHints(majors?: readonly string[]): string[] {
   return packsForMajors(majors)

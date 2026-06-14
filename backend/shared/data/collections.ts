@@ -15,6 +15,8 @@ import type {
   Conversation,
   ConversationMessage,
   Benchmark,
+  BenchmarkHistory,
+  BenchmarkSnapshot,
   FocusOverview,
   Invite,
   FamilyMember,
@@ -232,6 +234,36 @@ export function makeBenchmarks(client: TableClient): BenchmarkRepo {
       merged.updatedAt = now;
       merged.lastDataRefresh = now;
       return write(collegeId, merged as unknown as Benchmark);
+    },
+  };
+}
+
+/** Per-student singleton: the rolling history of monthly benchmark snapshots (progress over time). */
+export interface BenchmarkHistoryRepo {
+  get(): Promise<BenchmarkHistory | null>;
+  put(snapshots: BenchmarkSnapshot[]): Promise<BenchmarkHistory>;
+}
+
+export function makeBenchmarkHistory(client: TableClient): BenchmarkHistoryRepo {
+  return {
+    async get() {
+      const item = await client.get('BENCHMARK_HISTORY', SK_DETAILS);
+      return item ? toDomain<BenchmarkHistory>(item) : null;
+    },
+    async put(snapshots) {
+      const existing = await client.get('BENCHMARK_HISTORY', SK_DETAILS);
+      const now = isoNow();
+      const domain: BenchmarkHistory = {
+        snapshots,
+        createdAt: (existing?.createdAt as string | undefined) ?? now,
+        updatedAt: now,
+      };
+      await client.put({
+        ...(domain as unknown as Record<string, unknown>),
+        PK: 'BENCHMARK_HISTORY',
+        SK: SK_DETAILS,
+      });
+      return domain;
     },
   };
 }

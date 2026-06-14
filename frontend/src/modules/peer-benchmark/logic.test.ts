@@ -6,10 +6,59 @@ import {
   fmtGpa,
   fmtNum,
   isEmptyMatrix,
+  monthLabel,
   readinessMeta,
   severityTone,
   statusMeta,
+  summarizeTrend,
+  totalGaps,
 } from './logic';
+import type { BenchmarkSnapshot } from './types';
+
+const snap = (month: string, over: Partial<BenchmarkSnapshot> = {}): BenchmarkSnapshot => ({
+  month,
+  capturedAt: `${month}-01T00:00:00.000Z`,
+  clinicalHours: 0,
+  volunteerHours: 0,
+  certCount: 0,
+  collegesWithData: 1,
+  belowGpa: 0,
+  belowTeas: 0,
+  belowClinicalHours: 0,
+  belowVolunteerHours: 0,
+  strongCount: 0,
+  competitiveCount: 0,
+  needsWorkCount: 0,
+  ...over,
+});
+
+describe('totalGaps', () => {
+  it('sums the per-metric below counts', () => {
+    expect(totalGaps(snap('2026-06', { belowGpa: 2, belowTeas: 1, belowClinicalHours: 1, belowVolunteerHours: 0 }))).toBe(4);
+  });
+});
+
+describe('summarizeTrend', () => {
+  it('returns null with fewer than two points', () => {
+    expect(summarizeTrend([])).toBeNull();
+    expect(summarizeTrend([snap('2026-06')])).toBeNull();
+  });
+  it('reports gaps closing as a negative delta (first vs latest)', () => {
+    const s = summarizeTrend([snap('2026-04', { belowGpa: 5 }), snap('2026-06', { belowGpa: 2 })]);
+    expect(s?.gapsFrom).toBe(5);
+    expect(s?.gapsTo).toBe(2);
+    expect(s?.gapsDelta).toBe(-3); // 3 gaps closed
+  });
+});
+
+describe('monthLabel', () => {
+  it('formats YYYY-MM as "Mon YYYY"', () => {
+    expect(monthLabel('2026-06')).toBe('Jun 2026');
+  });
+  it('passes through an unparseable value', () => {
+    expect(monthLabel('nope')).toBe('nope');
+  });
+});
 
 describe('readinessMeta', () => {
   it('maps each readiness to a label + tone', () => {

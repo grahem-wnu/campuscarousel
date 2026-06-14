@@ -38,6 +38,19 @@ describe('curatedQuestionGenerator', () => {
     expect(qs[0]?.category).toBe('school-specific');
     expect(qs[0]?.question).toMatch(/Ohio State/);
   });
+
+  it('seeds the active major pack questions into the curated fallback', async () => {
+    const qs = await curatedQuestionGenerator({ count: 8, grounding, majors: ['Nursing'] });
+    const text = qs.map((q) => q.question);
+    // A nursing-pack interview question should appear in the fallback set.
+    expect(text).toContain('Why our nursing program specifically?');
+  });
+
+  it('names the school opener for the active major, not hardcoded nursing', async () => {
+    const qs = await curatedQuestionGenerator({ count: 4, grounding, school: 'MIT', majors: ['Computer Science'] });
+    expect(qs[0]?.question).toMatch(/computer science/i);
+    expect(qs[0]?.question).not.toMatch(/nursing/i);
+  });
 });
 
 describe('curatedFeedbackGenerator', () => {
