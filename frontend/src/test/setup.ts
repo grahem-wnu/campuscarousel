@@ -8,7 +8,6 @@ if (typeof Element !== 'undefined' && !Element.prototype.scrollTo) {
   Element.prototype.scrollTo = () => {};
 }
 if (typeof window !== 'undefined' && !window.scrollTo) {
-  // eslint-disable-next-line @typescript-eslint/no-empty-function
   window.scrollTo = () => {};
 }
 
