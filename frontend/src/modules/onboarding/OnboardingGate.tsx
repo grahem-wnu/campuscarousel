@@ -1,77 +1,99 @@
-// First-run onboarding (v2.1 F4). Registered as the shell's "onboarding" slot, so it mounts on every
-// authenticated load. It fetches the ACTIVE student's profile and, when onboarding isn't complete,
-// shows a 3-step wizard (profile → discover colleges → set up goals). Steps 2 & 3 hand off to the
-// existing College Finder / Goal Tracker rather than reimplementing them. Any hand-off or "Finish"
-// marks onboardingComplete so it never nags again. Re-evaluates on student switch so a newly added
-// sibling gets onboarded too, and re-opens on the dashboard's "Set up the profile" button.
+// First-run onboarding (v2.1 F4; multi-student FTUE 2026-06). Registered as the shell's "onboarding"
+// slot, so it mounts on every authenticated load. It decides whether to open the onboarding flow:
+//   • LOOP   — a fresh family (empty roster) or a resume (the family declared N kids but fewer are set
+//              up). Runs OnboardingFlow, which sets up each child back-to-back and creates the roster.
+//   • SINGLE — re-onboarding an EXISTING active student (the dashboard "Set up the profile" button, or
+//              switching to a still-un-onboarded sibling). Finishes that student in place.
+//   • FORM   — the legacy single-student wizard ("Prefer a form?").
+// Dismissals are remembered for the session so a flow doesn't re-pop while the family clicks around.
 
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, Field, Input, Modal, Select, useToast } from '../../shared/ui';
 import { useActiveStudent } from '../../shared/shell';
-import { getProfile, putProfile, type StudentProfile } from './api';
-import OnboardingChat from './OnboardingChat';
+import { getProfile, getSetup, putProfile, type StudentProfile } from './api';
+import OnboardingFlow from './OnboardingFlow';
+
+type View = null | 'loop' | 'single' | 'form';
+const LOOP_KEY = '__loop__'; // dismiss key for the family-level loop (distinct from any studentId)
 
 export default function OnboardingGate() {
-  const { activeStudentId } = useActiveStudent();
-  const navigate = useNavigate();
-  const [open, setOpen] = useState(false);
-  // The conversational chat is the default FTUE; "Prefer a form?" switches to the legacy wizard.
-  const [mode, setMode] = useState<'chat' | 'form'>('chat');
-  // Students whose wizard was dismissed this session — don't re-pop when toggling back to them.
+  const { activeStudentId, students } = useActiveStudent();
+  const [view, setView] = useState<View>(null);
+  const [loop, setLoop] = useState({ startIndex: 0, initialTotal: 1 });
+  // Keys (LOOP_KEY or a studentId) dismissed this session — don't re-pop them.
   const dismissedRef = useRef<Set<string>>(new Set());
+  const activeCount = students.length;
 
-  // Re-evaluate per ACTIVE student: switching to a fresh, un-onboarded student (e.g. a newly added
-  // sibling) must surface the setup wizard. The previous mount-once check missed that, so a
-  // switched-to profile just landed on a dead-end empty dashboard.
+  // Decide what (if anything) to open. Skipped while a flow is already open so we never fight the
+  // loop's own state as it creates students / flips the active id.
   useEffect(() => {
-    if (!activeStudentId || dismissedRef.current.has(activeStudentId)) return;
+    if (view !== null) return;
     let alive = true;
-    getProfile()
-      .then((p) => {
-        if (alive) setOpen(p.onboardingComplete !== true);
-      })
-      .catch(() => {
-        /* if profile can't load, don't block the app */
-      });
+    (async () => {
+      const setup = await getSetup().catch(() => ({}) as Awaited<ReturnType<typeof getSetup>>);
+      const declared = setup.declaredStudentCount;
+      // LOOP: a brand-new family (no kids yet) or a resume (declared more than are set up).
+      const needsLoop =
+        !dismissedRef.current.has(LOOP_KEY) &&
+        (activeCount === 0 || (declared != null && setup.setupComplete !== true && activeCount < declared));
+      if (needsLoop) {
+        if (!alive) return;
+        setLoop({ startIndex: activeCount, initialTotal: declared ?? 1 });
+        setView('loop');
+        return;
+      }
+      // SINGLE: the active student exists but isn't onboarded yet.
+      if (activeStudentId && !dismissedRef.current.has(activeStudentId)) {
+        const p = await getProfile().catch(() => null);
+        if (alive && p && p.onboardingComplete !== true) setView('single');
+      }
+    })();
     return () => {
       alive = false;
     };
-  }, [activeStudentId]);
+  }, [activeStudentId, activeCount, view]);
 
-  // The dashboard's "Set up the profile" button re-opens onboarding (chat) for the active student.
+  // The dashboard's "Set up the profile" button re-opens onboarding for the EXISTING active student.
   useEffect(() => {
     const reopen = () => {
       if (activeStudentId) dismissedRef.current.delete(activeStudentId);
-      setMode('chat');
-      setOpen(true);
+      setView('single');
     };
     window.addEventListener('open-onboarding', reopen);
     return () => window.removeEventListener('open-onboarding', reopen);
   }, [activeStudentId]);
 
-  function handleClose() {
-    // Remember the dismissal for this session so it doesn't re-pop on every switch back (a finish/skip
-    // also persists onboardingComplete, so it won't return in future sessions either).
-    if (activeStudentId) dismissedRef.current.add(activeStudentId);
-    setOpen(false);
+  // Dismiss the right key so the flow doesn't immediately re-pop, then close.
+  function close() {
+    dismissedRef.current.add(view === 'loop' ? LOOP_KEY : activeStudentId ?? LOOP_KEY);
+    setView(null);
   }
 
-  // Onboarding finished (profile saved + seeded): close, and land on a freshly-loaded dashboard.
-  function handleComplete() {
-    if (activeStudentId) dismissedRef.current.add(activeStudentId);
-    setOpen(false);
-    // Tell an already-mounted dashboard to refetch; navigate covers the not-on-dashboard case.
-    window.dispatchEvent(new Event('onboarding-finished'));
-    navigate('/dashboard');
+  // Loop finished every child: remember it so it won't reopen this session (the flow already
+  // navigated + launched the tour).
+  function completeLoop() {
+    dismissedRef.current.add(LOOP_KEY);
   }
 
-  if (!open) return null;
-  if (mode === 'form') return <Wizard onClose={handleClose} />;
+  // Single existing-student onboarding finished.
+  function completeSingle() {
+    if (activeStudentId) dismissedRef.current.add(activeStudentId);
+  }
+
+  if (view === null) return null;
+  if (view === 'form') return <Wizard onClose={close} />;
   return (
-    <Modal open onClose={handleClose} title="Let's set things up" size="lg">
-      <OnboardingChat onComplete={handleComplete} onUseForm={() => setMode('form')} />
-    </Modal>
+    <OnboardingFlow
+      // Remount when the slot/student identity changes so internal state never leaks across opens.
+      key={view === 'loop' ? `loop:${loop.startIndex}` : `single:${activeStudentId ?? 'none'}`}
+      startIndex={view === 'loop' ? loop.startIndex : 0}
+      initialTotal={view === 'loop' ? loop.initialTotal : 1}
+      createStudents={view === 'loop'}
+      onAllComplete={view === 'loop' ? completeLoop : completeSingle}
+      onClose={close}
+      onUseForm={() => setView('form')}
+    />
   );
 }
 
