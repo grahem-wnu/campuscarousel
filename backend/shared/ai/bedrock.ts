@@ -208,7 +208,11 @@ export async function converseWithSearch(
           }
           resultText = formatResults(results);
         } catch (err) {
-          resultText = `Search unavailable: ${(err as Error).message}`;
+          // Web-search failures were silent (the model just gets a "search unavailable" tool result and
+          // writes a disclaimer). Log them so a degraded result is observable — the key is never logged.
+          const message = err instanceof Error ? err.message : String(err);
+          console.warn(`[web_search] unavailable (query="${query.slice(0, 80)}"): ${message}`);
+          resultText = `Search unavailable: ${message}`;
         }
         toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: resultText });
       } else {
