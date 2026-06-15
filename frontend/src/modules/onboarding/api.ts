@@ -89,6 +89,12 @@ export function resetStudent(): Promise<{ ok: boolean; goalsRemoved: number; col
   return api.post<{ ok: boolean; goalsRemoved: number; collegesRemoved: number }>('/onboarding/reset', {});
 }
 
+// ⚠️ TEMPORARY TESTING AID — admin hard reset to re-test the FTUE: removes ALL students + clears
+// /setup so the onboarding loop bootstraps from scratch. Remove with the dev-reset module + button.
+export function hardReset(): Promise<{ ok: boolean; studentsRemoved: number }> {
+  return api.post<{ ok: boolean; studentsRemoved: number }>('/admin/hard-reset', {});
+}
+
 // --- Family-level setup state (FTUE loop progress) ----------------------------------------------
 
 /** Family-level FTUE progress: how many kids the family said they'd set up, and whether the loop
