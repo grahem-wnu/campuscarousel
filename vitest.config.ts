@@ -8,7 +8,7 @@ import { defineConfig } from 'vitest/config';
 // (the design-system workspace adds the jsdom dependency when the shell lands).
 export default defineConfig({
   test: {
-    include: ['**/*.{test,spec}.ts'],
+    include: ['**/*.{test,spec}.{ts,tsx}'],
     exclude: [
       '**/node_modules/**',
       '**/dist/**',
@@ -17,5 +17,8 @@ export default defineConfig({
       '.worktrees/**',
     ],
     passWithNoTests: true,
+    // Default env stays `node` (backend). DOM tests opt in per-file with `// @vitest-environment jsdom`.
+    // The setup file only registers jest-dom matchers + RTL cleanup, which is inert for node tests.
+    setupFiles: ['frontend/src/test/setup.ts'],
   },
 });
