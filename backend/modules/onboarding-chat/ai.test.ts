@@ -35,4 +35,20 @@ describe('parseTurn', () => {
     expect(t.profile).toEqual({});
     expect(t.reply).toContain('prose');
   });
+
+  it('captures a valid studentCount', () => {
+    const t = parseTurn('{"reply":"Two — got it!","profile":{},"done":false,"studentCount":2}');
+    expect(t.studentCount).toBe(2);
+  });
+
+  it('omits studentCount when absent', () => {
+    const t = parseTurn('{"reply":"Hi","profile":{},"done":false}');
+    expect(t.studentCount).toBeUndefined();
+  });
+
+  it('drops an out-of-range or non-numeric studentCount', () => {
+    expect(parseTurn('{"reply":"x","profile":{},"done":false,"studentCount":0}').studentCount).toBeUndefined();
+    expect(parseTurn('{"reply":"x","profile":{},"done":false,"studentCount":99}').studentCount).toBeUndefined();
+    expect(parseTurn('{"reply":"x","profile":{},"done":false,"studentCount":"two"}').studentCount).toBeUndefined();
+  });
 });

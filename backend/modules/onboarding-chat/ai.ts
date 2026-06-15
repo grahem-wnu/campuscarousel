@@ -25,6 +25,9 @@ export interface OnboardingTurn {
   reply: string;
   profile: OnboardingProfile;
   done: boolean;
+  /** How many students the family said they're setting up (captured once, early in the chat). The
+   *  frontend uses it to size the multi-child onboarding loop. Absent until the family answers. */
+  studentCount?: number;
 }
 
 export type OnboardingChatter = (messages: ChatMsg[]) => Promise<OnboardingTurn>;
@@ -57,7 +60,11 @@ function buildSystem(now: Date): string {
   return [
     'You are a warm, encouraging college-prep guide onboarding a family on Campus Carousel. Your job is a',
     'short, friendly conversation that builds the student’s starting profile — not an interrogation.',
-    'Gather, a couple of things at a time and reacting naturally to answers: the student’s name,',
+    'FIRST, before anything else, ask how many students (children) the family is setting up today. The',
+    'moment they tell you, record it as studentCount (a whole number) and acknowledge it warmly. You only',
+    'set up ONE student in this conversation — the app walks the family through the others afterward — so',
+    'once the count is known, focus entirely on the FIRST student and do not ask about siblings again.',
+    'Then gather, a couple of things at a time and reacting naturally to answers: the student’s name,',
     'graduation year (or current grade), intended major(s), career goal, current GPA (and weighted vs',
     'unweighted), city & state, a few interests/activities, and a rough family college budget. It is fine',
     'if they don’t know something — skip it gracefully and move on. Keep each message brief.',
@@ -68,8 +75,9 @@ function buildSystem(now: Date): string {
     'more details), wrap up: warmly summarize what you heard in one or two sentences and set done=true.',
     '',
     'ALWAYS respond with ONLY a single JSON object — no prose outside it, no code fences:',
-    '{"reply": "<your next message to the family>", "profile": { <all fields gathered so far, CUMULATIVE> }, "done": <true once setup is complete>}',
-    'profile keys (include ONLY what you actually know): name (string), graduationYear (number),',
+    '{"reply": "<your next message to the family>", "profile": { <all fields gathered so far, CUMULATIVE> }, "done": <true once THIS student’s setup is complete>, "studentCount": <whole number, once the family tells you how many kids>}',
+    'Include studentCount as soon as you know it and keep including it on every later turn. Omit it only',
+    'until the family has answered. profile keys (include ONLY what you actually know): name (string), graduationYear (number),',
     'currentGPA (number), gpaType ("weighted"|"unweighted"), careerGoal (string), intendedMajors (string[]),',
     'location (string), highSchool (string), interests (string[]), budgetTotal (number, USD).',
   ].join(' ');
@@ -88,10 +96,14 @@ export function parseTurn(text: string): OnboardingTurn {
     if (start === -1 || end <= start) throw new Error('no json');
     const obj = JSON.parse(text.slice(start, end + 1)) as Partial<OnboardingTurn>;
     const reply = typeof obj.reply === 'string' ? obj.reply.trim() : '';
+    // studentCount is optional; accept only a sane integer (1–12), otherwise drop it.
+    const rawCount = typeof obj.studentCount === 'number' ? Math.floor(obj.studentCount) : NaN;
+    const studentCount = Number.isFinite(rawCount) && rawCount >= 1 && rawCount <= 12 ? rawCount : undefined;
     return {
       reply: reply || 'Tell me a little more.',
       profile: (obj.profile && typeof obj.profile === 'object' ? obj.profile : {}) as OnboardingProfile,
       done: obj.done === true,
+      ...(studentCount !== undefined ? { studentCount } : {}),
     };
   } catch {
     return { reply: text.trim() || 'Could you tell me a bit more?', profile: {}, done: false };
