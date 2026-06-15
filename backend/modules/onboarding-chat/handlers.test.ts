@@ -3,14 +3,14 @@ import type { HandlerContext } from '../../shared/api/index.js';
 import type { Requester } from '../../shared/auth/index.js';
 import { InMemoryTableClient, makeData, type Data } from '../../shared/data/index.js';
 import { makeHandlers, type OnboardingHandlers } from './handlers.js';
-import type { CollegeSeeder, OnboardingChatter } from './ai.js';
-import type { GoalSuggester } from '../goal-tracker/suggester.js';
+import type { OnboardingChatter } from './ai.js';
+import type { SeedDispatcher } from './seed.js';
 
 const grahem: Requester = { username: 'grahem', role: 'admin' };
 const kate: Requester = { username: 'kate', role: 'parent' };
 
 let data: Data;
-let hydrated: string[];
+let seedCalls: number;
 
 const ctx = (over: Partial<HandlerContext> = {}): HandlerContext => ({
   requester: grahem,
@@ -27,38 +27,19 @@ const stubChatter: OnboardingChatter = async () => ({
   done: false,
 });
 
-const stubSuggester: GoalSuggester = {
-  suggest: async () => [
-    { title: 'Shadow a nurse', category: 'clinical', milestones: ['Find a mentor', 'Log 10 hours'] },
-    { title: 'Start TEAS prep', category: 'test-prep' },
-  ],
+// Spy seed dispatcher — finish ENQUEUES seeding (it must not run inline on the request path). The
+// actual seeding logic is tested directly in seed.test.ts.
+const spySeed: SeedDispatcher = async () => {
+  seedCalls++;
 };
 
-const stubCollegeSeeder: CollegeSeeder = async () => [
-  { name: 'State University', state: 'CA' },
-  { name: 'Tech Institute' },
-];
-
-function makeOnboarding(
-  chatter: OnboardingChatter = stubChatter,
-  suggester: GoalSuggester = stubSuggester,
-  collegeSeeder: CollegeSeeder = stubCollegeSeeder,
-): OnboardingHandlers {
-  return makeHandlers({
-    getData: () => data,
-    chatter,
-    suggester,
-    collegeSeeder,
-    hydrateDispatch: async (collegeId: string) => {
-      hydrated.push(collegeId);
-    },
-    assetsDispatch: async () => {},
-  });
+function makeOnboarding(chatter: OnboardingChatter = stubChatter, seedDispatch: SeedDispatcher = spySeed): OnboardingHandlers {
+  return makeHandlers({ getData: () => data, chatter, seedDispatch });
 }
 
 beforeEach(() => {
   data = makeData(new InMemoryTableClient());
-  hydrated = [];
+  seedCalls = 0;
 });
 
 describe('POST /onboarding/chat', () => {
@@ -80,56 +61,48 @@ describe('POST /onboarding/chat', () => {
 });
 
 describe('POST /onboarding/finish', () => {
-  it('saves the profile (onboardingComplete + budget mapping), seeds goals, and seeds + hydrates colleges', async () => {
+  it('saves the profile (onboardingComplete + budget mapping + GPA coercion) and ENQUEUES seeding (202)', async () => {
     const res = await makeOnboarding().finish(
-      ctx({ body: { profile: { intendedMajors: ['Nursing'], careerGoal: 'ICU Nurse', currentGPA: 3.8, budgetTotal: 200000 } } }),
+      ctx({ body: { profile: { intendedMajors: ['Nursing'], careerGoal: 'ICU Nurse', currentGPA: '3.8', graduationYear: '2030', budgetTotal: 200000 } } }),
     );
-    expect(res.status).toBe(200);
+    // 202 = accepted; seeding runs in the background so the family isn't held on a spinner.
+    expect(res.status).toBe(202);
+    expect((res.body as { seeding: string }).seeding).toBe('queued');
 
     const profile = await data.studentProfile.get();
-    expect(profile).toMatchObject({ onboardingComplete: true, careerGoal: 'ICU Nurse', currentGPA: 3.8, updatedBy: 'grahem' });
+    expect(profile).toMatchObject({ onboardingComplete: true, careerGoal: 'ICU Nurse', updatedBy: 'grahem' });
+    expect(profile?.currentGPA).toBe(3.8); // coerced from string
+    expect(profile?.graduationYear).toBe(2030); // coerced from string
     expect(profile?.intendedMajors).toEqual(['Nursing']);
     expect(profile?.budget).toEqual({ total: 200000, currency: 'USD' });
 
-    const goals = await data.goals.list();
-    expect(goals.length).toBe(2);
-    expect(goals.some((g) => g.title === 'Shadow a nurse')).toBe(true);
-
-    const colleges = await data.colleges.list();
-    expect(colleges.map((c) => c.name).sort()).toEqual(['State University', 'Tech Institute']);
-    expect(colleges.every((c) => c.addedBy === 'ai-discovered' && c.hydrationStatus === 'in-progress')).toBe(true);
-
-    const body = res.body as { goalsCreated: number; collegesCreated: number };
-    expect(body.goalsCreated).toBe(2);
-    expect(body.collegesCreated).toBe(2);
-    expect(hydrated).toHaveLength(2); // hydration dispatched for each seeded college
-
-    // Budget reaches the canonical (dashboard/FinAid) budget, not just the profile note.
-    expect((await data.budget.get())?.totalBudget).toBe(200000);
+    // Seeding is dispatched, NOT run inline (the whole point — it must stay off the request path).
+    expect(seedCalls).toBe(1);
+    expect(await data.goals.list()).toEqual([]); // nothing seeded synchronously
   });
 
-  it('does not duplicate a college that already exists', async () => {
-    await data.colleges.create({ name: 'State University', status: 'researching' } as Parameters<Data['colleges']['create']>[0]);
-    await makeOnboarding().finish(ctx({ body: { profile: { intendedMajors: ['Nursing'] } } }));
-    const names = (await data.colleges.list()).map((c) => c.name.toLowerCase());
-    expect(names.filter((n) => n === 'state university')).toHaveLength(1);
-  });
-
-  it('coerces a stringified GPA from the model JSON', async () => {
-    await makeOnboarding().finish(ctx({ body: { profile: { currentGPA: '4.0', graduationYear: '2030' } } }));
-    const profile = await data.studentProfile.get();
-    expect(profile?.currentGPA).toBe(4.0);
-    expect(profile?.graduationYear).toBe(2030);
+  it('still returns 202 (profile saved) even if the seed dispatch fails', async () => {
+    const angryDispatch: SeedDispatcher = async () => {
+      throw new Error('queue down');
+    };
+    const res = await makeOnboarding(stubChatter, angryDispatch).finish(
+      ctx({ body: { profile: { intendedMajors: ['Biology'] } } }),
+    );
+    expect(res.status).toBe(202);
+    expect((await data.studentProfile.get())?.onboardingComplete).toBe(true);
   });
 
   it('reset (admin) clears setup but PRESERVES factual data; non-admin is forbidden', async () => {
-    await makeOnboarding().finish(
-      ctx({ body: { profile: { intendedMajors: ['Nursing'], careerGoal: 'ICU Nurse', currentGPA: 3.9 } } }),
-    );
-    // A manually-added college (real research) must survive the reset.
+    // Set up a completed, seeded state directly (seeding itself is covered in seed.test.ts).
+    await data.studentProfile.put({
+      onboardingComplete: true,
+      intendedMajors: ['Nursing'],
+      careerGoal: 'ICU Nurse',
+      currentGPA: 3.9,
+    } as Parameters<Data['studentProfile']['put']>[0]);
+    await data.goals.create({ title: 'Shadow a nurse', category: 'clinical' } as Parameters<Data['goals']['create']>[0]);
+    await data.colleges.create({ name: 'AI Pick', status: 'researching', addedBy: 'ai-discovered' } as Parameters<Data['colleges']['create']>[0]);
     await data.colleges.create({ name: 'My Dream U', status: 'researching', addedBy: 'manual' } as Parameters<Data['colleges']['create']>[0]);
-    expect((await data.studentProfile.get())?.onboardingComplete).toBe(true);
-    expect((await data.goals.list()).length).toBeGreaterThan(0);
 
     await expect(makeOnboarding().reset(ctx({ requester: kate }))).rejects.toMatchObject({ status: 403 });
 
@@ -141,25 +114,6 @@ describe('POST /onboarding/finish', () => {
     expect(profile?.currentGPA).toBe(3.9); // factual: PRESERVED
     expect(profile?.careerGoal).toBe('ICU Nurse'); // PRESERVED
     expect(await data.goals.list()).toEqual([]); // path regenerated
-    const colleges = await data.colleges.list();
-    expect(colleges.map((c) => c.name)).toEqual(['My Dream U']); // only the manual one survives
-  });
-
-  it('still finishes (profile saved) even if seeding throws', async () => {
-    const angry: GoalSuggester = {
-      suggest: async () => {
-        throw new Error('suggester down');
-      },
-    };
-    const angryCollegeSeeder: CollegeSeeder = async () => {
-      throw new Error('seeder down');
-    };
-    const res = await makeOnboarding(stubChatter, angry, angryCollegeSeeder).finish(
-      ctx({ body: { profile: { intendedMajors: ['Biology'] } } }),
-    );
-    expect(res.status).toBe(200);
-    expect((await data.studentProfile.get())?.onboardingComplete).toBe(true);
-    expect((res.body as { goalsCreated: number; collegesCreated: number }).goalsCreated).toBe(0);
-    expect((res.body as { collegesCreated: number }).collegesCreated).toBe(0);
+    expect((await data.colleges.list()).map((c) => c.name)).toEqual(['My Dream U']); // only manual survives
   });
 });

@@ -202,6 +202,12 @@ export class AsyncStack extends Stack {
     table.grantReadWriteData(assetsWorker);
     assetsBucket.grantPut(assetsWorker);
 
+    // The hydration worker also seeds a newly-onboarded student's starter colleges (the backgrounded
+    // `onboarding-seed` job), which dispatches per-college imagery to the assets queue — so it needs
+    // the assets queue URL + send permission, like the API Lambda has.
+    worker.addEnvironment("ASSETS_QUEUE_URL", this.assetsQueue.queueUrl);
+    this.assetsQueue.grantSendMessages(worker);
+
     putOutput(this, config, "assetsQueueUrl", this.assetsQueue.queueUrl, "Assets SQS URL");
     putOutput(this, config, "assetsQueueArn", this.assetsQueue.queueArn, "Assets SQS ARN");
     putOutput(this, config, "assetsDlqUrl", this.assetsDeadLetterQueue.queueUrl, "Assets DLQ URL");

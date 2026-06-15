@@ -6,6 +6,7 @@ import type { HydrationRegistration } from '../hydration.js';
 import { hydration as collegeAssetsHydration } from '../../modules/college-assets/hydration.manifest.js';
 import { hydration as collegeHubHydration } from '../../modules/college-hub/hydration.manifest.js';
 import { hydration as focusHydration } from '../../modules/focus/hydration.manifest.js';
+import { hydration as onboardingChatHydration } from '../../modules/onboarding-chat/hydration.manifest.js';
 import { hydration as opportunitiesHydration } from '../../modules/opportunities/hydration.manifest.js';
 import { hydration as scholarshipTrackerHydration } from '../../modules/scholarship-tracker/hydration.manifest.js';
 
@@ -13,6 +14,7 @@ export const hydrationRegistrations: HydrationRegistration[] = [
   collegeAssetsHydration,
   collegeHubHydration,
   focusHydration,
+  onboardingChatHydration,
   opportunitiesHydration,
   scholarshipTrackerHydration,
 ];

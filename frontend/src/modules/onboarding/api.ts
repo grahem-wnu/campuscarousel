@@ -74,11 +74,12 @@ export function onboardingChat(messages: ChatMsg[]): Promise<OnboardingTurn> {
 
 export interface FinishResult {
   profile: StudentProfile;
-  goalsCreated: number;
-  collegesCreated: number;
+  /** Seeding (starter goals + colleges + budget) runs in the background; this is its status. */
+  seeding?: string;
 }
 
-/** Save the gathered profile (marks onboarding complete) and seed starter goals + college discovery. */
+/** Save the gathered profile (marks onboarding complete). Seeding is enqueued server-side and fills in
+ *  on the dashboard shortly after — finish returns fast (202) so the family isn't held on a spinner. */
 export function finishOnboarding(profile: OnboardingProfile): Promise<FinishResult> {
   return api.post<FinishResult>('/onboarding/finish', { profile });
 }

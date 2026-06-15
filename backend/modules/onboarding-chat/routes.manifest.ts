@@ -9,16 +9,23 @@ import { makeSqsEnqueuer } from '../college-hub/enqueue.js';
 import { makeAssetsEnqueuer } from '../college-hub/assets-enqueue.js';
 import { makeBedrockCollegeSeeder, makeBedrockOnboardingChatter } from './ai.js';
 import { makeHandlers } from './handlers.js';
+import { makeSqsSeedEnqueuer, type SeedDeps } from './seed.js';
 
 let cached: Data | undefined;
 const getData = (): Data => (cached ??= dataFromEnv());
-const handlers = makeHandlers({
+// Seeding building blocks (goal suggester + college discovery/assets), reused by the seed job.
+const seedDeps: SeedDeps = {
   getData,
-  chatter: makeBedrockOnboardingChatter(),
   suggester: bedrockSuggester,
   collegeSeeder: makeBedrockCollegeSeeder(),
   hydrateDispatch: makeSqsEnqueuer(getData),
   assetsDispatch: makeAssetsEnqueuer(getData),
+};
+const handlers = makeHandlers({
+  getData,
+  chatter: makeBedrockOnboardingChatter(),
+  // finish enqueues this (or runs inline if no queue) so seeding never blocks the response.
+  seedDispatch: makeSqsSeedEnqueuer(seedDeps),
 });
 
 export const routes: RouteDef[] = [
