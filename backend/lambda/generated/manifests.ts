@@ -30,6 +30,7 @@ import { routes as peerBenchmarkRoutes } from '../../modules/peer-benchmark/rout
 import { routes as profileRoutes } from '../../modules/profile/routes.manifest.js';
 import { routes as remindersRoutes } from '../../modules/reminders/routes.manifest.js';
 import { routes as scholarshipTrackerRoutes } from '../../modules/scholarship-tracker/routes.manifest.js';
+import { routes as setupRoutes } from '../../modules/setup/routes.manifest.js';
 import { routes as studentsRoutes } from '../../modules/students/routes.manifest.js';
 
 export const manifests: RouteManifest[] = [
@@ -59,5 +60,6 @@ export const manifests: RouteManifest[] = [
   { routes: profileRoutes },
   { routes: remindersRoutes },
   { routes: scholarshipTrackerRoutes },
+  { routes: setupRoutes },
   { routes: studentsRoutes },
 ];

@@ -22,6 +22,7 @@ import type {
   FamilyMember,
   Profile,
   ReminderSettings,
+  SetupState,
   Student,
   StudentProfile,
   Tenant,
@@ -401,6 +402,39 @@ export function makeReminderSettings(client: TableClient): ReminderSettingsRepo 
       if (!existing) throw new NotFoundError('REMINDER_SETTINGS', 'singleton');
       const current = toDomain<ReminderSettings>(existing);
       return write({ ...current, ...patch, createdAt: current.createdAt, updatedAt: isoNow() });
+    },
+  };
+}
+
+// Setup state: family-level singleton (PK=SETUP) — FTUE progress for the onboarding loop.
+// Unlike the other singletons, `update` UPSERTS (no throw when absent): the loop may persist
+// `setupComplete` before any `put` has run.
+export interface SetupStateRepo {
+  get(): Promise<SetupState | null>;
+  put(input: Omit<SetupState, 'createdAt' | 'updatedAt'>): Promise<SetupState>;
+  update(patch: Partial<Omit<SetupState, 'createdAt' | 'updatedAt'>>): Promise<SetupState>;
+}
+
+export function makeSetupState(client: TableClient): SetupStateRepo {
+  const write = async (domain: SetupState): Promise<SetupState> => {
+    await client.put({ ...(domain as unknown as Record<string, unknown>), PK: 'SETUP', SK: SK_DETAILS });
+    return domain;
+  };
+  return {
+    async get() {
+      const item = await client.get('SETUP', SK_DETAILS);
+      return item ? toDomain<SetupState>(item) : null;
+    },
+    async put(input) {
+      const existing = await client.get('SETUP', SK_DETAILS);
+      const now = isoNow();
+      return write({ ...input, createdAt: (existing?.createdAt as string | undefined) ?? now, updatedAt: now });
+    },
+    async update(patch) {
+      const existing = await client.get('SETUP', SK_DETAILS);
+      const now = isoNow();
+      const current = existing ? toDomain<SetupState>(existing) : ({ createdAt: now } as SetupState);
+      return write({ ...current, ...patch, createdAt: current.createdAt ?? now, updatedAt: now });
     },
   };
 }
