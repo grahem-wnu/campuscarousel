@@ -93,6 +93,29 @@ describe('OnboardingFlow loop', () => {
     expect(h.order.indexOf('setActive:s1')).toBeLessThan(h.order.indexOf('finish'));
   });
 
+  it('dispatches start-tour when the loop completes (new family)', async () => {
+    const user = userEvent.setup();
+    h.post.mockResolvedValueOnce({ studentId: 's1' });
+    const onTour = vi.fn();
+    window.addEventListener('start-tour', onTour);
+    render(<OnboardingFlow onClose={vi.fn()} onAllComplete={vi.fn()} onUseForm={vi.fn()} />);
+    await user.click(screen.getByText('finish')); // total defaults to 1 → completes immediately
+    await waitFor(() => expect(onTour).toHaveBeenCalled());
+    window.removeEventListener('start-tour', onTour);
+  });
+
+  it('does NOT create a student or launch the tour when createStudents is false (in-place)', async () => {
+    const user = userEvent.setup();
+    const onTour = vi.fn();
+    window.addEventListener('start-tour', onTour);
+    render(<OnboardingFlow createStudents={false} onClose={vi.fn()} onAllComplete={vi.fn()} onUseForm={vi.fn()} />);
+    await user.click(screen.getByText('finish'));
+    await waitFor(() => expect(h.finishOnboarding).toHaveBeenCalled());
+    expect(h.post).not.toHaveBeenCalled();
+    expect(onTour).not.toHaveBeenCalled();
+    window.removeEventListener('start-tour', onTour);
+  });
+
   it('resumes mid-loop: starting on child 2 of 2 finishes in one pass', async () => {
     const user = userEvent.setup();
     h.post.mockResolvedValueOnce({ studentId: 's2' });

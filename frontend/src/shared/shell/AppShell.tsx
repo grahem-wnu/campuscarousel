@@ -211,6 +211,9 @@ export function AppShell({ nav }: { nav: AssembledNav }) {
 
       {/* First-run onboarding (filled by the onboarding slot; renders itself only when incomplete) */}
       <SlotOutlet name="onboarding" placeholder={null} />
+
+      {/* Post-onboarding guided tour (filled by the tour slot; listens for the `start-tour` event) */}
+      <SlotOutlet name="tour" placeholder={null} />
     </div>
   );
 }
@@ -219,6 +222,7 @@ function TopTab({ entry }: { entry: NavEntry }) {
   return (
     <NavLink
       to={entry.route}
+      data-tour={entry.route}
       className={({ isActive }) =>
         cn(
           "flex shrink-0 items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium transition-colors",
@@ -236,6 +240,7 @@ function BottomTab({ entry }: { entry: NavEntry }) {
   return (
     <NavLink
       to={entry.route}
+      data-tour={entry.route}
       className={({ isActive }) =>
         cn(
           "flex flex-1 flex-col items-center justify-center gap-0.5 text-xs",
@@ -253,6 +258,7 @@ function DrawerLink({ entry, onNavigate }: { entry: NavEntry; onNavigate: () => 
   return (
     <NavLink
       to={entry.route}
+      data-tour={entry.route}
       onClick={onNavigate}
       className={({ isActive }) =>
         cn(
@@ -353,6 +359,7 @@ function StudentSwitcher() {
     <div className="relative">
       <button
         type="button"
+        data-tour="switcher"
         onClick={() => setOpen((v) => !v)}
         className="flex items-center gap-1.5 rounded-full border border-surface-border bg-surface-raised py-1 pl-1 pr-2 text-sm font-medium text-ink-700 hover:bg-ink-100"
         aria-label={`Viewing ${activeStudent?.name ?? "—"}. Tap to switch student.`}
