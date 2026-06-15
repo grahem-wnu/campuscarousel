@@ -61,6 +61,9 @@ export interface OnboardingTurn {
   reply: string;
   profile: OnboardingProfile;
   done: boolean;
+  /** How many students the family said they're setting up (present once the chat asks + they answer).
+   *  Sizes the multi-child onboarding loop. */
+  studentCount?: number;
 }
 
 /** One conversational turn: send the full (short) transcript, get the guide's next message + the
@@ -84,4 +87,21 @@ export function finishOnboarding(profile: OnboardingProfile): Promise<FinishResu
  *  onboarding — factual data (GPA, courses, journal) is kept. */
 export function resetStudent(): Promise<{ ok: boolean; goalsRemoved: number; collegesRemoved: number }> {
   return api.post<{ ok: boolean; goalsRemoved: number; collegesRemoved: number }>('/onboarding/reset', {});
+}
+
+// --- Family-level setup state (FTUE loop progress) ----------------------------------------------
+
+/** Family-level FTUE progress: how many kids the family said they'd set up, and whether the loop
+ *  finished. Drives the resume nudge. `{}` before anything is saved. */
+export interface SetupState {
+  declaredStudentCount?: number;
+  setupComplete?: boolean;
+}
+
+export function getSetup(): Promise<SetupState> {
+  return api.get<SetupState>('/setup');
+}
+
+export function putSetup(patch: SetupState): Promise<SetupState> {
+  return api.put<SetupState>('/setup', patch);
 }

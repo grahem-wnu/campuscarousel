@@ -741,6 +741,17 @@ export interface ReminderSettings extends Timestamped {
 }
 
 // ---------------------------------------------------------------------------
+// Setup state (PK: SETUP, SK: DETAILS) — family-level singleton.
+// FTUE progress for the multi-student onboarding loop: how many kids the family said they'd set up,
+// and whether the loop has fully completed. Drives the resume nudge after an abandon.
+// ---------------------------------------------------------------------------
+export interface SetupState extends Timestamped {
+  declaredStudentCount?: number;
+  setupComplete?: boolean;
+  updatedBy?: string;
+}
+
+// ---------------------------------------------------------------------------
 // Document (PK: DOCUMENT#<documentId>, SK: DETAILS; collection GSI1PK=DOCUMENTS) — v2.1 F2.
 // Metadata for a file stored in the private documents S3 bucket; bytes are never in DynamoDB.
 // Visibility follows the family/private model (private = Keira only; AI sees all when she's caller).

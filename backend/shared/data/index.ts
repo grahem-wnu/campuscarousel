@@ -23,6 +23,7 @@ import {
   makeMembers,
   makeProfiles,
   makeReminderSettings,
+  makeSetupState,
   makeStudentProfile,
   makeStudents,
   makeTenants,
@@ -274,6 +275,7 @@ export function makeData(
     // FAMILY-LEVEL repos — tenant-scoped but NOT per-child (shared across the family's kids).
     profiles: makeProfiles(familyClient),
     reminderSettings: makeReminderSettings(familyClient),
+    setupState: makeSetupState(familyClient),
     students: makeStudents(familyClient),
     members: makeMembers(familyClient),
     // GLOBAL registries — built on the un-scoped base client (never tenant-prefixed).

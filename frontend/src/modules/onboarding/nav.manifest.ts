@@ -4,5 +4,6 @@
 import { registerSlot, type NavEntry } from '../../shared/shell';
 
 registerSlot('onboarding', () => import('./OnboardingGate'));
+registerSlot('tour', () => import('./GuidedTour'));
 
 export const nav: NavEntry[] = [];

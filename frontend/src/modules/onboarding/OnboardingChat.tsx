@@ -1,18 +1,38 @@
-// Conversational onboarding (the FTUE). A short chat interviews the family and extracts the student
-// profile as it goes; when it has enough it hands to a pre-filled REVIEW step so the family can correct
-// anything (a misheard name, the grad year) before it saves. On finish the backend seeds the profile +
-// starter goals + college discovery, then we hand off to the dashboard. "Prefer a quick form?" falls
-// back to the legacy wizard.
+// Conversational onboarding for ONE child (the FTUE). A short chat interviews the family and extracts
+// that child's profile as it goes; when it has enough it hands to a pre-filled REVIEW step so the
+// family can correct anything (a misheard name, the grad year) before it saves. This component is
+// "dumb": it does NOT persist anything itself — it hands the reviewed profile to an injected `onFinish`
+// (the OnboardingFlow loop owns student creation, seeding, advancing, and the dashboard hand-off).
+// "Prefer a quick form?" falls back to the legacy wizard.
 
 import { useEffect, useRef, useState } from 'react';
 import { Button, Field, Input, Select, Spinner } from '../../shared/ui';
-import { finishOnboarding, onboardingChat, type ChatMsg, type OnboardingProfile } from './api';
+import { onboardingChat, type ChatMsg, type OnboardingProfile } from './api';
 
-const GREETING =
-  "Hi! I'll help set up the plan — it only takes a minute. To start: what grade is the student in (or their graduation year), and what subjects, majors, or careers are they drawn to?";
+const GREETING_FIRST =
+  "Hi! I'll help set up the plan — it only takes a minute. First: how many students (kids) are you setting up today?";
+const GREETING_NEXT =
+  "Great — now let's set up your next child. What grade are they in (or their graduation year), and what subjects, majors, or careers are they drawn to?";
 
-export default function OnboardingChat({ onComplete, onUseForm }: { onComplete: () => void; onUseForm: () => void }) {
-  const [messages, setMessages] = useState<ChatMsg[]>([{ role: 'assistant', content: GREETING }]);
+export default function OnboardingChat({
+  onFinish,
+  onUseForm,
+  onStudentCount,
+  childIndex = 0,
+  finishLabel,
+}: {
+  /** Persist the reviewed profile for THIS child + advance the loop. Throws to surface a failure. */
+  onFinish: (p: OnboardingProfile) => Promise<void>;
+  onUseForm: () => void;
+  /** Called the turn the chat learns how many kids the family is setting up. */
+  onStudentCount?: (n: number) => void;
+  /** 0-based position in the loop; >0 uses the "next child" greeting. */
+  childIndex?: number;
+  /** Label for the finish button (the loop varies it: "next child" vs "open the dashboard"). */
+  finishLabel?: string;
+}) {
+  const greeting = childIndex > 0 ? GREETING_NEXT : GREETING_FIRST;
+  const [messages, setMessages] = useState<ChatMsg[]>([{ role: 'assistant', content: greeting }]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [profile, setProfile] = useState<OnboardingProfile>({});
@@ -39,6 +59,7 @@ export default function OnboardingChat({ onComplete, onUseForm }: { onComplete: 
       // MERGE cumulatively — the model sometimes drops earlier fields on later turns; keep what we had.
       setProfile((prev) => ({ ...prev, ...turn.profile }));
       setDone(turn.done);
+      if (turn.studentCount != null) onStudentCount?.(turn.studentCount);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Something went wrong — try again.');
     } finally {
@@ -46,12 +67,13 @@ export default function OnboardingChat({ onComplete, onUseForm }: { onComplete: 
     }
   }
 
+  // Hand the reviewed profile to the loop. On success the loop advances/remounts us; on failure we
+  // surface the error and let the family retry (don't clear finishing on success — we're moving on).
   async function finish(edited: OnboardingProfile) {
     setFinishing(true);
     setError(null);
     try {
-      await finishOnboarding(edited);
-      onComplete();
+      await onFinish(edited);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not finish setup.');
       setFinishing(false);
@@ -63,7 +85,7 @@ export default function OnboardingChat({ onComplete, onUseForm }: { onComplete: 
     return (
       <div className="flex max-h-[70vh] flex-col overflow-y-auto">
         {error ? <p className="px-1 pb-2 text-xs text-error-600">{error}</p> : null}
-        <ReviewForm initial={profile} finishing={finishing} onFinish={(p) => void finish(p)} />
+        <ReviewForm initial={profile} finishing={finishing} finishLabel={finishLabel} onFinish={(p) => void finish(p)} />
       </div>
     );
   }
@@ -133,10 +155,12 @@ export default function OnboardingChat({ onComplete, onUseForm }: { onComplete: 
 function ReviewForm({
   initial,
   finishing,
+  finishLabel,
   onFinish,
 }: {
   initial: OnboardingProfile;
   finishing: boolean;
+  finishLabel?: string;
   onFinish: (p: OnboardingProfile) => void;
 }) {
   const [name, setName] = useState(initial.name ?? '');
@@ -194,7 +218,7 @@ function ReviewForm({
         </Field>
       </div>
       <Button className="mt-4 w-full" loading={finishing} onClick={submit}>
-        Finish &amp; open the dashboard
+        {finishLabel ?? 'Finish & open the dashboard'}
       </Button>
     </div>
   );

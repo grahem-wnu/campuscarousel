@@ -302,6 +302,17 @@ describe('singletons', () => {
     expect(u.totalBudget).toBe(200000);
   });
 
+  it('setupState put/get + update upserts when absent', async () => {
+    expect(await data.setupState.get()).toBeNull();
+    // update before any put must NOT throw (unlike budget/reminderSettings) — it upserts.
+    const created = await data.setupState.update({ setupComplete: true });
+    expect(created.setupComplete).toBe(true);
+    const saved = await data.setupState.put({ declaredStudentCount: 2 });
+    expect(saved.declaredStudentCount).toBe(2);
+    const merged = await data.setupState.update({ setupComplete: true });
+    expect(merged).toMatchObject({ declaredStudentCount: 2, setupComplete: true });
+  });
+
   it('profiles are per-user', async () => {
     await data.profiles.put({ userId: 'keira', name: 'Keira', role: 'student' });
     await data.profiles.put({ userId: 'kate', name: 'Kate', role: 'parent' });
