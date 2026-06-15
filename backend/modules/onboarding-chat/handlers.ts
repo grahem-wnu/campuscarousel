@@ -1,18 +1,16 @@
 // Conversational onboarding handlers. Two endpoints:
 //   POST /onboarding/chat   — one model-only chat turn (interview + structured extraction).
-//   POST /onboarding/finish — persist the gathered profile (onboardingComplete), then SEED the student:
-//                             a few starter goals (model-only suggester) + an async college-discovery
-//                             job for the intended major. Seeding is best-effort: a failure there never
-//                             blocks finishing onboarding. Family-visible; identity from the JWT.
+//   POST /onboarding/finish — persist the gathered profile (onboardingComplete), then ENQUEUE the
+//                             student seeding (starter goals + college discovery + budget) so the
+//                             family lands on the dashboard/tour immediately instead of waiting on a
+//                             30-60s synchronous seed. The actual seeding runs on the async worker
+//                             (see seed.ts). Family-visible; identity from the JWT.
 
 import { Errors, validateBody, type Handler } from '../../shared/api/index.js';
 import type { Data, StudentProfile } from '../../shared/data/index.js';
-import type { GoalSuggester } from '../goal-tracker/suggester.js';
 import { chatSchema, finishSchema } from './schema.js';
-import { type CollegeSeeder, type OnboardingChatter, type OnboardingProfile } from './ai.js';
-
-/** A college job dispatcher (hydration or assets) — `(collegeId) => Promise<void>`. */
-type CollegeJobDispatcher = (collegeId: string) => Promise<void>;
+import { type OnboardingChatter, type OnboardingProfile } from './ai.js';
+import type { SeedDispatcher } from './seed.js';
 
 export interface OnboardingHandlers {
   chat: Handler;
@@ -23,13 +21,8 @@ export interface OnboardingHandlers {
 export interface OnboardingDeps {
   getData: () => Data;
   chatter: OnboardingChatter;
-  suggester: GoalSuggester;
-  /** Names a few starter colleges for the major (model-only). */
-  collegeSeeder: CollegeSeeder;
-  /** Kick off text hydration for a newly-seeded college. */
-  hydrateDispatch: CollegeJobDispatcher;
-  /** Kick off imagery/assets for a newly-seeded college. */
-  assetsDispatch: CollegeJobDispatcher;
+  /** Enqueue (or inline-run) the post-onboarding seeding job. */
+  seedDispatch: SeedDispatcher;
 }
 
 /** Map the chat's gathered profile onto a StudentProfile patch (budgetTotal → budget object). */
@@ -49,7 +42,7 @@ function toProfilePatch(p: OnboardingProfile): Partial<StudentProfile> {
 }
 
 export function makeHandlers(deps: OnboardingDeps): OnboardingHandlers {
-  const { getData, chatter, suggester, collegeSeeder, hydrateDispatch, assetsDispatch } = deps;
+  const { getData, chatter, seedDispatch } = deps;
 
   return {
     // POST /onboarding/chat — one conversational turn. Never 500s on a model hiccup; the chat keeps
@@ -64,7 +57,10 @@ export function makeHandlers(deps: OnboardingDeps): OnboardingHandlers {
       }
     },
 
-    // POST /onboarding/finish — save the profile and seed the student.
+    // POST /onboarding/finish — save the profile, then ENQUEUE the (slow) seeding and return at once.
+    // The seed (2 AI calls + ~12 colleges + their hydrate/asset dispatches) ran ~30-60s inline and
+    // blew past the 30s request budget; backgrounding it lets the family hit the dashboard + tour
+    // immediately while goals/colleges fill in. 202 = accepted, seeding in progress.
     finish: async (ctx) => {
       const { profile } = validateBody(finishSchema, ctx);
       const data = getData();
@@ -74,78 +70,13 @@ export function makeHandlers(deps: OnboardingDeps): OnboardingHandlers {
         ...toProfilePatch(profile),
         updatedBy: ctx.requester.username,
       });
-      const majors = saved.intendedMajors ?? [];
-
-      // Seed starter goals (best-effort, model-only).
-      let goalsCreated = 0;
+      // Best-effort dispatch — a queue hiccup must not fail finishing onboarding.
       try {
-        const suggestions = await suggester.suggest(
-          {
-            careerGoal: saved.careerGoal,
-            gradeLevel: saved.graduationYear ? `Class of ${saved.graduationYear}` : undefined,
-            count: 3,
-          },
-          majors,
-        );
-        for (const s of suggestions.slice(0, 3)) {
-          await data.goals.create({
-            title: s.title,
-            description: s.description,
-            category: s.category,
-            period: s.period,
-            milestones: (s.milestones ?? []).map((label, i) => ({ id: `ms-${i}`, label, completed: false })),
-            createdBy: ctx.requester.username,
-          } as Parameters<Data['goals']['create']>[0]);
-          goalsCreated++;
-        }
+        await seedDispatch();
       } catch {
-        /* seeding is non-fatal — the family can add goals later */
+        /* the family can seed via College Finder / Goal Tracker if this never runs */
       }
-
-      // Seed a few real starter colleges for the major and hydrate them, so the dashboard + Colleges
-      // page aren't empty on arrival (best-effort). Names come model-only; the async hydration pipeline
-      // fills in tuition/deadlines/etc. Skips any name already in the list (idempotent across re-runs).
-      let collegesCreated = 0;
-      try {
-        const suggestions = await collegeSeeder(majors, saved.location ?? undefined);
-        const existing = await data.colleges.list();
-        const seen = new Set(existing.map((c) => c.name.trim().toLowerCase()));
-        for (const s of suggestions.slice(0, 12)) {
-          if (seen.has(s.name.trim().toLowerCase())) continue;
-          seen.add(s.name.trim().toLowerCase());
-          const created = await data.colleges.create({
-            name: s.name,
-            state: s.state,
-            status: 'researching',
-            addedBy: 'ai-discovered',
-            userEdited: [],
-            hydrationStatus: 'in-progress',
-            assetsStatus: 'in-progress',
-          } as Parameters<Data['colleges']['create']>[0]);
-          await hydrateDispatch(created.collegeId);
-          await assetsDispatch(created.collegeId);
-          collegesCreated++;
-        }
-      } catch {
-        /* college seeding is non-fatal — the family can run the College Finder later */
-      }
-
-      // Seed the canonical budget so it shows on the dashboard + FinAid (profile.budget alone doesn't
-      // reach them). Best-effort; update if a budget already exists, else create.
-      if (saved.budget?.total != null) {
-        try {
-          const existingBudget = await data.budget.get();
-          if (existingBudget) {
-            await data.budget.update({ totalBudget: saved.budget.total });
-          } else {
-            await data.budget.put({ totalBudget: saved.budget.total } as Parameters<Data['budget']['put']>[0]);
-          }
-        } catch {
-          /* non-fatal — the family can set the budget on the FinAid page */
-        }
-      }
-
-      return { status: 200, body: { profile: saved, goalsCreated, collegesCreated } };
+      return { status: 202, body: { profile: saved, seeding: 'queued' } };
     },
 
     // POST /onboarding/reset — TESTING aid (admin only): reset the ACTIVE student's SETUP so onboarding
