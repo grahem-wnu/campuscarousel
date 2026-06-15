@@ -75,6 +75,7 @@ for (const stage of stages) {
     userPoolClient: auth.userPoolClient,
     hydrationQueue: asyncStack.hydrationQueue,
     assetsQueue: asyncStack.assetsQueue,
+    focusQueue: asyncStack.focusQueue,
   });
 
   // --- Web (private S3 + CloudFront OAC) ---

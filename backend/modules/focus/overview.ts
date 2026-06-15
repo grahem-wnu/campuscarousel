@@ -83,7 +83,10 @@ export function makeSqsOverviewEnqueuer(
 ): OverviewDispatcher {
   const fallback = options.fallback ?? (() => runOverviewJob(getData, undefined));
   return async () => {
-    const queueUrl = options.queueUrl ?? process.env.HYDRATION_QUEUE_URL;
+    // Interactive lane: prefer the dedicated focus queue so a user-initiated "Generate" never queues
+    // behind bulk college hydration. Falls back to the shared hydration queue (and then inline) so
+    // local/dev/tests and any env without FOCUS_QUEUE_URL set still work.
+    const queueUrl = options.queueUrl ?? process.env.FOCUS_QUEUE_URL ?? process.env.HYDRATION_QUEUE_URL;
     if (!queueUrl) return fallback();
     try {
       const { SQSClient, SendMessageCommand } = await import('@aws-sdk/client-sqs');

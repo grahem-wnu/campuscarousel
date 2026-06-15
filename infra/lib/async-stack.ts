@@ -41,6 +41,11 @@ export class AsyncStack extends Stack {
   public readonly assetsQueue: Queue;
   public readonly assetsDeadLetterQueue: Queue;
   public readonly assetsWorkerFunctionName: string;
+  /** Interactive lane: user-initiated focus overview / career-path jobs run here so they never queue
+   *  behind bulk college hydration. The API Lambda sends to this queue via FOCUS_QUEUE_URL. */
+  public readonly focusQueue: Queue;
+  public readonly focusDeadLetterQueue: Queue;
+  public readonly focusWorkerFunctionName: string;
 
   constructor(scope: Construct, id: string, props: AsyncStackProps) {
     super(scope, id, props);
@@ -73,8 +78,10 @@ export class AsyncStack extends Stack {
       memorySize: 512,
       // Cap concurrent workers so an SQS burst can't fan out to hundreds of simultaneous
       // ~140s Bedrock calls (throttling + runaway cost). batchSize:1 limits per-invocation,
-      // NOT concurrency — this is the real throttle/cost guard.
-      reservedConcurrentExecutions: 3,
+      // NOT concurrency — this is the real throttle/cost guard. 10 lanes so a bulk FTUE seed wave
+      // (~12 college-hydrate jobs) drains in ~2 min instead of ~8; total spend is per-token, so more
+      // lanes only changes speed, not cost. Interactive focus jobs run on their own queue (below).
+      reservedConcurrentExecutions: 10,
       // Active tracing across the API -> SQS -> worker -> Bedrock chain for latency debugging.
       tracing: Tracing.ACTIVE,
       logRetention: RetentionDays.ONE_MONTH,
@@ -201,5 +208,64 @@ export class AsyncStack extends Stack {
 
     new CfnOutput(this, "AssetsQueueUrl", { value: this.assetsQueue.queueUrl });
     new CfnOutput(this, "AssetsDlqUrl", { value: this.assetsDeadLetterQueue.queueUrl });
+
+    // --- Interactive focus lane: priority queue + worker -----------------------------------------
+    // User-initiated focus overview / career-path jobs are web-grounded (~2 min) just like college
+    // hydration, but they are INTERACTIVE — a person is watching a spinner. A separate queue + worker
+    // (reusing the SAME bundle; the shared registry routes `focus-overview`/`kind:'career'`) keeps
+    // them off the bulk hydration lanes, so a "Generate" click runs immediately no matter how big the
+    // college-hydrate backlog is. Same Bedrock/SSM/Dynamo grants as the hydration worker.
+    this.focusDeadLetterQueue = new Queue(this, "FocusDlq", {
+      queueName: `${config.namePrefix}-focus-dlq`,
+      retentionPeriod: Duration.days(14),
+      enforceSSL: true,
+    });
+
+    this.focusQueue = new Queue(this, "FocusQueue", {
+      queueName: `${config.namePrefix}-focus`,
+      // >= 6x the worker timeout (300s), matching the hydration queue, so a slow/retried run isn't
+      // redelivered mid-processing.
+      visibilityTimeout: Duration.seconds(1800),
+      retentionPeriod: Duration.days(4),
+      enforceSSL: true,
+      deadLetterQueue: { queue: this.focusDeadLetterQueue, maxReceiveCount: 3 },
+    });
+
+    const focusWorker = new LambdaFunction(this, "FocusWorker", {
+      functionName: `${config.namePrefix}-focus-worker`,
+      runtime: Runtime.NODEJS_20_X,
+      handler: "index.handler",
+      code: Code.fromAsset(join(__dirname, "../../backend/dist/hydration")),
+      timeout: Duration.seconds(300),
+      memorySize: 512,
+      // Small dedicated lane for interactive jobs — low volume (one per user click), so a few lanes
+      // keep "Generate" responsive without competing with bulk hydration for Bedrock throughput.
+      reservedConcurrentExecutions: 3,
+      tracing: Tracing.ACTIVE,
+      logRetention: RetentionDays.ONE_MONTH,
+      environment: {
+        TABLE_NAME: table.tableName,
+        BEDROCK_MODEL_ID: config.bedrockSonnetProfile,
+        SSM_PREFIX: config.ssmPrefix,
+        AI_WEB_SEARCH: "true",
+        STAGE: config.stage,
+      },
+    });
+    this.focusWorkerFunctionName = focusWorker.functionName;
+
+    focusWorker.addEventSource(
+      new SqsEventSource(this.focusQueue, { batchSize: 1, reportBatchItemFailures: true }),
+    );
+
+    table.grantReadWriteData(focusWorker);
+    focusWorker.addToRolePolicy(bedrockInvokeStatement(this.account, config.bedrockSonnetProfile));
+    focusWorker.addToRolePolicy(ssmReadConfigStatement(this.region, this.account, config.ssmPrefix));
+
+    putOutput(this, config, "focusQueueUrl", this.focusQueue.queueUrl, "Focus (interactive) SQS URL");
+    putOutput(this, config, "focusQueueArn", this.focusQueue.queueArn, "Focus (interactive) SQS ARN");
+    putOutput(this, config, "focusDlqUrl", this.focusDeadLetterQueue.queueUrl, "Focus DLQ URL");
+
+    new CfnOutput(this, "FocusQueueUrl", { value: this.focusQueue.queueUrl });
+    new CfnOutput(this, "FocusDlqUrl", { value: this.focusDeadLetterQueue.queueUrl });
   }
 }

@@ -84,7 +84,9 @@ export function makeSqsCareerEnqueuer(
 ): CareerDispatcher {
   const fallback = options.fallback ?? (() => runCareerPathJob(getData, undefined));
   return async () => {
-    const queueUrl = options.queueUrl ?? process.env.HYDRATION_QUEUE_URL;
+    // Interactive lane: prefer the dedicated focus queue (see overview.ts) so career-path generation
+    // doesn't wait behind bulk college hydration. Falls back to the shared hydration queue, then inline.
+    const queueUrl = options.queueUrl ?? process.env.FOCUS_QUEUE_URL ?? process.env.HYDRATION_QUEUE_URL;
     if (!queueUrl) return fallback();
     try {
       const { SQSClient, SendMessageCommand } = await import('@aws-sdk/client-sqs');

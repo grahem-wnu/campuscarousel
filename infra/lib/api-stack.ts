@@ -24,6 +24,8 @@ export interface ApiStackProps extends StackProps {
   readonly userPoolClient: UserPoolClient;
   readonly hydrationQueue: Queue;
   readonly assetsQueue: Queue;
+  /** Interactive lane for user-initiated focus overview / career-path jobs (AsyncStack). */
+  readonly focusQueue: Queue;
 }
 
 /**
@@ -47,7 +49,7 @@ export class ApiStack extends Stack {
 
   constructor(scope: Construct, id: string, props: ApiStackProps) {
     super(scope, id, props);
-    const { config, table, documentsBucket, userPool, userPoolClient, hydrationQueue, assetsQueue } = props;
+    const { config, table, documentsBucket, userPool, userPoolClient, hydrationQueue, assetsQueue, focusQueue } = props;
 
     const routing = new LambdaFunction(this, "RoutingFn", {
       functionName: `${config.namePrefix}-api-routing`,
@@ -82,6 +84,9 @@ export class ApiStack extends Stack {
         REMINDER_SENDER_EMAIL: config.reminderSenderEmail,
         HYDRATION_QUEUE_URL: hydrationQueue.queueUrl,
         ASSETS_QUEUE_URL: assetsQueue.queueUrl,
+        // Interactive focus jobs go to their own queue so a "Generate" click never waits behind bulk
+        // college hydration. The focus dispatchers prefer this; they fall back to HYDRATION_QUEUE_URL.
+        FOCUS_QUEUE_URL: focusQueue.queueUrl,
         USER_POOL_ID: userPool.userPoolId,
         USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId,
         BEDROCK_MODEL_ID: config.bedrockSonnetProfile,
@@ -100,6 +105,7 @@ export class ApiStack extends Stack {
     documentsBucket.grantDelete(routing);
     hydrationQueue.grantSendMessages(routing);
     assetsQueue.grantSendMessages(routing);
+    focusQueue.grantSendMessages(routing);
     routing.addToRolePolicy(bedrockInvokeStatement(this.account, config.bedrockSonnetProfile));
     // Send reminder test emails + invite/family-member emails via SES (verified domain identity).
     routing.addToRolePolicy(sesSendStatement(this.region, this.account));
