@@ -59,6 +59,12 @@ at the API layer off the JWT identity. Never trust the client to filter.
 ## Git
 - **Branch off `dev`/`development`, never `main`/`master`. PRs target `dev`/`development`.**
   Never merge to `main`/`master` on your own initiative — only when Grahem explicitly says so.
+- **Standing authorization (granted 2026-06-16):** when a task is complete and verified
+  (typecheck + tests + lint green), you may commit, push, open a PR into `dev`, and merge it
+  **without asking each time**. A push to `dev` auto-deploys to staging via GitHub Actions —
+  that is the intended "deploy when done." Still announce what you shipped and link the PR.
+- This authorization stops at `dev`/staging. `main`/`master` and any prod deploy still require
+  Grahem's explicit say-so, every time.
 
 ## Verify before claiming done
 Run it; don't assume. Hit the real endpoint. For auth/privacy, prove a parent **cannot** read a

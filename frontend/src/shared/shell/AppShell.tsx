@@ -45,7 +45,11 @@ export function AppShell({ nav }: { nav: AssembledNav }) {
   const desktopOverflow = [...nav.primary.slice(DESKTOP_PRIMARY_MAX), ...nav.secondary];
 
   return (
-    <div className="flex min-h-full flex-col bg-surface-base">
+    // overflow-x-clip is a mobile safety net: it clips any stray horizontal overflow (long
+    // unbreakable URLs, wide AI tables) without creating a scroll container, so sticky header
+    // and body scroll both keep working. Real fixes wrap content (e.g. break-words in the focus
+    // Markdown); this just guarantees the page can never scroll sideways.
+    <div className="flex min-h-full flex-col overflow-x-clip bg-surface-base">
       {/* Top navigation */}
       <header className="sticky top-0 z-nav border-b border-surface-border bg-surface-raised/95 backdrop-blur">
         <div className="mx-auto flex h-nav-h max-w-6xl items-center gap-3 px-4">
