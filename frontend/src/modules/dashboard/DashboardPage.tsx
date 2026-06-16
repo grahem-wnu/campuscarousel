@@ -321,7 +321,7 @@ export default function DashboardPage() {
       ) : d.family ? (
         <Card className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <Link to="/finaid" className="rounded-lg p-1 transition hover:bg-surface-base"><p className="text-xs text-ink-500">Budget</p><p className="font-semibold text-ink-900">{money(d.family.budget.totalBudget)}</p></Link>
-          <Link to="/scholarships" className="rounded-lg p-1 transition hover:bg-surface-base"><p className="text-xs text-ink-500">Scholarships won</p><p className="font-semibold text-ink-900">{money(d.family.budget.awarded)}</p></Link>
+          <Link to="/finaid" className="rounded-lg p-1 transition hover:bg-surface-base"><p className="text-xs text-ink-500">Scholarships won</p><p className="font-semibold text-ink-900">{money(d.family.budget.awarded)}</p></Link>
           <Link to="/goals" className="rounded-lg p-1 transition hover:bg-surface-base"><p className="text-xs text-ink-500">Goals</p><p className="font-semibold text-ink-900">{d.family.goals.completed}/{d.family.goals.total} done{d.family.goals.avgProgress !== null ? ` · ${d.family.goals.avgProgress}%` : ''}</p></Link>
           <Link to="/benchmark" className="rounded-lg p-1 transition hover:bg-surface-base"><p className="text-xs text-ink-500">Readiness</p><Badge tone={READINESS_TONE[d.family.benchmarkReadiness.level] ?? 'neutral'}>{d.family.benchmarkReadiness.level}</Badge></Link>
         </Card>

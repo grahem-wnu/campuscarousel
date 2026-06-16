@@ -174,7 +174,6 @@ export default function TimelinePage() {
             <TimelineSource to="/colleges" icon="school" label="Add a college" hint="Application deadlines appear once it finishes refreshing." />
             <TimelineSource to="/exams" icon="teas" label="Add an exam date" hint="Official test dates land on the calendar." />
             <TimelineSource to="/visits" icon="calendar" label="Plan a campus visit" hint="Visit dates show here too." />
-            <TimelineSource to="/scholarships" icon="scholarship" label="Track a scholarship" hint="Its deadline joins the timeline." />
             <TimelineSource to="/finaid" icon="application" label="Add a financial-aid item" hint="FAFSA/CSS and aid deadlines." />
             <TimelineSource to="/goals" icon="goal" label="Set a goal" hint="Goals with a target date appear." />
           </div>

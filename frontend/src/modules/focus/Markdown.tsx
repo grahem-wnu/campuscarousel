@@ -52,7 +52,7 @@ function Table({ lines }: { lines: string[] }) {
 export function Markdown({ text }: { text: string }) {
   const blocks = text.replace(/\r\n/g, "\n").split(/\n{2,}/);
   return (
-    <div className="space-y-3 text-sm leading-relaxed text-ink-700">
+    <div className="space-y-3 break-words text-sm leading-relaxed text-ink-700">
       {blocks.map((block, bi) => {
         const lines = block.split("\n").filter((l) => l.length > 0);
 
