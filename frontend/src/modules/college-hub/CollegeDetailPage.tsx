@@ -24,6 +24,7 @@ import {
   PROGRAM_TYPE_LABEL,
   STATUS_META,
   acceptanceValue,
+  assetsBusy,
   campusImageSrc,
   checklistPct,
   compactCost,
@@ -81,10 +82,12 @@ export default function CollegeDetailPage() {
     void load();
   }, [load]);
 
-  // While this college is mid-hydration, poll so an async refresh fills the page in without a manual
-  // reload (mirrors the list view). hydrationMeta(...).busy is true only for pending/in-progress.
+  // While this college is mid-hydration OR mid imagery-fetch, poll so an async refresh fills the page
+  // in without a manual reload (mirrors the list view). Photos arrive on the assets pipeline, which
+  // is separate from — and often finishes after — text hydration, so we must watch both or a found
+  // photo would never appear until a manual reload.
   useEffect(() => {
-    if (!college || !hydrationMeta(college.hydrationStatus)?.busy) return;
+    if (!college || (!hydrationMeta(college.hydrationStatus)?.busy && !assetsBusy(college))) return;
     pollRef.current = setTimeout(() => void load(), 4000);
     return () => clearTimeout(pollRef.current);
   }, [college, load]);
@@ -261,22 +264,41 @@ function PhotosTab({ college, busy, onRefresh }: { college: College; busy: boole
   const [broken, setBroken] = useState<Set<string>>(() => new Set());
   const shown = photos.filter((u) => !broken.has(u));
 
+  // The campus photo arrives on the async assets pipeline; while it's running, say so HERE (the user
+  // clicked Refresh on this tab) rather than only flipping the badge on the header card.
+  const searching = assetsBusy(college);
+
   if (shown.length === 0) {
     return (
       <Card className="space-y-3 py-8 text-center">
-        <p className="text-sm text-ink-500">No campus photos yet.</p>
-        <p className="mx-auto max-w-sm text-xs text-ink-400">
-          Refresh fetches a campus photo and searches the web for more — they’ll appear here once found.
-        </p>
-        <div className="flex justify-center pt-1">
-          <Button size="sm" variant="outline" icon="course" loading={busy} onClick={onRefresh}>Refresh</Button>
-        </div>
+        {searching ? (
+          <>
+            <div className="flex justify-center"><Spinner size={22} /></div>
+            <p className="text-sm font-medium text-ink-700">Searching for campus photos…</p>
+            <p className="mx-auto max-w-sm text-xs text-ink-400">
+              We’re fetching a campus photo and scanning the web — they’ll appear here automatically. This can take a minute.
+            </p>
+          </>
+        ) : (
+          <>
+            <p className="text-sm text-ink-500">No campus photos yet.</p>
+            <p className="mx-auto max-w-sm text-xs text-ink-400">
+              Refresh fetches a campus photo and searches the web for more — they’ll appear here once found.
+            </p>
+            <div className="flex justify-center pt-1">
+              <Button size="sm" variant="outline" icon="course" loading={busy} onClick={onRefresh}>Refresh</Button>
+            </div>
+          </>
+        )}
       </Card>
     );
   }
 
   return (
     <Card className="space-y-3">
+      {searching ? (
+        <div className="flex items-center gap-2 text-xs text-ink-400"><Spinner size={13} /> Searching for more photos…</div>
+      ) : null}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         {shown.map((url) => (
           <img

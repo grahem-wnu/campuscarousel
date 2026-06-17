@@ -157,6 +157,12 @@ export function anyFetchingAssets(colleges: readonly College[]): boolean {
   return colleges.some((c) => c.assetsStatus === 'in-progress' || c.assetsStatus === 'pending');
 }
 
+/** True while THIS college's campus photo / logo is still being fetched — drives the detail page's
+ *  poll loop and the Photos tab's "searching" state. */
+export function assetsBusy(c: College): boolean {
+  return c.assetsStatus === 'in-progress' || c.assetsStatus === 'pending';
+}
+
 /** A short fit-score band for quick scanning. */
 export function fitBand(score: number | undefined): { label: string; tone: BadgeTone } | null {
   if (score === undefined) return null;

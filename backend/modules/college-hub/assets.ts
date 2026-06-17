@@ -31,7 +31,7 @@ export interface FetchedImage {
 
 /** Resolves a college's campus photo + logo as raw images ready to cache. Injectable for tests. */
 export type ImageSource = (
-  college: Pick<College, 'name' | 'state' | 'website'>,
+  college: Pick<College, 'name' | 'state' | 'website' | 'campusImageUrls'>,
 ) => Promise<{ campus?: FetchedImage; logo?: FetchedImage }>;
 
 /** Persists image bytes under `key` and returns the public (CDN) url. Injectable for tests. */
@@ -163,11 +163,21 @@ async function fetchLogo(fetchFn: FetchLike, website?: string): Promise<FetchedI
 /** Default image source: campus photo from Wikimedia, logo cached from Clearbit/favicon. */
 export function makeWikimediaImageSource(options: WikimediaSourceOptions = {}): ImageSource {
   const fetchFn = options.fetchFn ?? withTimeout((globalThis.fetch as unknown) as FetchLike, options.timeoutMs ?? 8000);
-  return async ({ name, website }) => {
-    const [campus, logo] = await Promise.all([
+  return async ({ name, website, campusImageUrls }) => {
+    const [wiki, logo] = await Promise.all([
       wikimediaCampusImage(fetchFn, name).catch(() => undefined),
       fetchLogo(fetchFn, website),
     ]);
+    let campus = wiki;
+    // Wikimedia has no lead image for plenty of schools. Fall back to the AI-discovered campus URLs
+    // from text hydration: download the first that actually resolves to an image and cache it, so
+    // the Photos tab gets a stable CDN photo instead of a hotlink that 404s in the browser.
+    if (!campus && campusImageUrls?.length) {
+      for (const url of campusImageUrls.slice(0, 6)) {
+        campus = await downloadImage(fetchFn, url).catch(() => undefined);
+        if (campus) break;
+      }
+    }
     return { campus, logo };
   };
 }
@@ -226,6 +236,7 @@ export async function fetchCollegeAssets(
       name: college.name,
       state: college.state,
       website: college.website,
+      campusImageUrls: college.campusImageUrls,
     });
     const patch: Partial<College> = { assetsStatus: 'complete' };
     if (campus) {
