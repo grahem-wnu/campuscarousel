@@ -163,6 +163,21 @@ describe('makeWikimediaImageSource', () => {
     expect(logo).toBeUndefined(); // no website → no Clearbit attempt
   });
 
+  it('falls back to an AI-discovered campus URL when Wikimedia has none (skipping ones that fail)', async () => {
+    const fetchFn = fakeFetch([
+      { match: 'prop=pageimages', res: { json: async () => ({ query: { pages: { '-1': {} } } }) } },
+      // The first candidate URL 404s (no route → default 404); the second resolves to a real image.
+      { match: 'good.example/campus.jpg', res: { headers: { get: (n) => (n.toLowerCase() === 'content-type' ? 'image/jpeg' : null) }, arrayBuffer: async () => new Uint8Array([9, 9]).buffer } },
+    ]);
+    const source = makeWikimediaImageSource({ fetchFn });
+    const { campus } = await source({
+      name: 'Nowhere College',
+      campusImageUrls: ['https://bad.example/missing.jpg', 'https://good.example/campus.jpg'],
+    });
+    expect(campus?.ext).toBe('jpg');
+    expect(campus?.contentType).toBe('image/jpeg');
+  });
+
   it('ignores a non-image response (e.g. an error page)', async () => {
     const fetchFn = fakeFetch([
       { match: 'prop=pageimages', res: { json: async () => ({ query: { pages: { '1': { thumbnail: { source: 'https://x/y' } } } } }) } },
