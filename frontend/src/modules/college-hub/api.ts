@@ -96,3 +96,13 @@ export async function getChecklist(id: string): Promise<ChecklistItem[]> {
 export function putChecklist(id: string, items: ChecklistItem[]): Promise<CollegeChecklist> {
   return api.put<CollegeChecklist>(`/colleges/${encodeURIComponent(id)}/checklist`, { items });
 }
+
+/** AI-suggested application steps for this college, tailored to the student's major. Returns an
+ *  editable list (label + optional ISO dueDate); the caller merges + persists via putChecklist. */
+export async function suggestChecklist(id: string): Promise<{ label: string; dueDate?: string }[]> {
+  const res = await api.post<{ suggestions: { label: string; dueDate?: string }[] }>(
+    `/colleges/${encodeURIComponent(id)}/checklist/suggest`,
+    {},
+  );
+  return res.suggestions ?? [];
+}
