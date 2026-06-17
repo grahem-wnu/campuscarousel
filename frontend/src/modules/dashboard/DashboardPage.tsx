@@ -55,10 +55,19 @@ function NextStep({ to, children }: { to: string; children: ReactNode }) {
  * while polling, flips to an "all set" state when research finishes, and points to the next steps.
  * It self-hides when there's nothing to report, and is dismissible.
  */
-function SetupProgressBanner() {
+// ~2 minutes at the 4s poll cadence: how long we'll wait for the async seed to produce colleges
+// before giving up, so a seed that never lands doesn't poll for the whole session.
+const SEED_WAIT_MAX_POLLS = 30;
+
+export function SetupProgressBanner() {
   const [colleges, setColleges] = useState<College[] | null>(null);
   const [justOnboarded, setJustOnboarded] = useState(false);
   const [dismissed, setDismissed] = useState(false);
+  // Onboarding finish enqueues seeding server-side and returns immediately, so the colleges don't
+  // exist yet when we first refetch. This flag keeps us polling through that gap (finish → seed job
+  // creates colleges) — without it the banner only polls once research is already in flight, so the
+  // seeded colleges were never discovered until a navigation remounted the banner.
+  const [waitingForSeed, setWaitingForSeed] = useState(false);
 
   const refresh = useCallback(() => {
     listColleges()
@@ -70,34 +79,50 @@ function SetupProgressBanner() {
 
   useEffect(refresh, [refresh]);
 
-  // When onboarding finishes, frame this as a welcome and refetch the freshly-seeded colleges.
+  // When onboarding finishes, frame this as a welcome and start watching for the seeded colleges.
   useEffect(() => {
     const onFinished = () => {
       setJustOnboarded(true);
       setDismissed(false);
+      setWaitingForSeed(true);
       refresh();
     };
     window.addEventListener('onboarding-finished', onFinished);
     return () => window.removeEventListener('onboarding-finished', onFinished);
   }, [refresh]);
 
+  const total = colleges ? colleges.length : 0;
   const researching = colleges
     ? colleges.filter((c) => c.hydrationStatus === 'in-progress' || c.hydrationStatus === 'pending').length
     : 0;
 
-  // Poll while research is in flight so the count ticks up live, then stop.
+  // Once the seeded colleges show up, we're no longer waiting for the seed to land.
   useEffect(() => {
-    if (researching === 0) return;
-    const id = window.setInterval(refresh, 4000);
+    if (waitingForSeed && total > 0) setWaitingForSeed(false);
+  }, [waitingForSeed, total]);
+
+  // Poll while seeding is pending (just onboarded, colleges not created yet) OR research is in flight,
+  // so the banner updates on its own — no navigation/remount needed. Bounded so a seed that never
+  // produces colleges doesn't poll forever.
+  const shouldPoll = researching > 0 || waitingForSeed;
+  useEffect(() => {
+    if (!shouldPoll) return;
+    let polls = 0;
+    const id = window.setInterval(() => {
+      polls += 1;
+      refresh();
+      if (polls >= SEED_WAIT_MAX_POLLS) setWaitingForSeed(false);
+    }, 4000);
     return () => window.clearInterval(id);
-  }, [researching, refresh]);
+  }, [shouldPoll, refresh]);
 
   if (dismissed || !colleges) return null;
-  const total = colleges.length;
   const done = total - researching;
   const active = researching > 0;
-  // Nothing timely to say: not freshly onboarded and no research running.
-  if (!active && !justOnboarded) return null;
+  // Seeded colleges haven't appeared yet — show a "setting up" state instead of a misleading "all set".
+  const seeding = waitingForSeed && total === 0;
+  // Nothing timely to say: not freshly onboarded, nothing seeding, no research running.
+  if (!active && !seeding && !justOnboarded) return null;
 
   return (
     <Card className="relative border border-primary-200 bg-primary-50">
@@ -111,10 +136,18 @@ function SetupProgressBanner() {
       </button>
       <div className="flex items-start gap-3 pr-6">
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-100 text-primary-600">
-          {active ? <Spinner size={18} /> : <Icon name="check" size={20} />}
+          {active || seeding ? <Spinner size={18} /> : <Icon name="check" size={20} />}
         </span>
         <div className="min-w-0 flex-1">
-          {active ? (
+          {seeding ? (
+            <>
+              <p className="text-sm font-semibold text-primary-800">You&rsquo;re all set — setting up your plan</p>
+              <p className="mt-0.5 text-xs text-primary-700">
+                We&rsquo;re creating your goals and colleges and researching each one. This fills in on its
+                own — keep exploring.
+              </p>
+            </>
+          ) : active ? (
             <>
               <p className="text-sm font-semibold text-primary-800">
                 {justOnboarded ? "You're all set — we're researching your colleges" : 'Researching your colleges'}
