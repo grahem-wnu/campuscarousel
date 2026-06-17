@@ -27,6 +27,7 @@ import {
 import { queryColleges } from './query.js';
 import { findActiveByName, normalizeCollegeName } from './dedupe.js';
 import type { Discoverer } from './ai.js';
+import { makeBedrockChecklistSuggester, type ChecklistSuggester } from './checklist-ai.js';
 import { makeInlineDispatcher, type HydrationDispatcher } from './hydration.js';
 import { runDiscoveryJob, type DiscoverDispatcher } from './discover.js';
 import { makeAssetsEnqueuer, type AssetsDispatcher } from './assets-enqueue.js';
@@ -48,6 +49,7 @@ export interface CollegeHandlers {
   addNote: Handler;
   getChecklist: Handler;
   putChecklist: Handler;
+  suggestChecklist: Handler;
 }
 
 export interface CollegeDeps {
@@ -60,6 +62,8 @@ export interface CollegeDeps {
   discoverDispatch?: DiscoverDispatcher;
   /** Campus-imagery / logo fetch trigger; defaults to the SQS assets enqueuer (no-op if unconfigured). */
   assetsDispatch?: AssetsDispatcher;
+  /** AI source for /checklist/suggest; defaults to the model-only Bedrock suggester (→ [] on failure). */
+  checklistSuggester?: ChecklistSuggester;
 }
 
 export function makeHandlers(deps: CollegeDeps): CollegeHandlers {
@@ -73,6 +77,9 @@ export function makeHandlers(deps: CollegeDeps): CollegeHandlers {
   const discoverDispatch =
     deps.discoverDispatch ?? ((jobId: string) => runDiscoveryJob(getData, deps.discoverer, jobId));
   const assetsDispatch = deps.assetsDispatch ?? makeAssetsEnqueuer(getData);
+  // Model-only checklist generator (no web search → fits the request budget). Real Bedrock by
+  // default; tests inject a stub. Returns [] on any failure so the endpoint never 500s.
+  const checklistSuggester = deps.checklistSuggester ?? makeBedrockChecklistSuggester();
 
   /** Fetch a college or throw 404. */
   async function requireCollege(id: string): Promise<College> {
@@ -276,6 +283,18 @@ export function makeHandlers(deps: CollegeDeps): CollegeHandlers {
       const checklist = await getData().collegeChecklist.put(id, items);
       return { status: 200, body: checklist };
     },
+
+    // POST /colleges/:id/checklist/suggest — AI-generated, college + major-specific application
+    // steps for the "Generate steps" button. Model-only (no web search) so it stays in the request
+    // budget; returns an editable list and persists NOTHING — the client de-dupes against existing
+    // items and PUTs the merged checklist (so manual + already-checked items are never clobbered).
+    suggestChecklist: async (ctx) => {
+      const { id } = validateParams(idParamSchema, ctx);
+      const college = await requireCollege(id);
+      const majors = (await getData().studentProfile.get())?.intendedMajors ?? [];
+      const suggestions = await checklistSuggester(college, majors);
+      return { status: 200, body: { suggestions } };
+    },
   };
 }
 
@@ -299,5 +318,6 @@ export function buildRoutes(h: CollegeHandlers) {
     { method: 'POST' as const, path: '/colleges/:id/notes', handler: h.addNote },
     { method: 'GET' as const, path: '/colleges/:id/checklist', handler: h.getChecklist },
     { method: 'PUT' as const, path: '/colleges/:id/checklist', handler: h.putChecklist },
+    { method: 'POST' as const, path: '/colleges/:id/checklist/suggest', handler: h.suggestChecklist },
   ];
 }

@@ -759,9 +759,13 @@ Each college has a full detail page with a branded header and tabs:
   - Rich text or markdown support
   
 - **Checklist tab:** Application preparation checklist
-  - Pre-populated with common items (transcripts, test scores, essays, recommendations, financial aid apps)
-  - Customizable — add/remove/reorder items
-  - Due dates and completion tracking
+  - **AI-generated on demand** — a "Generate application steps" button builds a checklist tailored to
+    *this* college and the student's intended major, grounded in the college's hydrated data
+    (deadlines, application fee, prerequisites, required tests, essay prompts, application service).
+    Model-only (no web search) so it stays within the request budget. New steps are merged
+    (de-duplicated) into the existing list — it never clobbers manual or already-checked items.
+  - Customizable — add/remove items manually; generated steps are editable like any other
+  - Due dates (carried from known deadlines) and completion tracking
   - Visual progress bar
   
 - **Fit Analysis tab:** AI-generated analysis of how Keira's current profile matches this school

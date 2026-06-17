@@ -284,4 +284,36 @@ describe('notes / checklist', () => {
     const got = await h.getChecklist(ctx({ params: { id: c.collegeId } }));
     expect((got.body as { items: { label: string }[] }).items.map((i) => i.label)).toEqual(['Apply']);
   });
+
+  it('suggestChecklist returns AI steps (college + majors passed through; nothing persisted)', async () => {
+    let seenCollege = '';
+    let seenMajors: string[] = [];
+    const hh = makeHandlers({
+      getData: () => data,
+      dispatch: makeDispatch(),
+      assetsDispatch: makeAssetsDispatch(),
+      checklistSuggester: async (college, majors) => {
+        seenCollege = college.name;
+        seenMajors = majors;
+        return [{ label: 'Submit the TEAS exam score' }, { label: 'Pay the application fee', dueDate: '2026-11-01' }];
+      },
+    });
+    const c = await create({ name: 'Ohio State' });
+    await data.studentProfile.put({ onboardingComplete: true, intendedMajors: ['Nursing (BSN)'] });
+
+    const res = await hh.suggestChecklist(ctx({ params: { id: c.collegeId } }));
+    const { suggestions } = res.body as { suggestions: { label: string; dueDate?: string }[] };
+    expect(suggestions.map((s) => s.label)).toEqual(['Submit the TEAS exam score', 'Pay the application fee']);
+    expect(suggestions[1]?.dueDate).toBe('2026-11-01');
+    expect(seenCollege).toBe('Ohio State');
+    expect(seenMajors).toEqual(['Nursing (BSN)']);
+
+    // Pure suggestion endpoint — it must not write a checklist.
+    const got = await hh.getChecklist(ctx({ params: { id: c.collegeId } }));
+    expect((got.body as { items: unknown[] }).items).toHaveLength(0);
+  });
+
+  it('suggestChecklist 404s for a missing college', async () => {
+    await expectStatus(h.suggestChecklist(ctx({ params: { id: 'ghost' } })), 404);
+  });
 });

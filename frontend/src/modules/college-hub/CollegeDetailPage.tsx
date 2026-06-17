@@ -12,6 +12,7 @@ import {
   Tabs,
   Textarea,
   safeHref,
+  useToast,
   type TabItem,
 } from '../../shared/ui';
 import { CollegeLogo } from './CollegeLogo';
@@ -35,6 +36,7 @@ import {
   hydrateCollege,
   listNotes,
   putChecklist,
+  suggestChecklist,
   updateCollege,
 } from './api';
 import type { ChecklistItem, College, CollegeInput, CollegeNote } from './types';
@@ -533,6 +535,9 @@ function ChecklistTab({ college, onSaved }: { college: College; onSaved: () => P
   const [items, setItems] = useState<ChecklistItem[]>([]);
   const [label, setLabel] = useState('');
   const [saving, setSaving] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const toast = useToast();
   const pct = checklistPct(items);
 
   // Load the checklist from the college's own checklist resource on mount.
@@ -544,6 +549,8 @@ function ChecklistTab({ college, onSaved }: { college: College; onSaved: () => P
         if (active) setItems(cl);
       } catch {
         if (active) setItems([]);
+      } finally {
+        if (active) setLoaded(true);
       }
     })();
     return () => {
@@ -569,6 +576,42 @@ function ChecklistTab({ college, onSaved }: { college: College; onSaved: () => P
     setLabel('');
   }
 
+  // Generate a college + major-specific checklist (AI). Merges in only NEW steps (case-insensitive
+  // dedupe) so it never clobbers manual or already-checked items, then persists once.
+  async function generate(): Promise<void> {
+    setGenerating(true);
+    try {
+      const suggestions = await suggestChecklist(college.collegeId);
+      if (suggestions.length === 0) {
+        toast.error("Couldn't generate steps right now — add them manually below.");
+        return;
+      }
+      const have = new Set(items.map((i) => i.label.trim().toLowerCase()));
+      const additions: ChecklistItem[] = [];
+      suggestions.forEach((s, idx) => {
+        const key = s.label.trim().toLowerCase();
+        if (!key || have.has(key)) return;
+        have.add(key);
+        additions.push({
+          id: `i-gen-${items.length + idx}-${s.label.trim().slice(0, 8)}`,
+          label: s.label.trim(),
+          completed: false,
+          ...(s.dueDate ? { dueDate: s.dueDate } : {}),
+        });
+      });
+      if (additions.length === 0) {
+        toast.info('Those steps are already on your checklist.');
+        return;
+      }
+      await persist([...items, ...additions]);
+      toast.success(`Added ${additions.length} step${additions.length === 1 ? '' : 's'} for ${college.name}.`);
+    } catch {
+      toast.error("Couldn't generate steps right now — add them manually below.");
+    } finally {
+      setGenerating(false);
+    }
+  }
+
   return (
     <Card className="space-y-3">
       {pct !== null ? (
@@ -579,6 +622,21 @@ function ChecklistTab({ college, onSaved }: { college: College; onSaved: () => P
           </div>
         </div>
       ) : null}
+
+      {/* Empty state: invite the family to auto-build a tailored application checklist. */}
+      {loaded && items.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-surface-border bg-surface-sunken px-4 py-5 text-center">
+          <p className="text-sm font-medium text-ink-800">No steps yet</p>
+          <p className="mx-auto mt-1 max-w-sm text-xs text-ink-500">
+            Generate an application checklist tailored to {college.name} and the student&rsquo;s major — deadlines,
+            essays, tests, and fees included. You can edit or remove any step after.
+          </p>
+          <Button className="mt-3" icon="star" loading={generating} onClick={() => void generate()}>
+            Generate application steps
+          </Button>
+        </div>
+      ) : null}
+
       <ul className="space-y-1.5">
         {items.map((it, idx) => (
           <li key={it.id} className="flex items-center gap-2 text-sm">
@@ -586,18 +644,34 @@ function ChecklistTab({ college, onSaved }: { college: College; onSaved: () => P
               type="checkbox"
               checked={it.completed}
               onChange={() => void persist(items.map((x, i) => (i === idx ? { ...x, completed: !x.completed } : x)))}
-              className="h-4 w-4 rounded border-surface-border text-primary-600"
+              className="mt-0.5 h-4 w-4 shrink-0 rounded border-surface-border text-primary-600"
             />
-            <span className={it.completed ? 'text-ink-400 line-through' : 'text-ink-800'}>{it.label}</span>
+            <span className={it.completed ? 'text-ink-400 line-through' : 'text-ink-800'}>
+              {it.label}
+              {it.dueDate ? <span className="ml-2 text-xs text-ink-400">· due {it.dueDate}</span> : null}
+            </span>
           </li>
         ))}
       </ul>
+
       <div className="flex items-end gap-2">
         <Field label="Add a checklist item" className="flex-1">
           <Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="e.g. Request transcript" />
         </Field>
         <Button size="sm" loading={saving} disabled={!label.trim()} onClick={addItem}>Add</Button>
       </div>
+
+      {/* When the list isn't empty, still offer to top it up with AI-suggested steps. */}
+      {items.length > 0 ? (
+        <button
+          type="button"
+          onClick={() => void generate()}
+          disabled={generating}
+          className="flex items-center gap-1.5 text-xs font-medium text-primary-600 hover:text-primary-700 disabled:opacity-50"
+        >
+          <Icon name="star" size={13} /> {generating ? 'Generating…' : 'Suggest more steps'}
+        </button>
+      ) : null}
     </Card>
   );
 }
