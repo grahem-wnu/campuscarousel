@@ -20,7 +20,9 @@ export function Tabs({ items, value, onChange, className }: TabsProps) {
   return (
     // overflow-x-auto: when the tabs don't fit (mobile, or many slotted-in tabs) the strip scrolls
     // horizontally on its own instead of wrapping or being clipped by the page's overflow-x guard.
-    <div role="tablist" className={cn("flex gap-1 overflow-x-auto border-b border-surface-border", className)}>
+    // overflow-y-hidden: an x-axis `auto` makes the y-axis compute to `auto` too, and the active
+    // tab's `border-b-2 -mb-px` overflows by 1px → a phantom vertical scrollbar. Pin y to hidden.
+    <div role="tablist" className={cn("flex gap-1 overflow-x-auto overflow-y-hidden border-b border-surface-border", className)}>
       {items.map((item) => {
         const active = item.id === value;
         return (
