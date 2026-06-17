@@ -64,9 +64,16 @@ describe('router integration', () => {
     expect(before.statusCode).toBe(200);
     expect(parse(before).benchmark).toBeNull();
 
+    // Async: refresh is accepted (202) and returns a job; the inline worker (default dispatch) has
+    // already run it to completion, so the benchmark is persisted by the time we poll/reload.
     const refreshed = await dispatch(event('POST', `/colleges/${id}/benchmark/refresh`, { as: keira, body: {} }));
-    expect(refreshed.statusCode).toBe(200);
-    expect((parse(refreshed).benchmark as { avgGPAAdmitted: number }).avgGPAAdmitted).toBe(3.8);
+    expect(refreshed.statusCode).toBe(202);
+    const job = parse(refreshed) as { jobId: string; status: string };
+    expect(job.status).toBe('complete');
+
+    const status = await dispatch(event('GET', `/colleges/${id}/benchmark/refresh/${job.jobId}`, { as: keira }));
+    expect(status.statusCode).toBe(200);
+    expect((parse(status) as { jobId: string }).jobId).toBe(job.jobId);
 
     const after = await dispatch(event('GET', `/colleges/${id}/benchmark`, { as: keira }));
     expect((parse(after).benchmark as { typicalClinicalHours: number }).typicalClinicalHours).toBe(40);

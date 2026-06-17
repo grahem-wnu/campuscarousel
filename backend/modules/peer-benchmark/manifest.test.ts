@@ -17,12 +17,13 @@ describe('routes.manifest ↔ buildRoutes', () => {
     expect(manifest).toEqual(built);
   });
 
-  it('expose all four Peer Benchmark endpoints', () => {
+  it('expose all Peer Benchmark endpoints', () => {
     expect(manifestRoutes.map(sig).sort()).toEqual(
       [
         'GET /benchmarks/aggregate',
         'GET /benchmarks/gaps',
         'GET /colleges/:id/benchmark',
+        'GET /colleges/:id/benchmark/refresh/:jobId',
         'POST /colleges/:id/benchmark/refresh',
       ].sort(),
     );

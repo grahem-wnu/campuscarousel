@@ -8,6 +8,7 @@ import { hydration as collegeHubHydration } from '../../modules/college-hub/hydr
 import { hydration as focusHydration } from '../../modules/focus/hydration.manifest.js';
 import { hydration as onboardingChatHydration } from '../../modules/onboarding-chat/hydration.manifest.js';
 import { hydration as opportunitiesHydration } from '../../modules/opportunities/hydration.manifest.js';
+import { hydration as peerBenchmarkHydration } from '../../modules/peer-benchmark/hydration.manifest.js';
 import { hydration as scholarshipTrackerHydration } from '../../modules/scholarship-tracker/hydration.manifest.js';
 
 export const hydrationRegistrations: HydrationRegistration[] = [
@@ -16,5 +17,6 @@ export const hydrationRegistrations: HydrationRegistration[] = [
   focusHydration,
   onboardingChatHydration,
   opportunitiesHydration,
+  peerBenchmarkHydration,
   scholarshipTrackerHydration,
 ];

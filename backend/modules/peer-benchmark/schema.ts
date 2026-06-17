@@ -16,3 +16,6 @@ export const refreshSchema = z
   .strict();
 
 export type RefreshInput = z.infer<typeof refreshSchema>;
+
+/** Path params for the refresh-job poll route: `/colleges/:id/benchmark/refresh/:jobId`. */
+export const refreshJobParamSchema = z.object({ id: z.string().min(1), jobId: z.string().min(1) });

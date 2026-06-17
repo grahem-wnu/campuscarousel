@@ -19,11 +19,13 @@ import { buildAggregate, compareToBenchmark } from './compare.js';
 import { computeKeiraStats, type KeiraStats } from './stats.js';
 import { buildSnapshot, mergeSnapshot, monthOf } from './snapshots.js';
 import type { BenchmarkResearcher } from './researcher.js';
-import { collegeParamSchema, refreshSchema } from './schema.js';
+import { collegeParamSchema, refreshJobParamSchema, refreshSchema } from './schema.js';
+import { runRefreshJob, type RefreshDispatcher } from './refresh-job.js';
 
 export interface BenchmarkHandlers {
   detail: Handler;
   refresh: Handler;
+  refreshStatus: Handler;
   aggregate: Handler;
   gaps: Handler;
 }
@@ -100,7 +102,15 @@ async function benchmarksByCollege(
   return new Map(collegeIds.map((id, i) => [id, found[i] ?? null]));
 }
 
-export function makeHandlers(getData: () => Data, getResearcher: () => BenchmarkResearcher): BenchmarkHandlers {
+export function makeHandlers(
+  getData: () => Data,
+  getResearcher: () => BenchmarkResearcher,
+  getDispatch?: () => RefreshDispatcher,
+): BenchmarkHandlers {
+  // Default dispatcher (tests / no queue): run the job inline with the SAME researcher the handlers
+  // were given, so an injected fake drives the inline run. Production injects an SQS enqueuer.
+  const dispatch: RefreshDispatcher =
+    getDispatch?.() ?? ((jobId) => runRefreshJob(getData, getResearcher(), jobId));
   return {
     // GET /colleges/:id/benchmark — the stored benchmark (may be null) + Keira's freshly-computed
     // comparison against it. A null benchmark surfaces as the "insufficient data" empty state.
@@ -121,9 +131,10 @@ export function makeHandlers(getData: () => Data, getResearcher: () => Benchmark
       };
     },
 
-    // POST /colleges/:id/benchmark/refresh — AI researches the competitive profile, merged into the
-    // stored benchmark (preserving any human-edited fields), then Keira's comparison is recomputed
-    // against the persisted numbers.
+    // POST /colleges/:id/benchmark/refresh — ASYNC. Web-grounded research of the competitive profile
+    // can exceed API Gateway's 30s ceiling, so we create a pending job and enqueue it (the 300s SQS
+    // worker runs the research and merges it into the stored benchmark, preserving human edits). The
+    // frontend polls refreshStatus, then reloads the benchmark. Returns 202 with the created job.
     refresh: async (ctx) => {
       const { id } = validateParams(collegeParamSchema, ctx);
       const input = validate(refreshSchema, ctx.body ?? {});
@@ -131,27 +142,22 @@ export function makeHandlers(getData: () => Data, getResearcher: () => Benchmark
       const college = await data.colleges.get(id);
       if (!college) throw Errors.notFound('College not found');
 
-      const majors = (await data.studentProfile.get())?.intendedMajors ?? [];
-      const [existing, profile, keira] = await Promise.all([
-        data.benchmarks.get(id),
-        getResearcher().research(college, input.focus, majors),
-        gatherStats(data, ctx.requester),
-      ]);
-      // Compute the comparison against what will actually be persisted (existing values with the AI
-      // profile applied), then write once so lastDataRefresh is stamped a single time.
-      const preview = { ...(existing ?? { collegeId: id }), ...profile } as Benchmark;
-      const comparison = compareToBenchmark(keira, preview);
-      const saved = await data.benchmarks.mergePreservingUserEdits(id, { ...profile, keirasComparison: comparison });
+      const job = await data.benchmarkRefreshJobs.create({
+        collegeId: id,
+        status: 'pending',
+        ...(input.focus ? { focus: input.focus } : {}),
+      });
+      await dispatch(job.jobId);
+      const after = await data.benchmarkRefreshJobs.get(job.jobId);
+      return { status: 202, body: after ?? job };
+    },
 
-      return {
-        status: 200,
-        body: {
-          college: { collegeId: college.collegeId, name: college.name },
-          benchmark: saved,
-          keira,
-          comparison,
-        },
-      };
+    // GET /colleges/:id/benchmark/refresh/:jobId — poll a refresh job's status.
+    refreshStatus: async (ctx) => {
+      const { jobId } = validateParams(refreshJobParamSchema, ctx);
+      const job = await getData().benchmarkRefreshJobs.get(jobId);
+      if (!job) throw Errors.notFound('Refresh job not found');
+      return { status: 200, body: job };
     },
 
     // GET /benchmarks/aggregate — the matrix: every college × metrics, with Keira's stats compared.
@@ -188,6 +194,7 @@ export function buildRoutes(handlers: BenchmarkHandlers): RouteDef[] {
   return [
     { method: 'GET', path: '/colleges/:id/benchmark', handler: handlers.detail },
     { method: 'POST', path: '/colleges/:id/benchmark/refresh', handler: handlers.refresh },
+    { method: 'GET', path: '/colleges/:id/benchmark/refresh/:jobId', handler: handlers.refreshStatus },
     { method: 'GET', path: '/benchmarks/aggregate', handler: handlers.aggregate },
     { method: 'GET', path: '/benchmarks/gaps', handler: handlers.gaps },
   ];

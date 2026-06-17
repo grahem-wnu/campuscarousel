@@ -19,9 +19,13 @@ competitiveEdges[], keirasComparison {gpaStatus, teasStatus, clinicalHoursStatus
 volunteerHoursStatus, overallReadiness}, lastDataRefresh).
 
 ## API endpoints
-`GET /colleges/:id/benchmark`; `POST /colleges/:id/benchmark/refresh` (AI researches competitive
-profile via web search); `GET /benchmarks/aggregate` (matrix: all colleges × metrics, Keira's stats
-compared); `GET /benchmarks/gaps` (AI biggest-gaps analysis with specific recommendations).
+`GET /colleges/:id/benchmark`; `POST /colleges/:id/benchmark/refresh` (ASYNC — creates a refresh
+job, enqueues web-grounded AI research on the SQS worker, returns 202 with the job; the web search
+exceeds API Gateway's 30s ceiling so it cannot run on the request path); `GET
+/colleges/:id/benchmark/refresh/:jobId` (poll job status — pending/complete/failed; the worker merges
+the researched profile into the stored benchmark, preserving human edits); `GET /benchmarks/aggregate`
+(matrix: all colleges × metrics, Keira's stats compared); `GET /benchmarks/gaps` (AI biggest-gaps
+analysis with specific recommendations — synchronous, model-only).
 
 ## Frontend
 - Per-college benchmark tab: comparison card (GPA, TEAS, clinical hours, volunteer hours, certs,
@@ -33,8 +37,12 @@ compared); `GET /benchmarks/gaps` (AI biggest-gaps analysis with specific recomm
 - Empty state; mobile + desktop.
 
 ## AI behavior
-`benchmark/refresh` + `benchmarks/gaps` → Bedrock + web search for admitted-student profiles.
-Keira's comparison fields auto-computed from her real data (read the source modules). Sync or async.
+`benchmark/refresh` → Bedrock + web search for admitted-student profiles, run ASYNC on the 300s SQS
+worker (shares the hydration queue, own message `type: 'benchmark-refresh'`); the request path only
+enqueues a job. `benchmarks/gaps` synthesizes the already-fetched matrix → model-only, synchronous.
+Keira's comparison fields auto-computed from her real data (read the source modules). The PERSISTED
+`keirasComparison` is computed from family-visible stats (private entries excluded); the per-caller
+live comparison on `GET /benchmark` is recomputed off the JWT.
 
 ## Privacy
 Family-visible (uses Keira's aggregate stats, not private entry content).

@@ -1,9 +1,12 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Badge, Button, Card, Spinner, useToast } from '../../shared/ui';
 import { useActiveStudent } from '../../shared/shell';
-import { getBenchmark, refreshBenchmark } from './api';
+import { getBenchmark, getRefreshStatus, startBenchmarkRefresh } from './api';
 import { cellText, readinessMeta, statusMeta } from './logic';
 import type { BenchmarkDetail, MetricStatus, TeasStatus } from './types';
+
+const POLL_MS = 3000;
+const MAX_POLLS = 60; // ~3 min — web-grounded research runs on the 300s worker but is usually <90s
 
 /** One metric row: label, "keira / school" values, and a color-coded status badge. */
 function MetricRow({
@@ -41,16 +44,25 @@ export function BenchmarkCard({ collegeId }: { collegeId: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  // Guards against setState after the card unmounts mid-poll (the research can run ~90s).
+  const aliveRef = useRef(true);
+  useEffect(() => {
+    aliveRef.current = true;
+    return () => {
+      aliveRef.current = false;
+    };
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      setDetail(await getBenchmark(collegeId));
+      const d = await getBenchmark(collegeId);
+      if (aliveRef.current) setDetail(d);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not load the benchmark.');
+      if (aliveRef.current) setError(err instanceof Error ? err.message : 'Could not load the benchmark.');
     } finally {
-      setLoading(false);
+      if (aliveRef.current) setLoading(false);
     }
   }, [collegeId]);
 
@@ -58,15 +70,32 @@ export function BenchmarkCard({ collegeId }: { collegeId: string }) {
     void load();
   }, [load]);
 
+  // Refresh is ASYNC: the web-grounded research runs on the worker (it exceeds the 30s request
+  // budget), so we start a job and poll until it settles, then reload the benchmark.
   async function refresh(): Promise<void> {
     setRefreshing(true);
     try {
-      setDetail(await refreshBenchmark(collegeId));
-      toast.success('Benchmark refreshed.');
+      const job = await startBenchmarkRefresh(collegeId);
+      let current = job;
+      for (let i = 0; current.status === 'pending' && i < MAX_POLLS; i++) {
+        await new Promise((r) => setTimeout(r, POLL_MS));
+        if (!aliveRef.current) return;
+        current = await getRefreshStatus(collegeId, job.jobId);
+      }
+      if (current.status === 'failed') {
+        toast.error(current.error || 'Could not refresh the benchmark. Please try again.');
+        return;
+      }
+      if (current.status === 'pending') {
+        toast.error('Research is taking longer than expected — please try again in a moment.');
+        return;
+      }
+      await load();
+      if (aliveRef.current) toast.success('Benchmark refreshed.');
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not refresh the benchmark.');
+      if (aliveRef.current) toast.error(err instanceof Error ? err.message : 'Could not refresh the benchmark.');
     } finally {
-      setRefreshing(false);
+      if (aliveRef.current) setRefreshing(false);
     }
   }
 
@@ -104,9 +133,16 @@ export function BenchmarkCard({ collegeId }: { collegeId: string }) {
           </Badge>
         </div>
         <Button size="sm" variant="outline" icon="search" loading={refreshing} onClick={() => void refresh()}>
-          Refresh Benchmark
+          {refreshing ? 'Researching…' : 'Refresh Benchmark'}
         </Button>
       </div>
+
+      {refreshing ? (
+        <p className="mt-3 text-sm text-ink-500">
+          Researching the typical admitted-student profile for {detail.college.name} on the web — this
+          usually takes up to a minute. You can leave this page; the result is saved when it finishes.
+        </p>
+      ) : null}
 
       {benchmark ? (
         <>
@@ -153,10 +189,31 @@ export function BenchmarkCard({ collegeId }: { collegeId: string }) {
             <p className="mt-3 text-xs text-ink-400">Last researched {benchmark.lastDataRefresh.slice(0, 10)}.</p>
           ) : null}
         </>
-      ) : (
-        <p className="mt-3 text-sm text-ink-500">
-          No benchmark yet. Use <strong>Refresh Benchmark</strong> to research the competitive profile for this school.
-        </p>
+      ) : refreshing ? null : (
+        <div className="mt-3 space-y-3 text-sm text-ink-600">
+          <p>
+            This card compares {studentName}&rsquo;s profile against a typical admitted student at{' '}
+            {detail.college.name}. To use it:
+          </p>
+          <ol className="list-inside list-decimal space-y-1 text-ink-700">
+            <li>
+              Click <strong>Refresh Benchmark</strong> above — it researches the school&rsquo;s typical
+              admitted-student profile (GPA, TEAS, clinical &amp; volunteer hours, certifications) on the web.
+            </li>
+            <li>
+              Fill in {studentName}&rsquo;s own data in the other modules — it&rsquo;s pulled in automatically:
+              <span className="text-ink-600">
+                {' '}GPA from <strong>Course Planner</strong>, TEAS from <strong>Exam Prep</strong>,
+                clinical hours from <strong>Clinical Hours</strong>, volunteer hours from the{' '}
+                <strong>Activity Journal</strong>, and earned <strong>Certifications</strong>.
+              </span>
+            </li>
+          </ol>
+          <p className="text-xs text-ink-400">
+            The readiness badge stays <em>Insufficient Data</em> until both the school profile is researched and
+            {studentName} has at least a couple of comparable metrics entered.
+          </p>
+        </div>
       )}
     </Card>
   );

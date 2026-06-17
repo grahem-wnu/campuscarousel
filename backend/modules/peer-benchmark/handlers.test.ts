@@ -83,14 +83,16 @@ describe('detail (GET /colleges/:id/benchmark)', () => {
   });
 });
 
-describe('refresh (POST /colleges/:id/benchmark/refresh)', () => {
-  it('researches, persists the merged benchmark, and returns the comparison', async () => {
+describe('refresh (POST /colleges/:id/benchmark/refresh) — async job', () => {
+  it('accepts the request (202) and creates a job; the inline worker persists the merged benchmark', async () => {
     const id = await seedCollege();
     const res = await h.refresh(ctx({ params: { id }, body: {} }));
-    expect(res.status).toBe(200);
-    const body = res.body as { benchmark: { avgGPAAdmitted: number; keirasComparison?: unknown } };
-    expect(body.benchmark.avgGPAAdmitted).toBe(3.8);
-    // Persisted, and carries the computed comparison.
+    // Async: the API returns 202 with the job (the default inline dispatch already ran it to completion).
+    expect(res.status).toBe(202);
+    const job = res.body as { jobId: string; collegeId: string; status: string };
+    expect(job.collegeId).toBe(id);
+    expect(job.status).toBe('complete');
+    // The worker persisted the researched benchmark with a computed comparison.
     const stored = await data.benchmarks.get(id);
     expect(stored?.avgGPAAdmitted).toBe(3.8);
     expect(stored?.keirasComparison).toBeDefined();
@@ -114,10 +116,31 @@ describe('refresh (POST /colleges/:id/benchmark/refresh)', () => {
     await expectStatus(h.refresh(ctx({ params: { id }, body: { bogus: 1 } })), 422);
   });
 
-  it('propagates a 503 when AI research is unavailable', async () => {
+  it('marks the job failed (not a request error) when AI research is unavailable', async () => {
     const hh = makeHandlers(() => data, () => downResearcher);
     const id = await seedCollege();
-    await expectStatus(hh.refresh(ctx({ params: { id }, body: {} })), 503);
+    const res = await hh.refresh(ctx({ params: { id }, body: {} }));
+    expect(res.status).toBe(202);
+    const job = res.body as { status: string; error?: string };
+    expect(job.status).toBe('failed');
+    expect(job.error).toBeTruthy();
+    // No benchmark was persisted.
+    expect(await data.benchmarks.get(id)).toBeNull();
+  });
+});
+
+describe('refreshStatus (GET /colleges/:id/benchmark/refresh/:jobId)', () => {
+  it('returns the job by id', async () => {
+    const id = await seedCollege();
+    const started = (await h.refresh(ctx({ params: { id }, body: {} }))).body as { jobId: string };
+    const res = await h.refreshStatus(ctx({ params: { id, jobId: started.jobId } }));
+    expect(res.status).toBe(200);
+    expect((res.body as { jobId: string }).jobId).toBe(started.jobId);
+  });
+
+  it('404s for an unknown job', async () => {
+    const id = await seedCollege();
+    await expectStatus(h.refreshStatus(ctx({ params: { id, jobId: 'nope' } })), 404);
   });
 });
 

@@ -241,6 +241,22 @@ export interface DiscoveryJob extends Timestamped {
   error?: string;
 }
 
+/**
+ * A transient async peer-benchmark refresh job. The API creates one (status 'pending') and enqueues
+ * it; the 300s SQS worker runs the web-grounded competitive-profile research (which can exceed the
+ * 30s API budget) and writes the merged benchmark back; the frontend polls until it settles, then
+ * reloads the benchmark. PK: BENCHMARKREFRESH#<jobId>, SK: DETAILS.
+ */
+export interface BenchmarkRefreshJob extends Timestamped {
+  jobId: string;
+  /** The college whose benchmark this job refreshes. */
+  collegeId: string;
+  status: 'pending' | 'complete' | 'failed';
+  /** Optional free-text steer echoed from the request, so the worker can run the research. */
+  focus?: string;
+  error?: string;
+}
+
 export interface CollegeNote extends Timestamped {
   collegeId: string;
   noteId: string; // derived from the SK timestamp

@@ -45,6 +45,7 @@ import type {
   Certification,
   ExperienceEntry,
   College,
+  BenchmarkRefreshJob,
   Contact,
   Course,
   DiscoveryJob,
@@ -138,6 +139,11 @@ export function makeData(
   // Transient async discovery jobs (no collection — fetched only by id while polling).
   const discoveryJobs = makeDetailsRepo<DiscoveryJob, 'jobId'>(client, {
     prefix: 'DISCOVERY',
+    idField: 'jobId',
+  });
+
+  const benchmarkRefreshJobs = makeDetailsRepo<BenchmarkRefreshJob, 'jobId'>(client, {
+    prefix: 'BENCHMARKREFRESH',
     idField: 'jobId',
   });
 
@@ -245,6 +251,7 @@ export function makeData(
     exams,
     colleges,
     discoveryJobs,
+    benchmarkRefreshJobs,
     scholarships,
     goals,
     courses,

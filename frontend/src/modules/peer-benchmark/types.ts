@@ -107,3 +107,16 @@ export interface GapsAnalysis {
 export interface RefreshInput {
   focus?: string;
 }
+
+/** POST /colleges/:id/benchmark/refresh (202) + GET .../refresh/:jobId — an async refresh job. The
+ *  web-grounded research runs on the SQS worker; the frontend polls this until it settles, then
+ *  reloads the benchmark. */
+export interface BenchmarkRefreshJob {
+  jobId: string;
+  collegeId: string;
+  status: 'pending' | 'complete' | 'failed';
+  focus?: string;
+  error?: string;
+  createdAt: string;
+  updatedAt: string;
+}

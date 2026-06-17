@@ -14,16 +14,21 @@ import type { RouteDef } from '../../shared/api/index.js';
 import { dataFromEnv, type Data } from '../../shared/data/index.js';
 import { bedrockResearcher } from './bedrock.js';
 import { makeHandlers } from './handlers.js';
+import { makeSqsRefreshEnqueuer } from './refresh-job.js';
 
 let cached: Data | undefined;
+const getData = (): Data => (cached ??= dataFromEnv());
 const handlers = makeHandlers(
-  (): Data => (cached ??= dataFromEnv()),
+  getData,
   () => bedrockResearcher,
+  // Refresh is async: enqueue to the shared hydration queue; the 300s worker runs the research.
+  () => makeSqsRefreshEnqueuer(getData),
 );
 
 export const routes: RouteDef[] = [
   { method: 'GET', path: '/colleges/:id/benchmark', handler: handlers.detail },
   { method: 'POST', path: '/colleges/:id/benchmark/refresh', handler: handlers.refresh },
+  { method: 'GET', path: '/colleges/:id/benchmark/refresh/:jobId', handler: handlers.refreshStatus },
   { method: 'GET', path: '/benchmarks/aggregate', handler: handlers.aggregate },
   { method: 'GET', path: '/benchmarks/gaps', handler: handlers.gaps },
 ];
