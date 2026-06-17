@@ -10,6 +10,9 @@ import { getProfile, type StudentProfile } from '../onboarding/api';
 import { listColleges } from '../college-hub/api';
 import type { College } from '../college-hub/types';
 
+/** How many colleges the dashboard card lists before collapsing the rest into "+N more". */
+const COLLEGE_PREVIEW = 6;
+
 /** A banner linking to the Focus (major-pack) page — shown only once the student has set a major. It
  *  makes the otherwise-ambient major pack a visible, clickable destination from the dashboard. */
 function FocusBanner() {
@@ -247,6 +250,7 @@ function Stat({ to, label, value, sub, icon }: { to: string; label: string; valu
 export default function DashboardPage() {
   const [d, setD] = useState<Dashboard | null>(null);
   const [profile, setProfile] = useState<StudentProfile | null>(null);
+  const [colleges, setColleges] = useState<College[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -261,6 +265,11 @@ export default function DashboardPage() {
     getProfile()
       .then(setProfile)
       .catch(() => setProfile(null));
+    // The colleges card lists the actual schools (names + status), not just per-status counts.
+    // Non-blocking — the card falls back to a spinner until this resolves.
+    listColleges()
+      .then(setColleges)
+      .catch(() => setColleges(null));
   };
   useEffect(load, []);
 
@@ -364,12 +373,37 @@ export default function DashboardPage() {
         {/* Colleges → college hub (tracked count). Above deadlines: the list drives the deadlines. */}
         <LinkCard to="/colleges">
           <CardTitle>Colleges ({totalColleges(d.collegeCounts)})</CardTitle>
-          <div className="flex flex-wrap gap-1.5">
-            {Object.entries(d.collegeCounts).map(([status, n]) => (
-              <Badge key={status} tone="neutral">{status}: {n}</Badge>
-            ))}
-            {totalColleges(d.collegeCounts) === 0 ? <p className="text-sm text-ink-500">No colleges tracked.</p> : null}
-          </div>
+          {totalColleges(d.collegeCounts) === 0 ? (
+            <p className="text-sm text-ink-500">No colleges tracked.</p>
+          ) : colleges === null ? (
+            <div className="flex items-center gap-2 text-sm text-ink-400"><Spinner size={14} /> Loading…</div>
+          ) : (
+            <ul className="space-y-1">
+              {[...colleges]
+                // Top picks first, then alphabetical — a stable, scannable preview.
+                .sort((a, b) => Number(b.isTopPick ?? false) - Number(a.isTopPick ?? false) || a.name.localeCompare(b.name))
+                .slice(0, COLLEGE_PREVIEW)
+                .map((c) => {
+                  const hydrating = c.hydrationStatus === 'in-progress' || c.hydrationStatus === 'pending';
+                  return (
+                    <li key={c.collegeId} className="flex items-center justify-between gap-2 text-sm">
+                      <span className="flex min-w-0 items-center gap-1.5">
+                        {c.isTopPick ? <Icon name="star" size={13} className="shrink-0 text-secondary-500" /> : null}
+                        <span className="truncate text-ink-800">{c.name}</span>
+                      </span>
+                      {hydrating ? (
+                        <span className="flex shrink-0 items-center gap-1 text-xs text-ink-400"><Spinner size={11} /> researching</span>
+                      ) : (
+                        <span className="shrink-0 text-xs capitalize text-ink-400">{c.status ?? ''}</span>
+                      )}
+                    </li>
+                  );
+                })}
+              {colleges.length > COLLEGE_PREVIEW ? (
+                <li className="pt-0.5 text-xs font-medium text-primary-600">+{colleges.length - COLLEGE_PREVIEW} more →</li>
+              ) : null}
+            </ul>
+          )}
         </LinkCard>
 
         {/* Upcoming deadlines → master timeline. A clean preview (next 3); the full list lives on the timeline. */}
