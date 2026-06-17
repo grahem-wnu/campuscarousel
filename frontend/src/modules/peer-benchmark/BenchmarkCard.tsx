@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Badge, Button, Card, Spinner, useToast } from '../../shared/ui';
+import { useActiveStudent } from '../../shared/shell';
 import { getBenchmark, refreshBenchmark } from './api';
 import { cellText, readinessMeta, statusMeta } from './logic';
 import type { BenchmarkDetail, MetricStatus, TeasStatus } from './types';
@@ -34,6 +35,8 @@ function MetricRow({
  *  Self-contained — college-hub can mount this in its detail tab; it consumes the public API. */
 export function BenchmarkCard({ collegeId }: { collegeId: string }) {
   const toast = useToast();
+  const { activeStudent } = useActiveStudent();
+  const studentName = activeStudent?.name ?? 'This student';
   const [detail, setDetail] = useState<BenchmarkDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -113,7 +116,7 @@ export function BenchmarkCard({ collegeId }: { collegeId: string }) {
             <MetricRow label="Clinical hours" keira={keira.clinicalHours} school={benchmark.typicalClinicalHours} status={clin} />
             <MetricRow label="Volunteer hours" keira={keira.volunteerHours} school={benchmark.typicalVolunteerHours} status={vol} />
           </div>
-          <p className="mt-2 text-xs text-ink-400">Keira / typical admitted student.</p>
+          <p className="mt-2 text-xs text-ink-400">{studentName} / typical admitted student.</p>
 
           {benchmark.typicalCertifications && benchmark.typicalCertifications.length > 0 ? (
             <div className="mt-3">

@@ -18,6 +18,7 @@ import {
 import { CollegeLogo } from './CollegeLogo';
 import { CollegeForm } from './CollegeForm';
 import { HydrationBadge } from './HydrationBadge';
+import { useActiveStudent } from '../../shared/shell';
 import { BenchmarkCard } from '../peer-benchmark/BenchmarkCard';
 import {
   PROGRAM_TYPE_LABEL,
@@ -48,6 +49,7 @@ type TabId = 'overview' | 'notes' | 'checklist' | 'fit' | 'photos';
 export default function CollegeDetailPage() {
   const { id = '' } = useParams();
   const navigate = useNavigate();
+  const { activeStudent } = useActiveStudent();
   const [college, setCollege] = useState<College | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -125,6 +127,7 @@ export default function CollegeDetailPage() {
   }
 
   const status = STATUS_META[college.status ?? 'researching'];
+  const studentName = activeStudent?.name ?? 'this student';
   const fit = fitBand(college.fitScore);
   const accent = college.branding?.primaryColor;
   const campus = campusImageSrc(college);
@@ -223,8 +226,8 @@ export default function CollegeDetailPage() {
             <h2 className="text-sm font-semibold text-ink-800">Fit analysis</h2>
             {fit ? <Badge tone={fit.tone}>{fit.label}</Badge> : <p className="text-sm text-ink-500">No fit score yet.</p>}
             <p className="text-sm text-ink-600">
-              The fit score is set by AI against Keira’s profile during hydration; use <strong>Refresh</strong> to
-              recompute it. The breakdown below compares each of her metrics to this school’s typical admitted
+              The fit score is set by AI against {studentName}’s profile during hydration; use <strong>Refresh</strong> to
+              recompute it. The breakdown below compares each of their metrics to this school’s typical admitted
               student.
             </p>
           </Card>
