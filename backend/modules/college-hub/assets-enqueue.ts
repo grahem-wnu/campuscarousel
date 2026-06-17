@@ -33,8 +33,10 @@ export function makeAssetsEnqueuer(_getData: () => Data, options: AssetsEnqueuer
           MessageBody: JSON.stringify({ type: ASSETS_TYPE, collegeId, tenantId: currentTenantId(), studentId: currentStudentId() }),
         }),
       );
-    } catch {
+    } catch (err) {
       // Best-effort: a failed enqueue must never break create/hydrate. The card falls back gracefully.
+      // But don't swallow silently — log so a missing grant/queue is visible, not invisible.
+      console.error('[college-assets] enqueue failed (assets skipped)', { collegeId, err });
     }
   };
 }
