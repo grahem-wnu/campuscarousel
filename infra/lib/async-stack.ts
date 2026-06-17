@@ -208,6 +208,12 @@ export class AsyncStack extends Stack {
     worker.addEnvironment("ASSETS_QUEUE_URL", this.assetsQueue.queueUrl);
     this.assetsQueue.grantSendMessages(worker);
 
+    // The seed also fans out per-college TEXT hydration onto the hydration queue (the same queue this
+    // worker consumes). The SqsEventSource grants consume-only (receive/delete) — NOT send — so the
+    // seed's enqueue was denied and silently fell back to a ~140s inline hydrate per college, blowing
+    // the 300s budget after ~2 colleges. Grant send so the seed enqueues instead of hydrating inline.
+    this.hydrationQueue.grantSendMessages(worker);
+
     putOutput(this, config, "assetsQueueUrl", this.assetsQueue.queueUrl, "Assets SQS URL");
     putOutput(this, config, "assetsQueueArn", this.assetsQueue.queueArn, "Assets SQS ARN");
     putOutput(this, config, "assetsDlqUrl", this.assetsDeadLetterQueue.queueUrl, "Assets DLQ URL");
