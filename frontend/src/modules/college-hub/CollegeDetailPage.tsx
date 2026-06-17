@@ -163,38 +163,47 @@ export default function CollegeDetailPage() {
       ) : null}
 
       <Card
-        className="flex flex-wrap items-center gap-4"
+        className="space-y-3"
         style={accent ? { borderTopColor: accent, borderTopWidth: 4 } : undefined}
       >
-        <CollegeLogo college={college} size={64} />
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-xl font-bold text-ink-900">{college.name}</h1>
+        {/* Logo + name. */}
+        <div className="flex items-center gap-3">
+          <CollegeLogo college={college} size={56} className="shrink-0" />
+          <h1 className="min-w-0 flex-1 text-xl font-bold leading-tight text-ink-900">{college.name}</h1>
+        </div>
+
+        {/* Status tags on the left, actions on the right (wraps when tight). */}
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
             <Badge tone={status.tone}>{status.label}</Badge>
             {college.isTopPick ? <Badge tone="warn">★ Top pick</Badge> : null}
             <HydrationBadge status={college.hydrationStatus} />
           </div>
-          <p className="mt-0.5 text-sm text-ink-500">
-            {[college.location ?? college.state, college.programType ? PROGRAM_TYPE_LABEL[college.programType] : undefined]
-              .filter(Boolean)
-              .join(' · ') || '—'}
-            {college.branding?.mascot ? ` · ${college.branding.mascot}` : ''}
-          </p>
-          <div className="mt-2 flex flex-wrap gap-2 text-sm">
-            {safeHref(college.contactInfo?.programAdmissionsUrl) ? (
-              <a className="text-primary-600 hover:underline" href={safeHref(college.contactInfo?.programAdmissionsUrl)} target="_blank" rel="noreferrer">Program admissions</a>
-            ) : null}
-            {safeHref(college.contactInfo?.campusVisitUrl) ? (
-              <a className="text-primary-600 hover:underline" href={safeHref(college.contactInfo?.campusVisitUrl)} target="_blank" rel="noreferrer">Plan a visit</a>
-            ) : null}
-            {safeHref(college.website) ? (
-              <a className="text-primary-600 hover:underline" href={safeHref(college.website)} target="_blank" rel="noreferrer">Website</a>
-            ) : null}
+          <div className="flex shrink-0 gap-2">
+            <Button size="sm" variant="outline" onClick={() => setShowEdit(true)}>Edit</Button>
+            <Button size="sm" variant="ghost" icon="course" loading={busy} onClick={() => void onRefresh()}>Refresh</Button>
           </div>
         </div>
-        <div className="flex flex-col gap-2">
-          <Button size="sm" variant="outline" onClick={() => setShowEdit(true)}>Edit</Button>
-          <Button size="sm" variant="ghost" icon="course" loading={busy} onClick={() => void onRefresh()}>Refresh</Button>
+
+        {/* Location · program · mascot. */}
+        <p className="text-sm text-ink-500">
+          {[college.location ?? college.state, college.programType ? PROGRAM_TYPE_LABEL[college.programType] : undefined]
+            .filter(Boolean)
+            .join(' · ') || '—'}
+          {college.branding?.mascot ? ` · ${college.branding.mascot}` : ''}
+        </p>
+
+        {/* Quick links. */}
+        <div className="flex flex-wrap gap-2 text-sm">
+          {safeHref(college.contactInfo?.programAdmissionsUrl) ? (
+            <a className="text-primary-600 hover:underline" href={safeHref(college.contactInfo?.programAdmissionsUrl)} target="_blank" rel="noreferrer">Program admissions</a>
+          ) : null}
+          {safeHref(college.contactInfo?.campusVisitUrl) ? (
+            <a className="text-primary-600 hover:underline" href={safeHref(college.contactInfo?.campusVisitUrl)} target="_blank" rel="noreferrer">Plan a visit</a>
+          ) : null}
+          {safeHref(college.website) ? (
+            <a className="text-primary-600 hover:underline" href={safeHref(college.website)} target="_blank" rel="noreferrer">Website</a>
+          ) : null}
         </div>
       </Card>
 
