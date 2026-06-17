@@ -90,14 +90,21 @@ export function extractJson(text: string): unknown {
   return JSON.parse(fenced.slice(start, end + 1));
 }
 
-const str = (v: unknown): string | undefined => (typeof v === 'string' && v.trim() ? v.trim() : undefined);
+// `max` truncates over-long values so a discovered candidate always fits the bulk-add field caps
+// (college-hub/schema.ts) — the model can emit a multi-citation `ranking` far past the 120-char cap,
+// which would 422 the whole bulk-add batch. Truncating keeps the leading (most relevant) text.
+const str = (v: unknown, max?: number): string | undefined => {
+  if (typeof v !== 'string' || !v.trim()) return undefined;
+  const t = v.trim();
+  return max && t.length > max ? t.slice(0, max).trimEnd() : t;
+};
 const num = (v: unknown): number | undefined => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
 const bool = (v: unknown): boolean | undefined => (typeof v === 'boolean' ? v : undefined);
 
 /** Trimmed, non-empty strings from an array; undefined if none survive. */
 const strArray = (v: unknown): string[] | undefined => {
   if (!Array.isArray(v)) return undefined;
-  const out = v.map(str).filter((s): s is string => s !== undefined);
+  const out = v.map((s) => str(s)).filter((s): s is string => s !== undefined);
   return out.length ? out : undefined;
 };
 /** Only http(s) URLs from an array (model image/source URLs are best-effort and often junk). */
@@ -144,15 +151,17 @@ const programType = (v: unknown): College['programType'] | undefined =>
 function toCandidate(raw: unknown): CollegeCandidate | null {
   if (!raw || typeof raw !== 'object') return null;
   const o = raw as Record<string, unknown>;
-  const name = str(o.name);
+  // Caps mirror the bulk-add field limits in college-hub/schema.ts: a candidate is submitted to
+  // POST /colleges/bulk-add verbatim, so any over-long string here would 422 the entire batch.
+  const name = str(o.name, 200);
   if (!name) return null;
   return {
     name,
-    location: str(o.location),
-    state: str(o.state),
+    location: str(o.location, 200),
+    state: str(o.state, 100),
     programType: programType(o.programType),
     isDirectAdmit: bool(o.isDirectAdmit),
-    ranking: str(o.ranking),
+    ranking: str(o.ranking, 120),
     tuitionInState: num(o.tuitionInState),
     tuitionOutOfState: num(o.tuitionOutOfState),
     website: str(o.website),
