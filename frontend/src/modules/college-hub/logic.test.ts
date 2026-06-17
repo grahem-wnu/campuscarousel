@@ -1,16 +1,21 @@
 import { describe, expect, it } from 'vitest';
 import {
+  acceptanceValue,
   anyFetchingAssets,
   anyHydrating,
   bestCost,
   campusImageSrc,
   checklistPct,
+  compactCost,
   costLabel,
   domainOf,
+  firstPercent,
   fitBand,
+  gpaValue,
   hydrationMeta,
   logoSrc,
   normalizeName,
+  rankValue,
   untrackedCandidates,
 } from './logic';
 import type { College } from './types';
@@ -115,5 +120,41 @@ describe('checklistPct', () => {
   it('computes completion percent or null when empty', () => {
     expect(checklistPct([{ completed: true }, { completed: false }, { completed: false }, { completed: true }])).toBe(50);
     expect(checklistPct([])).toBeNull();
+  });
+});
+
+describe('at-a-glance snapshot extractors', () => {
+  it('compactCost — k-rounds, Free at zero, null when unknown', () => {
+    expect(compactCost(59925)).toBe('$60k');
+    expect(compactCost(20257)).toBe('$20k');
+    expect(compactCost(0)).toBe('Free');
+    expect(compactCost(850)).toBe('$850');
+    expect(compactCost(undefined)).toBeNull();
+  });
+
+  it('rankValue — pulls the first rank token from a blurb', () => {
+    expect(rankValue('Texas A&M University ranks No. 21 among Top Public Schools')).toBe('#21');
+    expect(rankValue('UF ranked #5 among public universities nationally (U.S. News 2025)')).toBe('#5');
+    expect(rankValue('Oldest continuous CM program (est. 1935); top-rated nationally')).toBeNull();
+    expect(rankValue(undefined)).toBeNull();
+  });
+
+  it('firstPercent — first percentage, low end of a range', () => {
+    expect(firstPercent('~57% overall (Class of 2028)')).toBe('57%');
+    expect(firstPercent('~19–20% (Class of 2029)')).toBe('19%');
+    expect(firstPercent('99% job placement rate at graduation')).toBe('99%');
+    expect(firstPercent('Not published separately for this program')).toBeNull();
+  });
+
+  it('gpaValue — first GPA-shaped number on a 0–5 scale', () => {
+    expect(gpaValue('~3.66–3.75 weighted GPA (university-wide admitted average)')).toBe('3.66');
+    expect(gpaValue('4.5–4.7 weighted (middle 50%, Class of 2029)')).toBe('4.5');
+    expect(gpaValue('est. 1935; no GPA reported')).toBeNull();
+  });
+
+  it('acceptanceValue — prefers the university rate, falls back to program', () => {
+    expect(acceptanceValue(college({ acceptanceRateUniversity: '~57% overall', acceptanceRateProgram: 'Not published' }))).toBe('57%');
+    expect(acceptanceValue(college({ acceptanceRateProgram: 'About 30% of applicants admitted' }))).toBe('30%');
+    expect(acceptanceValue(college())).toBeNull();
   });
 });

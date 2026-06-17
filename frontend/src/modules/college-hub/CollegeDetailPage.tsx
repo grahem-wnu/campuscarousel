@@ -23,11 +23,16 @@ import { BenchmarkCard } from '../peer-benchmark/BenchmarkCard';
 import {
   PROGRAM_TYPE_LABEL,
   STATUS_META,
+  acceptanceValue,
   campusImageSrc,
   checklistPct,
+  compactCost,
   costLabel,
+  firstPercent,
   fitBand,
+  gpaValue,
   hydrationMeta,
+  rankValue,
 } from './logic';
 import {
   addNote,
@@ -344,10 +349,42 @@ function Narrative({ text }: { text: string }) {
   );
 }
 
+/** At-a-glance snapshot — the 6 stats someone clicking quickly through colleges wants without reading:
+ *  prestige (rank), odds (acceptance + GPA bar), money (sticker vs after-aid), outcome (employment).
+ *  Each is a single concise token pulled from the richer fields; the full detail lives in Key stats
+ *  below. Self-hides until at least one value exists (an un-hydrated college shows nothing here). */
+function KeyStatsStrip({ college }: { college: College }) {
+  const stats: { label: string; value: string | null }[] = [
+    { label: 'Rank', value: rankValue(college.ranking) },
+    { label: 'Acceptance', value: acceptanceValue(college) },
+    { label: 'Avg GPA', value: gpaValue(college.avgGPAAdmitted) },
+    { label: 'All-in / yr', value: compactCost(college.costOfAttendanceOutOfState) },
+    { label: 'Net price / yr', value: compactCost(college.estimatedNetPriceAfterAid) },
+    { label: 'Employment', value: firstPercent(college.employmentRate) },
+  ];
+  if (stats.every((s) => s.value === null)) return null;
+
+  return (
+    <Card flush className="grid grid-cols-2 gap-px overflow-hidden bg-surface-border sm:grid-cols-3">
+      {stats.map((s) => (
+        <div key={s.label} className="bg-surface-raised px-3 py-2.5">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-ink-400">{s.label}</p>
+          <p className={`mt-0.5 text-lg font-bold ${s.value === null ? 'text-ink-300' : 'text-ink-900'}`}>
+            {s.value ?? '—'}
+          </p>
+        </div>
+      ))}
+    </Card>
+  );
+}
+
 function OverviewTab({ college, onDelete }: { college: College; onDelete: () => void }) {
   const hasNarrative = Boolean(college.overview || college.admissionsDeepDive);
   return (
     <div className="space-y-5">
+      {/* 0. At-a-glance snapshot — fast triage, above everything. */}
+      <KeyStatsStrip college={college} />
+
       {/* 1. Narrative — the lead content. Hidden entirely until hydrated. */}
       {hasNarrative ? (
         <Card className="space-y-4">
