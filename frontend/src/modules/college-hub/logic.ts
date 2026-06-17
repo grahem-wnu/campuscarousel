@@ -172,6 +172,47 @@ export function fitBand(score: number | undefined): { label: string; tone: Badge
   return { label: `Reach · ${score}`, tone: 'error' };
 }
 
+// --- At-a-glance snapshot extractors ------------------------------------------------------------
+// The hydrator stores ranking / acceptance / GPA / employment as rich narrative paragraphs (great for
+// the detailed table, too long for a fast triage strip). These pull the single concise token a parent
+// scanning quickly actually wants ("#21", "57%", "3.66"); the full text still lives in the Key stats
+// table below. All return null when nothing usable is found, so the tile renders a dash.
+
+/** A compact USD figure for snapshot tiles: "$60k", "$20k", "Free". null when unknown. */
+export function compactCost(cost?: number): string | null {
+  if (cost === undefined || cost === null) return null;
+  if (cost === 0) return 'Free';
+  if (cost < 1000) return `$${cost}`;
+  return `$${Math.round(cost / 1000)}k`;
+}
+
+/** First numeric rank in a ranking blurb → "#21" (matches "#5", "No. 21", "ranked No.21"). null if none. */
+export function rankValue(ranking?: string): string | null {
+  if (!ranking) return null;
+  const m = ranking.match(/(?:#|No\.?\s*)(\d{1,3})\b/i);
+  return m ? `#${m[1]}` : null;
+}
+
+/** First percentage in a blurb → "57%" (the low end of a range like "19–20%"). null if none. The
+ *  range arm lets the `%` sit on the high end while we report the first bound. */
+export function firstPercent(text?: string): string | null {
+  if (!text) return null;
+  const m = text.match(/(\d{1,3}(?:\.\d+)?)(?:\s*[–-]\s*\d{1,3}(?:\.\d+)?)?\s*%/);
+  return m ? `${m[1]}%` : null;
+}
+
+/** First GPA-shaped number (0–5 scale) in a blurb → "3.66"; the low end of a range. null if none. */
+export function gpaValue(text?: string): string | null {
+  if (!text) return null;
+  const m = text.match(/\b([0-5]\.\d{1,2})\b/);
+  return m?.[1] ?? null;
+}
+
+/** Concise selectivity for the strip: university rate preferred (program is often "not published"). */
+export function acceptanceValue(c: College): string | null {
+  return firstPercent(c.acceptanceRateUniversity) ?? firstPercent(c.acceptanceRateProgram);
+}
+
 /** Normalize a college name for duplicate detection (mirrors the server's dedupe rule). */
 export function normalizeName(name: string): string {
   return name.trim().toLowerCase().replace(/\s+/g, ' ');
