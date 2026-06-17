@@ -35,11 +35,14 @@ export function CollegeCard({ college, selectedForCompare, onOpen, onToggleTopPi
   useEffect(() => setCampusErrored(false), [campus]);
   const hero = campus && !campusErrored;
 
+  // p-2 + touch-manipulation give the star a finger-sized (~36px) tap target instead of the bare
+  // 20px glyph — otherwise it's near-impossible to hit on touch, especially in the hero corner.
   const star = (
     <button
       type="button"
       aria-label={college.isTopPick ? 'Remove top pick' : 'Mark top pick'}
       onClick={() => onToggleTopPick(college)}
+      className="touch-manipulation p-2"
     >
       <Icon name="star" size={20} />
     </button>
