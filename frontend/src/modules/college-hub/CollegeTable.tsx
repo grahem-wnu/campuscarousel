@@ -35,7 +35,7 @@ export function CollegeTable({ colleges, onOpen, onToggleTopPick }: Props) {
                     type="button"
                     aria-label={c.isTopPick ? 'Remove top pick' : 'Mark top pick'}
                     onClick={() => onToggleTopPick(c)}
-                    className={c.isTopPick ? 'text-warn-500' : 'text-ink-300 hover:text-warn-400'}
+                    className={`touch-manipulation p-2 ${c.isTopPick ? 'text-warn-500' : 'text-ink-300 hover:text-warn-400'}`}
                   >
                     <Icon name="star" size={16} />
                   </button>
