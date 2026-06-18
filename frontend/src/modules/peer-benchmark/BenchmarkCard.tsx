@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Badge, Button, Card, Spinner, useToast } from '../../shared/ui';
 import { useActiveStudent } from '../../shared/shell';
 import { getBenchmark, refreshBenchmark } from './api';
@@ -33,7 +33,10 @@ function MetricRow({
 
 /** Per-college benchmark comparison card: school typical vs Keira's, readiness badge, refresh.
  *  Self-contained — college-hub can mount this in its detail tab; it consumes the public API. */
-export function BenchmarkCard({ collegeId }: { collegeId: string }) {
+/** `onResearched` fires once when an async research cycle settles to 'complete' — the host (college
+ *  detail) uses it to reload the college so the freshly-computed fit score shows without a manual
+ *  page reload. */
+export function BenchmarkCard({ collegeId, onResearched }: { collegeId: string; onResearched?: () => void }) {
   const toast = useToast();
   const { activeStudent } = useActiveStudent();
   const studentName = activeStudent?.name ?? 'This student';
@@ -76,6 +79,14 @@ export function BenchmarkCard({ collegeId }: { collegeId: string }) {
     const t = setTimeout(() => void reload(), 4000);
     return () => clearTimeout(t);
   }, [researching, detail, reload]);
+
+  // When a research cycle settles to 'complete', tell the host once so it can refresh derived data
+  // (the college's fit score is recomputed server-side during research).
+  const wasResearchingRef = useRef(false);
+  useEffect(() => {
+    if (wasResearchingRef.current && status === 'complete') onResearched?.();
+    wasResearchingRef.current = researching;
+  }, [status, researching, onResearched]);
 
   async function refresh(): Promise<void> {
     setRefreshing(true);
