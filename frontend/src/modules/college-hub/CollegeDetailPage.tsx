@@ -238,13 +238,13 @@ export default function CollegeDetailPage() {
             <h2 className="text-sm font-semibold text-ink-800">Fit analysis</h2>
             {fit ? <Badge tone={fit.tone}>{fit.label}</Badge> : <p className="text-sm text-ink-500">No fit score yet.</p>}
             <p className="text-sm text-ink-600">
-              The fit score is set by AI against {studentName}’s profile during hydration; use <strong>Refresh</strong> to
-              recompute it. The breakdown below compares each of their metrics to this school’s typical admitted
-              student.
+              The fit score is auto-calculated from {studentName}’s profile against this school’s typical admitted
+              student. Use <strong>Refresh Benchmark</strong> below to research the school and recompute it — the
+              breakdown shows how each metric compares.
             </p>
           </Card>
           {/* Detailed per-metric comparison (GPA / TEAS / clinical + volunteer hours / certs vs this school). */}
-          <BenchmarkCard collegeId={college.collegeId} />
+          <BenchmarkCard collegeId={college.collegeId} onResearched={() => void load()} />
         </div>
       )}
 
