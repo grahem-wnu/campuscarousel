@@ -82,8 +82,24 @@ export interface College {
   campusImageCredit?: string;
   logoImageUrl?: string;
   assetsStatus?: AssetsStatus;
+  /** AI "how to prepare in high school for this college" plan (see POST /colleges/:id/prep). */
+  hsPrepPlan?: HsPrepPlan;
   createdAt: string;
   updatedAt: string;
+}
+
+/** One recommendation in a high-school prep plan: a short label + an optional one-line "why/how". */
+export interface HsPrepItem {
+  label: string;
+  detail?: string;
+}
+
+/** AI plan of what to aim for + take in high school to be competitive for a specific college's program. */
+export interface HsPrepPlan {
+  headline?: string;
+  targets: HsPrepItem[];
+  courses: HsPrepItem[];
+  activities: HsPrepItem[];
 }
 
 /** Body for create/update (the lib stamps id + timestamps; imagery is system-owned). */
@@ -101,6 +117,7 @@ export type CollegeInput = Partial<
     | 'campusImageCredit'
     | 'logoImageUrl'
     | 'assetsStatus'
+    | 'hsPrepPlan'
   >
 > & {
   name?: string;

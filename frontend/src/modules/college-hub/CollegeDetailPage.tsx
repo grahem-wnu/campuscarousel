@@ -41,17 +41,15 @@ import {
   getChecklist,
   getCollege,
   hydrateCollege,
+  generatePrep,
   listNotes,
   putChecklist,
   suggestChecklist,
   updateCollege,
 } from './api';
-import type { ChecklistItem, College, CollegeInput, CollegeNote } from './types';
-import { getPrerequisites } from '../course-planner/api';
-import { PrereqReportView } from '../course-planner/PrereqReportView';
-import type { PrereqReport } from '../course-planner/types';
+import type { ChecklistItem, College, CollegeInput, CollegeNote, HsPrepItem, HsPrepPlan } from './types';
 
-type TabId = 'overview' | 'notes' | 'checklist' | 'prereqs' | 'fit' | 'photos';
+type TabId = 'overview' | 'notes' | 'checklist' | 'prep' | 'fit' | 'photos';
 
 /** College detail — branded header + Overview / Notes / Checklist / Fit tabs, edit, refresh, delete.
  *  Touchpoints, Visits, and Benchmark tabs are owned by their own modules and slot in separately. */
@@ -148,7 +146,7 @@ export default function CollegeDetailPage() {
     { id: 'overview', label: 'Overview' },
     { id: 'notes', label: 'Notes' },
     { id: 'checklist', label: 'Checklist' },
-    { id: 'prereqs', label: 'Prerequisites' },
+    { id: 'prep', label: 'Prepare' },
     { id: 'fit', label: 'Fit analysis' },
     { id: 'photos', label: 'Photos' },
   ];
@@ -230,8 +228,8 @@ export default function CollegeDetailPage() {
         <NotesTab collegeId={id} />
       ) : tab === 'checklist' ? (
         <ChecklistTab college={college} onSaved={load} />
-      ) : tab === 'prereqs' ? (
-        <PrereqsTab college={college} />
+      ) : tab === 'prep' ? (
+        <PrepTab college={college} onUpdate={setCollege} />
       ) : tab === 'photos' ? (
         <PhotosTab college={college} busy={busy} onRefresh={() => void onRefresh()} />
       ) : (
@@ -257,45 +255,121 @@ export default function CollegeDetailPage() {
   );
 }
 
-/** Prerequisites tab — which courses the student still needs for THIS college's program. Pulls the
- *  per-college prereq report (their courses checked against the college's hydrated prerequisites) and
- *  lists the gaps first. No course-name resolver (the college page doesn't load the course list), so
- *  covered items just read "covered by your courses". */
-function PrereqsTab({ college }: { college: College }) {
-  const [report, setReport] = useState<PrereqReport | null>(null);
-  const [loading, setLoading] = useState(true);
+/** The three sections of an AI prep plan, each a labeled list with optional one-line detail. */
+function PrepPlanView({ plan }: { plan: HsPrepPlan }) {
+  const sections: { title: string; items: HsPrepItem[] }[] = [
+    { title: 'Aim for', items: plan.targets },
+    { title: 'Take these classes', items: plan.courses },
+    { title: 'Strengthen your application', items: plan.activities },
+  ].filter((s) => s.items.length > 0);
+  return (
+    <div className="space-y-4">
+      {plan.headline ? <p className="text-sm text-ink-700">{plan.headline}</p> : null}
+      {sections.map((s) => (
+        <div key={s.title}>
+          <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-ink-500">{s.title}</h3>
+          <ul className="space-y-1.5">
+            {s.items.map((it, i) => (
+              <li key={i} className="flex items-start gap-2 text-sm">
+                <Icon name="check" size={15} className="mt-0.5 shrink-0 text-primary-500" />
+                <span>
+                  <span className="font-medium text-ink-900">{it.label}</span>
+                  {it.detail ? <span className="text-ink-500"> — {it.detail}</span> : null}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Prepare tab — an AI plan for what to DO IN HIGH SCHOOL to be competitive for THIS college's
+ *  program: recommended HS classes, GPA/test targets (from the college's admission bar), and
+ *  activities. Generated on demand and persisted on the college. The college's own program-level
+ *  requirements (admission criteria + in-major college courses) are shown below for reference — NOT
+ *  as high-school to-dos (that was the old, confusing behavior). */
+function PrepTab({ college, onUpdate }: { college: College; onUpdate: (c: College) => void }) {
+  const plan = college.hsPrepPlan ?? null;
+  const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let active = true;
-    setLoading(true);
+  async function generate(): Promise<void> {
+    setGenerating(true);
     setError(null);
-    getPrerequisites(college.collegeId)
-      .then((r) => { if (active) setReport(r); })
-      .catch((e) => { if (active) setError(e instanceof Error ? e.message : 'Could not load prerequisites.'); })
-      .finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
-  }, [college.collegeId]);
+    try {
+      const { plan: p } = await generatePrep(college.collegeId);
+      if (!p) {
+        setError("Couldn't generate a plan right now — try again in a moment.");
+        return;
+      }
+      onUpdate({ ...college, hsPrepPlan: p });
+    } catch {
+      setError("Couldn't generate a plan right now — try again in a moment.");
+    } finally {
+      setGenerating(false);
+    }
+  }
 
-  if (loading) return <Card className="flex justify-center py-8"><Spinner size={22} /></Card>;
-  if (error) return <Card className="border border-error-200 bg-error-50 text-error-700"><p className="text-sm">{error}</p></Card>;
-  if (!report) return null;
+  const programReqs = college.prerequisites ?? [];
 
-  const allMet = report.totalCount > 0 && report.satisfiedCount === report.totalCount;
   return (
-    <Card className="space-y-3">
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="text-sm font-semibold text-ink-800">Courses you need for {college.name}</h2>
-        {report.totalCount > 0 ? (
-          <Badge tone={allMet ? 'success' : 'warn'}>{report.satisfiedCount}/{report.totalCount} met</Badge>
+    <div className="space-y-4">
+      <Card className="space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold text-ink-800">How to prepare in high school</h2>
+          {plan ? (
+            <button
+              type="button"
+              onClick={() => void generate()}
+              disabled={generating}
+              className="flex items-center gap-1 text-xs font-medium text-primary-600 hover:text-primary-700 disabled:opacity-50"
+            >
+              <Icon name="star" size={13} /> {generating ? 'Regenerating…' : 'Regenerate'}
+            </button>
+          ) : null}
+        </div>
+
+        {plan ? (
+          <PrepPlanView plan={plan} />
+        ) : (
+          <div className="rounded-lg border border-dashed border-surface-border bg-surface-sunken px-4 py-6 text-center">
+            <p className="text-sm font-medium text-ink-800">Get a game plan for {college.name}</p>
+            <p className="mx-auto mt-1 max-w-sm text-xs text-ink-500">
+              AI builds a high-school plan tailored to this program — which classes to take (AP Physics, AP Calc…),
+              the GPA/test scores to aim for, and the activities that strengthen your application.
+            </p>
+            <Button className="mt-3" icon="star" loading={generating} onClick={() => void generate()}>
+              Generate my prep plan
+            </Button>
+          </div>
+        )}
+
+        {error ? <p className="text-xs text-error-600">{error}</p> : null}
+        {plan ? (
+          <p className="text-[11px] text-ink-400">
+            AI guidance — confirm specifics with your counselor and the school. Regenerate after changing the major
+            or refreshing the college.
+          </p>
         ) : null}
-      </div>
-      <p className="text-xs text-ink-500">
-        Your courses checked against this program’s prerequisites. Add courses in the Course Planner to fill gaps;
-        hit <strong>Refresh</strong> above if the prerequisites look out of date.
-      </p>
-      <PrereqReportView report={report} />
-    </Card>
+      </Card>
+
+      {programReqs.length > 0 ? (
+        <Card className="space-y-2">
+          <h3 className="text-sm font-semibold text-ink-800">The program’s own requirements</h3>
+          <p className="text-xs text-ink-500">
+            What {college.name} lists for the major itself — admission criteria and college-level coursework you’ll
+            handle <strong>once enrolled</strong>. These aren’t high-school to-dos; they’re here for reference.
+          </p>
+          <ul className="list-disc space-y-1 pl-5 text-sm text-ink-700">
+            {programReqs.map((r, i) => (
+              <li key={i}>{r}</li>
+            ))}
+          </ul>
+        </Card>
+      ) : null}
+    </div>
   );
 }
 

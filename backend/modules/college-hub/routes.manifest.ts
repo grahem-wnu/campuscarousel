@@ -44,4 +44,5 @@ export const routes: RouteDef[] = [
   { method: 'GET', path: '/colleges/:id/checklist', handler: handlers.getChecklist },
   { method: 'PUT', path: '/colleges/:id/checklist', handler: handlers.putChecklist },
   { method: 'POST', path: '/colleges/:id/checklist/suggest', handler: handlers.suggestChecklist },
+  { method: 'POST', path: '/colleges/:id/prep', handler: handlers.generatePrep },
 ];
