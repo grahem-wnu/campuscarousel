@@ -81,6 +81,21 @@ describe('detail (GET /colleges/:id/benchmark)', () => {
     expect(body.comparison.gpaStatus).toBe('above');
     expect(body.comparison.clinicalHoursStatus).toBe('above');
   });
+
+  it('falls back to the onboarding GPA when no courses are entered', async () => {
+    const id = await seedCollege();
+    await data.studentProfile.put({ currentGPA: 3.4 } as Parameters<Data['studentProfile']['put']>[0]);
+    const res = await h.detail(ctx({ params: { id } }));
+    expect((res.body as { keira: { gpa?: number } }).keira.gpa).toBe(3.4);
+  });
+
+  it('prefers a real course GPA over the onboarding GPA', async () => {
+    const id = await seedCollege();
+    await data.studentProfile.put({ currentGPA: 3.4 } as Parameters<Data['studentProfile']['put']>[0]);
+    await data.courses.create({ name: 'AP Bio', grade: 'A' } as Parameters<Data['courses']['create']>[0]);
+    const res = await h.detail(ctx({ params: { id } }));
+    expect((res.body as { keira: { gpa?: number } }).keira.gpa).toBe(4.0);
+  });
 });
 
 describe('refresh (POST /colleges/:id/benchmark/refresh)', () => {
@@ -112,6 +127,15 @@ describe('refresh (POST /colleges/:id/benchmark/refresh)', () => {
   it('422s on an unknown body field', async () => {
     const id = await seedCollege();
     await expectStatus(h.refresh(ctx({ params: { id }, body: { bogus: 1 } })), 422);
+  });
+
+  it('auto-calculates and persists a 0-100 college fit score from the comparison', async () => {
+    const id = await seedCollege();
+    await h.refresh(ctx({ params: { id }, body: {} }));
+    const college = await data.colleges.get(id);
+    expect(typeof college?.fitScore).toBe('number');
+    expect(college!.fitScore!).toBeGreaterThanOrEqual(0);
+    expect(college!.fitScore!).toBeLessThanOrEqual(100);
   });
 
   it('marks the benchmark failed (not a thrown error) when AI research is unavailable', async () => {

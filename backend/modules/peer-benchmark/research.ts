@@ -5,7 +5,7 @@
 // worker (same path as college hydration). The student comparison is recomputed live on GET, so the
 // worker persists only the college's profile + a family-visible comparison snapshot; nothing private.
 
-import { compareToBenchmark } from './compare.js';
+import { compareToBenchmark, computeFitScore } from './compare.js';
 import { gatherFamilyVisibleStats } from './gather.js';
 import type { BenchmarkResearcher } from './researcher.js';
 import type { Benchmark, Data } from '../../shared/data/index.js';
@@ -43,7 +43,13 @@ export async function researchBenchmark(
     const existing = await data.benchmarks.get(collegeId);
     const preview = { ...(existing ?? { collegeId }), ...profile } as Benchmark;
     const keirasComparison = compareToBenchmark(familyStats, preview);
-    await data.benchmarks.mergePreservingUserEdits(collegeId, { ...profile, keirasComparison, hydrationStatus: 'complete' });
+    const merged = await data.benchmarks.mergePreservingUserEdits(collegeId, { ...profile, keirasComparison, hydrationStatus: 'complete' });
+    // Auto-calculate the college fit score (spec's "Refresh Fit Analysis") from the family-visible
+    // stats vs the freshly-researched benchmark. Only when computable, so we never clobber a real
+    // score with undefined. fitScore is a system field (see HYDRATION_SYSTEM_FIELDS) so the update
+    // doesn't mark it user-owned.
+    const fitScore = computeFitScore(familyStats, merged);
+    if (fitScore !== undefined) await data.colleges.update(collegeId, { fitScore });
   } catch (err) {
     console.error('[benchmark-research] research failed', collegeId, err);
     await data.benchmarks.mergePreservingUserEdits(collegeId, { hydrationStatus: 'failed' });

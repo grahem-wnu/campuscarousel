@@ -28,7 +28,9 @@ const STAMP_KEYS = new Set(['createdAt', 'updatedAt']);
  *  userEdited tracking, and actively removed from it (self-heal) if a prior write wrongly added one.
  *  (Setting hydrationStatus via update() used to mark it user-owned, which then blocked
  *  mergePreservingUserEdits from ever clearing the "Refreshing…" badge.) */
-const HYDRATION_SYSTEM_FIELDS = new Set(['hydrationStatus', 'lastDataRefresh', 'addedBy']);
+// System-computed fields that update()/merge must never treat as human-edited. fitScore is
+// auto-calculated from the peer benchmark, so a refresh always recomputes it (never user-owned).
+const HYDRATION_SYSTEM_FIELDS = new Set(['hydrationStatus', 'lastDataRefresh', 'addedBy', 'fitScore']);
 
 export const isoNow = (): string => new Date().toISOString();
 export const newId = (): string => randomUUID();
