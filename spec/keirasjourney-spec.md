@@ -767,6 +767,12 @@ Each college has a full detail page with a branded header and tabs:
   - Customizable — add/remove items manually; generated steps are editable like any other
   - Due dates (carried from known deadlines) and completion tracking
   - Visual progress bar
+
+- **Prerequisites tab:** Which courses the student still needs for THIS college's program
+  - Checks the student's Course Planner courses against the college's hydrated `prerequisites`,
+    listing the gaps (courses still to take) first, then the ones already covered.
+  - Reuses the per-college prerequisite report (`GET /courses/prerequisites/:collegeId`) so it stays
+    consistent with the Course Planner's coverage matrix.
   
 - **Fit Analysis tab:** AI-generated analysis of how Keira's current profile matches this school
   - GPA comparison
@@ -862,7 +868,9 @@ All suggestions are presented as a checklist — user can accept, modify, or del
 
 **Prerequisite Mapper:**
 - For each target college, shows which prerequisites are satisfied by current/planned courses
-- Matrix view: courses (rows) × colleges (columns) with checkmarks
+- Coverage matrix: colleges (rows) × prerequisites (columns) with covered/gap markers and a met count
+- **Tap a college row to expand it** — shows that college's full breakdown (courses still needed
+  first, then covered), so the wide matrix is usable on mobile without reading across columns
 - Highlights gaps: "UCI requires Microbiology — not currently in your plan"
 
 **Course Entry:**

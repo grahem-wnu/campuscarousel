@@ -47,8 +47,11 @@ import {
   updateCollege,
 } from './api';
 import type { ChecklistItem, College, CollegeInput, CollegeNote } from './types';
+import { getPrerequisites } from '../course-planner/api';
+import { PrereqReportView } from '../course-planner/PrereqReportView';
+import type { PrereqReport } from '../course-planner/types';
 
-type TabId = 'overview' | 'notes' | 'checklist' | 'fit' | 'photos';
+type TabId = 'overview' | 'notes' | 'checklist' | 'prereqs' | 'fit' | 'photos';
 
 /** College detail — branded header + Overview / Notes / Checklist / Fit tabs, edit, refresh, delete.
  *  Touchpoints, Visits, and Benchmark tabs are owned by their own modules and slot in separately. */
@@ -145,6 +148,7 @@ export default function CollegeDetailPage() {
     { id: 'overview', label: 'Overview' },
     { id: 'notes', label: 'Notes' },
     { id: 'checklist', label: 'Checklist' },
+    { id: 'prereqs', label: 'Prerequisites' },
     { id: 'fit', label: 'Fit analysis' },
     { id: 'photos', label: 'Photos' },
   ];
@@ -226,6 +230,8 @@ export default function CollegeDetailPage() {
         <NotesTab collegeId={id} />
       ) : tab === 'checklist' ? (
         <ChecklistTab college={college} onSaved={load} />
+      ) : tab === 'prereqs' ? (
+        <PrereqsTab college={college} />
       ) : tab === 'photos' ? (
         <PhotosTab college={college} busy={busy} onRefresh={() => void onRefresh()} />
       ) : (
@@ -248,6 +254,48 @@ export default function CollegeDetailPage() {
         <CollegeForm initial={college} busy={busy} onSubmit={(input) => void onEdit(input)} onCancel={() => setShowEdit(false)} />
       </Modal>
     </div>
+  );
+}
+
+/** Prerequisites tab — which courses the student still needs for THIS college's program. Pulls the
+ *  per-college prereq report (their courses checked against the college's hydrated prerequisites) and
+ *  lists the gaps first. No course-name resolver (the college page doesn't load the course list), so
+ *  covered items just read "covered by your courses". */
+function PrereqsTab({ college }: { college: College }) {
+  const [report, setReport] = useState<PrereqReport | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setError(null);
+    getPrerequisites(college.collegeId)
+      .then((r) => { if (active) setReport(r); })
+      .catch((e) => { if (active) setError(e instanceof Error ? e.message : 'Could not load prerequisites.'); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [college.collegeId]);
+
+  if (loading) return <Card className="flex justify-center py-8"><Spinner size={22} /></Card>;
+  if (error) return <Card className="border border-error-200 bg-error-50 text-error-700"><p className="text-sm">{error}</p></Card>;
+  if (!report) return null;
+
+  const allMet = report.totalCount > 0 && report.satisfiedCount === report.totalCount;
+  return (
+    <Card className="space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold text-ink-800">Courses you need for {college.name}</h2>
+        {report.totalCount > 0 ? (
+          <Badge tone={allMet ? 'success' : 'warn'}>{report.satisfiedCount}/{report.totalCount} met</Badge>
+        ) : null}
+      </div>
+      <p className="text-xs text-ink-500">
+        Your courses checked against this program’s prerequisites. Add courses in the Course Planner to fill gaps;
+        hit <strong>Refresh</strong> above if the prerequisites look out of date.
+      </p>
+      <PrereqReportView report={report} />
+    </Card>
   );
 }
 
