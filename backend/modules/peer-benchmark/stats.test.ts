@@ -28,6 +28,14 @@ describe('computeGpa', () => {
   it('treats a missing/zero unit count as 1', () => {
     expect(computeGpa([course({ gradePoints: 4.0 }), course({ gradePoints: 3.0 })])).toBe(3.5);
   });
+  it('derives points from a letter grade when gradePoints is absent', () => {
+    // Real courses are entered with just a letter grade; the old gradePoints-only logic showed "no GPA".
+    expect(computeGpa([course({ grade: 'A' })])).toBe(4.0);
+    expect(computeGpa([course({ grade: 'A', units: 3 }), course({ grade: 'B', units: 1 })])).toBe(3.75);
+  });
+  it('still ignores ungraded (planned/in-progress) courses', () => {
+    expect(computeGpa([course({ grade: 'A' }), course({ name: 'Planned' })])).toBe(4.0);
+  });
 });
 
 describe('bestTeasScore', () => {
