@@ -1,11 +1,10 @@
-// Master Timeline handlers — read-only aggregation of every dated item across modules into one
-// stream. PRIVACY: activity-derived events are visibility-filtered (filterForRequester off the JWT)
-// BEFORE aggregation, so a parent/admin never sees an event sourced from keira's private journal
-// entries; keira sees everything. Built from injectable deps (in-memory data + pinned clock + stub
-// analyzer in tests).
+// Master Timeline handlers — read-only aggregation of every dated DEADLINE/milestone across modules
+// into one stream. Journal entries (activities) are intentionally NOT included — the timeline is for
+// what's due (deadlines, exam/visit dates, goal targets), not the activity log. Because no
+// visibility-bearing source is aggregated here, there's nothing to per-caller privacy-filter. Built
+// from injectable deps (in-memory data + pinned clock + stub analyzer in tests).
 
 import { validateBody, validateQuery, type Handler } from '../../shared/api/index.js';
-import { filterForRequester } from '../../shared/auth/index.js';
 import type { Data, Visit } from '../../shared/data/index.js';
 import { analyzeSchema, timelineQuerySchema, upcomingQuerySchema } from './schema.js';
 import { buildEvents, filterEvents, upcoming, type EventSources } from './events.js';
@@ -39,11 +38,11 @@ export function makeHandlers(deps: TimelineDeps): TimelineHandlers {
     }
   }
 
-  // Gather all event sources, visibility-filtering activities for the caller.
-  async function gather(requester: Parameters<Handler>[0]['requester']): Promise<EventSources> {
+  // Gather the timeline's deadline/milestone sources. Activities (journal entries) are deliberately
+  // excluded — see the file header.
+  async function gather(): Promise<EventSources> {
     const data = getData();
-    const [activitiesRaw, goals, colleges, exams, scholarships, certifications, finaid, profile] = await Promise.all([
-      data.activities.list(),
+    const [goals, colleges, exams, scholarships, certifications, finaid, profile] = await Promise.all([
       data.goals.list(),
       data.colleges.list(),
       data.exams.list(),
@@ -56,7 +55,7 @@ export function makeHandlers(deps: TimelineDeps): TimelineHandlers {
     const visitLists = await Promise.all(colleges.map((c) => data.visits.list(c.collegeId)));
     const visits: Visit[] = visitLists.flat();
     return {
-      activities: filterForRequester(activitiesRaw, requester), // PRIVACY
+      activities: [], // journal entries are not timeline events
       goals,
       colleges,
       exams,
@@ -72,7 +71,7 @@ export function makeHandlers(deps: TimelineDeps): TimelineHandlers {
     // GET /timeline — the unified, filtered event stream.
     timeline: async (ctx) => {
       const q = validateQuery(timelineQuerySchema, ctx);
-      const events = filterEvents(buildEvents(await gather(ctx.requester)), q);
+      const events = filterEvents(buildEvents(await gather()), q);
       return { status: 200, body: { events } };
     },
 
@@ -80,14 +79,14 @@ export function makeHandlers(deps: TimelineDeps): TimelineHandlers {
     upcoming: async (ctx) => {
       const q = validateQuery(upcomingQuerySchema, ctx);
       const horizon = q.horizon ?? DEFAULT_HORIZON;
-      const events = upcoming(buildEvents(await gather(ctx.requester)), today(), horizon);
+      const events = upcoming(buildEvents(await gather()), today(), horizon);
       return { status: 200, body: { events, horizon } };
     },
 
     // POST /timeline/analyze — AI priorities, conflicts, and missing items over the window.
     analyze: async (ctx) => {
       const body = validateBody(analyzeSchema, ctx);
-      const all = buildEvents(await gather(ctx.requester));
+      const all = buildEvents(await gather());
       const todayIso = today();
       const window = upcoming(all, todayIso, body.horizonDays ?? DEFAULT_HORIZON);
       const analysis = await analyzer({ events: window, allEvents: all, todayIso, majors: await activeMajors() });
