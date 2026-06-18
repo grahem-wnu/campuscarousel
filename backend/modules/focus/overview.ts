@@ -24,14 +24,16 @@ async function resolveOverviewer(getData: () => Data, injected?: FocusOverviewer
   if (injected) return injected;
   let majors: string[] = [];
   let careerGoal: string | undefined;
+  let graduationYear: number | undefined;
   try {
     const profile = await getData().studentProfile.get();
     majors = profile?.intendedMajors ?? [];
     careerGoal = profile?.careerGoal;
+    graduationYear = profile?.graduationYear;
   } catch {
     majors = [];
   }
-  return makeBedrockFocusOverviewer({}, majors, careerGoal);
+  return makeBedrockFocusOverviewer({}, majors, careerGoal, graduationYear);
 }
 
 /** Run the overview job: read the student's majors, run the (web-grounded) overviewer, write the

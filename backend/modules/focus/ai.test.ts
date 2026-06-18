@@ -14,6 +14,14 @@ describe('buildCareerPathPrompt', () => {
     expect(p).toContain('Psychiatry');
     expect(p).toMatch(/your options/i);
   });
+  it('injects current-grade timeline context when a graduation year is given (fixed date)', () => {
+    const p = buildCareerPathPrompt('Psychiatry', [], 2030, new Date('2026-06-15T00:00:00Z'));
+    expect(p).toMatch(/NOT in high school yet/); // class of 2030 is pre-HS in mid-2026
+    expect(p).toContain('start 9th grade in fall 2026');
+  });
+  it('omits timeline context when no graduation year is given', () => {
+    expect(buildCareerPathPrompt('Psychiatry', ['Neuroscience'])).not.toMatch(/TIMELINE:/);
+  });
 });
 
 describe('buildOverviewPrompt', () => {
