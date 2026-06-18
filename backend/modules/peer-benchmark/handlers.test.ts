@@ -114,10 +114,15 @@ describe('refresh (POST /colleges/:id/benchmark/refresh)', () => {
     await expectStatus(h.refresh(ctx({ params: { id }, body: { bogus: 1 } })), 422);
   });
 
-  it('propagates a 503 when AI research is unavailable', async () => {
+  it('marks the benchmark failed (not a thrown error) when AI research is unavailable', async () => {
+    // Refresh is async now: the request is accepted (200) and hands off to the worker; a research
+    // failure surfaces as hydrationStatus 'failed' on the benchmark, which the UI polls for. (With no
+    // queue configured the dispatcher runs the research inline, so the 'failed' write lands here.)
     const hh = makeHandlers(() => data, () => downResearcher);
     const id = await seedCollege();
-    await expectStatus(hh.refresh(ctx({ params: { id }, body: {} })), 503);
+    const res = await hh.refresh(ctx({ params: { id }, body: {} }));
+    expect(res.status).toBe(200);
+    expect((await data.benchmarks.get(id))?.hydrationStatus).toBe('failed');
   });
 });
 

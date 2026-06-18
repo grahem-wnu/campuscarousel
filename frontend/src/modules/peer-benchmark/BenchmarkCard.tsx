@@ -54,17 +54,36 @@ export function BenchmarkCard({ collegeId }: { collegeId: string }) {
     }
   }, [collegeId]);
 
+  // Quiet refetch used by the poll loop — no full-card spinner flicker.
+  const reload = useCallback(async () => {
+    try {
+      setDetail(await getBenchmark(collegeId));
+    } catch {
+      /* transient; keep the last good state and let the next poll retry */
+    }
+  }, [collegeId]);
+
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Research runs on the async worker now, so poll hydrationStatus until it settles (mirrors the
+  // college-hydration poll). 'in-progress'/'pending' = still researching.
+  const status = detail?.benchmark?.hydrationStatus;
+  const researching = status === 'in-progress' || status === 'pending';
+  useEffect(() => {
+    if (!researching) return;
+    const t = setTimeout(() => void reload(), 4000);
+    return () => clearTimeout(t);
+  }, [researching, detail, reload]);
 
   async function refresh(): Promise<void> {
     setRefreshing(true);
     try {
       setDetail(await refreshBenchmark(collegeId));
-      toast.success('Benchmark refreshed.');
+      toast.info('Researching this school… this can take a minute.');
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not refresh the benchmark.');
+      toast.error(err instanceof Error ? err.message : 'Could not start the benchmark research.');
     } finally {
       setRefreshing(false);
     }
@@ -93,22 +112,47 @@ export function BenchmarkCard({ collegeId }: { collegeId: string }) {
   const readiness = readinessMeta(comparison.overallReadiness);
   const clin = comparison.clinicalHoursStatus as MetricStatus | undefined;
   const vol = comparison.volunteerHoursStatus as MetricStatus | undefined;
+  const hasData =
+    !!benchmark &&
+    (benchmark.avgGPAAdmitted != null ||
+      benchmark.avgTEASScore != null ||
+      benchmark.typicalClinicalHours != null ||
+      benchmark.typicalVolunteerHours != null ||
+      (benchmark.typicalCertifications?.length ?? 0) > 0 ||
+      (benchmark.competitiveEdges?.length ?? 0) > 0);
 
   return (
     <Card>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <h3 className="font-semibold text-ink-900">{detail.college.name}</h3>
-          <Badge tone={readiness.tone} solid>
-            {readiness.label}
-          </Badge>
+          {researching ? (
+            <Badge tone="info" solid>Researching…</Badge>
+          ) : (
+            <Badge tone={readiness.tone} solid>{readiness.label}</Badge>
+          )}
         </div>
-        <Button size="sm" variant="outline" icon="search" loading={refreshing} onClick={() => void refresh()}>
+        <Button
+          size="sm"
+          variant="outline"
+          icon="search"
+          loading={refreshing || researching}
+          disabled={researching}
+          onClick={() => void refresh()}
+        >
           Refresh Benchmark
         </Button>
       </div>
 
-      {benchmark ? (
+      {researching ? (
+        <div className="mt-3 flex items-center gap-3 text-sm text-ink-500">
+          <Spinner size={16} />
+          <span>
+            Researching {detail.college.name}’s competitive profile… this can take a minute. You can
+            leave this page; it keeps going.
+          </span>
+        </div>
+      ) : benchmark && hasData ? (
         <>
           <div className="mt-3 divide-y divide-surface-border">
             <MetricRow label="GPA" keira={keira.gpa} school={benchmark.avgGPAAdmitted} status={comparison.gpaStatus} gpa />
@@ -155,7 +199,13 @@ export function BenchmarkCard({ collegeId }: { collegeId: string }) {
         </>
       ) : (
         <p className="mt-3 text-sm text-ink-500">
-          No benchmark yet. Use <strong>Refresh Benchmark</strong> to research the competitive profile for this school.
+          {status === 'failed' ? (
+            'That research run didn’t finish. Tap Refresh Benchmark to try again.'
+          ) : (
+            <>
+              No benchmark yet. Use <strong>Refresh Benchmark</strong> to research the competitive profile for this school.
+            </>
+          )}
         </p>
       )}
     </Card>
