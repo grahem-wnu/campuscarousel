@@ -16,10 +16,12 @@ const college = (over: Partial<College> = {}): College =>
   }) as College;
 
 describe('buildPrepPrompt', () => {
-  it('frames a HIGH SCHOOL plan grounded in the college admission facts + major + grad year', () => {
-    const p = buildPrepPrompt(college(), ['Construction Management'], 2028);
+  it('frames a HIGH SCHOOL plan grounded in the college admission facts + major + current grade', () => {
+    // Fixed date so the derived grade is deterministic: class of 2028 in spring 2026 → 10th grade.
+    const p = buildPrepPrompt(college(), ['Construction Management'], 2028, new Date('2026-06-15T00:00:00Z'));
     expect(p).toMatch(/HIGH SCHOOL/);
-    expect(p).toContain('graduating 2028');
+    expect(p).toContain('graduates high school in 2028');
+    expect(p).toContain('10th grade (sophomore)');
     expect(p).toContain('Arizona State University');
     expect(p).toContain('Average admitted GPA: 3.5');
     expect(p).toMatch(/Construction Management/i);

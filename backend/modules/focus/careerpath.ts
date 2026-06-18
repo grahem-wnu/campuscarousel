@@ -26,14 +26,16 @@ async function resolveGenerator(getData: () => Data, injected?: FocusOverviewer)
   if (injected) return injected;
   let careerGoal = '';
   let majors: string[] = [];
+  let graduationYear: number | undefined;
   try {
     const profile = await getData().studentProfile.get();
     careerGoal = profile?.careerGoal ?? '';
     majors = profile?.intendedMajors ?? [];
+    graduationYear = profile?.graduationYear;
   } catch {
     careerGoal = '';
   }
-  return makeBedrockCareerPathGenerator({}, careerGoal, majors);
+  return makeBedrockCareerPathGenerator({}, careerGoal, majors, graduationYear);
 }
 
 /** Run the career-path job: read the career goal, run the (web-grounded) generator, write the roadmap

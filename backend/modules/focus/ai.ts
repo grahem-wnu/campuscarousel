@@ -5,7 +5,7 @@
 // prose plus the sources it actually consulted, for citation in the UI. Injectable (invoker + searcher)
 // so tests run with no network; any error degrades to a thrown error the caller records as `failed`.
 
-import { converseWithSearch, type BedrockInvoker, type WebSearcher } from '../../shared/ai/index.js';
+import { converseWithSearch, gradeContext, type BedrockInvoker, type WebSearcher } from '../../shared/ai/index.js';
 import { majorList, majorPhrase } from '../../shared/ai/major.js';
 import { packFocusBriefs } from '../../shared/packs/index.js';
 import type { FocusSource } from '../../shared/data/index.js';
@@ -31,9 +31,12 @@ export interface AiOptions {
 
 /** Build the overview prompt for the active student's major(s), folding in any major-pack guidance
  *  (e.g. nursing → TEAS, direct-admit BSN, clinical hours) so the overview is major-specific. */
-export function buildOverviewPrompt(majors: string[], careerGoal?: string): string {
+export function buildOverviewPrompt(majors: string[], careerGoal?: string, graduationYear?: number, now: Date = new Date()): string {
   const phrase = majorPhrase(majors, 'an undergraduate college program');
   const briefs = packFocusBriefs(majors);
+  // Anchor "this year"/"now"/the timeline to the student's actual current grade (derived from their
+  // graduation year), so a class-of-2030 8th-grader isn't handed senior-year advice.
+  const grade = gradeContext(graduationYear, now);
   // When there's a career goal, be explicit that this major is ONE route, not a requirement — the
   // student shouldn't feel locked into it (the Career Path doc enumerates the alternatives).
   const goalLine = careerGoal
@@ -41,6 +44,7 @@ export function buildOverviewPrompt(majors: string[], careerGoal?: string): stri
     : '';
   return [
     `Write a clear, encouraging overview for a high-school student (and their family) about pursuing ${phrase} in college.`,
+    grade,
     goalLine,
     ...briefs,
     'Use web_search to ground the facts (typical prerequisites, admissions expectations, timeline, career outlook, salary ranges) in current, reputable sources.',
@@ -62,9 +66,10 @@ export function makeBedrockFocusOverviewer(
   options: AiOptions = {},
   majors: string[] = [],
   careerGoal?: string,
+  graduationYear?: number,
 ): FocusOverviewer {
   return async () => {
-    const { text, sources } = await converseWithSearch(buildOverviewPrompt(majors, careerGoal), {
+    const { text, sources } = await converseWithSearch(buildOverviewPrompt(majors, careerGoal, graduationYear), {
       modelId: options.modelId,
       invoker: options.invoker,
       searcher: options.searcher,
@@ -84,12 +89,15 @@ export function makeBedrockFocusOverviewer(
 /** Build the career-path prompt from the student's FREE-TEXT career goal (the entry point) — the major
  *  is only context. Produces a concrete education→licensure→role roadmap for whatever they typed,
  *  even unusual careers, grounded in current web sources. */
-export function buildCareerPathPrompt(careerGoal: string, majors: string[] = []): string {
+export function buildCareerPathPrompt(careerGoal: string, majors: string[] = [], graduationYear?: number, now: Date = new Date()): string {
   const majorContext = majorList(majors).length
     ? `Their current intended major is ${majorPhrase(majors)} — treat it as ONE option among several, never the required route.`
     : '';
+  // "Start now — this year" must reflect the student's actual grade, not a default junior/senior.
+  const grade = gradeContext(graduationYear, now);
   return [
     `A high-school student wants to become: "${careerGoal}". Map the realistic ROUTES from where they are now to that career — they should see their options, not feel locked into one major.`,
+    grade,
     majorContext,
     'Use web_search to ground the routes (which majors lead there, required degrees and licenses/exams, typical timeline, and outlook) in current, reputable sources.',
     'Cover, as short markdown sections with `##` headings:',
@@ -110,9 +118,10 @@ export function makeBedrockCareerPathGenerator(
   options: AiOptions = {},
   careerGoal = '',
   majors: string[] = [],
+  graduationYear?: number,
 ): FocusOverviewer {
   return async () => {
-    const { text, sources } = await converseWithSearch(buildCareerPathPrompt(careerGoal, majors), {
+    const { text, sources } = await converseWithSearch(buildCareerPathPrompt(careerGoal, majors, graduationYear), {
       modelId: options.modelId,
       invoker: options.invoker,
       searcher: options.searcher,

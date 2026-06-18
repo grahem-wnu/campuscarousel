@@ -9,3 +9,5 @@ export { tavilySearch, getTavilyKey, SearchNotConfiguredError } from './search.j
 export type { SearchResult, SearchOptions, WebSearcher } from './search.js';
 
 export { promptLiteral } from './sanitize.js';
+
+export { currentGrade, gradeContext } from './grade.js';
