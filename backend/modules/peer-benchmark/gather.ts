@@ -4,18 +4,30 @@
 // handlers ⇄ research import cycle.
 
 import { filterForRequester, type Requester } from '../../shared/auth/index.js';
-import type { Data } from '../../shared/data/index.js';
+import type { Data, StudentProfile } from '../../shared/data/index.js';
 import { computeKeiraStats, type KeiraStats } from './stats.js';
 
 async function sources(data: Data) {
-  const [courses, exams, experiences, activities, certifications] = await Promise.all([
+  const [courses, exams, experiences, activities, certifications, profile] = await Promise.all([
     data.courses.list(),
     data.exams.list(),
     data.experiences.list(),
     data.activities.list(),
     data.certifications.list(),
+    data.studentProfile.get(),
   ]);
-  return { courses, exams, experiences, activities, certifications };
+  return { courses, exams, experiences, activities, certifications, profile };
+}
+
+/** Use the onboarding-reported GPA when no graded courses exist yet, so the comparison isn't blank
+ *  for a student who finished onboarding but hasn't entered any courses. A real course GPA always
+ *  wins. The onboarding GPA is family-visible (not a private entry), so this is safe for both
+ *  gatherers. */
+function withProfileGpaFallback(stats: KeiraStats, profile: StudentProfile | null): KeiraStats {
+  if (stats.gpa === undefined && typeof profile?.currentGPA === 'number') {
+    return { ...stats, gpa: profile.currentGPA };
+  }
+  return stats;
 }
 
 /** The student's comparable stats, with experience/volunteer hours visibility-filtered for the
@@ -23,13 +35,16 @@ async function sources(data: Data) {
  *  visibility-bearing. Used for the LIVE comparison computed per-request on read. */
 export async function gatherStats(data: Data, requester: Requester): Promise<KeiraStats> {
   const s = await sources(data);
-  return computeKeiraStats({
-    courses: s.courses,
-    exams: s.exams,
-    certifications: s.certifications,
-    experiences: filterForRequester(s.experiences, requester),
-    activities: filterForRequester(s.activities, requester),
-  });
+  return withProfileGpaFallback(
+    computeKeiraStats({
+      courses: s.courses,
+      exams: s.exams,
+      certifications: s.certifications,
+      experiences: filterForRequester(s.experiences, requester),
+      activities: filterForRequester(s.activities, requester),
+    }),
+    s.profile,
+  );
 }
 
 /** Family-visible stats: private entries ALWAYS excluded, regardless of caller. This is the basis
@@ -37,11 +52,14 @@ export async function gatherStats(data: Data, requester: Requester): Promise<Kei
  *  family-visible and must never embed the student's private-entry hours. */
 export async function gatherFamilyVisibleStats(data: Data): Promise<KeiraStats> {
   const s = await sources(data);
-  return computeKeiraStats({
-    courses: s.courses,
-    exams: s.exams,
-    certifications: s.certifications,
-    experiences: s.experiences.filter((e) => e.visibility !== 'private'),
-    activities: s.activities.filter((a) => a.visibility !== 'private'),
-  });
+  return withProfileGpaFallback(
+    computeKeiraStats({
+      courses: s.courses,
+      exams: s.exams,
+      certifications: s.certifications,
+      experiences: s.experiences.filter((e) => e.visibility !== 'private'),
+      activities: s.activities.filter((a) => a.visibility !== 'private'),
+    }),
+    s.profile,
+  );
 }

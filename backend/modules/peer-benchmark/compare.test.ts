@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { Benchmark, College } from '../../shared/data/index.js';
-import { buildAggregate, compareToBenchmark, computeReadiness, hasBenchmarkData } from './compare.js';
+import {
+  buildAggregate,
+  compareToBenchmark,
+  computeFitScore,
+  computeReadiness,
+  hasBenchmarkData,
+} from './compare.js';
 import type { KeiraStats } from './stats.js';
 
 const bench = (over: Partial<Benchmark>): Benchmark =>
@@ -88,5 +94,35 @@ describe('buildAggregate', () => {
     const csulb = matrix.rows[1]!;
     expect(csulb.benchmark.hasData).toBe(false);
     expect(csulb.comparison.overallReadiness).toBe('insufficient-data');
+  });
+});
+
+describe('computeFitScore', () => {
+  const fullBench = bench({
+    avgGPAAdmitted: 3.5,
+    avgTEASScore: 80,
+    typicalClinicalHours: 100,
+    typicalVolunteerHours: 50,
+  });
+
+  it('is undefined without benchmark data', () => {
+    expect(computeFitScore(stats({ gpa: 4 }), null)).toBeUndefined();
+    expect(computeFitScore(stats({ gpa: 4 }), bench({}))).toBeUndefined();
+  });
+  it('is undefined with fewer than two comparable metrics', () => {
+    // Only GPA is comparable (no hours/TEAS targets on the benchmark).
+    expect(computeFitScore(stats({ gpa: 4 }), bench({ avgGPAAdmitted: 3.5 }))).toBeUndefined();
+  });
+  it('is 100 when the student exceeds every metric', () => {
+    expect(
+      computeFitScore(stats({ gpa: 4.0, teasScore: 95, clinicalHours: 300, volunteerHours: 200 }), fullBench),
+    ).toBe(100);
+  });
+  it('treats a not-taken-but-expected exam and zero hours as gaps (35)', () => {
+    expect(computeFitScore(stats(), fullBench)).toBe(35);
+  });
+  it('blends strengths and gaps into a mid-range score', () => {
+    // GPA above (100), TEAS not taken (35), clinical below (35), volunteer below (35) → 51.
+    expect(computeFitScore(stats({ gpa: 4.0 }), fullBench)).toBe(51);
   });
 });
