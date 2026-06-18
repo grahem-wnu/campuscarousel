@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { Badge, Card, EmptyState, Icon, Spinner } from '../../shared/ui';
 import { getPrereqMatrix } from './api';
-import type { PrereqMatrix as PrereqMatrixData } from './types';
+import { PrereqReportView } from './PrereqReportView';
+import type { PrereqMatrix as PrereqMatrixData, PrereqReport } from './types';
 
 /**
  * Full courses×target-colleges prerequisite matrix. One row per college Keira is pursuing (any
@@ -13,6 +14,8 @@ export function PrereqMatrix() {
   const [data, setData] = useState<PrereqMatrixData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Which college row is expanded to show its full "courses you need" breakdown (one at a time).
+  const [expanded, setExpanded] = useState<string | null>(null);
 
   useEffect(() => {
     void (async () => {
@@ -45,6 +48,8 @@ export function PrereqMatrix() {
   const requiredByCollege = new Map<string, Set<string>>(
     data.reports.map((r) => [r.collegeId, new Set(r.prerequisites.map((p) => p.name))]),
   );
+  // Full per-college report, for the expandable "which courses do I need" row.
+  const reportByCollege = new Map<string, PrereqReport>(data.reports.map((r) => [r.collegeId, r]));
 
   return (
     <Card className="space-y-3">
@@ -70,27 +75,59 @@ export function PrereqMatrix() {
               const sat = satisfiedByCollege.get(c.collegeId) ?? new Set<string>();
               const req = requiredByCollege.get(c.collegeId) ?? new Set<string>();
               const complete = c.totalCount > 0 && c.satisfiedCount === c.totalCount;
+              const isOpen = expanded === c.collegeId;
+              const report = reportByCollege.get(c.collegeId);
               return (
-                <tr key={c.collegeId} className="border-t border-surface-border">
-                  <td className="p-2 font-medium text-ink-900">{c.collegeName ?? c.collegeId}</td>
-                  <td className="p-2">
-                    <Badge tone={c.totalCount === 0 ? 'neutral' : complete ? 'success' : 'warn'}>
-                      {c.satisfiedCount}/{c.totalCount}
-                    </Badge>
-                  </td>
-                  {data.allPrerequisites.map((p) => {
-                    if (!req.has(p)) return <td key={p} className="p-2 text-center text-ink-300">·</td>;
-                    return (
-                      <td key={p} className="p-2 text-center">
-                        {sat.has(p) ? (
-                          <Icon name="check" size={16} className="mx-auto text-success-600" />
-                        ) : (
-                          <Icon name="warning" size={16} className="mx-auto text-error-500" />
-                        )}
+                <Fragment key={c.collegeId}>
+                  <tr className="border-t border-surface-border">
+                    <td className="p-2 font-medium text-ink-900">
+                      {/* Tap a college to expand its full "courses you still need" breakdown. */}
+                      <button
+                        type="button"
+                        onClick={() => setExpanded(isOpen ? null : c.collegeId)}
+                        aria-expanded={isOpen}
+                        className="flex items-center gap-1 text-left hover:text-primary-700"
+                      >
+                        <Icon name="chevron-right" size={14} className={`shrink-0 text-ink-400 transition-transform ${isOpen ? 'rotate-90' : ''}`} />
+                        <span>{c.collegeName ?? c.collegeId}</span>
+                      </button>
+                    </td>
+                    <td className="p-2">
+                      <Badge tone={c.totalCount === 0 ? 'neutral' : complete ? 'success' : 'warn'}>
+                        {c.satisfiedCount}/{c.totalCount}
+                      </Badge>
+                    </td>
+                    {data.allPrerequisites.map((p) => {
+                      if (!req.has(p)) return <td key={p} className="p-2 text-center text-ink-300">·</td>;
+                      return (
+                        <td key={p} className="p-2 text-center">
+                          {sat.has(p) ? (
+                            <Icon name="check" size={16} className="mx-auto text-success-600" />
+                          ) : (
+                            <Icon name="warning" size={16} className="mx-auto text-error-500" />
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                  {isOpen ? (
+                    <tr className="bg-surface-sunken">
+                      <td colSpan={2 + data.allPrerequisites.length} className="p-0">
+                        {/* sticky-left keeps this readable while the wide matrix scrolls horizontally. */}
+                        <div className="sticky left-0 max-w-[min(36rem,90vw)] space-y-2 p-3">
+                          <p className="text-sm font-medium text-ink-800">
+                            {c.totalCount === 0
+                              ? 'No prerequisites listed for this college yet — Refresh it in the College Hub.'
+                              : c.gaps.length === 0
+                                ? 'All prerequisites are covered — nothing left to take. 🎉'
+                                : `${c.gaps.length} course${c.gaps.length === 1 ? '' : 's'} still needed`}
+                          </p>
+                          {report ? <PrereqReportView report={report} /> : null}
+                        </div>
                       </td>
-                    );
-                  })}
-                </tr>
+                    </tr>
+                  ) : null}
+                </Fragment>
               );
             })}
           </tbody>

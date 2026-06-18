@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
-import { Badge, Button, Card, EmptyState, Field, Icon, Input } from '../../shared/ui';
+import { Badge, Button, Card, EmptyState, Field, Input } from '../../shared/ui';
 import { getPrerequisites } from './api';
+import { PrereqReportView } from './PrereqReportView';
 import type { Course, PrereqReport } from './types';
 
 /**
@@ -71,28 +72,7 @@ export function PrereqChecker({ courses }: { courses: Course[] }) {
                 {report.satisfiedCount} / {report.totalCount} met
               </Badge>
             </div>
-            <ul className="space-y-2">
-              {report.prerequisites.map((p) => (
-                <li
-                  key={p.name}
-                  className={`flex items-start gap-2 rounded-md p-2 ${
-                    p.satisfied ? 'bg-success-50' : 'bg-error-50'
-                  }`}
-                >
-                  <span className={p.satisfied ? 'text-success-600' : 'text-error-600'}>
-                    <Icon name={p.satisfied ? 'check' : 'warning'} size={18} />
-                  </span>
-                  <div className="min-w-0">
-                    <div className="text-sm font-medium text-ink-900">{p.name}</div>
-                    <div className="text-xs text-ink-500">
-                      {p.satisfied
-                        ? `Satisfied by ${p.satisfiedByCourseIds.map(courseName).join(', ')}`
-                        : 'No course covers this yet — a gap to fill.'}
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ul>
+            <PrereqReportView report={report} courseName={courseName} />
           </Card>
         )
       ) : (
