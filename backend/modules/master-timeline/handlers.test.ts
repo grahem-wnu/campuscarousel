@@ -32,16 +32,18 @@ beforeEach(async () => {
 const ctx = (over: Partial<HandlerContext> = {}): HandlerContext => ({ requester: keira, params: {}, query: {}, body: undefined, ...over });
 
 describe('GET /timeline', () => {
-  it('aggregates events across sources for keira (incl. her private activity)', async () => {
+  it('aggregates deadline/milestone sources and excludes journal entries (activities)', async () => {
     const b = (await h.timeline(ctx())).body as { events: { source: string; title: string }[] };
-    expect(new Set(b.events.map((e) => e.source))).toEqual(new Set(['activity', 'goal', 'college', 'visit']));
-    expect(b.events.some((e) => e.title === 'Private reflection')).toBe(true);
+    expect(new Set(b.events.map((e) => e.source))).toEqual(new Set(['goal', 'college', 'visit']));
+    expect(b.events.some((e) => e.source === 'activity')).toBe(false);
+    expect(b.events.some((e) => e.title === 'Family volunteering')).toBe(false);
+    expect(b.events.some((e) => e.title === 'Private reflection')).toBe(false);
   });
 
-  it('PRIVACY: a parent does NOT see keira’s private-activity event', async () => {
-    const b = (await h.timeline(ctx({ requester: kate }))).body as { events: { title: string }[] };
-    expect(b.events.some((e) => e.title === 'Private reflection')).toBe(false);
-    expect(b.events.some((e) => e.title === 'Family volunteering')).toBe(true);
+  it('shows the same timeline to a parent and the student (no visibility-bearing source remains)', async () => {
+    const forKeira = (await h.timeline(ctx())).body as { events: { source: string }[] };
+    const forParent = (await h.timeline(ctx({ requester: kate }))).body as { events: { source: string }[] };
+    expect(forParent.events.map((e) => e.source).sort()).toEqual(forKeira.events.map((e) => e.source).sort());
   });
 
   it('filters by source', async () => {
@@ -60,10 +62,10 @@ describe('GET /timeline/upcoming', () => {
 });
 
 describe('POST /timeline/analyze', () => {
-  it('passes the visibility-filtered window to the analyzer', async () => {
+  it('passes the deadline window to the analyzer, excluding journal entries', async () => {
     const b = (await h.analyze(ctx({ body: {} }))).body as { analysis: { priorities: string[] } };
-    expect(b.analysis.priorities).toContain('Private reflection'); // keira's window includes private
-    const bk = (await h.analyze(ctx({ requester: kate, body: {} }))).body as { analysis: { priorities: string[] } };
-    expect(bk.analysis.priorities).not.toContain('Private reflection');
+    expect(b.analysis.priorities).toContain('Submit OSU app'); // a real deadline is in the window
+    expect(b.analysis.priorities).not.toContain('Private reflection'); // journal entries are excluded
+    expect(b.analysis.priorities).not.toContain('Family volunteering');
   });
 });
