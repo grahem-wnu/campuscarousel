@@ -33,6 +33,7 @@ export interface Benchmark {
   typicalExtracurriculars?: string;
   competitiveEdges?: string[];
   keirasComparison?: Comparison;
+  hydrationStatus?: 'pending' | 'in-progress' | 'complete' | 'partial' | 'failed';
   lastDataRefresh?: string;
   createdAt: string;
   updatedAt: string;

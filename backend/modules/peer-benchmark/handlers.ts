@@ -13,10 +13,11 @@ import {
   type Handler,
   type RouteDef,
 } from '../../shared/api/index.js';
-import { filterForRequester, type Requester } from '../../shared/auth/index.js';
 import type { Benchmark, BenchmarkSnapshot, College, Data } from '../../shared/data/index.js';
 import { buildAggregate, compareToBenchmark } from './compare.js';
-import { computeKeiraStats, type KeiraStats } from './stats.js';
+import { gatherFamilyVisibleStats, gatherStats } from './gather.js';
+import { makeSqsEnqueuer } from './enqueue.js';
+import type { BenchmarkDispatcher } from './research.js';
 import { buildSnapshot, mergeSnapshot, monthOf } from './snapshots.js';
 import type { BenchmarkResearcher } from './researcher.js';
 import { collegeParamSchema, refreshSchema } from './schema.js';
@@ -26,46 +27,6 @@ export interface BenchmarkHandlers {
   refresh: Handler;
   aggregate: Handler;
   gaps: Handler;
-}
-
-/** Aggregate Keira's comparable stats, with experience/volunteer hours visibility-filtered for the
- *  caller so a parent never sees private-entry hours folded in. Courses/exams/certs aren't
- *  visibility-bearing. */
-async function gatherStats(data: Data, requester: Requester): Promise<KeiraStats> {
-  const [courses, exams, experiences, activities, certifications] = await Promise.all([
-    data.courses.list(),
-    data.exams.list(),
-    data.experiences.list(),
-    data.activities.list(),
-    data.certifications.list(),
-  ]);
-  return computeKeiraStats({
-    courses,
-    exams,
-    certifications,
-    experiences: filterForRequester(experiences, requester),
-    activities: filterForRequester(activities, requester),
-  });
-}
-
-/** Family-visible stats: private entries ALWAYS excluded, regardless of caller. This is the basis
- *  for the PERSISTED monthly trend, which is family-visible and must never embed Keira's
- *  private-entry hours (a parent viewing the trend later would otherwise see them). */
-async function gatherFamilyVisibleStats(data: Data): Promise<KeiraStats> {
-  const [courses, exams, experiences, activities, certifications] = await Promise.all([
-    data.courses.list(),
-    data.exams.list(),
-    data.experiences.list(),
-    data.activities.list(),
-    data.certifications.list(),
-  ]);
-  return computeKeiraStats({
-    courses,
-    exams,
-    certifications,
-    experiences: experiences.filter((e) => e.visibility !== 'private'),
-    activities: activities.filter((a) => a.visibility !== 'private'),
-  });
 }
 
 /** Record at most one snapshot for the current calendar month and return the rolling trend. Uses
@@ -100,7 +61,14 @@ async function benchmarksByCollege(
   return new Map(collegeIds.map((id, i) => [id, found[i] ?? null]));
 }
 
-export function makeHandlers(getData: () => Data, getResearcher: () => BenchmarkResearcher): BenchmarkHandlers {
+export function makeHandlers(
+  getData: () => Data,
+  getResearcher: () => BenchmarkResearcher,
+  dispatcher?: BenchmarkDispatcher,
+): BenchmarkHandlers {
+  // Production: enqueue a `benchmark-research` job for the 300s SQS worker. Tests / no queue: the
+  // enqueuer falls back to running the research inline, so the same handler stays synchronous there.
+  const dispatch = dispatcher ?? makeSqsEnqueuer(getData, getResearcher);
   return {
     // GET /colleges/:id/benchmark — the stored benchmark (may be null) + Keira's freshly-computed
     // comparison against it. A null benchmark surfaces as the "insufficient data" empty state.
@@ -121,9 +89,11 @@ export function makeHandlers(getData: () => Data, getResearcher: () => Benchmark
       };
     },
 
-    // POST /colleges/:id/benchmark/refresh — AI researches the competitive profile, merged into the
-    // stored benchmark (preserving any human-edited fields), then Keira's comparison is recomputed
-    // against the persisted numbers.
+    // POST /colleges/:id/benchmark/refresh — kick off the AI research. Web-grounded research blows
+    // past API Gateway's ~30s ceiling, so we mark the benchmark `in-progress` and hand off to the
+    // 300s async worker; the frontend polls hydrationStatus. Returns the current (now researching)
+    // benchmark plus the caller's live comparison. (In tests / no queue the dispatcher runs the
+    // research inline, so the benchmark is already `complete` by the time we re-read it.)
     refresh: async (ctx) => {
       const { id } = validateParams(collegeParamSchema, ctx);
       const input = validate(refreshSchema, ctx.body ?? {});
@@ -131,25 +101,17 @@ export function makeHandlers(getData: () => Data, getResearcher: () => Benchmark
       const college = await data.colleges.get(id);
       if (!college) throw Errors.notFound('College not found');
 
-      const majors = (await data.studentProfile.get())?.intendedMajors ?? [];
-      const [existing, profile, keira] = await Promise.all([
-        data.benchmarks.get(id),
-        getResearcher().research(college, input.focus, majors),
-        gatherStats(data, ctx.requester),
-      ]);
-      // Compute the comparison against what will actually be persisted (existing values with the AI
-      // profile applied), then write once so lastDataRefresh is stamped a single time.
-      const preview = { ...(existing ?? { collegeId: id }), ...profile } as Benchmark;
-      const comparison = compareToBenchmark(keira, preview);
-      const saved = await data.benchmarks.mergePreservingUserEdits(id, { ...profile, keirasComparison: comparison });
+      await data.benchmarks.mergePreservingUserEdits(id, { hydrationStatus: 'in-progress' });
+      await dispatch(id, input.focus);
 
+      const [benchmark, keira] = await Promise.all([data.benchmarks.get(id), gatherStats(data, ctx.requester)]);
       return {
         status: 200,
         body: {
           college: { collegeId: college.collegeId, name: college.name },
-          benchmark: saved,
+          benchmark,
           keira,
-          comparison,
+          comparison: compareToBenchmark(keira, benchmark),
         },
       };
     },
