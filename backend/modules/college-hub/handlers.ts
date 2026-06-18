@@ -28,6 +28,7 @@ import { queryColleges } from './query.js';
 import { findActiveByName, normalizeCollegeName } from './dedupe.js';
 import type { Discoverer } from './ai.js';
 import { makeBedrockChecklistSuggester, type ChecklistSuggester } from './checklist-ai.js';
+import { makeBedrockPrepSuggester, type PrepSuggester } from './prep-ai.js';
 import { makeInlineDispatcher, type HydrationDispatcher } from './hydration.js';
 import { runDiscoveryJob, type DiscoverDispatcher } from './discover.js';
 import { makeAssetsEnqueuer, type AssetsDispatcher } from './assets-enqueue.js';
@@ -50,6 +51,7 @@ export interface CollegeHandlers {
   getChecklist: Handler;
   putChecklist: Handler;
   suggestChecklist: Handler;
+  generatePrep: Handler;
 }
 
 export interface CollegeDeps {
@@ -64,6 +66,8 @@ export interface CollegeDeps {
   assetsDispatch?: AssetsDispatcher;
   /** AI source for /checklist/suggest; defaults to the model-only Bedrock suggester (→ [] on failure). */
   checklistSuggester?: ChecklistSuggester;
+  /** AI source for /prep; defaults to the model-only Bedrock HS-prep generator (→ null on failure). */
+  prepSuggester?: PrepSuggester;
 }
 
 export function makeHandlers(deps: CollegeDeps): CollegeHandlers {
@@ -80,6 +84,8 @@ export function makeHandlers(deps: CollegeDeps): CollegeHandlers {
   // Model-only checklist generator (no web search → fits the request budget). Real Bedrock by
   // default; tests inject a stub. Returns [] on any failure so the endpoint never 500s.
   const checklistSuggester = deps.checklistSuggester ?? makeBedrockChecklistSuggester();
+  // Model-only HS-prep plan generator. Real Bedrock by default; tests inject a stub. null on failure.
+  const prepSuggester = deps.prepSuggester ?? makeBedrockPrepSuggester();
 
   /** Fetch a college or throw 404. */
   async function requireCollege(id: string): Promise<College> {
@@ -295,6 +301,20 @@ export function makeHandlers(deps: CollegeDeps): CollegeHandlers {
       const suggestions = await checklistSuggester(college, majors);
       return { status: 200, body: { suggestions } };
     },
+
+    // POST /colleges/:id/prep — generate the AI "how to prepare in high school" plan for this college
+    // (recommended HS classes + GPA/test targets + activities), grounded in the college's admission
+    // data + the student's major. Model-only. Persists onto the college (system-owned, merged) so it
+    // sticks across reloads; returns { plan } (null if the model produced nothing usable).
+    generatePrep: async (ctx) => {
+      const { id } = validateParams(idParamSchema, ctx);
+      const college = await requireCollege(id);
+      const profile = await getData().studentProfile.get();
+      const plan = await prepSuggester(college, profile?.intendedMajors ?? [], profile?.graduationYear);
+      if (!plan) return { status: 200, body: { plan: null } };
+      const updated = await getData().colleges.mergePreservingUserEdits(id, { hsPrepPlan: plan });
+      return { status: 200, body: { plan, college: updated } };
+    },
   };
 }
 
@@ -319,5 +339,6 @@ export function buildRoutes(h: CollegeHandlers) {
     { method: 'GET' as const, path: '/colleges/:id/checklist', handler: h.getChecklist },
     { method: 'PUT' as const, path: '/colleges/:id/checklist', handler: h.putChecklist },
     { method: 'POST' as const, path: '/colleges/:id/checklist/suggest', handler: h.suggestChecklist },
+    { method: 'POST' as const, path: '/colleges/:id/prep', handler: h.generatePrep },
   ];
 }

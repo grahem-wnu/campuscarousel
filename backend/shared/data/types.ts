@@ -203,6 +203,30 @@ export interface College extends Timestamped, Hydratable {
   logoImageUrl?: string;
   /** Asset-fetch lifecycle, polled independently of `hydrationStatus`. */
   assetsStatus?: 'pending' | 'in-progress' | 'complete' | 'failed';
+  /** AI-generated "how to prepare in high school for THIS college's program" plan — recommended HS
+   *  classes, academic targets (GPA/tests, from this college's admission bar), and activities/certs.
+   *  System-owned: generated on demand via POST /colleges/:id/prep, merged so it persists; never in
+   *  the create/update schema. Distinct from `prerequisites` (the college's own program-level reqs). */
+  hsPrepPlan?: HsPrepPlan;
+}
+
+/** One recommendation in a high-school prep plan: a short label + an optional one-line "why/how". */
+export interface HsPrepItem {
+  label: string;
+  detail?: string;
+}
+
+/** AI prep plan: what a high-school student should aim for and take to be competitive for a specific
+ *  college's program. Grounded in the college's hydrated admission data + the student's intended major. */
+export interface HsPrepPlan {
+  /** One-line framing of how to position for this program. */
+  headline?: string;
+  /** Academic targets to hit in high school (GPA, SAT/ACT) — from this college's real admission bar. */
+  targets: HsPrepItem[];
+  /** Recommended high-school classes (e.g. AP Physics, AP Calculus, Anatomy & Physiology). */
+  courses: HsPrepItem[];
+  /** Activities, certifications, and experiences that strengthen the application for this major. */
+  activities: HsPrepItem[];
 }
 
 /** One discovered candidate (College-shaped, name required) — the result of a discovery run. */

@@ -768,11 +768,17 @@ Each college has a full detail page with a branded header and tabs:
   - Due dates (carried from known deadlines) and completion tracking
   - Visual progress bar
 
-- **Prerequisites tab:** Which courses the student still needs for THIS college's program
-  - Checks the student's Course Planner courses against the college's hydrated `prerequisites`,
-    listing the gaps (courses still to take) first, then the ones already covered.
-  - Reuses the per-college prerequisite report (`GET /courses/prerequisites/:collegeId`) so it stays
-    consistent with the Course Planner's coverage matrix.
+- **Prepare tab:** AI "how to prepare in high school" plan for getting into THIS college's program
+  - On-demand AI (`POST /colleges/:id/prep`, model-only, persisted on the college) generates, tailored
+    to the college + the student's intended major + grad year: **academic targets** (GPA / SAT / ACT,
+    grounded in the college's hydrated admission bar), **recommended high-school classes** (e.g. AP
+    Physics, AP Calculus, Anatomy & Physiology), and **activities/certifications** that strengthen the
+    application. Regenerate after changing the major or refreshing the college.
+  - The college's own program-level requirements (admission criteria + in-major *college* courses from
+    `prerequisites`) are shown below for **reference** — explicitly NOT framed as high-school to-dos
+    (a high schooler can't take "CON 223 Strength of Materials"; that confusion is what this replaced).
+  - Distinct from the Course Planner's coverage matrix (which maps entered courses to college
+    prerequisites for transfer/dual-enrollment planning).
   
 - **Fit Analysis tab:** AI-generated analysis of how Keira's current profile matches this school
   - GPA comparison

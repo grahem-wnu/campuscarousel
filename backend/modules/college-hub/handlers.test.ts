@@ -316,4 +316,39 @@ describe('notes / checklist', () => {
   it('suggestChecklist 404s for a missing college', async () => {
     await expectStatus(h.suggestChecklist(ctx({ params: { id: 'ghost' } })), 404);
   });
+
+  it('generatePrep returns the plan, passes college+major+gradYear through, and persists it on the college', async () => {
+    let seen: { name: string; majors: string[]; gradYear?: number } = { name: '', majors: [] };
+    const plan = { headline: 'Aim high', targets: [{ label: '3.5 GPA' }], courses: [{ label: 'AP Physics 1' }], activities: [{ label: 'Robotics' }] };
+    const hh = makeHandlers({
+      getData: () => data,
+      dispatch: makeDispatch(),
+      assetsDispatch: makeAssetsDispatch(),
+      prepSuggester: async (college, majors, gradYear) => {
+        seen = { name: college.name, majors, gradYear };
+        return plan;
+      },
+    });
+    const c = await create({ name: 'Ohio State' });
+    await data.studentProfile.put({ onboardingComplete: true, intendedMajors: ['Nursing (BSN)'], graduationYear: 2028 });
+
+    const res = await hh.generatePrep(ctx({ params: { id: c.collegeId } }));
+    expect((res.body as { plan: typeof plan }).plan.courses[0]?.label).toBe('AP Physics 1');
+    expect(seen).toEqual({ name: 'Ohio State', majors: ['Nursing (BSN)'], gradYear: 2028 });
+    // Persisted onto the college so it survives a reload.
+    const after = await data.colleges.get(c.collegeId);
+    expect(after?.hsPrepPlan?.headline).toBe('Aim high');
+  });
+
+  it('generatePrep returns { plan: null } when the model produced nothing (and persists nothing)', async () => {
+    const hh = makeHandlers({ getData: () => data, dispatch: makeDispatch(), assetsDispatch: makeAssetsDispatch(), prepSuggester: async () => null });
+    const c = await create({ name: 'Kent State' });
+    const res = await hh.generatePrep(ctx({ params: { id: c.collegeId } }));
+    expect((res.body as { plan: unknown }).plan).toBeNull();
+    expect((await data.colleges.get(c.collegeId))?.hsPrepPlan).toBeUndefined();
+  });
+
+  it('generatePrep 404s for a missing college', async () => {
+    await expectStatus(h.generatePrep(ctx({ params: { id: 'ghost' } })), 404);
+  });
 });
