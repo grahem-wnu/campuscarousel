@@ -4,9 +4,9 @@
 // POST /admin/hard-reset — admin-only, TENANT-SCOPED hard reset for re-testing the first-time
 // experience. Empties the family's student roster and clears the /setup progress singleton, so the
 // onboarding gate bootstraps the multi-student loop from scratch on the next load. It does NOT touch
-// other tenants (everything goes through the tenant-scoped Data layer) and does NOT delete per-child
-// data — orphaned S#<id># partitions are unreachable once their roster entry is gone, and each new
-// test child gets a fresh studentId, so the dashboard is clean per run.
+// other tenants (everything goes through the tenant-scoped Data layer). Each removed student's
+// per-child data (`T#<tenant>#S#<id>#…` — colleges, profile, etc.) is PURGED first, so repeated test
+// runs don't leave orphaned partitions accumulating in the table.
 
 import { type Handler } from '../../shared/api/index.js';
 import { requireRole } from '../../shared/auth/index.js';
@@ -30,13 +30,15 @@ export function makeHandlers(deps: DevResetDeps): DevResetHandlers {
       const data = getData();
       const students = await data.students.list();
       let studentsRemoved = 0;
+      let itemsPurged = 0;
       for (const s of students) {
+        itemsPurged += await data.purgeStudent(s.studentId); // wipe the child's data, not just the roster entry
         await data.students.delete(s.studentId);
         studentsRemoved++;
       }
       // Clear declaredStudentCount / setupComplete so the gate sees a fresh family.
       await data.setupState.put({});
-      return { status: 200, body: { ok: true, studentsRemoved } };
+      return { status: 200, body: { ok: true, studentsRemoved, itemsPurged } };
     },
   };
 }

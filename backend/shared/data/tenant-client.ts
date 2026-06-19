@@ -31,6 +31,7 @@ function prefixedClient(inner: TableClient, prefix: () => string): TableClient {
     put: async (item: StoredItem) => inner.put(scopeItem(item)),
     query: async (pk: string, opts?: QueryOptions) => inner.query(scope(pk), opts),
     queryIndex: async (index, pk: string, opts?: QueryOptions) => inner.queryIndex(index, scope(pk), opts),
+    scanByPkPrefix: async (pkPrefix: string) => inner.scanByPkPrefix(scope(pkPrefix)),
   };
 }
 
