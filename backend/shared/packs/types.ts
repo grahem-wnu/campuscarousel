@@ -23,8 +23,12 @@ export interface MajorPack {
   focusBrief: string;
   /** Curated certs to suggest for this major. */
   certifications?: PackCertification[];
-  /** The standardized/entrance exam this major expects (nursing → TEAS). */
+  /** The standardized/entrance exam this major expects (nursing → TEAS). Majors with no standardized
+   *  entrance exam (e.g. construction management) leave this unset, and the exam metric is hidden. */
   entranceExam?: { examName: string; competitiveScore?: number; note?: string };
+  /** Label for the major's "hands-on experience hours" metric in benchmarks (nursing → "Clinical
+   *  hours", construction → "Internship / jobsite hours"). Defaults to "Experience hours" with no pack. */
+  experienceLabel?: string;
   /** Major-specific interview questions (seed the interview question bank). */
   interviewQuestions?: string[];
   /** Major-specific campus-visit questions (seed the visit prep checklist). */

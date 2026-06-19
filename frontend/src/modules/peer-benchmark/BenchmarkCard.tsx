@@ -3,7 +3,7 @@ import { Badge, Button, Card, Spinner, useToast } from '../../shared/ui';
 import { useActiveStudent } from '../../shared/shell';
 import { getBenchmark, refreshBenchmark } from './api';
 import { cellText, readinessMeta, statusMeta } from './logic';
-import type { BenchmarkDetail, MetricStatus, TeasStatus } from './types';
+import { DEFAULT_BENCHMARK_LABELS, type BenchmarkDetail, type MetricStatus, type TeasStatus } from './types';
 
 /** One metric row: label, "keira / school" values, and a color-coded status badge. */
 function MetricRow({
@@ -120,6 +120,7 @@ export function BenchmarkCard({ collegeId, onResearched }: { collegeId: string; 
   if (!detail) return null;
 
   const { benchmark, keira, comparison } = detail;
+  const labels = detail.labels ?? DEFAULT_BENCHMARK_LABELS;
   const readiness = readinessMeta(comparison.overallReadiness);
   const clin = comparison.clinicalHoursStatus as MetricStatus | undefined;
   const vol = comparison.volunteerHoursStatus as MetricStatus | undefined;
@@ -167,8 +168,10 @@ export function BenchmarkCard({ collegeId, onResearched }: { collegeId: string; 
         <>
           <div className="mt-3 divide-y divide-surface-border">
             <MetricRow label="GPA" keira={keira.gpa} school={benchmark.avgGPAAdmitted} status={comparison.gpaStatus} gpa />
-            <MetricRow label="TEAS" keira={keira.teasScore} school={benchmark.avgTEASScore} status={comparison.teasStatus} />
-            <MetricRow label="Clinical hours" keira={keira.clinicalHours} school={benchmark.typicalClinicalHours} status={clin} />
+            {labels.exam ? (
+              <MetricRow label={labels.exam} keira={keira.teasScore} school={benchmark.avgTEASScore} status={comparison.teasStatus} />
+            ) : null}
+            <MetricRow label={labels.experience} keira={keira.clinicalHours} school={benchmark.typicalClinicalHours} status={clin} />
             <MetricRow label="Volunteer hours" keira={keira.volunteerHours} school={benchmark.typicalVolunteerHours} status={vol} />
           </div>
           <p className="mt-2 text-xs text-ink-400">{studentName} / typical admitted student.</p>
