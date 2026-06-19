@@ -39,10 +39,12 @@ export default function CollegeHubPage() {
   const [programType, setProgramType] = useState<ProgramType | ''>('');
   const [sortBy, setSortBy] = useState<NonNullable<ListFilters['sortBy']>>('name');
 
+  const [showDiscover, setShowDiscover] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const discoverRef = useRef<HTMLDivElement>(null);
 
   const [compareIds, setCompareIds] = useState<string[]>([]);
   const [showCompare, setShowCompare] = useState(false);
@@ -82,6 +84,12 @@ export default function CollegeHubPage() {
     pollRef.current = setTimeout(() => void refresh(), 4000);
     return () => clearTimeout(pollRef.current);
   }, [colleges, refresh]);
+
+  // The Discover toggle ("Search") lives below the list, but the card opens at the top — scroll it
+  // into view so the bottom button still does something visible.
+  useEffect(() => {
+    if (showDiscover) discoverRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [showDiscover]);
 
   const compareSet = useMemo(() => new Set(compareIds), [compareIds]);
   const compareColleges = useMemo(
@@ -157,27 +165,23 @@ export default function CollegeHubPage() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-5 p-4 sm:p-6">
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-ink-900">College Hub</h1>
-          <p className="mt-0.5 text-sm text-ink-500">
-            Research, track, and compare college programs on the way to your goals.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {colleges.length > 0 ? (
-            <Button variant="ghost" icon="course" loading={refreshing} onClick={() => void refreshAll()}>
-              Refresh all
-            </Button>
-          ) : null}
-          <Button icon="plus" onClick={() => { setFormError(null); setShowAdd(true); }}>
-            Add college
-          </Button>
-        </div>
+      <header>
+        <h1 className="text-2xl font-bold text-ink-900">College Hub</h1>
+        <p className="mt-0.5 text-sm text-ink-500">
+          Research, track, and compare college programs on the way to your goals.
+        </p>
       </header>
 
-      {/* Discovery is the primary way to build the list, so the search card is always shown. */}
-      <DiscoverPanel trackedNames={colleges.map((c) => c.name)} onAdd={addCandidates} />
+      {/* The Discover (AI search) card opens at the top, toggled by the "Search" button below the list. */}
+      <div ref={discoverRef}>
+        {showDiscover ? (
+          <DiscoverPanel
+            trackedNames={colleges.map((c) => c.name)}
+            onAdd={addCandidates}
+            onClose={() => setShowDiscover(false)}
+          />
+        ) : null}
+      </div>
 
       {colleges.length > 0 || hasFilters ? (
         <Card flush className="p-3">
@@ -231,10 +235,13 @@ export default function CollegeHubPage() {
           description={
             hasFilters
               ? 'Try clearing the filters.'
-              : 'Use Discover programs above to find schools with AI, or add one by name — we’ll fill in the details automatically.'
+              : 'Search for programs with AI, or add a school by name — we’ll fill in the details automatically.'
           }
           action={
-            <Button variant="outline" icon="plus" onClick={() => setShowAdd(true)}>Add by name</Button>
+            <div className="flex gap-2">
+              <Button icon="search" onClick={() => setShowDiscover(true)}>Search programs</Button>
+              <Button variant="outline" icon="plus" onClick={() => setShowAdd(true)}>Add by name</Button>
+            </div>
           }
         />
       ) : view === 'cards' ? (
@@ -257,6 +264,21 @@ export default function CollegeHubPage() {
           onToggleTopPick={(x) => void toggleTopPick(x)}
         />
       )}
+
+      {/* Primary actions live below the list: add a school, refresh them all, or open AI search. */}
+      {colleges.length > 0 ? (
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          <Button icon="plus" onClick={() => { setFormError(null); setShowAdd(true); }}>
+            Add college
+          </Button>
+          <Button variant="ghost" icon="course" loading={refreshing} onClick={() => void refreshAll()}>
+            Refresh all
+          </Button>
+          <Button variant="outline" icon="search" onClick={() => setShowDiscover((s) => !s)}>
+            Search
+          </Button>
+        </div>
+      ) : null}
 
       {compareIds.length >= 2 ? (
         <div className="sticky bottom-20 z-fab flex justify-center sm:bottom-4">
