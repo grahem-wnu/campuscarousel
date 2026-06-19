@@ -110,6 +110,48 @@ async function downloadImage(
 
 const USER_AGENT = 'CampusCarousel/1.0 (private college tracker; campus imagery)';
 const WIKI_API = 'https://en.wikipedia.org/w/api.php';
+const COMMONS_API = 'https://commons.wikimedia.org/w/api.php';
+
+/** Build a short attribution from a Wikimedia Commons file's extmetadata (artist + license). */
+function commonsCredit(meta: Record<string, { value?: string }>): string {
+  const artist = meta.Artist?.value ? plainText(meta.Artist.value) : undefined;
+  const license = meta.LicenseShortName?.value ? plainText(meta.LicenseShortName.value) : undefined;
+  return `Photo: ${[artist, license].filter(Boolean).join(' · ') || 'Wikimedia Commons'} via Wikimedia Commons`.slice(0, 300);
+}
+
+/** Search Wikimedia Commons for an actual CAMPUS photo. A university's Wikipedia lead image is
+ *  usually the school seal (already shown as the app's logo), not a campus — so for the hero we
+ *  search Commons' File namespace for "<name> campus", keep raster photos (skipping seals/diagrams/
+ *  video), and cache the most relevant one that downloads. Free, no API key, served from the
+ *  Wikimedia CDN (stable, no hotlink 404s). */
+async function commonsCampusImage(fetchFn: FetchLike, name: string): Promise<FetchedImage | undefined> {
+  const search = encodeURIComponent(`${name} campus`);
+  const q = `${COMMONS_API}?action=query&format=json&generator=search&gsrsearch=${search}&gsrnamespace=6&gsrlimit=8&prop=imageinfo&iiprop=url%7Cmime%7Cextmetadata&iiurlwidth=1200`;
+  const res = await fetchFn(q, { headers: { 'User-Agent': USER_AGENT, Accept: 'application/json' } });
+  if (!res.ok) return undefined;
+  const body = (await res.json()) as {
+    query?: {
+      pages?: Record<
+        string,
+        { index?: number; imageinfo?: { thumburl?: string; url?: string; mime?: string; extmetadata?: Record<string, { value?: string }> }[] }
+      >;
+    };
+  };
+  const candidates = Object.values(body.query?.pages ?? {})
+    .filter((p) => {
+      const mime = p.imageinfo?.[0]?.mime ?? '';
+      return mime === 'image/jpeg' || mime === 'image/png';
+    })
+    .sort((a, b) => (a.index ?? 999) - (b.index ?? 999)); // search relevance order
+  for (const p of candidates) {
+    const ii = p.imageinfo![0]!;
+    const url = ii.thumburl ?? ii.url;
+    if (!url) continue;
+    const img = await downloadImage(fetchFn, url, commonsCredit(ii.extmetadata ?? {})).catch(() => undefined);
+    if (img) return img;
+  }
+  return undefined;
+}
 
 /** Ask the Wikimedia API for a college's lead image (a fixed-width thumbnail) + its source filename. */
 async function wikimediaCampusImage(
@@ -164,14 +206,18 @@ async function fetchLogo(fetchFn: FetchLike, website?: string): Promise<FetchedI
 export function makeWikimediaImageSource(options: WikimediaSourceOptions = {}): ImageSource {
   const fetchFn = options.fetchFn ?? withTimeout((globalThis.fetch as unknown) as FetchLike, options.timeoutMs ?? 8000);
   return async ({ name, website, campusImageUrls }) => {
-    const [wiki, logo] = await Promise.all([
-      wikimediaCampusImage(fetchFn, name).catch(() => undefined),
+    // Commons search is the PRIMARY campus source (real building/campus photos). Fetch the logo in
+    // parallel since it's independent of the campus hero.
+    const [commons, logo] = await Promise.all([
+      commonsCampusImage(fetchFn, name).catch(() => undefined),
       fetchLogo(fetchFn, website),
     ]);
-    let campus = wiki;
-    // Wikimedia has no lead image for plenty of schools. Fall back to the AI-discovered campus URLs
-    // from text hydration: download the first that actually resolves to an image and cache it, so
-    // the Photos tab gets a stable CDN photo instead of a hotlink that 404s in the browser.
+    let campus = commons;
+    // Secondary: the Wikipedia article's own page image — a real campus photo for some schools (it
+    // returns nothing for the seal-led ones, so it won't surface a logo as the hero).
+    if (!campus) campus = await wikimediaCampusImage(fetchFn, name).catch(() => undefined);
+    // Last resort: the AI-discovered campus URLs from text hydration. These are frequently
+    // hallucinated / 404 (so they're tried last) — cache the first that actually resolves to an image.
     if (!campus && campusImageUrls?.length) {
       for (const url of campusImageUrls.slice(0, 6)) {
         campus = await downloadImage(fetchFn, url).catch(() => undefined);

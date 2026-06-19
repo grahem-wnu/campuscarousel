@@ -116,6 +116,40 @@ function fakeFetch(routes: { match: string; res: Partial<Awaited<ReturnType<Fetc
 }
 
 describe('makeWikimediaImageSource', () => {
+  it('uses a Wikimedia Commons campus photo as the primary source', async () => {
+    const fetchFn = fakeFetch([
+      {
+        match: 'commons.wikimedia.org',
+        res: {
+          json: async () => ({
+            query: {
+              pages: {
+                '7': {
+                  index: 1,
+                  imageinfo: [
+                    {
+                      thumburl: 'https://upload.wikimedia.org/commons/thumb/campus.jpg',
+                      mime: 'image/jpeg',
+                      extmetadata: { Artist: { value: 'Pat Doe' }, LicenseShortName: { value: 'CC BY 4.0' } },
+                    },
+                  ],
+                },
+              },
+            },
+          }),
+        },
+      },
+      {
+        match: 'commons/thumb/campus.jpg',
+        res: { headers: { get: (n) => (n.toLowerCase() === 'content-type' ? 'image/jpeg' : null) }, arrayBuffer: async () => new Uint8Array([7, 7, 7]).buffer },
+      },
+    ]);
+    const source = makeWikimediaImageSource({ fetchFn });
+    const { campus } = await source({ name: 'Arizona State University' });
+    expect(campus?.ext).toBe('jpg');
+    expect(campus?.credit).toBe('Photo: Pat Doe · CC BY 4.0 via Wikimedia Commons');
+  });
+
   it('pulls a campus thumbnail + credit from Wikimedia and a logo from Clearbit', async () => {
     const fetchFn = fakeFetch([
       {
