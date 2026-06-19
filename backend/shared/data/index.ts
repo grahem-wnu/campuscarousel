@@ -39,6 +39,7 @@ import {
 } from './table-client.js';
 import { studentScoped, tenantScoped } from './tenant-client.js';
 import { InMemoryTableClient } from './memory-client.js';
+import { currentTenantId } from '../tenant/index.js';
 import type {
   Activity,
   Application,
@@ -281,6 +282,17 @@ export function makeData(
     // GLOBAL registries — built on the un-scoped base client (never tenant-prefixed).
     tenants: makeTenants(base),
     invites: makeInvites(base),
+
+    /** Hard-delete EVERY per-child item for `studentId` in the current tenant (keys
+     *  `T#<tenant>#S#<studentId>#…`). Used when a student is removed so no orphaned partition is left
+     *  behind. Goes through the raw `base` client (partition-wide), so it must run inside a tenant
+     *  context. Returns the number of items deleted. */
+    purgeStudent: async (studentId: string): Promise<number> => {
+      const prefix = `T#${currentTenantId()}#S#${studentId}#`;
+      const items = await base.scanByPkPrefix(prefix);
+      for (const it of items) await base.delete(it.PK, it.SK);
+      return items.length;
+    },
   };
 }
 

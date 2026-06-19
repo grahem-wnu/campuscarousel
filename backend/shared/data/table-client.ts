@@ -13,6 +13,7 @@ import {
   GetCommand,
   PutCommand,
   QueryCommand,
+  ScanCommand,
 } from '@aws-sdk/lib-dynamodb';
 import { partitionAttr, sortAttr, type IndexName } from './keys.js';
 
@@ -41,6 +42,9 @@ export interface TableClient {
   query(pk: string, opts?: QueryOptions): Promise<StoredItem[]>;
   /** Query a GSI partition `pk` on `index`. */
   queryIndex(index: IndexName, pk: string, opts?: QueryOptions): Promise<StoredItem[]>;
+  /** Full-table scan for every item whose PK begins with `pkPrefix`. Used only for partition-wide
+   *  admin operations (e.g. purging a removed student's data) — NOT a request-path primitive. */
+  scanByPkPrefix(pkPrefix: string): Promise<StoredItem[]>;
 }
 
 function buildKeyCondition(pkAttr: string, skAttr: string, opts: QueryOptions | undefined) {
@@ -97,6 +101,25 @@ export class DynamoTableClient implements TableClient {
 
   async queryIndex(index: IndexName, pk: string, opts?: QueryOptions): Promise<StoredItem[]> {
     return this.runQuery(index, partitionAttr(index), sortAttr(index), pk, opts);
+  }
+
+  async scanByPkPrefix(pkPrefix: string): Promise<StoredItem[]> {
+    const items: StoredItem[] = [];
+    let exclusiveStartKey: Record<string, unknown> | undefined;
+    do {
+      const res = await this.doc.send(
+        new ScanCommand({
+          TableName: this.tableName,
+          FilterExpression: 'begins_with(#pk, :p)',
+          ExpressionAttributeNames: { '#pk': 'PK' },
+          ExpressionAttributeValues: { ':p': pkPrefix },
+          ExclusiveStartKey: exclusiveStartKey,
+        }),
+      );
+      for (const it of (res.Items ?? []) as StoredItem[]) items.push(it);
+      exclusiveStartKey = res.LastEvaluatedKey as Record<string, unknown> | undefined;
+    } while (exclusiveStartKey);
+    return items;
   }
 
   private async runQuery(
