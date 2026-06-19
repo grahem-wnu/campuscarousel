@@ -7,7 +7,6 @@ import {
   Field,
   Icon,
   Input,
-  Modal,
   Spinner,
   Tabs,
   Textarea,
@@ -16,7 +15,6 @@ import {
   type TabItem,
 } from '../../shared/ui';
 import { CollegeLogo } from './CollegeLogo';
-import { CollegeForm } from './CollegeForm';
 import { HydrationBadge } from './HydrationBadge';
 import { useActiveStudent } from '../../shared/shell';
 import { BenchmarkCard } from '../peer-benchmark/BenchmarkCard';
@@ -45,9 +43,8 @@ import {
   listNotes,
   putChecklist,
   suggestChecklist,
-  updateCollege,
 } from './api';
-import type { ChecklistItem, College, CollegeInput, CollegeNote, HsPrepItem, HsPrepPlan } from './types';
+import type { ChecklistItem, College, CollegeNote, HsPrepItem, HsPrepPlan } from './types';
 
 type TabId = 'overview' | 'notes' | 'checklist' | 'prep' | 'fit' | 'photos';
 
@@ -61,7 +58,6 @@ export default function CollegeDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<TabId>('overview');
-  const [showEdit, setShowEdit] = useState(false);
   const [busy, setBusy] = useState(false);
   const pollRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   // Swap back to the plain header if the cached campus photo fails to load.
@@ -95,17 +91,6 @@ export default function CollegeDetailPage() {
 
   // Reset the photo-error flag whenever the cached campus image changes (e.g. after a refresh).
   useEffect(() => setCampusErrored(false), [college?.campusImageUrl]);
-
-  async function onEdit(input: CollegeInput): Promise<void> {
-    setBusy(true);
-    try {
-      const updated = await updateCollege(id, input);
-      setCollege(updated);
-      setShowEdit(false);
-    } finally {
-      setBusy(false);
-    }
-  }
 
   async function onRefresh(): Promise<void> {
     setBusy(true);
@@ -193,7 +178,6 @@ export default function CollegeDetailPage() {
             <HydrationBadge status={college.hydrationStatus} />
           </div>
           <div className="flex shrink-0 gap-2">
-            <Button size="sm" variant="outline" onClick={() => setShowEdit(true)}>Edit</Button>
             <Button size="sm" variant="ghost" icon="course" loading={busy} onClick={() => void onRefresh()}>Refresh</Button>
           </div>
         </div>
@@ -247,10 +231,6 @@ export default function CollegeDetailPage() {
           <BenchmarkCard collegeId={college.collegeId} onResearched={() => void load()} />
         </div>
       )}
-
-      <Modal open={showEdit} onClose={() => setShowEdit(false)} title="Edit college" size="lg">
-        <CollegeForm initial={college} busy={busy} onSubmit={(input) => void onEdit(input)} onCancel={() => setShowEdit(false)} />
-      </Modal>
     </div>
   );
 }
