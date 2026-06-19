@@ -200,7 +200,7 @@ export default function CertificationsPage() {
         <EmptyState
           icon="certificate"
           title="No certifications yet"
-          description="Add the certifications you've earned or plan to — BLS/CPR, CNA, First Aid — to track renewals and training. The suggestions above are a good place to start."
+          description="Add the certifications you've earned or plan to earn — anything that builds skills or strengthens an application — to track renewals and training. The suggestions above are tailored to your path and are a good place to start."
           action={
             <Button icon="plus" onClick={openCreate}>
               Add your first certification
