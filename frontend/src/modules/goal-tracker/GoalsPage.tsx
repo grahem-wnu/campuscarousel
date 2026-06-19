@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Button, Card, EmptyState, Field, Input, Modal, Select, Spinner, Tabs, type TabItem } from '../../shared/ui';
+import { Button, Card, EmptyState, Field, Modal, Select, Spinner, Tabs, type TabItem } from '../../shared/ui';
 import { createGoal, listGoals, updateGoal } from './api';
 import { GoalCard } from './GoalCard';
 import { GoalDetail } from './GoalDetail';
 import { GoalForm, emptyForm, type GoalFormValues } from './GoalForm';
 import { SuggestGoals } from './SuggestGoals';
-import { BOARD_COLUMNS, CATEGORY_META, filterBySearch, groupByPeriod, groupByStatus } from './logic';
+import { BOARD_COLUMNS, CATEGORY_META, groupByPeriod, groupByStatus } from './logic';
 import { CATEGORIES, type Category, type Goal, type GoalInput } from './types';
 
 type ViewId = 'board' | 'timeline';
@@ -31,7 +31,6 @@ export default function GoalsPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [view, setView] = useState<ViewId>('board');
-  const [search, setSearch] = useState('');
   const [category, setCategory] = useState<Category | ''>('');
 
   const [showCreate, setShowCreate] = useState(false);
@@ -55,7 +54,7 @@ export default function GoalsPage() {
     void load();
   }, [load]);
 
-  const visible = useMemo(() => filterBySearch(goals, search), [goals, search]);
+  const visible = goals;
   const byStatus = useMemo(() => groupByStatus(visible), [visible]);
   const byPeriod = useMemo(() => groupByPeriod(visible), [visible]);
 
@@ -84,7 +83,7 @@ export default function GoalsPage() {
     setSelected((prev) => (prev?.goalId === updated.goalId ? updated : prev));
   }
 
-  const hasFilters = Boolean(search || category);
+  const hasFilters = Boolean(category);
   const views: TabItem[] = [
     { id: 'board', label: 'Board' },
     { id: 'timeline', label: 'Timeline' },
@@ -111,13 +110,6 @@ export default function GoalsPage() {
 
       <Card flush className="p-3">
         <div className="flex flex-wrap items-end gap-3">
-          <Field label="Search" className="min-w-[12rem] flex-1">
-            <Input
-              placeholder="Search goals…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </Field>
           <Field label="Category">
             <Select value={category} onChange={(e) => setCategory(e.target.value as Category | '')}>
               <option value="">All</option>
@@ -129,13 +121,7 @@ export default function GoalsPage() {
             </Select>
           </Field>
           {hasFilters ? (
-            <Button
-              variant="ghost"
-              onClick={() => {
-                setSearch('');
-                setCategory('');
-              }}
-            >
+            <Button variant="ghost" onClick={() => setCategory('')}>
               Clear
             </Button>
           ) : null}
