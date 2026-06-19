@@ -60,17 +60,6 @@ export interface VisitPrep {
   source: 'ai' | 'curated';
 }
 
-export interface TripCluster {
-  region: string;
-  colleges: { collegeId: string; name: string; location?: string }[];
-  itinerary: string;
-}
-
-export interface TripPlan {
-  clusters: TripCluster[];
-  source: 'ai' | 'curated';
-}
-
 /** Minimal shape of a college from the College Hub list endpoint (only what this module needs). */
 export interface CollegeOption {
   collegeId: string;

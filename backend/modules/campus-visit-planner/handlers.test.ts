@@ -115,36 +115,3 @@ describe('prep (POST /colleges/:id/visits/:vid/prep)', () => {
     expect(questions.some((q) => /NCLEX/.test(q))).toBe(true);
   });
 });
-
-describe('trip-plan (POST /visits/trip-plan)', () => {
-  beforeEach(async () => {
-    await seedCollege({ name: 'Iowa', state: 'IA' });
-    await seedCollege({ name: 'Iowa State', state: 'IA' });
-    await seedCollege({ name: 'Michigan', state: 'MI' });
-  });
-
-  it('clusters all colleges by region when no subset given', async () => {
-    const res = await h.tripPlan(ctx({ body: {} }));
-    const plan = res.body as { clusters: { region: string }[]; source: string };
-    expect(plan.source).toBe('curated');
-    expect(plan.clusters.map((c) => c.region).sort()).toEqual(['IA', 'MI']);
-  });
-
-  it('restricts to the requested college subset', async () => {
-    const all = await data.colleges.list();
-    const iaIds = all.filter((c) => c.state === 'IA').map((c) => c.collegeId);
-    const res = await h.tripPlan(ctx({ body: { collegeIds: iaIds } }));
-    const plan = res.body as { clusters: { region: string; colleges: unknown[] }[] };
-    expect(plan.clusters).toHaveLength(1);
-    expect(plan.clusters[0]!.region).toBe('IA');
-  });
-
-  it('422s on an unknown trip-plan field', async () => {
-    await expectStatus(h.tripPlan(ctx({ body: { bogus: 1 } })), 422);
-  });
-
-  it('tolerates a missing body', async () => {
-    const res = await h.tripPlan(ctx({ body: undefined }));
-    expect(res.status).toBe(200);
-  });
-});

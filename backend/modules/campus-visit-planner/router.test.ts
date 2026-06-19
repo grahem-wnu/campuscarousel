@@ -83,12 +83,4 @@ describe('router integration', () => {
     expect(res.statusCode).toBe(200);
     expect((parse(res).questions as unknown[]).length).toBeGreaterThanOrEqual(8);
   });
-
-  it('routes /visits/trip-plan to the trip planner', async () => {
-    await seedCollege({ name: 'Iowa', state: 'IA' });
-    await seedCollege({ name: 'Michigan', state: 'MI' });
-    const res = await dispatch(event('POST', '/visits/trip-plan', { as: keira, body: {} }));
-    expect(res.statusCode).toBe(200);
-    expect((parse(res).clusters as unknown[]).length).toBe(2);
-  });
 });

@@ -10,14 +10,11 @@ import {
   Select,
   Spinner,
   Table,
-  Tabs,
   useToast,
   safeHref,
   type Column,
-  type TabItem,
 } from '../../shared/ui';
 import { deleteVisit, getPrep, listColleges, listVisits } from './api';
-import { TripPlanner } from './TripPlanner';
 import { VisitForm } from './VisitForm';
 import {
   buildComparison,
@@ -31,8 +28,6 @@ import {
   type ComparisonRow,
 } from './logic';
 import type { CollegeOption, Visit, VisitPrep } from './types';
-
-type TabId = 'visits' | 'trip';
 
 const comparisonColumns: Column<ComparisonRow>[] = [
   { key: 'date', header: 'Date', render: (r) => r.date },
@@ -48,7 +43,7 @@ const comparisonColumns: Column<ComparisonRow>[] = [
   { key: 'cost', header: 'Travel', align: 'right', render: (r) => (r.travelCost != null ? formatCost(r.travelCost) : '—') },
 ];
 
-/** Campus Visit Planner — pick a college, plan/debrief visits, get visit prep, plan trips. */
+/** Campus Visit Planner — pick a college, plan/debrief visits, and get visit prep. */
 export default function VisitPlannerPage() {
   const toast = useToast();
   const [colleges, setColleges] = useState<CollegeOption[]>([]);
@@ -58,7 +53,6 @@ export default function VisitPlannerPage() {
   const [loadingVisits, setLoadingVisits] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [tab, setTab] = useState<TabId>('visits');
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Visit | null>(null);
   const [prep, setPrep] = useState<{ visit: Visit; data: VisitPrep } | null>(null);
@@ -136,25 +130,16 @@ export default function VisitPlannerPage() {
     }
   }
 
-  const tabs: TabItem[] = [
-    { id: 'visits', label: 'Visits', count: visits.length },
-    { id: 'trip', label: 'Trip Planner' },
-  ];
-
   return (
     <div className="mx-auto max-w-3xl space-y-5 p-4 sm:p-6">
       <header>
         <h1 className="text-2xl font-bold text-ink-900">Campus Visits</h1>
         <p className="mt-0.5 text-sm text-ink-500">
-          Plan visits, prep questions to ask, debrief after, and group nearby schools into trips.
+          Plan visits, prep questions to ask, and debrief after.
         </p>
       </header>
 
-      <Tabs items={tabs} value={tab} onChange={(id) => setTab(id as TabId)} />
-
-      {tab === 'trip' ? (
-        <TripPlanner />
-      ) : loadingColleges ? (
+      {loadingColleges ? (
         <div className="flex justify-center py-16">
           <Spinner />
         </div>

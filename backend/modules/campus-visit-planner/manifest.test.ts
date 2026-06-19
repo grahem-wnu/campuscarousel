@@ -23,7 +23,6 @@ describe('routes.manifest ↔ buildRoutes', () => {
         'GET /colleges/:id/visits',
         'POST /colleges/:id/visits',
         'POST /colleges/:id/visits/:vid/prep',
-        'POST /visits/trip-plan',
         'PUT /colleges/:id/visits/:vid',
       ].sort(),
     );
