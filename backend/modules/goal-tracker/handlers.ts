@@ -43,12 +43,22 @@ export function makeHandlers(getData: () => Data, getSuggester: () => GoalSugges
     list: async (ctx) => {
       const q = validateQuery(listQuerySchema, ctx);
       const all = await getData().goals.list();
-      const goals = all.filter(
-        (g) =>
-          (q.period === undefined || g.period === q.period) &&
-          (q.status === undefined || g.status === q.status) &&
-          (q.category === undefined || g.category === q.category),
-      );
+      const goals = all
+        .filter(
+          (g) =>
+            (q.period === undefined || g.period === q.period) &&
+            (q.status === undefined || g.status === q.status) &&
+            (q.category === undefined || g.category === q.category),
+        )
+        // Order by when the student should do them: soonest target date first; undated goals sink to
+        // the bottom (keeping their creation order). The page's status/period groupings preserve this
+        // within each group.
+        .sort((a, b) => {
+          if (a.targetDate && b.targetDate) return a.targetDate < b.targetDate ? -1 : a.targetDate > b.targetDate ? 1 : 0;
+          if (a.targetDate) return -1;
+          if (b.targetDate) return 1;
+          return 0;
+        });
       return { status: 200, body: { goals } };
     },
 

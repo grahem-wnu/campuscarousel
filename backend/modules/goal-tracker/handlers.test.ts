@@ -130,6 +130,16 @@ describe('list (GET /goals) — filtering', () => {
   it('422s on an invalid status filter', async () => {
     await expectStatus(h.list(ctx({ query: { status: 'bogus' } })), 422);
   });
+
+  it('orders by target date (soonest first); undated goals go last', async () => {
+    await seedGoal({ title: 'Later', targetDate: '2027-05-01' });
+    await seedGoal({ title: 'Soon', targetDate: '2026-09-01' });
+    await seedGoal({ title: 'Mid', targetDate: '2027-01-15' });
+    const goals = ((await h.list(ctx())).body as { goals: Goal[] }).goals;
+    expect(goals.filter((g) => g.targetDate).map((g) => g.title)).toEqual(['Soon', 'Mid', 'Later']);
+    // The undated A/B/C from the outer beforeEach sink to the bottom.
+    expect(new Set(goals.slice(-3).map((g) => g.title))).toEqual(new Set(['A', 'B', 'C']));
+  });
 });
 
 describe('detail (GET /goals/:id)', () => {
