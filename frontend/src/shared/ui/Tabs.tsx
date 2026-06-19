@@ -22,7 +22,7 @@ export function Tabs({ items, value, onChange, className }: TabsProps) {
     // horizontally on its own instead of wrapping or being clipped by the page's overflow-x guard.
     // overflow-y-hidden: an x-axis `auto` makes the y-axis compute to `auto` too, and the active
     // tab's `border-b-2 -mb-px` overflows by 1px → a phantom vertical scrollbar. Pin y to hidden.
-    <div role="tablist" className={cn("flex gap-1 overflow-x-auto overflow-y-hidden border-b border-surface-border", className)}>
+    <div role="tablist" className={cn("scrollbar-x-always flex gap-1 overflow-x-auto overflow-y-hidden border-b border-surface-border", className)}>
       {items.map((item) => {
         const active = item.id === value;
         return (

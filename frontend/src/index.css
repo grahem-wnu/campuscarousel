@@ -40,4 +40,23 @@
   .bottom-fabstack {
     bottom: calc(env(safe-area-inset-bottom) + 5rem);
   }
+
+  /* Always-visible thin horizontal scrollbar for scrollable strips (e.g. the detail-page tabs). On
+     touch devices the default overlay scrollbar auto-hides, so users can't tell the strip scrolls.
+     Styling ::-webkit-scrollbar gives a persistent (non-overlay) bar that shows whenever the strip
+     overflows (it stays hidden when everything fits, e.g. on desktop). */
+  .scrollbar-x-always {
+    scrollbar-width: thin; /* Firefox */
+    scrollbar-color: theme("colors.ink.300") transparent;
+  }
+  .scrollbar-x-always::-webkit-scrollbar {
+    height: 4px;
+  }
+  .scrollbar-x-always::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar-x-always::-webkit-scrollbar-thumb {
+    background-color: theme("colors.ink.300");
+    border-radius: 9999px;
+  }
 }

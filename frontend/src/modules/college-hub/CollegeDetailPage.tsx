@@ -131,9 +131,9 @@ export default function CollegeDetailPage() {
     { id: 'overview', label: 'Overview' },
     { id: 'prep', label: 'Prepare' },
     { id: 'checklist', label: 'Checklist' },
-    { id: 'notes', label: 'Notes' },
     { id: 'fit', label: 'Fit analysis' },
     { id: 'photos', label: 'Photos' },
+    { id: 'notes', label: 'Notes' },
   ];
 
   return (
