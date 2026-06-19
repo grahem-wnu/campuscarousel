@@ -129,9 +129,9 @@ export default function CollegeDetailPage() {
 
   const tabs: TabItem[] = [
     { id: 'overview', label: 'Overview' },
-    { id: 'notes', label: 'Notes' },
-    { id: 'checklist', label: 'Checklist' },
     { id: 'prep', label: 'Prepare' },
+    { id: 'checklist', label: 'Checklist' },
+    { id: 'notes', label: 'Notes' },
     { id: 'fit', label: 'Fit analysis' },
     { id: 'photos', label: 'Photos' },
   ];
