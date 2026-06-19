@@ -98,7 +98,7 @@ export default function JournalPage() {
         <div>
           <h1 className="text-2xl font-bold text-ink-900">Activity Journal</h1>
           <p className="mt-0.5 text-sm text-ink-500">
-            Every meaningful thing you do — volunteering, clinical hours, leadership, reflections.
+            Every meaningful thing you do — volunteering, work and clinical hours, leadership, awards.
           </p>
         </div>
         <Button icon="plus" onClick={() => setShowAdd(true)}>
@@ -157,7 +157,7 @@ export default function JournalPage() {
           description={
             hasFilters
               ? 'Try clearing the filters to see everything.'
-              : 'Log volunteering, clinical hours, leadership, awards — anything meaningful. It all becomes the story behind your application.'
+              : 'Log volunteering, clinical hours, leadership, awards — anything you do. (The “why” behind it — your motivations and reflections — lives in Why This Path.) It all becomes the story behind your application.'
           }
           action={
             hasFilters ? (

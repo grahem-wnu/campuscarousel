@@ -12,6 +12,9 @@ export const nav: NavEntry[] = [
     order: 35,
     route: '/motivations',
     icon: 'heart',
+    // Student-only: this is the student's personal motivation/essay space. Gating hides both the menu
+    // entry and the route from parents/admins (the backend already enforces per-entry privacy on top).
+    roles: ['student'],
     element: () => import('./MotivationPage'),
   },
 ];
