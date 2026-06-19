@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Button, Card, EmptyState, Field, Modal, Select, Spinner, Tabs, type TabItem } from '../../shared/ui';
+import { Button, Card, EmptyState, Modal, Spinner, Tabs, type TabItem } from '../../shared/ui';
 import { createGoal, listGoals, updateGoal } from './api';
 import { GoalCard } from './GoalCard';
 import { GoalDetail } from './GoalDetail';
 import { GoalForm, emptyForm, type GoalFormValues } from './GoalForm';
 import { SuggestGoals } from './SuggestGoals';
-import { BOARD_COLUMNS, CATEGORY_META, groupByPeriod, groupByStatus } from './logic';
-import { CATEGORIES, type Category, type Goal, type GoalInput } from './types';
+import { BOARD_COLUMNS, groupByPeriod, groupByStatus } from './logic';
+import { type Goal, type GoalInput } from './types';
 
 type ViewId = 'board' | 'timeline';
 
@@ -31,7 +31,6 @@ export default function GoalsPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [view, setView] = useState<ViewId>('board');
-  const [category, setCategory] = useState<Category | ''>('');
 
   const [showCreate, setShowCreate] = useState(false);
   const [showSuggest, setShowSuggest] = useState(false);
@@ -42,13 +41,13 @@ export default function GoalsPage() {
     setLoading(true);
     setError(null);
     try {
-      setGoals(await listGoals({ category: category || undefined }));
+      setGoals(await listGoals());
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load your goals.');
     } finally {
       setLoading(false);
     }
-  }, [category]);
+  }, []);
 
   useEffect(() => {
     void load();
@@ -83,7 +82,6 @@ export default function GoalsPage() {
     setSelected((prev) => (prev?.goalId === updated.goalId ? updated : prev));
   }
 
-  const hasFilters = Boolean(category);
   const views: TabItem[] = [
     { id: 'board', label: 'Board' },
     { id: 'timeline', label: 'Timeline' },
@@ -107,26 +105,6 @@ export default function GoalsPage() {
           </Button>
         </div>
       </header>
-
-      <Card flush className="p-3">
-        <div className="flex flex-wrap items-end gap-3">
-          <Field label="Category">
-            <Select value={category} onChange={(e) => setCategory(e.target.value as Category | '')}>
-              <option value="">All</option>
-              {CATEGORIES.map((c) => (
-                <option key={c} value={c}>
-                  {CATEGORY_META[c].label}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          {hasFilters ? (
-            <Button variant="ghost" onClick={() => setCategory('')}>
-              Clear
-            </Button>
-          ) : null}
-        </div>
-      </Card>
 
       <Tabs items={views} value={view} onChange={(id) => setView(id as ViewId)} />
 
@@ -157,8 +135,6 @@ export default function GoalsPage() {
             </div>
           }
         />
-      ) : visible.length === 0 ? (
-        <p className="py-8 text-center text-sm text-ink-500">No goals match your filters.</p>
       ) : view === 'board' ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           {BOARD_COLUMNS.map((col) => (
