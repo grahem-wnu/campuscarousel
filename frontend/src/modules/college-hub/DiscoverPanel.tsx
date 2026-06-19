@@ -11,7 +11,8 @@ interface Props {
   /** Names already in the tracked list — matching candidates are hidden from results. */
   trackedNames: string[];
   onAdd: (chosen: CollegeCandidate[]) => Promise<void> | void;
-  onClose: () => void;
+  /** When provided, a close (✕) affordance is shown. Omit it when the panel is always-on. */
+  onClose?: () => void;
 }
 
 /** "Discover Programs" — set filters (or just Find), review AI candidates with checkboxes, and
@@ -92,9 +93,11 @@ export function DiscoverPanel({ trackedNames, onAdd, onClose }: Props) {
           <Icon name="search" size={18} className="text-primary-600" />
           <h2 className="text-sm font-semibold text-primary-800">Discover programs</h2>
         </div>
-        <button type="button" onClick={onClose} aria-label="Close discovery" className="text-primary-600 hover:text-primary-800">
-          <Icon name="close" size={16} />
-        </button>
+        {onClose ? (
+          <button type="button" onClick={onClose} aria-label="Close discovery" className="text-primary-600 hover:text-primary-800">
+            <Icon name="close" size={16} />
+          </button>
+        ) : null}
       </div>
 
       <div className="mt-3 flex flex-wrap items-end gap-3">
