@@ -29,6 +29,20 @@ export interface MajorPack {
   /** Label for the major's "hands-on experience hours" metric in benchmarks (nursing → "Clinical
    *  hours", construction → "Internship / jobsite hours"). Defaults to "Experience hours" with no pack. */
   experienceLabel?: string;
+  /** Vocabulary for the Experience Hours module so it isn't nursing-coded for other majors. */
+  experienceTerms?: {
+    /** Where the hours happened (nursing → "Facility", construction → "Site / company"). */
+    placeLabel: string;
+    /** Placeholder for the place input (e.g. "e.g. Memorial Hospital"). */
+    placePlaceholder?: string;
+    /** Placeholder for the optional department/area field. */
+    departmentPlaceholder?: string;
+    /** Hint for the duties field (major-appropriate examples). */
+    dutiesPlaceholder?: string;
+    /** A tracked highlight flag (nursing → "Patient care"). When unset, the highlight checkbox/badge/
+     *  stat are hidden — that concept only applies to some majors. */
+    highlightLabel?: string;
+  };
   /** Major-specific interview questions (seed the interview question bank). */
   interviewQuestions?: string[];
   /** Major-specific campus-visit questions (seed the visit prep checklist). */

@@ -14,6 +14,7 @@ import {
   type RouteDef,
 } from '../../shared/api/index.js';
 import { assertCanRead, canSeePrivate, filterForRequester } from '../../shared/auth/index.js';
+import { experienceVocab } from '../../shared/packs/index.js';
 import { isoNow, type ExperienceEntry, type Data } from '../../shared/data/index.js';
 import { renderExperiencePdf } from './pdf.js';
 import { createSchema, exportSchema, idParamSchema, listQuerySchema, updateSchema } from './schema.js';
@@ -63,10 +64,14 @@ export function makeHandlers(getData: () => Data): ExperienceHandlers {
       return { status: 200, body: { entries: filterForRequester(items, ctx.requester) } };
     },
 
-    // GET /experience/summary — aggregate over the visibility-filtered set.
+    // GET /experience/summary — aggregate over the visibility-filtered set, plus major-aware labels
+    // so the module reads for the student's path (not nursing) — see experienceVocab.
     summary: async (ctx) => {
-      const items = await getData().experiences.list();
-      return { status: 200, body: summarize(filterForRequester(items, ctx.requester)) };
+      const [items, profile] = await Promise.all([getData().experiences.list(), getData().studentProfile.get()]);
+      return {
+        status: 200,
+        body: { ...summarize(filterForRequester(items, ctx.requester)), labels: experienceVocab(profile?.intendedMajors ?? []) },
+      };
     },
 
     // GET /experience/supervisors — directory derived from the visibility-filtered entries.

@@ -85,6 +85,30 @@ export function packExperienceLabel(majors?: readonly string[]): string {
   return packsForMajors(majors).find((p) => p.experienceLabel)?.experienceLabel ?? 'Experience hours';
 }
 
+/** Fully-resolved vocabulary for the Experience Hours module (labels + placeholders), so it reads
+ *  for the student's major instead of being nursing-coded. `highlightLabel` is present only for
+ *  majors that track a highlight flag (nursing → "Patient care"); absent → that UI is hidden. */
+export interface ExperienceVocab {
+  hoursLabel: string;
+  placeLabel: string;
+  placePlaceholder: string;
+  departmentPlaceholder: string;
+  dutiesPlaceholder: string;
+  highlightLabel?: string;
+}
+
+export function experienceVocab(majors?: readonly string[]): ExperienceVocab {
+  const t = packsForMajors(majors).find((p) => p.experienceTerms)?.experienceTerms;
+  return {
+    hoursLabel: packExperienceLabel(majors),
+    placeLabel: t?.placeLabel ?? 'Site / organization',
+    placePlaceholder: t?.placePlaceholder ?? 'e.g. the organization or site',
+    departmentPlaceholder: t?.departmentPlaceholder ?? 'e.g. team or area (optional)',
+    dutiesPlaceholder: t?.dutiesPlaceholder ?? 'what you did',
+    ...(t?.highlightLabel ? { highlightLabel: t.highlightLabel } : {}),
+  };
+}
+
 /** Major-aware labels for the peer-benchmark metrics. `exam` is the entrance-exam name (omitted when
  *  the major has no standardized entrance exam, so that row is hidden); `experience` labels the
  *  hands-on-hours metric. Drives the College fit/benchmark card and the Peer Benchmark page. */

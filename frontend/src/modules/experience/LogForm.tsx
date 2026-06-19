@@ -3,13 +3,15 @@ import { useAuth } from '../../shared/shell';
 import { Button, DateField, Field, Input, Select, Textarea, TextField, useToast } from '../../shared/ui';
 import { createExperience } from './api';
 import { canSetPrivate } from './logic';
-import type { ExperienceEntry, ExperienceInput, Visibility } from './types';
+import { DEFAULT_EXPERIENCE_VOCAB, type ExperienceEntry, type ExperienceInput, type ExperienceVocab, type Visibility } from './types';
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
 export interface LogFormProps {
+  /** Major-aware labels/placeholders (place, duties, highlight). */
+  vocab?: ExperienceVocab;
   /** Facilities seen on prior entries, to offer as quick-pick suggestions. */
   facilities?: string[];
   onCreated?: (entry: ExperienceEntry) => void;
@@ -20,7 +22,7 @@ export interface LogFormProps {
  * Log experience-hours form. The Private toggle is offered only to Keira (student role); the server
  * enforces the same rule off the JWT, so this is a UX nicety, not the security boundary.
  */
-export function LogForm({ facilities = [], onCreated, onCancel }: LogFormProps) {
+export function LogForm({ vocab = DEFAULT_EXPERIENCE_VOCAB, facilities = [], onCreated, onCancel }: LogFormProps) {
   const { user } = useAuth();
   const toast = useToast();
   const allowPrivate = canSetPrivate(user?.role);
@@ -41,7 +43,7 @@ export function LogForm({ facilities = [], onCreated, onCancel }: LogFormProps) 
   async function handleSubmit(e: FormEvent): Promise<void> {
     e.preventDefault();
     if (!facility.trim()) {
-      toast.error('Which facility were you at?');
+      toast.error(`Which ${vocab.placeLabel.toLowerCase()} were you at?`);
       return;
     }
     const hoursNum = Number(hours);
@@ -68,7 +70,7 @@ export function LogForm({ facilities = [], onCreated, onCancel }: LogFormProps) 
         visibility: allowPrivate ? visibility : 'family',
       };
       const created = await createExperience(input);
-      toast.success('ExperienceEntry hours logged.');
+      toast.success('Hours logged.');
       onCreated?.(created);
       // Reset the volatile fields for a quick second entry; keep facility/department.
       setHours('');
@@ -100,15 +102,15 @@ export function LogForm({ facilities = [], onCreated, onCancel }: LogFormProps) 
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Field label="Facility" required>
+        <Field label={vocab.placeLabel} required>
           <Input
-            list="clinical-facilities"
-            placeholder="e.g. Memorial Hospital"
+            list="experience-places"
+            placeholder={vocab.placePlaceholder}
             value={facility}
             onChange={(e) => setFacility(e.target.value)}
           />
           {facilities.length > 0 ? (
-            <datalist id="clinical-facilities">
+            <datalist id="experience-places">
               {facilities.map((f) => (
                 <option key={f} value={f} />
               ))}
@@ -117,7 +119,7 @@ export function LogForm({ facilities = [], onCreated, onCancel }: LogFormProps) 
         </Field>
         <TextField
           label="Department"
-          placeholder="e.g. Emergency, ICU, Pediatrics"
+          placeholder={vocab.departmentPlaceholder}
           value={department}
           onChange={(e) => setDepartment(e.target.value)}
         />
@@ -146,20 +148,22 @@ export function LogForm({ facilities = [], onCreated, onCancel }: LogFormProps) 
 
       <TextField
         label="Duties"
-        hint="Comma-separated — what you did (e.g. vitals, charting, patient transport)."
+        hint={`Comma-separated — ${vocab.dutiesPlaceholder}.`}
         value={dutiesText}
         onChange={(e) => setDutiesText(e.target.value)}
       />
 
-      <label className="flex items-center gap-2 text-sm text-ink-700">
-        <input
-          type="checkbox"
-          className="h-4 w-4 rounded border-surface-border text-primary-600 focus:ring-primary-500"
-          checked={patientInteraction}
-          onChange={(e) => setPatientInteraction(e.target.checked)}
-        />
-        Direct patient interaction
-      </label>
+      {vocab.highlightLabel ? (
+        <label className="flex items-center gap-2 text-sm text-ink-700">
+          <input
+            type="checkbox"
+            className="h-4 w-4 rounded border-surface-border text-primary-600 focus:ring-primary-500"
+            checked={patientInteraction}
+            onChange={(e) => setPatientInteraction(e.target.checked)}
+          />
+          {vocab.highlightLabel}
+        </label>
+      ) : null}
 
       <Field label="Reflection" hint="Optional — what you observed or learned.">
         <Textarea rows={3} value={reflection} onChange={(e) => setReflection(e.target.value)} />

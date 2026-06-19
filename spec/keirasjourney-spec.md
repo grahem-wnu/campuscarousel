@@ -1028,9 +1028,16 @@ This is the killer feature. For each essay:
 - Track which schools the score has been sent to
 - If retaking: comparison with previous attempts
 
-### 10. Clinical Hours Log
+### 10. Clinical Hours Log (Experience Hours)
 
-**Purpose:** Structured clinical hours tracking in the format nursing programs want to see. Separate from the general Activity Journal — this is the formal, detailed record.
+**Purpose:** Structured experience-hours tracking in the format programs want to see. Separate from the general Activity Journal — this is the formal, detailed record.
+
+> **MAJOR-AWARE vocabulary.** Surfaced as "Experience Hours" and relabeled per the active major's pack
+> (`experienceVocab`, on `GET /experience/summary`): the hours noun ("Clinical hours" / "Internship /
+> jobsite hours" / "Experience hours"), the place field ("Facility" / "Site / company"), its
+> placeholders, and a highlight flag that exists ONLY for majors that track it (nursing → "Patient
+> care") — for other majors the highlight checkbox/badge/stat are hidden. Stored field names are
+> unchanged; this is a labeling/visibility layer so the module doesn't read as nursing-only.
 
 **Log Entry Form:**
 - Date

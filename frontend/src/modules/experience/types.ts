@@ -38,6 +38,27 @@ export interface ExperienceInput {
   linkedActivityId?: string;
 }
 
+/** Major-aware vocabulary for the Experience Hours module (so it isn't nursing-coded). Supplied by
+ *  GET /experience/summary. `highlightLabel` (e.g. "Patient care") is present only for majors that
+ *  track it — absent → the highlight checkbox/badge/stat are hidden. */
+export interface ExperienceVocab {
+  hoursLabel: string;
+  placeLabel: string;
+  placePlaceholder: string;
+  departmentPlaceholder: string;
+  dutiesPlaceholder: string;
+  highlightLabel?: string;
+}
+
+/** Generic fallback before the summary (with labels) has loaded, or for an older response. */
+export const DEFAULT_EXPERIENCE_VOCAB: ExperienceVocab = {
+  hoursLabel: 'Experience hours',
+  placeLabel: 'Site / organization',
+  placePlaceholder: 'e.g. the organization or site',
+  departmentPlaceholder: 'e.g. team or area (optional)',
+  dutiesPlaceholder: 'what you did',
+};
+
 export interface ExperienceSummary {
   totalEntries: number;
   totalHours: number;
@@ -47,6 +68,7 @@ export interface ExperienceSummary {
   hoursByDepartment: Record<string, number>;
   hoursByMonth: Record<string, number>;
   countsByMonth: Record<string, number>;
+  labels?: ExperienceVocab;
 }
 
 export interface SupervisorEntry {
