@@ -1,9 +1,9 @@
 // Campus Visit Planner handlers. Visits are family-visible sub-entities under COLLEGE#<id> — every
 // authenticated caller may read and write them, so there is no visibility filtering here. Handlers
-// are built from `getData` + injectable AI seams (`prep`, `tripPlanner`) so tests run fully offline
-// (curated implementations) and production injects the Bedrock-backed ones (see routes.manifest.ts).
+// are built from `getData` + an injectable AI seam (`prep`) so tests run fully offline (curated
+// implementation) and production injects the Bedrock-backed one (see routes.manifest.ts).
 
-import { Errors, validate, validateBody, validateParams, type Handler, type RouteDef } from '../../shared/api/index.js';
+import { Errors, validateBody, validateParams, type Handler, type RouteDef } from '../../shared/api/index.js';
 import type { Data } from '../../shared/data/index.js';
 import { packsForMajors } from '../../shared/packs/index.js';
 import { curatedPrep, type PrepGenerator } from './prep.js';
@@ -16,11 +16,9 @@ async function activeMajors(data: Data): Promise<string[]> {
     return [];
   }
 }
-import { curatedTripPlan, type TripPlanner } from './tripplan.js';
 import {
   collegeParamSchema,
   createSchema,
-  tripPlanSchema,
   updateSchema,
   visitParamSchema,
 } from './schema.js';
@@ -31,15 +29,12 @@ export interface VisitHandlers {
   update: Handler;
   remove: Handler;
   prep: Handler;
-  tripPlan: Handler;
 }
 
 export interface HandlerDeps {
   getData: () => Data;
   /** Visit-prep generator (defaults to the offline curated one). */
   prep?: PrepGenerator;
-  /** Trip planner (defaults to the offline curated one). */
-  tripPlanner?: TripPlanner;
 }
 
 /** Ensure the parent college exists; 404 otherwise. Returns it for reuse. */
@@ -52,7 +47,6 @@ async function requireCollege(data: Data, collegeId: string) {
 export function makeHandlers(deps: HandlerDeps): VisitHandlers {
   const { getData } = deps;
   const prep = deps.prep ?? curatedPrep;
-  const tripPlanner = deps.tripPlanner ?? curatedTripPlan;
 
   return {
     // GET /colleges/:id/visits
@@ -110,30 +104,17 @@ export function makeHandlers(deps: HandlerDeps): VisitHandlers {
       const questions = [...packQuestions, ...result.questions].filter((qn, i, arr) => arr.indexOf(qn) === i);
       return { status: 200, body: { ...result, questions } };
     },
-
-    // POST /visits/trip-plan — group nearby schools into itineraries (AI or curated clustering).
-    tripPlan: async (ctx) => {
-      const input = validate(tripPlanSchema, ctx.body ?? {});
-      const data = getData();
-      const all = await data.colleges.list();
-      const subset = input.collegeIds
-        ? all.filter((c) => input.collegeIds!.includes(c.collegeId))
-        : all;
-      const plan = await tripPlanner(subset, input.maxClusters);
-      return { status: 200, body: plan };
-    },
   };
 }
 
 /**
  * The module's route table. Shared by the manifest (production) and the router integration test, so
- * there is one source of truth for paths. The static `/visits/trip-plan` and the deeper
- * `/colleges/:id/visits/:vid/prep` are listed before shallower param routes; the router also prefers
- * more-specific (static-heavy, longer) paths, so they never collide.
+ * there is one source of truth for paths. The deeper `/colleges/:id/visits/:vid/prep` is listed
+ * before shallower param routes; the router also prefers more-specific (static-heavy, longer) paths,
+ * so they never collide.
  */
 export function buildRoutes(h: VisitHandlers): RouteDef[] {
   return [
-    { method: 'POST', path: '/visits/trip-plan', handler: h.tripPlan },
     { method: 'POST', path: '/colleges/:id/visits/:vid/prep', handler: h.prep },
     { method: 'GET', path: '/colleges/:id/visits', handler: h.list },
     { method: 'POST', path: '/colleges/:id/visits', handler: h.create },

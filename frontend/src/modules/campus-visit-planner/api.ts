@@ -5,7 +5,7 @@
 // merged contract) to populate the college picker — this module reads colleges, it does not own them.
 
 import { api } from '../../shared/api';
-import type { CollegeOption, TripPlan, Visit, VisitInput, VisitPrep } from './types';
+import type { CollegeOption, Visit, VisitInput, VisitPrep } from './types';
 
 export async function listColleges(): Promise<CollegeOption[]> {
   const res = await api.get<{ colleges: CollegeOption[] }>('/colleges');
@@ -34,8 +34,4 @@ export function getPrep(collegeId: string, visitId: string): Promise<VisitPrep> 
     `/colleges/${encodeURIComponent(collegeId)}/visits/${encodeURIComponent(visitId)}/prep`,
     {},
   );
-}
-
-export function getTripPlan(collegeIds?: string[]): Promise<TripPlan> {
-  return api.post<TripPlan>('/visits/trip-plan', collegeIds ? { collegeIds } : {});
 }
