@@ -332,20 +332,44 @@ describe('notes / checklist', () => {
     const c = await create({ name: 'Ohio State' });
     await data.studentProfile.put({ onboardingComplete: true, intendedMajors: ['Nursing (BSN)'], graduationYear: 2028 });
 
+    // 202 (async); the default dispatcher runs inline here so the plan is already persisted + complete.
     const res = await hh.generatePrep(ctx({ params: { id: c.collegeId } }));
+    expect(res.status).toBe(202);
     expect((res.body as { plan: typeof plan }).plan.courses[0]?.label).toBe('AP Physics 1');
     expect(seen).toEqual({ name: 'Ohio State', majors: ['Nursing (BSN)'], gradYear: 2028 });
-    // Persisted onto the college so it survives a reload.
+    // Persisted onto the college (status flipped to complete) so it survives a reload.
     const after = await data.colleges.get(c.collegeId);
     expect(after?.hsPrepPlan?.headline).toBe('Aim high');
+    expect(after?.hsPrepStatus).toBe('complete');
   });
 
-  it('generatePrep returns { plan: null } when the model produced nothing (and persists nothing)', async () => {
+  it('generatePrep marks the college in-progress and enqueues without blocking on generation (async)', async () => {
+    const enqueued: string[] = [];
+    const hh = makeHandlers({
+      getData: () => data,
+      dispatch: makeDispatch(),
+      assetsDispatch: makeAssetsDispatch(),
+      // Simulate the SQS enqueuer: records the id and returns WITHOUT generating (worker does that).
+      prepDispatch: async (id) => { enqueued.push(id); },
+    });
+    const c = await create({ name: 'Boise State' });
+    const res = await hh.generatePrep(ctx({ params: { id: c.collegeId } }));
+    expect(res.status).toBe(202);
+    expect((res.body as { status: string }).status).toBe('in-progress');
+    expect(enqueued).toEqual([c.collegeId]);
+    const after = await data.colleges.get(c.collegeId);
+    expect(after?.hsPrepStatus).toBe('in-progress');
+    expect(after?.hsPrepPlan).toBeUndefined(); // worker fills this later
+  });
+
+  it('generatePrep returns { plan: null } + marks failed when the model produced nothing', async () => {
     const hh = makeHandlers({ getData: () => data, dispatch: makeDispatch(), assetsDispatch: makeAssetsDispatch(), prepSuggester: async () => null });
     const c = await create({ name: 'Kent State' });
     const res = await hh.generatePrep(ctx({ params: { id: c.collegeId } }));
     expect((res.body as { plan: unknown }).plan).toBeNull();
-    expect((await data.colleges.get(c.collegeId))?.hsPrepPlan).toBeUndefined();
+    const after = await data.colleges.get(c.collegeId);
+    expect(after?.hsPrepPlan).toBeUndefined();
+    expect(after?.hsPrepStatus).toBe('failed');
   });
 
   it('generatePrep 404s for a missing college', async () => {

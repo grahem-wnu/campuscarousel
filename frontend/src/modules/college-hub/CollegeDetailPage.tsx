@@ -270,25 +270,57 @@ function PrepPlanView({ plan }: { plan: HsPrepPlan }) {
  *  activities. Generated on demand and persisted on the college. The college's own program-level
  *  requirements (admission criteria + in-major college courses) are shown below for reference — NOT
  *  as high-school to-dos (that was the old, confusing behavior). */
-function PrepTab({ college, onUpdate }: { college: College; onUpdate: (c: College) => void }) {
+export function PrepTab({ college, onUpdate }: { college: College; onUpdate: (c: College) => void }) {
   const plan = college.hsPrepPlan ?? null;
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Generation is async on the worker (~20-30s); guard so a poll that resolves after the user leaves
+  // the tab doesn't set state on an unmounted component.
+  const mounted = useRef(true);
+  useEffect(() => () => { mounted.current = false; }, []);
 
+  const PREP_ERR = "Couldn't generate a plan right now — try again in a moment.";
+
+  // Kick off generation, then poll the college until hsPrepStatus settles. The backend returns 202
+  // 'in-progress' (prod, worker-generated); when it ran inline (tests/local) it's already 'complete'.
   async function generate(): Promise<void> {
     setGenerating(true);
     setError(null);
     try {
-      const { plan: p } = await generatePrep(college.collegeId);
-      if (!p) {
-        setError("Couldn't generate a plan right now — try again in a moment.");
+      const res = await generatePrep(college.collegeId);
+      if (res.status === 'complete' && res.plan) {
+        if (mounted.current) onUpdate({ ...college, hsPrepPlan: res.plan, hsPrepStatus: 'complete' });
         return;
       }
-      onUpdate({ ...college, hsPrepPlan: p });
+      if (res.status === 'failed') {
+        if (mounted.current) setError(PREP_ERR);
+        return;
+      }
+      // Poll while the worker generates (cap ~80s; generation is ~25s).
+      for (let i = 0; i < 20; i++) {
+        await new Promise((r) => setTimeout(r, 4000));
+        if (!mounted.current) return;
+        let fresh;
+        try {
+          fresh = await getCollege(college.collegeId);
+        } catch {
+          continue; // transient read error — keep polling
+        }
+        if (!mounted.current) return;
+        if (fresh.hsPrepStatus === 'complete' && fresh.hsPrepPlan) {
+          onUpdate(fresh);
+          return;
+        }
+        if (fresh.hsPrepStatus === 'failed') {
+          setError(PREP_ERR);
+          return;
+        }
+      }
+      if (mounted.current) setError('Still working on your plan — check back in a moment.');
     } catch {
-      setError("Couldn't generate a plan right now — try again in a moment.");
+      if (mounted.current) setError(PREP_ERR);
     } finally {
-      setGenerating(false);
+      if (mounted.current) setGenerating(false);
     }
   }
 

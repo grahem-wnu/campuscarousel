@@ -84,6 +84,9 @@ export interface College {
   assetsStatus?: AssetsStatus;
   /** AI "how to prepare in high school for this college" plan (see POST /colleges/:id/prep). */
   hsPrepPlan?: HsPrepPlan;
+  /** Prep-plan generation lifecycle — it runs async on the worker, so the UI polls this until it
+   *  settles to 'complete' (use hsPrepPlan) or 'failed'. */
+  hsPrepStatus?: 'pending' | 'in-progress' | 'complete' | 'failed';
   createdAt: string;
   updatedAt: string;
 }

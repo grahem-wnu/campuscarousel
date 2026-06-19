@@ -16,6 +16,7 @@ import { makeHandlers } from './handlers.js';
 import { makeSqsEnqueuer } from './enqueue.js';
 import { makeSqsDiscoverEnqueuer } from './discover.js';
 import { makeAssetsEnqueuer } from './assets-enqueue.js';
+import { makeSqsPrepEnqueuer } from './prep-ai.js';
 
 let cached: Data | undefined;
 const getData = (): Data => (cached ??= dataFromEnv());
@@ -24,6 +25,7 @@ const handlers = makeHandlers({
   dispatch: makeSqsEnqueuer(getData),
   discoverDispatch: makeSqsDiscoverEnqueuer(getData),
   assetsDispatch: makeAssetsEnqueuer(getData),
+  prepDispatch: makeSqsPrepEnqueuer(getData),
 });
 
 export const routes: RouteDef[] = [
