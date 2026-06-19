@@ -20,7 +20,7 @@ import { LogForm } from './LogForm';
 import { SummaryView } from './SummaryView';
 import { SupervisorDirectory } from './SupervisorDirectory';
 import { canSetPrivate, filterBySearch, pdfBlob, sortByDateDesc } from './logic';
-import type { ExperienceEntry, ExperienceSummary, SupervisorEntry } from './types';
+import { DEFAULT_EXPERIENCE_VOCAB, type ExperienceEntry, type ExperienceSummary, type SupervisorEntry } from './types';
 
 type TabId = 'log' | 'summary' | 'supervisors';
 
@@ -63,7 +63,7 @@ export default function ExperiencePage() {
       setSummary(sum);
       setSupervisors(sups);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not load your clinical hours.');
+      setError(err instanceof Error ? err.message : 'Could not load your experience hours.');
     } finally {
       setLoading(false);
     }
@@ -72,6 +72,11 @@ export default function ExperiencePage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Major-aware vocabulary (from the summary) so the page reads for the student's path, not nursing.
+  const vocab = summary?.labels ?? DEFAULT_EXPERIENCE_VOCAB;
+  const hoursLower = vocab.hoursLabel.toLowerCase();
+  const placeLower = vocab.placeLabel.toLowerCase();
 
   const visible = useMemo(() => sortByDateDesc(filterBySearch(entries, search)), [entries, search]);
   // Options come from the summary (the full visibility-filtered set) so the dropdowns don't shrink
@@ -147,7 +152,7 @@ export default function ExperiencePage() {
         <div>
           <h1 className="text-2xl font-bold text-ink-900">Experience Hours</h1>
           <p className="mt-0.5 text-sm text-ink-500">
-            Structured experience hours in the format programs want — facility, supervisor, duties, reflections.
+            Structured experience hours in the format programs want — {placeLower}, supervisor, duties, reflections.
           </p>
         </div>
         <div className="flex gap-2">
@@ -164,12 +169,12 @@ export default function ExperiencePage() {
         <div className="flex flex-wrap items-end gap-3">
           <Field label="Search" className="min-w-[12rem] flex-1">
             <Input
-              placeholder="Search facility, supervisor, duties…"
+              placeholder={`Search ${placeLower}, supervisor, duties…`}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
           </Field>
-          <Field label="Facility">
+          <Field label={vocab.placeLabel}>
             <Select value={facility} onChange={(e) => setFacility(e.target.value)}>
               <option value="">All</option>
               {facilityOptions.map((f) => (
@@ -214,18 +219,18 @@ export default function ExperiencePage() {
         </div>
       ) : tab === 'summary' ? (
         summary ? (
-          <SummaryView summary={summary} />
+          <SummaryView summary={summary} vocab={vocab} />
         ) : null
       ) : tab === 'supervisors' ? (
-        <SupervisorDirectory supervisors={supervisors} />
+        <SupervisorDirectory supervisors={supervisors} vocab={vocab} />
       ) : entries.length === 0 ? (
         <EmptyState
           icon="clinical"
-          title={hasFilters ? 'No entries match your filters' : 'Start logging clinical hours'}
+          title={hasFilters ? 'No entries match your filters' : `Start logging ${hoursLower}`}
           description={
             hasFilters
               ? 'Try clearing the filters to see everything.'
-              : 'Log each shift — facility, supervisor, hours, and what you did. It builds the experience record programs ask for.'
+              : `Log each session — ${placeLower}, supervisor, hours, and what you did. It builds the experience record programs ask for.`
           }
           action={
             hasFilters ? (
@@ -244,13 +249,14 @@ export default function ExperiencePage() {
       ) : (
         <div className="space-y-3">
           {visible.map((entry) => (
-            <ExperienceCard key={entry.entryId} entry={entry} canModify={canModify} onDelete={handleDelete} />
+            <ExperienceCard key={entry.entryId} entry={entry} vocab={vocab} canModify={canModify} onDelete={handleDelete} />
           ))}
         </div>
       )}
 
-      <Modal open={showAdd} onClose={() => setShowAdd(false)} title="Log clinical hours">
+      <Modal open={showAdd} onClose={() => setShowAdd(false)} title={`Log ${hoursLower}`}>
         <LogForm
+          vocab={vocab}
           facilities={facilityOptions}
           onCreated={() => {
             setShowAdd(false);

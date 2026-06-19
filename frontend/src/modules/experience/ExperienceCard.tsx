@@ -1,14 +1,16 @@
 import { Badge, Button, Card, Icon } from '../../shared/ui';
 import { formatHours } from './logic';
-import type { ExperienceEntry } from './types';
+import { DEFAULT_EXPERIENCE_VOCAB, type ExperienceEntry, type ExperienceVocab } from './types';
 
 /** One experience-hours entry in the list. */
 export function ExperienceCard({
   entry,
+  vocab = DEFAULT_EXPERIENCE_VOCAB,
   canModify,
   onDelete,
 }: {
   entry: ExperienceEntry;
+  vocab?: ExperienceVocab;
   canModify: boolean;
   onDelete?: (entry: ExperienceEntry) => void;
 }) {
@@ -23,7 +25,7 @@ export function ExperienceCard({
             <h3 className="font-semibold text-ink-900">{entry.facility}</h3>
             {entry.department ? <Badge tone="info">{entry.department}</Badge> : null}
             <Badge tone="primary">{formatHours(entry.hours)} hrs</Badge>
-            {entry.patientInteraction ? <Badge tone="success">Patient care</Badge> : null}
+            {entry.patientInteraction && vocab.highlightLabel ? <Badge tone="success">{vocab.highlightLabel}</Badge> : null}
             {entry.visibility === 'private' ? <Badge tone="neutral">Private</Badge> : null}
           </div>
           <p className="mt-0.5 text-sm text-ink-500">

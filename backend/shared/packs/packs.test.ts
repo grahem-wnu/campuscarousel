@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { benchmarkMetricLabels, packCertifications, packEntranceExam, packExperienceLabel, packFocusBriefs, packInterviewQuestions, packsForMajors } from './index.js';
+import { benchmarkMetricLabels, experienceVocab, packCertifications, packEntranceExam, packExperienceLabel, packFocusBriefs, packInterviewQuestions, packsForMajors } from './index.js';
 import { focusLine } from '../ai/major.js';
 
 describe('major-pack resolver', () => {
@@ -134,5 +134,25 @@ describe('phase-3 packs resolve by major (and do not cross-match)', () => {
 
   it('an unknown major falls back to generic labels (no exam, generic experience)', () => {
     expect(benchmarkMetricLabels(['Philosophy'])).toEqual({ experience: 'Experience hours' });
+  });
+
+  it('experience vocab is major-aware (nursing → Facility + Patient care highlight)', () => {
+    const v = experienceVocab(['Nursing']);
+    expect(v.hoursLabel).toBe('Clinical hours');
+    expect(v.placeLabel).toBe('Facility');
+    expect(v.highlightLabel).toBe('Patient care');
+  });
+
+  it('a non-nursing major drops the patient-care highlight and uses its own place label', () => {
+    const v = experienceVocab(['Construction Management']);
+    expect(v.placeLabel).toBe('Site / company');
+    expect(v.highlightLabel).toBeUndefined();
+    expect(v.hoursLabel).toBe('Internship / jobsite hours');
+  });
+
+  it('an unknown major gets fully-generic experience vocab', () => {
+    const v = experienceVocab(['Philosophy']);
+    expect(v.placeLabel).toBe('Site / organization');
+    expect(v.highlightLabel).toBeUndefined();
   });
 });

@@ -1,8 +1,8 @@
 import { Badge, Card, EmptyState, Table, type Column } from '../../shared/ui';
 import { formatHours } from './logic';
-import type { SupervisorEntry } from './types';
+import { DEFAULT_EXPERIENCE_VOCAB, type ExperienceVocab, type SupervisorEntry } from './types';
 
-const columns: Column<SupervisorEntry>[] = [
+const makeColumns = (vocab: ExperienceVocab): Column<SupervisorEntry>[] => [
   {
     key: 'name',
     header: 'Supervisor',
@@ -14,7 +14,7 @@ const columns: Column<SupervisorEntry>[] = [
     ),
   },
   { key: 'contact', header: 'Contact', render: (s) => s.contact ?? <span className="text-ink-400">—</span> },
-  { key: 'facilities', header: 'Facilities', render: (s) => s.facilities.join(', ') },
+  { key: 'facilities', header: vocab.placeLabel, render: (s) => s.facilities.join(', ') },
   { key: 'hours', header: 'Hours', align: 'right', render: (s) => formatHours(s.totalHours) },
   {
     key: 'recommender',
@@ -26,20 +26,26 @@ const columns: Column<SupervisorEntry>[] = [
   },
 ];
 
-/** Auto-built directory of every supervisor named on a (visibility-filtered) clinical entry. */
-export function SupervisorDirectory({ supervisors }: { supervisors: SupervisorEntry[] }) {
+/** Auto-built directory of every supervisor named on a (visibility-filtered) experience entry. */
+export function SupervisorDirectory({
+  supervisors,
+  vocab = DEFAULT_EXPERIENCE_VOCAB,
+}: {
+  supervisors: SupervisorEntry[];
+  vocab?: ExperienceVocab;
+}) {
   if (supervisors.length === 0) {
     return (
       <EmptyState
         icon="contacts"
         title="No supervisors yet"
-        description="Name a supervisor when you log clinical hours and they'll appear here — handy when it's time to line up recommenders."
+        description={`Name a supervisor when you log ${vocab.hoursLabel.toLowerCase()} and they'll appear here — handy when it's time to line up recommenders.`}
       />
     );
   }
   return (
     <Card flush>
-      <Table columns={columns} rows={supervisors} rowKey={(s) => s.name} />
+      <Table columns={makeColumns(vocab)} rows={supervisors} rowKey={(s) => s.name} />
     </Card>
   );
 }

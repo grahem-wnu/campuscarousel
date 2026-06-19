@@ -39,6 +39,13 @@ export const nursingPack: MajorPack = {
     note: 'ATI TEAS — the standard nursing-program entrance exam.',
   },
   experienceLabel: 'Clinical hours',
+  experienceTerms: {
+    placeLabel: 'Facility',
+    placePlaceholder: 'e.g. Memorial Hospital',
+    departmentPlaceholder: 'e.g. Emergency, ICU, Pediatrics',
+    dutiesPlaceholder: 'e.g. vitals, charting, patient transport',
+    highlightLabel: 'Patient care',
+  },
   interviewQuestions: [
     'Why do you want to become a nurse?',
     'Why our nursing program specifically?',

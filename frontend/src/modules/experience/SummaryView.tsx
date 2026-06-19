@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Card, Field, Input } from '../../shared/ui';
 import { benchmarkProgress, formatHours, monthLabel, toSortedRows } from './logic';
-import type { ExperienceSummary } from './types';
+import { DEFAULT_EXPERIENCE_VOCAB, type ExperienceSummary, type ExperienceVocab } from './types';
 
 function StatCard({ label, value }: { label: string; value: string | number }) {
   return (
@@ -46,7 +46,7 @@ function Bars({ title, byKey, emptyText }: { title: string; byKey: Record<string
 
 /** Total-hours headline, by-facility / by-department bars, monthly trend, patient-vs-observational
  *  split, and an editable benchmark target. All numbers are visibility-filtered server-side. */
-export function SummaryView({ summary }: { summary: ExperienceSummary }) {
+export function SummaryView({ summary, vocab = DEFAULT_EXPERIENCE_VOCAB }: { summary: ExperienceSummary; vocab?: ExperienceVocab }) {
   const [target, setTarget] = useState('');
   const targetNum = target.trim() ? Number(target) : undefined;
   const bench = benchmarkProgress(summary.totalHours, Number.isNaN(targetNum) ? undefined : targetNum);
@@ -61,8 +61,10 @@ export function SummaryView({ summary }: { summary: ExperienceSummary }) {
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatCard label="Total hours" value={formatHours(summary.totalHours)} />
         <StatCard label="Entries" value={summary.totalEntries} />
-        <StatCard label="Patient-care hrs" value={formatHours(summary.patientInteractionHours)} />
-        <StatCard label="Facilities" value={Object.keys(summary.hoursByFacility).length} />
+        {vocab.highlightLabel ? (
+          <StatCard label={`${vocab.highlightLabel} hrs`} value={formatHours(summary.patientInteractionHours)} />
+        ) : null}
+        <StatCard label={vocab.placeLabel} value={Object.keys(summary.hoursByFacility).length} />
       </div>
 
       <Card>
@@ -95,25 +97,27 @@ export function SummaryView({ summary }: { summary: ExperienceSummary }) {
         )}
       </Card>
 
-      <Bars title="Hours by facility" byKey={summary.hoursByFacility} emptyText="No hours logged yet." />
+      <Bars title={`Hours by ${vocab.placeLabel.toLowerCase()}`} byKey={summary.hoursByFacility} emptyText="No hours logged yet." />
       <Bars title="Hours by department" byKey={summary.hoursByDepartment} emptyText="No hours logged yet." />
 
-      <Card>
-        <h3 className="mb-3 text-base font-semibold text-ink-900">Patient interaction</h3>
-        {summary.totalHours === 0 ? (
-          <p className="text-sm text-ink-500">No hours logged yet.</p>
-        ) : (
-          <>
-            <div className="flex h-4 overflow-hidden rounded-full bg-ink-100">
-              <div className="h-full bg-success-500" style={{ width: `${piPct}%` }} title="Patient interaction" />
-            </div>
-            <p className="mt-2 text-sm text-ink-600">
-              {formatHours(summary.patientInteractionHours)} patient-interaction ·{' '}
-              {formatHours(summary.observationalHours)} observational
-            </p>
-          </>
-        )}
-      </Card>
+      {vocab.highlightLabel ? (
+        <Card>
+          <h3 className="mb-3 text-base font-semibold text-ink-900">{vocab.highlightLabel}</h3>
+          {summary.totalHours === 0 ? (
+            <p className="text-sm text-ink-500">No hours logged yet.</p>
+          ) : (
+            <>
+              <div className="flex h-4 overflow-hidden rounded-full bg-ink-100">
+                <div className="h-full bg-success-500" style={{ width: `${piPct}%` }} title={vocab.highlightLabel} />
+              </div>
+              <p className="mt-2 text-sm text-ink-600">
+                {formatHours(summary.patientInteractionHours)} {vocab.highlightLabel.toLowerCase()} ·{' '}
+                {formatHours(summary.observationalHours)} other
+              </p>
+            </>
+          )}
+        </Card>
+      ) : null}
 
       <Card>
         <h3 className="mb-3 text-base font-semibold text-ink-900">Hours over time</h3>

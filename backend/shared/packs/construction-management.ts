@@ -15,6 +15,12 @@ export const constructionManagementPack: MajorPack = {
     'hands-on jobsite or trades experience, leadership, and choosing an ACCE-accredited program. Strong ' +
     'programs feed directly into paid internships and high job-placement rates.',
   experienceLabel: 'Internship / jobsite hours',
+  experienceTerms: {
+    placeLabel: 'Site / company',
+    placePlaceholder: 'e.g. Turner Construction',
+    departmentPlaceholder: 'e.g. field, estimating, safety',
+    dutiesPlaceholder: 'e.g. reading plans, site walks, scheduling, take-offs',
+  },
   certifications: [
     { name: 'OSHA 30-Hour Construction', issuingOrganization: 'OSHA / authorized trainer', why: 'The safety credential general contractors expect — a standout on a high-schooler’s résumé and often required on jobsites.', priority: 1 },
     { name: 'OSHA 10-Hour Construction', issuingOrganization: 'OSHA / authorized trainer', why: 'The entry-level safety card; a fast first step before the 30-hour.', priority: 2 },
