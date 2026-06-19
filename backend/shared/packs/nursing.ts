@@ -38,6 +38,7 @@ export const nursingPack: MajorPack = {
     competitiveScore: 78,
     note: 'ATI TEAS — the standard nursing-program entrance exam.',
   },
+  experienceLabel: 'Clinical hours',
   interviewQuestions: [
     'Why do you want to become a nurse?',
     'Why our nursing program specifically?',

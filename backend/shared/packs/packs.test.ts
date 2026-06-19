@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { packCertifications, packEntranceExam, packFocusBriefs, packInterviewQuestions, packsForMajors } from './index.js';
+import { benchmarkMetricLabels, packCertifications, packEntranceExam, packExperienceLabel, packFocusBriefs, packInterviewQuestions, packsForMajors } from './index.js';
 import { focusLine } from '../ai/major.js';
 
 describe('major-pack resolver', () => {
@@ -119,5 +119,20 @@ describe('phase-3 packs resolve by major (and do not cross-match)', () => {
   it('a genuinely cross-disciplinary major can match more than one pack (by design)', () => {
     // "Software Engineering" is both CS-ish (software) and engineering — activating both merges guidance.
     expect(packsForMajors(['Software Engineering']).map((p) => p.key).sort()).toEqual(['computer-science', 'engineering']);
+  });
+
+  it('benchmark metric labels are major-aware (nursing has TEAS + clinical hours)', () => {
+    expect(benchmarkMetricLabels(['Nursing'])).toEqual({ exam: 'TEAS', experience: 'Clinical hours' });
+    expect(packExperienceLabel(['Nursing'])).toBe('Clinical hours');
+  });
+
+  it('a major with no entrance exam hides it and uses its own experience label', () => {
+    const labels = benchmarkMetricLabels(['Construction Management']);
+    expect(labels.exam).toBeUndefined(); // no TEAS row for construction
+    expect(labels.experience).toBe('Internship / jobsite hours');
+  });
+
+  it('an unknown major falls back to generic labels (no exam, generic experience)', () => {
+    expect(benchmarkMetricLabels(['Philosophy'])).toEqual({ experience: 'Experience hours' });
   });
 });

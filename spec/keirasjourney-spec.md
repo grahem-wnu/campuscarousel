@@ -574,6 +574,14 @@ Attributes:
 ```
 
 #### Peer Benchmark (per college)
+> **Metrics are MAJOR-AWARE in the UI.** The stored fields keep their (nursing-legacy) names, but
+> their meaning is generic — `avgTEASScore` = typical entrance-exam score, `typicalClinicalHours` =
+> typical hands-on experience hours. The fit/benchmark card + Peer Benchmark page label them from the
+> active major's pack: the entrance-exam row shows the major's exam name (nursing → "TEAS") and is
+> **hidden entirely for majors with no standardized entrance exam** (e.g. Construction Management);
+> the experience-hours row is labeled per major ("Clinical hours" / "Internship / jobsite hours" /
+> default "Experience hours"). The researcher likewise omits the entrance-exam figure when the major
+> has none.
 ```
 PK: COLLEGE#<collegeId>
 SK: BENCHMARK

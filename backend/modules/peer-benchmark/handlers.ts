@@ -14,6 +14,7 @@ import {
   type RouteDef,
 } from '../../shared/api/index.js';
 import type { Benchmark, BenchmarkSnapshot, College, Data } from '../../shared/data/index.js';
+import { benchmarkMetricLabels } from '../../shared/packs/index.js';
 import { buildAggregate, compareToBenchmark } from './compare.js';
 import { gatherFamilyVisibleStats, gatherStats } from './gather.js';
 import { makeSqsEnqueuer } from './enqueue.js';
@@ -77,7 +78,11 @@ export function makeHandlers(
       const data = getData();
       const college = await data.colleges.get(id);
       if (!college) throw Errors.notFound('College not found');
-      const [benchmark, keira] = await Promise.all([data.benchmarks.get(id), gatherStats(data, ctx.requester)]);
+      const [benchmark, keira, profile] = await Promise.all([
+        data.benchmarks.get(id),
+        gatherStats(data, ctx.requester),
+        data.studentProfile.get(),
+      ]);
       return {
         status: 200,
         body: {
@@ -85,6 +90,7 @@ export function makeHandlers(
           benchmark,
           keira,
           comparison: compareToBenchmark(keira, benchmark),
+          labels: benchmarkMetricLabels(profile?.intendedMajors ?? []),
         },
       };
     },
@@ -104,7 +110,11 @@ export function makeHandlers(
       await data.benchmarks.mergePreservingUserEdits(id, { hydrationStatus: 'in-progress' });
       await dispatch(id, input.focus);
 
-      const [benchmark, keira] = await Promise.all([data.benchmarks.get(id), gatherStats(data, ctx.requester)]);
+      const [benchmark, keira, profile] = await Promise.all([
+        data.benchmarks.get(id),
+        gatherStats(data, ctx.requester),
+        data.studentProfile.get(),
+      ]);
       return {
         status: 200,
         body: {
@@ -112,6 +122,7 @@ export function makeHandlers(
           benchmark,
           keira,
           comparison: compareToBenchmark(keira, benchmark),
+          labels: benchmarkMetricLabels(profile?.intendedMajors ?? []),
         },
       };
     },
@@ -125,7 +136,8 @@ export function makeHandlers(
       const benchmarkOf = (cid: string): Benchmark | null => byId.get(cid) ?? null;
       const matrix = buildAggregate(keira, colleges, benchmarkOf);
       const trend = await recordMonthlySnapshot(data, colleges, benchmarkOf);
-      return { status: 200, body: { ...matrix, trend } };
+      const labels = benchmarkMetricLabels((await data.studentProfile.get())?.intendedMajors ?? []);
+      return { status: 200, body: { ...matrix, trend, labels } };
     },
 
     // GET /benchmarks/gaps — AI biggest-gaps analysis with specific recommendations.

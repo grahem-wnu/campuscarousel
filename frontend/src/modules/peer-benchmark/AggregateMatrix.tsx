@@ -1,6 +1,6 @@
 import { Badge, Icon, Table, type Column } from '../../shared/ui';
 import { cellText, readinessMeta, statusMeta } from './logic';
-import type { MatrixRow } from './types';
+import { DEFAULT_BENCHMARK_LABELS, type BenchmarkLabels, type MatrixRow } from './types';
 
 /** A color-coded matrix cell: "keira / school" tinted by Keira's standing on that metric. */
 function Cell({ keira, school, status, gpa }: { keira?: number; school?: number; status?: 'above' | 'at' | 'below' | 'not-taken'; gpa?: boolean }) {
@@ -19,13 +19,15 @@ function Cell({ keira, school, status, gpa }: { keira?: number; school?: number;
 export function AggregateMatrix({
   rows,
   keira,
+  labels = DEFAULT_BENCHMARK_LABELS,
   onSelect,
 }: {
   rows: MatrixRow[];
   keira: { gpa?: number; teasScore?: number; clinicalHours: number; volunteerHours: number };
+  labels?: BenchmarkLabels;
   onSelect?: (collegeId: string) => void;
 }) {
-  const columns: Column<MatrixRow>[] = [
+  const columns: (Column<MatrixRow> | null)[] = [
     {
       key: 'college',
       header: 'College',
@@ -42,15 +44,18 @@ export function AggregateMatrix({
       align: 'center',
       render: (r) => <Cell keira={keira.gpa} school={r.benchmark.avgGPAAdmitted} status={r.comparison.gpaStatus} gpa />,
     },
-    {
-      key: 'teas',
-      header: 'TEAS',
-      align: 'center',
-      render: (r) => <Cell keira={keira.teasScore} school={r.benchmark.avgTEASScore} status={r.comparison.teasStatus} />,
-    },
+    // Entrance-exam column only when the major has one (hidden for e.g. construction management).
+    labels.exam
+      ? {
+          key: 'teas',
+          header: labels.exam,
+          align: 'center',
+          render: (r) => <Cell keira={keira.teasScore} school={r.benchmark.avgTEASScore} status={r.comparison.teasStatus} />,
+        }
+      : null,
     {
       key: 'clinical',
-      header: 'Clinical h',
+      header: labels.experience,
       align: 'center',
       render: (r) => (
         <Cell keira={keira.clinicalHours} school={r.benchmark.typicalClinicalHours} status={r.comparison.clinicalHoursStatus} />
@@ -77,7 +82,7 @@ export function AggregateMatrix({
 
   return (
     <Table
-      columns={columns}
+      columns={columns.filter((c): c is Column<MatrixRow> => c !== null)}
       rows={rows}
       rowKey={(r) => r.collegeId}
       onRowClick={onSelect ? (r) => onSelect(r.collegeId) : undefined}

@@ -96,6 +96,20 @@ describe('detail (GET /colleges/:id/benchmark)', () => {
     const res = await h.detail(ctx({ params: { id } }));
     expect((res.body as { keira: { gpa?: number } }).keira.gpa).toBe(4.0);
   });
+
+  it('returns major-aware metric labels (construction → no TEAS row, internship hours)', async () => {
+    const id = await seedCollege();
+    await data.studentProfile.put({ intendedMajors: ['Construction Management'] } as Parameters<Data['studentProfile']['put']>[0]);
+    const res = await h.detail(ctx({ params: { id } }));
+    expect((res.body as { labels: { exam?: string; experience: string } }).labels).toEqual({ experience: 'Internship / jobsite hours' });
+  });
+
+  it('returns TEAS + clinical-hours labels for a nursing student', async () => {
+    const id = await seedCollege();
+    await data.studentProfile.put({ intendedMajors: ['Nursing (BSN)'] } as Parameters<Data['studentProfile']['put']>[0]);
+    const res = await h.detail(ctx({ params: { id } }));
+    expect((res.body as { labels: { exam?: string; experience: string } }).labels).toEqual({ exam: 'TEAS', experience: 'Clinical hours' });
+  });
 });
 
 describe('refresh (POST /colleges/:id/benchmark/refresh)', () => {

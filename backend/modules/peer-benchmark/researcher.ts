@@ -11,7 +11,7 @@
 
 import { ApiError } from '../../shared/api/index.js';
 import { majorPhrase } from '../../shared/ai/major.js';
-import { packFocusBriefs } from '../../shared/packs/index.js';
+import { packEntranceExam, packExperienceLabel, packFocusBriefs } from '../../shared/packs/index.js';
 import { promptLiteral } from '../../shared/ai/index.js';
 import type { College } from '../../shared/data/index.js';
 import type { KeiraStats } from './stats.js';
@@ -82,6 +82,8 @@ export function buildResearchPrompt(college: College, focus?: string, majors: st
   // College name/location/programType are user-supplied — treat them as data, not instructions.
   const program = majorPhrase(majors, 'undergraduate');
   const briefs = packFocusBriefs(majors);
+  const exam = packEntranceExam(majors);
+  const experienceLabel = packExperienceLabel(majors);
   const name = promptLiteral(college.name);
   const location = college.location ? promptLiteral(college.location) : '';
   const programType = college.programType ? promptLiteral(college.programType) : '';
@@ -94,9 +96,13 @@ export function buildResearchPrompt(college: College, focus?: string, majors: st
     ...briefs,
     programType ? `Program type: ${programType}.` : '',
     focus ? `Focus: ${promptLiteral(focus, 300)}.` : '',
-    'Report realistic numbers a competitive applicant would target. Use a 0–100 entrance-exam scale and a 4.0 GPA scale.',
-    'Return ONLY a JSON object, no prose. (avgTEASScore = typical entrance-exam score; typicalClinicalHours = typical hands-on experience hours):',
-    '{"avgGPAAdmitted": number, "avgTEASScore": number, "avgSATScore": number, "typicalClinicalHours": number,',
+    'Report realistic numbers a competitive applicant would target. Use a 4.0 GPA scale.',
+    exam
+      ? `This major uses the ${exam.examName} entrance exam — set avgTEASScore to the typical ${exam.examName} score on a 0–100 scale.`
+      : 'This major has NO standardized entrance exam — set avgTEASScore to null (do not invent one).',
+    `(avgTEASScore = typical entrance-exam score; typicalClinicalHours = typical "${experienceLabel}" — hands-on/experience hours for this major.)`,
+    'Return ONLY a JSON object, no prose:',
+    '{"avgGPAAdmitted": number, "avgTEASScore": number|null, "avgSATScore": number, "typicalClinicalHours": number,',
     ' "typicalVolunteerHours": number, "typicalCertifications": string[], "typicalExtracurriculars": string,',
     ' "competitiveEdges": string[]}',
   ];

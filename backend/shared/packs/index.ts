@@ -79,6 +79,20 @@ export function packEntranceExam(majors?: readonly string[]): MajorPack['entranc
   return packsForMajors(majors).find((p) => p.entranceExam)?.entranceExam;
 }
 
+/** Label for the major's "hands-on experience hours" metric (nursing → "Clinical hours"); defaults
+ *  to the generic "Experience hours" when no pack supplies one. */
+export function packExperienceLabel(majors?: readonly string[]): string {
+  return packsForMajors(majors).find((p) => p.experienceLabel)?.experienceLabel ?? 'Experience hours';
+}
+
+/** Major-aware labels for the peer-benchmark metrics. `exam` is the entrance-exam name (omitted when
+ *  the major has no standardized entrance exam, so that row is hidden); `experience` labels the
+ *  hands-on-hours metric. Drives the College fit/benchmark card and the Peer Benchmark page. */
+export function benchmarkMetricLabels(majors?: readonly string[]): { exam?: string; experience: string } {
+  const exam = packEntranceExam(majors)?.examName;
+  return { ...(exam ? { exam } : {}), experience: packExperienceLabel(majors) };
+}
+
 /** Major-specific interview questions the active pack(s) seed (deduped, in registry order). */
 export function packInterviewQuestions(majors?: readonly string[]): string[] {
   const seen = new Set<string>();

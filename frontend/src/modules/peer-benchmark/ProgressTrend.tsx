@@ -1,11 +1,11 @@
 import { Badge, Card } from '../../shared/ui';
 import { fmtGpa, fmtNum, monthLabel, summarizeTrend, totalGaps } from './logic';
-import type { BenchmarkSnapshot } from './types';
+import { DEFAULT_BENCHMARK_LABELS, type BenchmarkLabels, type BenchmarkSnapshot } from './types';
 
 /** Progress over time (spec Module 16 — "are gaps closing?"). Renders the monthly snapshots as a
  *  compact table plus a first-vs-latest headline. One snapshot is captured per calendar month when
  *  this dashboard loads, so the trend fills in on its own over the application year. */
-export function ProgressTrend({ trend }: { trend: BenchmarkSnapshot[] }) {
+export function ProgressTrend({ trend, labels = DEFAULT_BENCHMARK_LABELS }: { trend: BenchmarkSnapshot[]; labels?: BenchmarkLabels }) {
   if (trend.length === 0) return null;
 
   const summary = summarizeTrend(trend);
@@ -38,8 +38,8 @@ export function ProgressTrend({ trend }: { trend: BenchmarkSnapshot[] }) {
             <tr className="text-left text-ink-500">
               <th className="p-2 font-medium">Month</th>
               <th className="p-2 text-right font-medium">GPA</th>
-              <th className="p-2 text-right font-medium">TEAS</th>
-              <th className="p-2 text-right font-medium">Clinical</th>
+              {labels.exam ? <th className="p-2 text-right font-medium">{labels.exam}</th> : null}
+              <th className="p-2 text-right font-medium">{labels.experience}</th>
               <th className="p-2 text-right font-medium">Volunteer</th>
               <th className="p-2 text-right font-medium">Certs</th>
               <th className="p-2 text-right font-medium">Gaps</th>
@@ -50,7 +50,7 @@ export function ProgressTrend({ trend }: { trend: BenchmarkSnapshot[] }) {
               <tr key={s.month} className="border-t border-surface-border">
                 <td className="p-2 font-medium text-ink-900">{monthLabel(s.month)}</td>
                 <td className="p-2 text-right tabular-nums text-ink-700">{fmtGpa(s.gpa)}</td>
-                <td className="p-2 text-right tabular-nums text-ink-700">{s.teasScore === undefined ? '—' : fmtNum(s.teasScore)}</td>
+                {labels.exam ? <td className="p-2 text-right tabular-nums text-ink-700">{s.teasScore === undefined ? '—' : fmtNum(s.teasScore)}</td> : null}
                 <td className="p-2 text-right tabular-nums text-ink-700">{fmtNum(s.clinicalHours)}h</td>
                 <td className="p-2 text-right tabular-nums text-ink-700">{fmtNum(s.volunteerHours)}h</td>
                 <td className="p-2 text-right tabular-nums text-ink-700">{s.certCount}</td>

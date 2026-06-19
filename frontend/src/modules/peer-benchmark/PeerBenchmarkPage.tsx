@@ -6,7 +6,7 @@ import { BenchmarkCard } from './BenchmarkCard';
 import { GapsCallout } from './GapsCallout';
 import { ProgressTrend } from './ProgressTrend';
 import { fmtGpa, fmtNum, READINESS_META } from './logic';
-import type { AggregateMatrix as Matrix, GapsAnalysis, Readiness } from './types';
+import { DEFAULT_BENCHMARK_LABELS, type AggregateMatrix as Matrix, type GapsAnalysis, type Readiness } from './types';
 
 const READINESS_ORDER: Readiness[] = ['strong', 'competitive', 'needs-work', 'insufficient-data'];
 
@@ -56,6 +56,7 @@ export default function PeerBenchmarkPage() {
   const rows = matrix?.rows ?? [];
   const keira = matrix?.keira;
   const trend = matrix?.trend ?? [];
+  const labels = matrix?.labels ?? DEFAULT_BENCHMARK_LABELS;
 
   // Current-standing rollup: the at-a-glance readiness distribution right now. Month-over-month
   // history is shown separately by <ProgressTrend> from the persisted monthly snapshots.
@@ -79,8 +80,10 @@ export default function PeerBenchmarkPage() {
           <p className="text-xs font-medium uppercase tracking-wide text-ink-400">Your stats</p>
           <div className="mt-2 flex flex-wrap gap-x-6 gap-y-2 text-sm">
             <span className="text-ink-700">GPA <strong className="tabular-nums">{fmtGpa(keira.gpa)}</strong></span>
-            <span className="text-ink-700">TEAS <strong className="tabular-nums">{keira.teasScore === undefined ? 'not taken' : fmtNum(keira.teasScore)}</strong></span>
-            <span className="text-ink-700">Clinical <strong className="tabular-nums">{fmtNum(keira.clinicalHours)}h</strong></span>
+            {labels.exam ? (
+              <span className="text-ink-700">{labels.exam} <strong className="tabular-nums">{keira.teasScore === undefined ? 'not taken' : fmtNum(keira.teasScore)}</strong></span>
+            ) : null}
+            <span className="text-ink-700">{labels.experience} <strong className="tabular-nums">{fmtNum(keira.clinicalHours)}h</strong></span>
             <span className="text-ink-700">Volunteer <strong className="tabular-nums">{fmtNum(keira.volunteerHours)}h</strong></span>
             <span className="text-ink-700">Certifications <strong className="tabular-nums">{keira.certifications.length}</strong></span>
           </div>
@@ -120,7 +123,7 @@ export default function PeerBenchmarkPage() {
           </Card>
 
           <Card flush className="p-2">
-            <AggregateMatrix rows={rows} keira={keira!} onSelect={(id) => setSelected(id)} />
+            <AggregateMatrix rows={rows} keira={keira!} labels={labels} onSelect={(id) => setSelected(id)} />
             <p className="px-3 pb-2 pt-1 text-xs text-ink-400">
               Each cell shows <span className="tabular-nums">your value / typical admitted student</span>. Green exceeds ·
               yellow meets · red below · gray no data. Tap a row to refresh that school's benchmark.
@@ -129,7 +132,7 @@ export default function PeerBenchmarkPage() {
 
           <GapsCallout analysis={gaps} loading={gapsLoading} error={gapsError} onRetry={() => void loadGaps()} />
 
-          {trend.length > 0 ? <ProgressTrend trend={trend} /> : null}
+          {trend.length > 0 ? <ProgressTrend trend={trend} labels={labels} /> : null}
         </>
       )}
 
