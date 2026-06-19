@@ -28,7 +28,7 @@ import { queryColleges } from './query.js';
 import { findActiveByName, normalizeCollegeName } from './dedupe.js';
 import type { Discoverer } from './ai.js';
 import { makeBedrockChecklistSuggester, type ChecklistSuggester } from './checklist-ai.js';
-import { makeBedrockPrepSuggester, type PrepSuggester } from './prep-ai.js';
+import { runPrepJob, type PrepDispatcher, type PrepSuggester } from './prep-ai.js';
 import { makeInlineDispatcher, type HydrationDispatcher } from './hydration.js';
 import { runDiscoveryJob, type DiscoverDispatcher } from './discover.js';
 import { makeAssetsEnqueuer, type AssetsDispatcher } from './assets-enqueue.js';
@@ -68,6 +68,9 @@ export interface CollegeDeps {
   checklistSuggester?: ChecklistSuggester;
   /** AI source for /prep; defaults to the model-only Bedrock HS-prep generator (→ null on failure). */
   prepSuggester?: PrepSuggester;
+  /** Prep-plan trigger; defaults to running the job inline with the handler's prepSuggester.
+   *  Production injects the SQS enqueuer (routes.manifest) so the ~20s generation runs on the worker. */
+  prepDispatch?: PrepDispatcher;
 }
 
 export function makeHandlers(deps: CollegeDeps): CollegeHandlers {
@@ -84,8 +87,10 @@ export function makeHandlers(deps: CollegeDeps): CollegeHandlers {
   // Model-only checklist generator (no web search → fits the request budget). Real Bedrock by
   // default; tests inject a stub. Returns [] on any failure so the endpoint never 500s.
   const checklistSuggester = deps.checklistSuggester ?? makeBedrockChecklistSuggester();
-  // Model-only HS-prep plan generator. Real Bedrock by default; tests inject a stub. null on failure.
-  const prepSuggester = deps.prepSuggester ?? makeBedrockPrepSuggester();
+  // Prep-plan generation runs async on the worker in production; default to inline generation for
+  // tests/local, using THIS handler's suggester stub when injected (runPrepJob builds the model-only
+  // Bedrock generator when none is given). Production injects the SQS enqueuer via routes.manifest.
+  const prepDispatch = deps.prepDispatch ?? ((collegeId: string) => runPrepJob(getData, deps.prepSuggester, collegeId));
 
   /** Fetch a college or throw 404. */
   async function requireCollege(id: string): Promise<College> {
@@ -302,18 +307,22 @@ export function makeHandlers(deps: CollegeDeps): CollegeHandlers {
       return { status: 200, body: { suggestions } };
     },
 
-    // POST /colleges/:id/prep — generate the AI "how to prepare in high school" plan for this college
-    // (recommended HS classes + GPA/test targets + activities), grounded in the college's admission
-    // data + the student's major. Model-only. Persists onto the college (system-owned, merged) so it
-    // sticks across reloads; returns { plan } (null if the model produced nothing usable).
+    // POST /colleges/:id/prep — kick off the AI "how to prepare in high school" plan for this college
+    // (recommended HS classes + GPA/test targets + activities), grounded in its admission data + the
+    // student's major. Generation is a ~20s model call, so it runs ASYNC on the SQS worker (like
+    // hydration): mark the college 'in-progress', enqueue, and return 202. The worker fills `hsPrepPlan`
+    // and flips `hsPrepStatus`; the frontend polls GET /colleges/:id until it settles. (When no queue is
+    // configured — tests/local — the dispatcher runs inline, so the returned college is already done.)
     generatePrep: async (ctx) => {
       const { id } = validateParams(idParamSchema, ctx);
-      const college = await requireCollege(id);
-      const profile = await getData().studentProfile.get();
-      const plan = await prepSuggester(college, profile?.intendedMajors ?? [], profile?.graduationYear);
-      if (!plan) return { status: 200, body: { plan: null } };
-      const updated = await getData().colleges.mergePreservingUserEdits(id, { hsPrepPlan: plan });
-      return { status: 200, body: { plan, college: updated } };
+      await requireCollege(id); // 404 if it's gone
+      await getData().colleges.mergePreservingUserEdits(id, { hsPrepStatus: 'in-progress' });
+      await prepDispatch(id);
+      const college = await getData().colleges.get(id);
+      return {
+        status: 202,
+        body: { status: college?.hsPrepStatus ?? 'in-progress', plan: college?.hsPrepPlan ?? null, college },
+      };
     },
   };
 }

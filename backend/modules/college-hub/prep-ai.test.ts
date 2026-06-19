@@ -1,6 +1,14 @@
-import { describe, expect, it } from 'vitest';
-import type { College } from '../../shared/data/index.js';
-import { buildPrepPrompt, parsePrepPlan } from './prep-ai.js';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { InMemoryTableClient, makeData, type College, type Data } from '../../shared/data/index.js';
+import { runWithStudent, runWithTenant } from '../../shared/tenant/index.js';
+import {
+  buildPrepPrompt,
+  makePrepWorkerHandler,
+  makeSqsPrepEnqueuer,
+  parsePrepPlan,
+  type PrepSuggester,
+  type SqsSender,
+} from './prep-ai.js';
 
 const college = (over: Partial<College> = {}): College =>
   ({
@@ -51,5 +59,85 @@ describe('parsePrepPlan', () => {
     expect(parsePrepPlan('the model declined')).toBeNull();
     const plan = parsePrepPlan('{"courses":[{"label":"AP Bio"},{"label":"ap bio"}],"targets":[],"activities":[]}');
     expect(plan?.courses).toHaveLength(1); // case-insensitive dedupe
+  });
+});
+
+describe('async prep generation (worker + enqueuer)', () => {
+  let data: Data;
+  const getData = () => data;
+  beforeEach(() => {
+    data = makeData(new InMemoryTableClient());
+  });
+
+  const PLAN = { headline: 'Go', targets: [{ label: '3.6 GPA' }], courses: [{ label: 'AP Bio' }], activities: [{ label: 'Volunteer' }] };
+  const newCollege = () => data.colleges.create({ name: 'Arizona State University' } as Parameters<Data['colleges']['create']>[0]);
+
+  it('makePrepWorkerHandler generates + persists the plan for a task:prep job, ignoring other payloads', async () => {
+    const suggester: PrepSuggester = async () => PLAN;
+    const handler = makePrepWorkerHandler(getData, suggester);
+    await runWithTenant('t1', () =>
+      runWithStudent('s1', async () => {
+        const c = await newCollege();
+        // Non-prep payloads are not this handler's job — left untouched.
+        await handler({ collegeId: c.collegeId });
+        expect((await data.colleges.get(c.collegeId))?.hsPrepStatus).toBeUndefined();
+        // A prep job generates, persists the plan, and flips status to complete.
+        await handler({ task: 'prep', collegeId: c.collegeId });
+        const after = await data.colleges.get(c.collegeId);
+        expect(after?.hsPrepPlan?.headline).toBe('Go');
+        expect(after?.hsPrepStatus).toBe('complete');
+      }),
+    );
+  });
+
+  it('marks the college failed when generation produces nothing', async () => {
+    const handler = makePrepWorkerHandler(getData, async () => null);
+    await runWithTenant('t1', () =>
+      runWithStudent('s1', async () => {
+        const c = await newCollege();
+        await handler({ task: 'prep', collegeId: c.collegeId });
+        const after = await data.colleges.get(c.collegeId);
+        expect(after?.hsPrepStatus).toBe('failed');
+        expect(after?.hsPrepPlan).toBeUndefined();
+      }),
+    );
+  });
+
+  it('makeSqsPrepEnqueuer sends a task:prep message on the shared hydration queue', async () => {
+    let captured: { input?: { QueueUrl?: string; MessageBody?: string } } | undefined;
+    const client: SqsSender = {
+      send: async (cmd) => {
+        captured = cmd as { input?: { QueueUrl?: string; MessageBody?: string } };
+        return {};
+      },
+    };
+    const enqueue = makeSqsPrepEnqueuer(getData, { queueUrl: 'https://sqs.test/q', client });
+    await runWithTenant('fam1', () => runWithStudent('s1', () => enqueue('college-9')));
+    expect(captured?.input?.QueueUrl).toBe('https://sqs.test/q');
+    expect(JSON.parse(captured?.input?.MessageBody ?? '{}')).toEqual({
+      type: 'college-hydrate',
+      collegeId: 'college-9',
+      task: 'prep',
+      tenantId: 'fam1',
+      studentId: 's1',
+    });
+  });
+
+  it('falls back to inline generation when the send throws', async () => {
+    const throwing: SqsSender = { send: async () => { throw new Error('AccessDenied'); } };
+    await runWithTenant('t1', () =>
+      runWithStudent('s1', async () => {
+        const c = await newCollege();
+        const enqueue = makeSqsPrepEnqueuer(getData, {
+          queueUrl: 'https://sqs.test/q',
+          client: throwing,
+          fallback: async (id) => {
+            await data.colleges.mergePreservingUserEdits(id, { hsPrepStatus: 'complete' });
+          },
+        });
+        await enqueue(c.collegeId);
+        expect((await data.colleges.get(c.collegeId))?.hsPrepStatus).toBe('complete');
+      }),
+    );
   });
 });

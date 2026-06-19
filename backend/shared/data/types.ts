@@ -208,6 +208,10 @@ export interface College extends Timestamped, Hydratable {
    *  System-owned: generated on demand via POST /colleges/:id/prep, merged so it persists; never in
    *  the create/update schema. Distinct from `prerequisites` (the college's own program-level reqs). */
   hsPrepPlan?: HsPrepPlan;
+  /** Prep-plan generation lifecycle, polled by the UI. Generation is a 20s+ model call, so it runs
+   *  ASYNC on the SQS worker (like hydration) rather than on the 30s request path: the API sets
+   *  'in-progress' and enqueues, the worker fills `hsPrepPlan` and flips this to 'complete'/'failed'. */
+  hsPrepStatus?: 'pending' | 'in-progress' | 'complete' | 'failed';
 }
 
 /** One recommendation in a high-school prep plan: a short label + an optional one-line "why/how". */

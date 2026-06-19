@@ -108,8 +108,12 @@ export async function suggestChecklist(id: string): Promise<{ label: string; due
   return res.suggestions ?? [];
 }
 
-/** Generate (and persist on the college) the AI "how to prepare in high school" plan for this college,
- *  tailored to the student's major + grad year. `plan` is null if the model produced nothing usable. */
-export async function generatePrep(id: string): Promise<{ plan: HsPrepPlan | null }> {
-  return api.post<{ plan: HsPrepPlan | null }>(`/colleges/${encodeURIComponent(id)}/prep`, {});
+/** Kick off the AI "how to prepare in high school" plan for this college (tailored to the student's
+ *  major + grad year). Generation runs async on the worker, so this returns 202 with the current
+ *  status ('in-progress' in prod; 'complete' + plan when the backend ran it inline). Poll
+ *  getCollege() until hsPrepStatus settles to 'complete' (use hsPrepPlan) or 'failed'. */
+export async function generatePrep(
+  id: string,
+): Promise<{ status: 'pending' | 'in-progress' | 'complete' | 'failed'; plan: HsPrepPlan | null }> {
+  return api.post(`/colleges/${encodeURIComponent(id)}/prep`, {});
 }

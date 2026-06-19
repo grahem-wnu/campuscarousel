@@ -14,8 +14,10 @@
 import { converseWithSearch, gradeContext, promptLiteral } from '../../shared/ai/index.js';
 import { majorPhrase } from '../../shared/ai/major.js';
 import { packFocusBriefs } from '../../shared/packs/index.js';
-import type { College, HsPrepItem, HsPrepPlan } from '../../shared/data/index.js';
+import type { College, Data, HsPrepItem, HsPrepPlan } from '../../shared/data/index.js';
+import { currentStudentId, currentTenantId } from '../../shared/tenant/index.js';
 import type { AiOptions } from './ai.js';
+import { HYDRATION_TYPE } from './hydration.js';
 
 /** Pluggable generator: production calls Bedrock; tests inject a fake. `gradYear` (the student's
  *  graduation year) lets the plan reflect how much high-school runway is left. */
@@ -154,6 +156,110 @@ export function makeBedrockPrepSuggester(options: AiOptions = {}): PrepSuggester
     } catch (err) {
       console.error('college-hub: AI prep plan generation failed', err);
       return null;
+    }
+  };
+}
+
+// --- Async generation (SQS worker) --------------------------------------------------------------
+// Generating a plan is a ~20-25s non-streaming model call — too close to the 30s API/Lambda ceiling
+// to run on the request path (it intermittently timed out). So, exactly like hydration + discovery,
+// the API marks the college 'in-progress' and enqueues; the 300s SQS worker generates and writes the
+// plan back; the frontend polls `hsPrepStatus`. It REUSES the hydration queue/type with a `task:'prep'`
+// discriminator (the worker routes by message shape — see hydration.manifest.ts), so no new plumbing.
+
+/** SQS message for a prep-plan job (shares the hydration queue/type; `task:'prep'` selects this path). */
+export interface CollegePrepMessage {
+  type: typeof HYDRATION_TYPE;
+  collegeId: string;
+  task: 'prep';
+  tenantId: string;
+  studentId: string;
+}
+
+/** Build the prep suggester for a run: an injected one is used as-is (tests); else the model-only
+ *  Bedrock generator. The job runs in the active-student context, so studentProfile is reachable. */
+function resolvePrepSuggester(injected?: PrepSuggester): PrepSuggester {
+  return injected ?? makeBedrockPrepSuggester();
+}
+
+/** Run one prep-plan job: generate the plan for the college (grounded in the student's major/grad
+ *  year) and write it back, flipping `hsPrepStatus` to 'complete' (or 'failed' when nothing usable
+ *  came back) so the polling UI settles. No-op if the college is gone. Never throws. */
+export async function runPrepJob(
+  getData: () => Data,
+  suggester: PrepSuggester | undefined,
+  collegeId: string,
+): Promise<void> {
+  const data = getData();
+  const college = await data.colleges.get(collegeId);
+  if (!college) return;
+  try {
+    const profile = await data.studentProfile.get();
+    const plan = await resolvePrepSuggester(suggester)(college, profile?.intendedMajors ?? [], profile?.graduationYear);
+    await data.colleges.mergePreservingUserEdits(
+      collegeId,
+      plan ? { hsPrepPlan: plan, hsPrepStatus: 'complete' } : { hsPrepStatus: 'failed' },
+    );
+  } catch (err) {
+    console.error('college-hub: prep job failed', err);
+    await data.colleges.mergePreservingUserEdits(collegeId, { hsPrepStatus: 'failed' }).catch(() => {});
+  }
+}
+
+/** Worker-side handler for a prep-plan job payload (`{ task: 'prep', collegeId }`). */
+export function makePrepWorkerHandler(
+  getData: () => Data,
+  suggester?: PrepSuggester,
+): (payload: unknown) => Promise<void> {
+  return async (payload) => {
+    const msg = (payload ?? {}) as Partial<CollegePrepMessage>;
+    if (msg.task !== 'prep' || typeof msg.collegeId !== 'string' || !msg.collegeId) return;
+    await runPrepJob(getData, suggester, msg.collegeId);
+  };
+}
+
+/** One seam for "start this prep job". Production enqueues to SQS; falls back to inline generation. */
+export type PrepDispatcher = (collegeId: string) => Promise<void>;
+
+/** Minimal structural type of the SQS client (just `send`) — injectable without the SDK class. */
+export interface SqsSender {
+  send(command: unknown): Promise<unknown>;
+}
+
+export interface SqsPrepEnqueuerOptions {
+  /** Queue URL; defaults to `process.env.HYDRATION_QUEUE_URL` (shared with hydration). */
+  queueUrl?: string;
+  client?: SqsSender;
+  /** Dispatcher used when enqueue can't proceed; defaults to running the job inline. */
+  fallback?: PrepDispatcher;
+}
+
+/** A dispatcher that enqueues a prep-plan job for the SQS worker (shared hydration queue). */
+export function makeSqsPrepEnqueuer(
+  getData: () => Data,
+  options: SqsPrepEnqueuerOptions = {},
+): PrepDispatcher {
+  const fallback = options.fallback ?? ((collegeId: string) => runPrepJob(getData, undefined, collegeId));
+  return async (collegeId) => {
+    const queueUrl = options.queueUrl ?? process.env.HYDRATION_QUEUE_URL;
+    if (!queueUrl) return fallback(collegeId);
+    try {
+      const { SQSClient, SendMessageCommand } = await import('@aws-sdk/client-sqs');
+      const client: SqsSender = options.client ?? (new SQSClient({}) as unknown as SqsSender);
+      await client.send(
+        new SendMessageCommand({
+          QueueUrl: queueUrl,
+          MessageBody: JSON.stringify({
+            type: HYDRATION_TYPE,
+            collegeId,
+            task: 'prep',
+            tenantId: currentTenantId(),
+            studentId: currentStudentId(),
+          } as CollegePrepMessage),
+        }),
+      );
+    } catch {
+      await fallback(collegeId);
     }
   };
 }
