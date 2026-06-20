@@ -7,6 +7,7 @@ import {
   SOURCE_DOT,
   SOURCE_LABEL,
   countdownLabel,
+  eventLink,
   eventsByDate,
   groupUpcoming,
   monthGrid,
@@ -185,16 +186,26 @@ export default function TimelinePage() {
               <h2 className={`mb-2 text-sm font-semibold ${group === 'overdue' ? 'text-error-700' : 'text-ink-800'}`}>{GROUP_LABEL[group]}</h2>
               <ul className="divide-y divide-surface-border">
                 {events.map((e) => (
-                  <li key={e.id} className="flex items-start gap-3 py-2.5">
-                    <EventIcon e={e} />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium leading-snug text-ink-800">{e.title}</p>
-                      <p className="mt-0.5 text-xs text-ink-400">
-                        {e.source !== 'college' ? `${SOURCE_LABEL[e.source]} · ` : ''}
-                        {e.date} ·{' '}
-                        <span className={e.daysUntil < 0 ? 'font-medium text-error-600' : ''}>{countdownLabel(e.daysUntil)}</span>
-                      </p>
-                    </div>
+                  <li key={e.id}>
+                    <Link
+                      to={eventLink(e)}
+                      className="group -mx-2 flex items-start gap-3 rounded-md px-2 py-2.5 transition hover:bg-surface-sunken"
+                    >
+                      <EventIcon e={e} />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium leading-snug text-ink-800 group-hover:text-primary-700">{e.title}</p>
+                        <p className="mt-0.5 text-xs text-ink-400">
+                          {e.source !== 'college' ? `${SOURCE_LABEL[e.source]} · ` : ''}
+                          {e.date} ·{' '}
+                          <span className={e.daysUntil < 0 ? 'font-medium text-error-600' : ''}>{countdownLabel(e.daysUntil)}</span>
+                        </p>
+                      </div>
+                      <Icon
+                        name="chevron-right"
+                        size={16}
+                        className="mt-0.5 shrink-0 text-ink-300 transition-transform group-hover:translate-x-0.5 group-hover:text-primary-500"
+                      />
+                    </Link>
                   </li>
                 ))}
               </ul>
