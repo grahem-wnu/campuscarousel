@@ -1,5 +1,5 @@
 import { Badge, Card } from '../../shared/ui';
-import { buildGrid, courseImportance, importanceTone, unscheduled } from './logic';
+import { buildGrid, unscheduled } from './logic';
 import type { Course, Semester, Year } from './types';
 
 const YEAR_LABEL: Record<Year, string> = {
@@ -19,7 +19,6 @@ const YEAR_ORDER: Year[] = ['freshman', 'sophomore', 'junior', 'senior'];
 const SEM_ORDER: (Semester | 'other')[] = ['fall', 'spring', 'full-year', 'summer', 'other'];
 
 function CourseChip({ course, onClick }: { course: Course; onClick?: (c: Course) => void }) {
-  const tone = importanceTone(courseImportance(course.subject));
   return (
     <button
       type="button"
@@ -30,15 +29,16 @@ function CourseChip({ course, onClick }: { course: Course; onClick?: (c: Course)
         <span className="truncate text-sm font-medium text-ink-900">{course.name}</span>
         {course.grade ? <span className="shrink-0 text-xs font-semibold text-ink-600">{course.grade}</span> : null}
       </div>
-      <div className="mt-1 flex flex-wrap items-center gap-1">
-        {course.type && course.type !== 'regular' ? <Badge tone="info">{course.type}</Badge> : null}
-        <Badge tone={tone}>{courseImportance(course.subject)}</Badge>
-      </div>
+      {course.type && course.type !== 'regular' ? (
+        <div className="mt-1 flex flex-wrap items-center gap-1">
+          <Badge tone="info">{course.type}</Badge>
+        </div>
+      ) : null}
     </button>
   );
 }
 
-/** 4-year plan: a column per year, courses grouped by semester, color-coded by program importance. */
+/** 4-year plan: a column per year, courses grouped by semester. */
 export function CourseGrid({ courses, onSelect }: { courses: Course[]; onSelect?: (c: Course) => void }) {
   const grid = buildGrid(courses);
   const loose = unscheduled(courses);
