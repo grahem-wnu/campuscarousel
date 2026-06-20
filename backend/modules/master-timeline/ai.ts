@@ -3,6 +3,7 @@
 // curated fallback (model id from BEDROCK_MODEL_ID, never hardcoded). The caller passes the already
 // visibility-filtered upcoming events, so this layer can't leak private data; output is returned live.
 
+import { gradeContext } from '../../shared/ai/index.js';
 import { majorPhrase } from '../../shared/ai/major.js';
 import { packFocusBriefs } from '../../shared/packs/index.js';
 import { daysUntil, type TimelineEvent, type UpcomingEvent } from './events.js';
@@ -21,7 +22,7 @@ export interface Analysis {
   missing: string[];
   source: 'ai' | 'curated';
 }
-export type Analyzer = (input: { events: readonly UpcomingEvent[]; allEvents: readonly TimelineEvent[]; todayIso: string; majors?: string[] }) => Promise<Analysis>;
+export type Analyzer = (input: { events: readonly UpcomingEvent[]; allEvents: readonly TimelineEvent[]; todayIso: string; majors?: string[]; graduationYear?: number }) => Promise<Analysis>;
 
 const DEADLINE_SOURCES = new Set(['college', 'scholarship', 'goal', 'certification']);
 
@@ -88,15 +89,22 @@ export function extractJson(text: string): unknown {
 
 const strArr = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
 
-export function buildPrompt(events: readonly UpcomingEvent[], todayIso: string, majors: string[] = []): string {
+export function buildPrompt(events: readonly UpcomingEvent[], todayIso: string, majors: string[] = [], graduationYear?: number): string {
   const compact = events.slice(0, 40).map((e) => ({ date: e.date, in: e.daysUntil, source: e.source, title: e.title }));
   const guidance = packFocusBriefs(majors);
   const focusLine = guidance.length ? `Major-specific guidance: ${guidance.join(' ')}` : '';
+  // Calibrate priorities/missing-items to the student's ACTUAL grade — a class-of-2030 freshman must
+  // not be told to add application/test/recommendation deadlines that belong to senior year.
+  const grade = gradeContext(graduationYear, new Date(todayIso));
   return [
     `You are a planning coach for a student pursuing ${majorPhrase(majors, 'their intended college program')}. Given today and the upcoming timeline events, identify`,
     'what to prioritize, any conflicts (overlapping/clustered deadlines, double-booked weekends), and',
     'likely missing items (no exam date, no app deadlines, no visits). Respond with ONLY JSON (no',
     'prose/fences): {"priorities": string[], "conflicts": string[], "missing": string[]}.',
+    grade,
+    'Only flag missing items that are AGE-APPROPRIATE for the grade above: do NOT tell an underclassman',
+    'to add application deadlines, test registrations, or recommendation-request dates that belong to',
+    'junior/senior year — focus them on what fits where they are now.',
     focusLine,
     `Today: ${todayIso}.`,
     `Events: ${JSON.stringify(compact)}.`,
@@ -108,7 +116,7 @@ export function buildPrompt(events: readonly UpcomingEvent[], todayIso: string, 
 export function makeBedrockAnalyzer(options: AiOptions = {}, fallback: Analyzer = curatedAnalyzer): Analyzer {
   return async (input) => {
     try {
-      const raw = extractJson(await invokeText(buildPrompt(input.events, input.todayIso, input.majors), options)) as Record<string, unknown>;
+      const raw = extractJson(await invokeText(buildPrompt(input.events, input.todayIso, input.majors, input.graduationYear), options)) as Record<string, unknown>;
       const priorities = strArr(raw.priorities);
       const conflicts = strArr(raw.conflicts);
       const missing = strArr(raw.missing);
