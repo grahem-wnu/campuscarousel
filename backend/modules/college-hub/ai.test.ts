@@ -151,6 +151,18 @@ describe('makeBedrockDiscoverer', () => {
     expect(await discover({})).toEqual([]);
   });
 
+  it('clamps an over-long ranking so it fits the bulk-add field cap (≤120 chars)', async () => {
+    const longRanking =
+      '#62 in National Universities; #28 in Best Undergraduate Nursing Programs; #14 in Best Value Schools (U.S. News & World Report, 2025 edition)';
+    const discover = makeBedrockDiscoverer({
+      modelId: MODEL,
+      invoker: stub(JSON.stringify([{ name: 'Ohio State', ranking: longRanking }])),
+    });
+    const out = await discover({});
+    expect(out[0]?.ranking?.length).toBeLessThanOrEqual(120);
+    expect(out[0]?.ranking).toBe(longRanking.slice(0, 120).trimEnd());
+  });
+
   it('uses web_search when enabled, then parses the grounded answer', async () => {
     let calls = 0;
     const searched: string[] = [];
