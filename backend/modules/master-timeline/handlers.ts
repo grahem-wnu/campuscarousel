@@ -29,12 +29,13 @@ export function makeHandlers(deps: TimelineDeps): TimelineHandlers {
   const analyzer = deps.analyzer ?? makeBedrockAnalyzer();
   const today = (): string => now().toISOString().slice(0, 10);
 
-  /** Read the active student's intended major(s) so the planning coach reflects their academic focus. */
-  async function activeMajors(): Promise<string[]> {
+  /** Read the active student's profile (major + grad year) so the planning coach reflects their focus
+   *  and grade. Defensive: a read failure degrades to no profile rather than a 500. */
+  async function activeProfile() {
     try {
-      return (await getData().studentProfile.get())?.intendedMajors ?? [];
+      return await getData().studentProfile.get();
     } catch {
-      return [];
+      return null;
     }
   }
 
@@ -89,7 +90,14 @@ export function makeHandlers(deps: TimelineDeps): TimelineHandlers {
       const all = buildEvents(await gather());
       const todayIso = today();
       const window = upcoming(all, todayIso, body.horizonDays ?? DEFAULT_HORIZON);
-      const analysis = await analyzer({ events: window, allEvents: all, todayIso, majors: await activeMajors() });
+      const profile = await activeProfile();
+      const analysis = await analyzer({
+        events: window,
+        allEvents: all,
+        todayIso,
+        majors: profile?.intendedMajors ?? [],
+        graduationYear: profile?.graduationYear,
+      });
       return { status: 200, body: { analysis } };
     },
   };

@@ -34,6 +34,17 @@ describe('buildPrompt major-awareness', () => {
     expect(p).toContain('their intended college program');
     expect(p).not.toContain('Major-specific guidance:');
   });
+
+  it('calibrates to the student grade and guards against senior-year items for an underclassman', () => {
+    const p = buildPrompt([], TODAY, [], 2030); // class of 2030 in mid-2026 → pre-high-school
+    expect(p).toMatch(/NOT in high school yet/);
+    expect(p).toMatch(/AGE-APPROPRIATE/);
+    expect(p).toMatch(/do NOT tell an underclassman/);
+  });
+
+  it('omits grade context when no graduation year is given', () => {
+    expect(buildPrompt([], TODAY)).not.toMatch(/TIMELINE:/);
+  });
 });
 
 describe('curatedAnalyzer', () => {
