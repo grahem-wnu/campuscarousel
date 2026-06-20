@@ -70,3 +70,26 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 export function monthLabel(year: number, month: number): string {
   return `${MONTHS[month]} ${year}`;
 }
+
+/** The page a timeline event links to — the thing you'd act on. College events deep-link to that
+ *  college's page; other sources go to their module. */
+export function eventLink(e: Pick<TimelineEvent, 'source' | 'collegeId'>): string {
+  switch (e.source) {
+    case 'college':
+      return e.collegeId ? `/colleges/${e.collegeId}` : '/colleges';
+    case 'teas':
+      return '/exams';
+    case 'visit':
+      return '/visits';
+    case 'scholarship':
+      return '/scholarships';
+    case 'certification':
+      return '/certifications';
+    case 'goal':
+      return '/goals';
+    case 'activity':
+      return '/journal';
+    default:
+      return '/';
+  }
+}

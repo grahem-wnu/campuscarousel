@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SOURCE_DOT, countdownLabel, eventsByDate, groupUpcoming, monthGrid, monthLabel } from './logic';
+import { SOURCE_DOT, countdownLabel, eventLink, eventsByDate, groupUpcoming, monthGrid, monthLabel } from './logic';
 import type { TimelineEvent, UpcomingEvent } from './types';
 
 const up = (o: Partial<UpcomingEvent>): UpcomingEvent => ({ id: 'e', date: '2026-06-10', source: 'goal', type: 'deadline', title: 'X', daysUntil: 4, group: 'this-week', ...o });
@@ -43,5 +43,18 @@ describe('eventsByDate / monthGrid / monthLabel', () => {
     expect(grid).toHaveLength(42);
     expect(grid.some((c) => c.iso === '2026-06-01' && c.inMonth)).toBe(true);
     expect(monthLabel(2026, 5)).toBe('Jun 2026');
+  });
+});
+
+describe('eventLink', () => {
+  it('deep-links a college event to that college, others to their module', () => {
+    expect(eventLink({ source: 'college', collegeId: 'c1' })).toBe('/colleges/c1');
+    expect(eventLink({ source: 'college' })).toBe('/colleges'); // no id → the hub
+    expect(eventLink({ source: 'teas' })).toBe('/exams');
+    expect(eventLink({ source: 'visit' })).toBe('/visits');
+    expect(eventLink({ source: 'scholarship' })).toBe('/scholarships');
+    expect(eventLink({ source: 'certification' })).toBe('/certifications');
+    expect(eventLink({ source: 'goal' })).toBe('/goals');
+    expect(eventLink({ source: 'activity' })).toBe('/journal');
   });
 });
