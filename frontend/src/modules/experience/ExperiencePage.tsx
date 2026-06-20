@@ -14,12 +14,12 @@ import {
   type TabItem,
 } from '../../shared/ui';
 import { DateField } from '../../shared/ui';
-import { deleteExperience, exportPdf, getSummary, getSupervisors, listExperience } from './api';
+import { deleteExperience, getSummary, getSupervisors, listExperience } from './api';
 import { ExperienceCard } from './ExperienceCard';
 import { LogForm } from './LogForm';
 import { SummaryView } from './SummaryView';
 import { SupervisorDirectory } from './SupervisorDirectory';
-import { canSetPrivate, filterBySearch, pdfBlob, sortByDateDesc } from './logic';
+import { canSetPrivate, filterBySearch, sortByDateDesc } from './logic';
 import { DEFAULT_EXPERIENCE_VOCAB, type ExperienceEntry, type ExperienceSummary, type SupervisorEntry } from './types';
 
 type TabId = 'log' | 'summary' | 'supervisors';
@@ -43,7 +43,7 @@ export default function ExperiencePage() {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [showAdd, setShowAdd] = useState(false);
-  const [exporting, setExporting] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -121,31 +121,6 @@ export default function ExperiencePage() {
     }
   }
 
-  async function handleExport(): Promise<void> {
-    setExporting(true);
-    try {
-      const result = await exportPdf({
-        facility: facility || undefined,
-        department: department || undefined,
-        from: from || undefined,
-        to: to || undefined,
-        studentName: user?.username,
-      });
-      const url = URL.createObjectURL(pdfBlob(result.base64, result.contentType));
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = result.filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not export the PDF.');
-    } finally {
-      setExporting(false);
-    }
-  }
-
   return (
     <div className="mx-auto max-w-3xl space-y-5 p-4 sm:p-6">
       <header className="flex flex-wrap items-start justify-between gap-3">
@@ -156,8 +131,8 @@ export default function ExperiencePage() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" icon="application" loading={exporting} onClick={() => void handleExport()}>
-            Export PDF
+          <Button variant="outline" icon="search" onClick={() => setShowFilters((s) => !s)}>
+            {hasFilters ? 'Filters •' : 'Filter'}
           </Button>
           <Button icon="plus" onClick={() => setShowAdd(true)}>
             Log hours
@@ -165,6 +140,7 @@ export default function ExperiencePage() {
         </div>
       </header>
 
+      {showFilters ? (
       <Card flush className="p-3">
         <div className="flex flex-wrap items-end gap-3">
           <Field label="Search" className="min-w-[12rem] flex-1">
@@ -203,6 +179,7 @@ export default function ExperiencePage() {
           ) : null}
         </div>
       </Card>
+      ) : null}
 
       <Tabs items={tabs} value={tab} onChange={(id) => setTab(id as TabId)} />
 
