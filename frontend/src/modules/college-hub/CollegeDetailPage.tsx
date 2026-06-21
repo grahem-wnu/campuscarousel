@@ -494,6 +494,69 @@ function fieldRows(college: College): { label: string; value: string }[] {
   ];
 }
 
+/** Sources — collapsed by default (the list gets long); click the header to expand. Lets the family
+ *  verify and dig deeper without the wall of links dominating the page. */
+function SourcesCard({ college }: { college: College }) {
+  const [open, setOpen] = useState(false);
+  const sources = college.dataSources ?? [];
+  if (sources.length === 0) return null;
+  const titleByUrl = new Map((college.dataSourceTitles ?? []).map((t) => [t.url, t.title]));
+  return (
+    <Card className="space-y-2">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="-m-1 flex w-full items-center justify-between gap-2 rounded-md p-1 text-left transition hover:bg-surface-sunken"
+      >
+        <span className="flex items-center gap-2">
+          <Icon name="chevron-right" size={16} className={`text-ink-400 transition-transform ${open ? 'rotate-90' : ''}`} />
+          <span className="text-sm font-semibold text-ink-800">Sources</span>
+          <span className="text-xs text-ink-400">({sources.length})</span>
+        </span>
+        {college.dataAsOf ? <span className="text-xs text-ink-400">{college.dataAsOf}</span> : null}
+      </button>
+      {open ? (
+        <ul className="space-y-2">
+          {sources.map((src) => {
+            const parsed = sourceLabel(src);
+            const title = titleByUrl.get(src) ?? parsed.title; // hydration-resolved title, else URL-parsed
+            const site = parsed.site;
+            // Sources are AI/web-sourced URLs — only link out when the href is a safe http(s) URL;
+            // otherwise show the card inert (no clickable javascript:/data: target).
+            const href = safeHref(src);
+            const body = (
+              <>
+                <p className="flex items-center gap-1 truncate text-sm font-medium text-ink-800 group-hover:text-primary-700">
+                  {title}
+                  <Icon name="chevron-right" size={13} className="text-ink-300 transition-transform group-hover:translate-x-0.5 group-hover:text-primary-500" />
+                </p>
+                {site && site !== title ? <p className="truncate text-xs text-ink-400">{site}</p> : null}
+              </>
+            );
+            return (
+              <li key={src}>
+                {href ? (
+                  <a
+                    className="group block rounded-lg border border-surface-border px-3 py-2 transition hover:border-primary-200 hover:bg-surface-sunken"
+                    href={href}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {body}
+                  </a>
+                ) : (
+                  <div className="block rounded-lg border border-surface-border px-3 py-2">{body}</div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+    </Card>
+  );
+}
+
 /** Render a multi-paragraph narrative string (blank-line separated) as stacked paragraphs. */
 function Narrative({ text }: { text: string }) {
   return (
@@ -630,53 +693,8 @@ function OverviewTab({ college, onDelete }: { college: College; onDelete: () => 
         {college.specialNotes ? <p className="text-sm text-ink-600">{college.specialNotes}</p> : null}
       </Card>
 
-      {/* 5. Sources — let the family verify and dig deeper. */}
-      {college.dataSources?.length ? (
-        <Card className="space-y-2">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-ink-800">Sources</h2>
-            {college.dataAsOf ? <span className="text-xs text-ink-400">{college.dataAsOf}</span> : null}
-          </div>
-          <ul className="space-y-2">
-            {(() => {
-              const titleByUrl = new Map((college.dataSourceTitles ?? []).map((t) => [t.url, t.title]));
-              return college.dataSources.map((src) => {
-                const parsed = sourceLabel(src);
-                const title = titleByUrl.get(src) ?? parsed.title; // hydration-resolved title, else URL-parsed
-                const site = parsed.site;
-                // Sources are AI/web-sourced URLs — only link out when the href is a safe http(s)
-                // URL; otherwise show the card inert (no clickable javascript:/data: target).
-                const href = safeHref(src);
-                const body = (
-                  <>
-                    <p className="flex items-center gap-1 truncate text-sm font-medium text-ink-800 group-hover:text-primary-700">
-                      {title}
-                      <Icon name="chevron-right" size={13} className="text-ink-300 transition-transform group-hover:translate-x-0.5 group-hover:text-primary-500" />
-                    </p>
-                    {site && site !== title ? <p className="truncate text-xs text-ink-400">{site}</p> : null}
-                  </>
-                );
-                return (
-                <li key={src}>
-                  {href ? (
-                    <a
-                      className="group block rounded-lg border border-surface-border px-3 py-2 transition hover:border-primary-200 hover:bg-surface-sunken"
-                      href={href}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      {body}
-                    </a>
-                  ) : (
-                    <div className="block rounded-lg border border-surface-border px-3 py-2">{body}</div>
-                  )}
-                </li>
-                );
-              });
-            })()}
-          </ul>
-        </Card>
-      ) : null}
+      {/* 5. Sources — collapsed by default; expand to verify and dig deeper. */}
+      <SourcesCard college={college} />
 
       <div>
         <Button size="sm" variant="danger" onClick={onDelete}>Remove college</Button>
