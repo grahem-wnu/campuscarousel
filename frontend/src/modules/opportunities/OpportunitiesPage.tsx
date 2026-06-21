@@ -4,6 +4,9 @@ import { bulkAdd, deleteOpportunity, listOpportunities, pollDiscovery, startDisc
 import { STATUSES, TYPES, statusLabel, typeLabel } from './logic';
 import type { Opportunity, OpportunityCandidate, OpportunityStatus, OpportunityType } from './types';
 
+const POLL_MS = 3000;
+const MAX_POLLS = 60; // ~3 min — web-grounded discovery runs on the 300s worker but can exceed 60s
+
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export default function OpportunitiesPage() {
@@ -48,12 +51,18 @@ export default function OpportunitiesPage() {
         location: location || undefined,
         query: query || undefined,
       });
-      for (let tries = 0; job.status === 'pending' && tries < 30; tries++) {
-        await sleep(2000);
+      for (let tries = 0; job.status === 'pending' && tries < MAX_POLLS; tries++) {
+        await sleep(POLL_MS);
         job = await pollDiscovery(job.jobId);
       }
       if (job.status === 'failed') {
         toast.error(job.error || 'Discovery failed. Try again.');
+        return;
+      }
+      // Still pending after the poll window — the worker is slow, NOT a "0 results" outcome. Don't
+      // claim "Found 0"; tell the user it's still running so they can re-check rather than retry blind.
+      if (job.status === 'pending') {
+        toast.error('Discovery is taking longer than expected — please try again in a moment.');
         return;
       }
       setCandidates(job.candidates ?? []);
