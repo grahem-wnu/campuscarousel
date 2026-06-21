@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Badge, Button, Card, Icon, Modal, Spinner, Tabs, type TabItem } from '../../shared/ui';
-import { analyzeTimeline, getTimeline, getUpcoming } from './api';
+import { analyzeTimeline, dismissTimelineEvent, getTimeline, getUpcoming } from './api';
 import {
   GROUP_LABEL,
   SOURCE_DOT,
@@ -164,6 +164,8 @@ export default function TimelinePage() {
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [showAnalysis, setShowAnalysis] = useState(false);
+  // Overdue items are usually stale (missed visits, decided-against deadlines) — collapse by default.
+  const [overdueOpen, setOverdueOpen] = useState(false);
 
   const load = useCallback(async () => {
     setError(null);
@@ -188,6 +190,20 @@ export default function TimelinePage() {
   // else keeps the chronological time-bucket grouping.
   const plans = useMemo(() => collegePlans(upcoming), [upcoming]);
   const grouped = useMemo(() => groupUpcoming(upcoming.filter((e) => e.source !== 'college')), [upcoming]);
+
+  // Remove a derived event from the timeline. It has no row of its own, so this records a dismissal
+  // server-side (filtered from every read path); the underlying source record is left untouched.
+  async function dismiss(e: UpcomingEvent): Promise<void> {
+    if (!window.confirm(`Remove "${e.title}" from your timeline? This won't delete the underlying item.`)) return;
+    setUpcoming((prev) => prev.filter((x) => x.id !== e.id));
+    setAll((prev) => prev.filter((x) => x.id !== e.id));
+    try {
+      await dismissTimelineEvent(e.id);
+    } catch {
+      void load(); // restore on failure
+    }
+  }
+
   const byDate = useMemo(() => eventsByDate(all), [all]);
   const grid = useMemo(() => monthGrid(calYear, calMonth), [calYear, calMonth]);
 
@@ -257,35 +273,59 @@ export default function TimelinePage() {
       ) : tab === 'upcoming' ? (
         <div className="space-y-4">
           {plans.length > 0 ? <CollegeApplicationsCard plans={plans} /> : null}
-          {grouped.map(({ group, events }) => (
-            <Card key={group}>
-              <h2 className={`mb-2 text-sm font-semibold ${group === 'overdue' ? 'text-error-700' : 'text-ink-800'}`}>{GROUP_LABEL[group]}</h2>
-              <ul className="divide-y divide-surface-border">
-                {events.map((e) => (
-                  <li key={e.id}>
-                    <Link
-                      to={eventLink(e)}
-                      className="group -mx-2 flex items-start gap-3 rounded-md px-2 py-2.5 transition hover:bg-surface-sunken"
-                    >
-                      <EventIcon e={e} />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium leading-snug text-ink-800 group-hover:text-primary-700">{e.title}</p>
-                        <p className="mt-0.5 text-xs text-ink-400">
-                          {SOURCE_LABEL[e.source]} · {e.date} ·{' '}
-                          <span className={e.daysUntil < 0 ? 'font-medium text-error-600' : ''}>{countdownLabel(e.daysUntil)}</span>
-                        </p>
-                      </div>
-                      <Icon
-                        name="chevron-right"
-                        size={16}
-                        className="mt-0.5 shrink-0 text-ink-300 transition-transform group-hover:translate-x-0.5 group-hover:text-primary-500"
-                      />
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </Card>
-          ))}
+          {grouped.map(({ group, events }) => {
+            const isOverdue = group === 'overdue';
+            const collapsed = isOverdue && !overdueOpen;
+            return (
+              <Card key={group}>
+                {isOverdue ? (
+                  <button
+                    type="button"
+                    onClick={() => setOverdueOpen((o) => !o)}
+                    aria-expanded={overdueOpen}
+                    className="mb-2 flex w-full items-center gap-1.5 text-sm font-semibold text-error-700"
+                  >
+                    <Icon name="chevron-right" size={16} className={`shrink-0 transition-transform ${overdueOpen ? 'rotate-90' : ''}`} />
+                    {GROUP_LABEL[group]}
+                    <span className="rounded-full bg-error-100 px-2 py-0.5 text-xs font-normal text-error-700">{events.length}</span>
+                  </button>
+                ) : (
+                  <h2 className="mb-2 text-sm font-semibold text-ink-800">{GROUP_LABEL[group]}</h2>
+                )}
+                {collapsed ? null : (
+                  <ul className="divide-y divide-surface-border">
+                    {events.map((e) => (
+                      <li key={e.id} className="flex items-stretch gap-1">
+                        <Link
+                          to={eventLink(e)}
+                          className="group -ml-2 flex flex-1 items-start gap-3 rounded-md px-2 py-2.5 transition hover:bg-surface-sunken"
+                        >
+                          <EventIcon e={e} />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium leading-snug text-ink-800 group-hover:text-primary-700">{e.title}</p>
+                            <p className="mt-0.5 text-xs text-ink-400">
+                              {e.source !== 'college' ? `${SOURCE_LABEL[e.source]} · ` : ''}
+                              {e.date} ·{' '}
+                              <span className={e.daysUntil < 0 ? 'font-medium text-error-600' : ''}>{countdownLabel(e.daysUntil)}</span>
+                            </p>
+                          </div>
+                        </Link>
+                        <button
+                          type="button"
+                          onClick={() => void dismiss(e)}
+                          aria-label={`Remove ${e.title} from the timeline`}
+                          title="Remove from timeline"
+                          className="shrink-0 self-center rounded-md p-1.5 text-ink-300 transition hover:bg-error-50 hover:text-error-600"
+                        >
+                          <Icon name="close" size={16} />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </Card>
+            );
+          })}
         </div>
       ) : (
         <Card>

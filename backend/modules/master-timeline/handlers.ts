@@ -6,8 +6,8 @@
 
 import { validateBody, validateQuery, type Handler } from '../../shared/api/index.js';
 import type { Data, Visit } from '../../shared/data/index.js';
-import { analyzeSchema, timelineQuerySchema, upcomingQuerySchema } from './schema.js';
-import { buildEvents, filterEvents, upcoming, type EventSources } from './events.js';
+import { analyzeSchema, dismissSchema, timelineQuerySchema, upcomingQuerySchema } from './schema.js';
+import { buildEvents, filterEvents, upcoming, type EventSources, type TimelineEvent } from './events.js';
 import { makeBedrockAnalyzer, type Analyzer } from './ai.js';
 
 const DEFAULT_HORIZON = 90;
@@ -16,6 +16,7 @@ export interface TimelineHandlers {
   timeline: Handler;
   upcoming: Handler;
   analyze: Handler;
+  dismiss: Handler;
 }
 export interface TimelineDeps {
   getData: () => Data;
@@ -38,6 +39,19 @@ export function makeHandlers(deps: TimelineDeps): TimelineHandlers {
       return null;
     }
   }
+
+  /** Event ids the family has removed from the timeline. Defensive: never blocks the read. */
+  async function dismissedIds(): Promise<Set<string>> {
+    try {
+      return new Set(await getData().timelineDismissals.list());
+    } catch {
+      return new Set();
+    }
+  }
+
+  /** Drop dismissed events from a built list (no-op when nothing is dismissed). */
+  const dropDismissed = <T extends TimelineEvent>(events: T[], dismissed: Set<string>): T[] =>
+    dismissed.size ? events.filter((e) => !dismissed.has(e.id)) : events;
 
   // Gather the timeline's deadline/milestone sources. Activities (journal entries) are deliberately
   // excluded — see the file header.
@@ -69,10 +83,10 @@ export function makeHandlers(deps: TimelineDeps): TimelineHandlers {
   }
 
   return {
-    // GET /timeline — the unified, filtered event stream.
+    // GET /timeline — the unified, filtered event stream (dismissed events removed).
     timeline: async (ctx) => {
       const q = validateQuery(timelineQuerySchema, ctx);
-      const events = filterEvents(buildEvents(await gather()), q);
+      const events = filterEvents(dropDismissed(buildEvents(await gather()), await dismissedIds()), q);
       return { status: 200, body: { events } };
     },
 
@@ -80,14 +94,14 @@ export function makeHandlers(deps: TimelineDeps): TimelineHandlers {
     upcoming: async (ctx) => {
       const q = validateQuery(upcomingQuerySchema, ctx);
       const horizon = q.horizon ?? DEFAULT_HORIZON;
-      const events = upcoming(buildEvents(await gather()), today(), horizon);
+      const events = upcoming(dropDismissed(buildEvents(await gather()), await dismissedIds()), today(), horizon);
       return { status: 200, body: { events, horizon } };
     },
 
     // POST /timeline/analyze — AI priorities, conflicts, and missing items over the window.
     analyze: async (ctx) => {
       const body = validateBody(analyzeSchema, ctx);
-      const all = buildEvents(await gather());
+      const all = dropDismissed(buildEvents(await gather()), await dismissedIds());
       const todayIso = today();
       const window = upcoming(all, todayIso, body.horizonDays ?? DEFAULT_HORIZON);
       const profile = await activeProfile();
@@ -100,6 +114,14 @@ export function makeHandlers(deps: TimelineDeps): TimelineHandlers {
       });
       return { status: 200, body: { analysis } };
     },
+
+    // POST /timeline/dismiss — remove a derived event from the timeline by id. Records the id (the
+    // event has no row of its own) so every read path filters it out; the source record is untouched.
+    dismiss: async (ctx) => {
+      const { eventId } = validateBody(dismissSchema, ctx);
+      await getData().timelineDismissals.add(eventId);
+      return { status: 204, body: undefined };
+    },
   };
 }
 
@@ -109,6 +131,7 @@ export function buildRoutes(h: TimelineHandlers) {
   return [
     { method: 'GET' as const, path: '/timeline/upcoming', handler: h.upcoming },
     { method: 'POST' as const, path: '/timeline/analyze', handler: h.analyze },
+    { method: 'POST' as const, path: '/timeline/dismiss', handler: h.dismiss },
     { method: 'GET' as const, path: '/timeline', handler: h.timeline },
   ];
 }

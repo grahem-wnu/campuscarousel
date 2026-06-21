@@ -14,5 +14,6 @@ const h = makeHandlers({ getData: (): Data => (cached ??= dataFromEnv()) });
 export const routes: RouteDef[] = [
   { method: 'GET', path: '/timeline/upcoming', handler: h.upcoming },
   { method: 'POST', path: '/timeline/analyze', handler: h.analyze },
+  { method: 'POST', path: '/timeline/dismiss', handler: h.dismiss },
   { method: 'GET', path: '/timeline', handler: h.timeline },
 ];
