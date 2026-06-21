@@ -634,6 +634,40 @@ export interface Certification extends Timestamped {
   notes?: string;
 }
 
+/** The researched "how & where to get it" payload for a certification (a subset is web-grounded:
+ *  local providers near the student). Stored on a CertGuidanceJob; rendered on suggestion + tracked
+ *  cards. All fields optional — research degrades to "general guidance" (no local list) gracefully. */
+export interface CertGuidanceResult {
+  /** The official issuer / where to register (a URL). */
+  officialUrl?: string;
+  /** A short paragraph: the path to obtain the cert (steps, format, who offers it). */
+  howToGet?: string;
+  /** Prerequisites / eligibility, if any. */
+  prerequisites?: string;
+  typicalCost?: number;
+  renewalFrequency?: string;
+  /** Specific local/nearby places to get it (web-grounded; empty when search is unavailable). */
+  localProviders?: { name: string; detail?: string; url?: string }[];
+  /** Source URLs the research drew on. */
+  sources?: string[];
+}
+
+/**
+ * A transient async "how to get this cert" research job (mirrors DiscoveryJob). The API creates one
+ * (status 'pending') with the cert name + the student's location and enqueues it; the 300s SQS worker
+ * runs the web-grounded research and writes the result back; the frontend polls until it settles.
+ * PK: CERTGUIDANCE#<jobId>, SK: DETAILS.
+ */
+export interface CertGuidanceJob extends Timestamped {
+  jobId: string;
+  certName: string;
+  /** The student's location ("City, ST") echoed from their profile, so the worker can localize. */
+  location?: string;
+  status: 'pending' | 'complete' | 'failed';
+  result?: CertGuidanceResult;
+  error?: string;
+}
+
 // ---------------------------------------------------------------------------
 // Exam record (PK: EXAM#<id>, SK: DETAILS) — GSI4 date
 // ---------------------------------------------------------------------------

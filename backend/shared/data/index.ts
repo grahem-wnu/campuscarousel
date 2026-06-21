@@ -44,6 +44,7 @@ import type {
   Activity,
   Application,
   Certification,
+  CertGuidanceJob,
   ExperienceEntry,
   College,
   Contact,
@@ -199,6 +200,12 @@ export function makeData(
     collection: 'CERTIFICATIONS',
   });
 
+  // Transient async "how to get this cert" research jobs (no collection — fetched by id while polling).
+  const certGuidanceJobs = makeDetailsRepo<CertGuidanceJob, 'jobId'>(client, {
+    prefix: 'CERTGUIDANCE',
+    idField: 'jobId',
+  });
+
   const interviews = makeDetailsRepo<Interview, 'sessionId'>(client, {
     prefix: 'INTERVIEW',
     idField: 'sessionId',
@@ -251,6 +258,7 @@ export function makeData(
     courses,
     essays,
     certifications,
+    certGuidanceJobs,
     interviews,
     motivations,
     contacts,

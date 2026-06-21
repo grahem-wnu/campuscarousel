@@ -18,14 +18,16 @@ describe('routes.manifest ↔ buildRoutes', () => {
     expect(manifest).toEqual(built);
   });
 
-  it('expose all seven Certifications endpoints', () => {
+  it('expose all Certifications endpoints', () => {
     expect(manifestRoutes.map(sig).sort()).toEqual(
       [
         'DELETE /certifications/:id',
         'GET /certifications',
         'GET /certifications/:id',
         'GET /certifications/expiring',
+        'GET /certifications/guidance/:jobId',
         'POST /certifications',
+        'POST /certifications/guidance',
         'POST /certifications/suggest',
         'PUT /certifications/:id',
       ].sort(),
