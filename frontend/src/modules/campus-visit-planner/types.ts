@@ -35,6 +35,8 @@ export interface Visit {
   wouldAttend?: WouldAttend;
   travelCost?: number;
   createdBy?: string;
+  /** Cached visit prep, generated when the visit is saved (show/hide in the UI; regenerate on demand). */
+  prep?: VisitPrep;
   createdAt: string;
   updatedAt: string;
 }

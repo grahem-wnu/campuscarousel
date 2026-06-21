@@ -93,16 +93,18 @@ describe('prep (POST /colleges/:id/visits/:vid/prep)', () => {
     await expectStatus(h.prep(ctx({ params: { id, vid: 'ghost' } })), 404);
   });
 
-  it('returns the curated nursing checklist + logistics for a real visit', async () => {
+  it('regenerates and returns the visit with the curated checklist + logistics cached on it', async () => {
     const id = await seedCollege({ contactInfo: { programAdmissionsEmail: 'nursing@uci.edu' } });
     const created = await h.create(ctx({ params: { id }, body: { date: '2026-04-01' } }));
     const vid = (created.body as { visitId: string }).visitId;
     const res = await h.prep(ctx({ params: { id, vid } }));
     expect(res.status).toBe(200);
-    const body = res.body as { questions: string[]; logistics: { contact?: string }; source: string };
-    expect(body.source).toBe('curated');
-    expect(body.questions.length).toBeGreaterThanOrEqual(8);
-    expect(body.logistics.contact).toBe('nursing@uci.edu');
+    const prep = (res.body as { prep: { questions: string[]; logistics: { contact?: string }; source: string } }).prep;
+    expect(prep.source).toBe('curated');
+    expect(prep.questions.length).toBeGreaterThanOrEqual(8);
+    expect(prep.logistics.contact).toBe('nursing@uci.edu');
+    // It's persisted on the visit (so the UI shows/hides it without re-generating).
+    expect((await data.visits.get(id, vid))?.prep?.questions.length).toBeGreaterThanOrEqual(8);
   });
 
   it("leads with the student's major-pack visit questions (nursing → NCLEX pass rate)", async () => {
@@ -111,7 +113,13 @@ describe('prep (POST /colleges/:id/visits/:vid/prep)', () => {
     const created = await h.create(ctx({ params: { id }, body: { date: '2026-04-01' } }));
     const vid = (created.body as { visitId: string }).visitId;
     const res = await h.prep(ctx({ params: { id, vid } }));
-    const questions = (res.body as { questions: string[] }).questions;
+    const questions = (res.body as { prep: { questions: string[] } }).prep.questions;
     expect(questions.some((q) => /NCLEX/.test(q))).toBe(true);
+  });
+
+  it('generates and caches prep when the visit is created', async () => {
+    const id = await seedCollege();
+    const created = await h.create(ctx({ params: { id }, body: { date: '2026-04-01' } }));
+    expect((created.body as { prep?: { questions: string[] } }).prep?.questions.length).toBeGreaterThanOrEqual(8);
   });
 });

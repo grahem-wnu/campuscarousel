@@ -4,7 +4,7 @@
 // implementation) and production injects the Bedrock-backed one (see routes.manifest.ts).
 
 import { Errors, validateBody, validateParams, type Handler, type RouteDef } from '../../shared/api/index.js';
-import type { Data } from '../../shared/data/index.js';
+import type { College, Data, Visit } from '../../shared/data/index.js';
 import { packsForMajors } from '../../shared/packs/index.js';
 import { curatedPrep, type PrepGenerator } from './prep.js';
 
@@ -48,6 +48,19 @@ export function makeHandlers(deps: HandlerDeps): VisitHandlers {
   const { getData } = deps;
   const prep = deps.prep ?? curatedPrep;
 
+  /** Generate prep (model/curated best-time + questions + the student's major-pack questions and the
+   *  college's logistics) and cache it on the visit. Returns the updated visit. */
+  async function attachPrep(data: Data, college: College, visit: Visit): Promise<Visit> {
+    const majors = await activeMajors(data);
+    const result = await prep({ college, visit, majors });
+    // Lead with the student's major-pack visit questions, then the standard checklist; dedupe.
+    const packQuestions = packsForMajors(majors).flatMap((p) => p.visitQuestions ?? []);
+    const questions = [...packQuestions, ...result.questions].filter((qn, i, arr) => arr.indexOf(qn) === i);
+    return data.visits.update(visit.collegeId, visit.visitId, {
+      prep: { bestTime: result.bestTime, questions, logistics: result.logistics, source: result.source, generatedAt: new Date().toISOString() },
+    });
+  }
+
   return {
     // GET /colleges/:id/visits
     list: async (ctx) => {
@@ -58,17 +71,20 @@ export function makeHandlers(deps: HandlerDeps): VisitHandlers {
       return { status: 200, body: { visits } };
     },
 
-    // POST /colleges/:id/visits — createdBy is stamped from the JWT, never the client.
+    // POST /colleges/:id/visits — createdBy is stamped from the JWT, never the client. Prep is
+    // generated and cached on the visit at save time (best-effort; a prep failure never fails create).
     create: async (ctx) => {
       const { id } = validateParams(collegeParamSchema, ctx);
       const input = validateBody(createSchema, ctx);
       const data = getData();
-      await requireCollege(data, id);
+      const college = await requireCollege(data, id);
       const created = await data.visits.add(id, { ...input, createdBy: ctx.requester.username });
-      return { status: 201, body: created };
+      const withPrep = await attachPrep(data, college, created).catch(() => created);
+      return { status: 201, body: withPrep };
     },
 
-    // PUT /colleges/:id/visits/:vid — e.g. the post-visit debrief.
+    // PUT /colleges/:id/visits/:vid — e.g. the post-visit debrief. Regenerate prep only when a field
+    // it depends on (date / visit type) changed, so editing impressions etc. doesn't re-run the AI.
     update: async (ctx) => {
       const { id, vid } = validateParams(visitParamSchema, ctx);
       const patch = validateBody(updateSchema, ctx);
@@ -76,7 +92,13 @@ export function makeHandlers(deps: HandlerDeps): VisitHandlers {
       const existing = await data.visits.get(id, vid);
       if (!existing) throw Errors.notFound('Visit not found');
       const updated = await data.visits.update(id, vid, patch);
-      return { status: 200, body: updated };
+      const prepStale =
+        (patch.date !== undefined && patch.date !== existing.date) ||
+        (patch.visitType !== undefined && patch.visitType !== existing.visitType);
+      if (!prepStale) return { status: 200, body: updated };
+      const college = await requireCollege(data, id);
+      const refreshed = await attachPrep(data, college, updated).catch(() => updated);
+      return { status: 200, body: refreshed };
     },
 
     // DELETE /colleges/:id/visits/:vid
@@ -89,20 +111,16 @@ export function makeHandlers(deps: HandlerDeps): VisitHandlers {
       return { status: 204, body: undefined };
     },
 
-    // POST /colleges/:id/visits/:vid/prep — AI (or curated) program-specific visit prep.
+    // POST /colleges/:id/visits/:vid/prep — explicit "Regenerate prep": re-run the AI/curated prep
+    // and cache it on the visit. Returns the updated visit (with the fresh `prep`).
     prep: async (ctx) => {
       const { id, vid } = validateParams(visitParamSchema, ctx);
       const data = getData();
       const college = await requireCollege(data, id);
       const visit = await data.visits.get(id, vid);
       if (!visit) throw Errors.notFound('Visit not found');
-      const majors = await activeMajors(data);
-      const result = await prep({ college, visit, majors });
-      // Lead with the student's major-pack visit questions (e.g. nursing → NCLEX pass rate, clinical
-      // sites), then the standard checklist; dedupe so the AI/curated overlap doesn't repeat.
-      const packQuestions = packsForMajors(majors).flatMap((p) => p.visitQuestions ?? []);
-      const questions = [...packQuestions, ...result.questions].filter((qn, i, arr) => arr.indexOf(qn) === i);
-      return { status: 200, body: { ...result, questions } };
+      const refreshed = await attachPrep(data, college, visit);
+      return { status: 200, body: refreshed };
     },
   };
 }

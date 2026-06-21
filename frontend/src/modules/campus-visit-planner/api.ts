@@ -5,7 +5,7 @@
 // merged contract) to populate the college picker — this module reads colleges, it does not own them.
 
 import { api } from '../../shared/api';
-import type { CollegeOption, Visit, VisitInput, VisitPrep } from './types';
+import type { CollegeOption, Visit, VisitInput } from './types';
 
 export async function listColleges(): Promise<CollegeOption[]> {
   const res = await api.get<{ colleges: CollegeOption[] }>('/colleges');
@@ -29,8 +29,9 @@ export function deleteVisit(collegeId: string, visitId: string): Promise<void> {
   return api.del<void>(`/colleges/${encodeURIComponent(collegeId)}/visits/${encodeURIComponent(visitId)}`);
 }
 
-export function getPrep(collegeId: string, visitId: string): Promise<VisitPrep> {
-  return api.post<VisitPrep>(
+/** Regenerate the visit's prep and cache it on the visit; returns the updated visit (with `prep`). */
+export function regeneratePrep(collegeId: string, visitId: string): Promise<Visit> {
+  return api.post<Visit>(
     `/colleges/${encodeURIComponent(collegeId)}/visits/${encodeURIComponent(visitId)}/prep`,
     {},
   );

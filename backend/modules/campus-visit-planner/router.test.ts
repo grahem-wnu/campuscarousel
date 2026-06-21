@@ -81,6 +81,6 @@ describe('router integration', () => {
     const vid = (parse(created) as { visitId: string }).visitId;
     const res = await dispatch(event('POST', `/colleges/${id}/visits/${vid}/prep`, { as: keira, body: {} }));
     expect(res.statusCode).toBe(200);
-    expect((parse(res).questions as unknown[]).length).toBeGreaterThanOrEqual(8);
+    expect(((parse(res).prep as { questions: unknown[] }).questions).length).toBeGreaterThanOrEqual(8);
   });
 });
