@@ -11,11 +11,11 @@ import { makeResearcher, unavailableResearcher, type BenchmarkResearcher, type M
 /** Build a web-grounded ModelInvoker. Injectable (invoker + searcher + flag) for tests; in prod it
  *  uses the real SDK client + Tavily, gated by the AI_WEB_SEARCH env flag. */
 export function makeWebGroundedInvoker(
-  options: { invoker?: BedrockInvoker; searcher?: WebSearcher; webSearch?: boolean } = {},
+  options: { invoker?: BedrockInvoker; searcher?: WebSearcher; webSearch?: boolean; maxTokens?: number } = {},
 ): ModelInvoker {
   return async (prompt) => {
     const { text } = await converseWithSearch(prompt, {
-      maxTokens: 1500,
+      maxTokens: options.maxTokens ?? 1500,
       temperature: 0.4,
       invoker: options.invoker,
       searcher: options.searcher,
@@ -31,7 +31,9 @@ export function makeWebGroundedInvoker(
 // (webSearch:false). That keeps the synchronous GET /benchmarks/gaps inside API Gateway's hard 30s
 // integration ceiling; web-grounded multi-round search blows past it and the request times out.
 const webResearcher = makeResearcher(makeWebGroundedInvoker({ webSearch: true }));
-const fastResearcher = makeResearcher(makeWebGroundedInvoker({ webSearch: false }));
+// Gaps is a concise synthesis on the synchronous request path — a tight token cap keeps the
+// (model-only) generation well inside API Gateway's 30s ceiling instead of timing out.
+const fastResearcher = makeResearcher(makeWebGroundedInvoker({ webSearch: false, maxTokens: 900 }));
 
 /**
  * Production researcher: the real researcher when BEDROCK_MODEL_ID is configured (the deployed Lambda),
