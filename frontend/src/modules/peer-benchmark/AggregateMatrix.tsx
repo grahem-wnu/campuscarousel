@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Badge, Icon, Table, type Column } from '../../shared/ui';
 import { cellText, readinessMeta, statusMeta } from './logic';
 import { DEFAULT_BENCHMARK_LABELS, type BenchmarkLabels, type MatrixRow } from './types';
@@ -21,11 +22,16 @@ export function AggregateMatrix({
   keira,
   labels = DEFAULT_BENCHMARK_LABELS,
   onSelect,
+  expandedId,
+  renderExpanded,
 }: {
   rows: MatrixRow[];
   keira: { gpa?: number; teasScore?: number; clinicalHours: number; volunteerHours: number };
   labels?: BenchmarkLabels;
   onSelect?: (collegeId: string) => void;
+  /** When set, that college's row is expanded inline with `renderExpanded` beneath it. */
+  expandedId?: string | null;
+  renderExpanded?: (row: MatrixRow) => ReactNode;
 }) {
   const columns: (Column<MatrixRow> | null)[] = [
     {
@@ -86,6 +92,8 @@ export function AggregateMatrix({
       rows={rows}
       rowKey={(r) => r.collegeId}
       onRowClick={onSelect ? (r) => onSelect(r.collegeId) : undefined}
+      isExpanded={expandedId ? (r) => r.collegeId === expandedId : undefined}
+      renderExpanded={renderExpanded}
       empty="No colleges to compare yet."
     />
   );

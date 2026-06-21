@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Badge, Button, Card, EmptyState, Modal, Spinner } from '../../shared/ui';
+import { Badge, Button, Card, EmptyState, Spinner } from '../../shared/ui';
 import { getAggregate, getGaps } from './api';
 import { AggregateMatrix } from './AggregateMatrix';
 import { BenchmarkCard } from './BenchmarkCard';
@@ -123,10 +123,27 @@ export default function PeerBenchmarkPage() {
           </Card>
 
           <Card flush className="p-2">
-            <AggregateMatrix rows={rows} keira={keira!} labels={labels} onSelect={(id) => setSelected(id)} />
+            <AggregateMatrix
+              rows={rows}
+              keira={keira!}
+              labels={labels}
+              onSelect={(id) => setSelected((cur) => (cur === id ? null : id))}
+              expandedId={selected}
+              renderExpanded={(r) => (
+                <BenchmarkCard
+                  collegeId={r.collegeId}
+                  // When a research run finishes, reload the matrix + gaps so the Readiness column and
+                  // your-standing rollup update without a manual page refresh.
+                  onResearched={() => {
+                    void loadMatrix();
+                    void loadGaps();
+                  }}
+                />
+              )}
+            />
             <p className="px-3 pb-2 pt-1 text-xs text-ink-400">
               Each cell shows <span className="tabular-nums">your value / typical admitted student</span>. Green exceeds ·
-              yellow meets · red below · gray no data. Tap a row to refresh that school's benchmark.
+              yellow meets · red below · gray no data. Tap a row to expand it and run or view that school's benchmark.
             </p>
           </Card>
 
@@ -135,10 +152,6 @@ export default function PeerBenchmarkPage() {
           {trend.length > 0 ? <ProgressTrend trend={trend} labels={labels} /> : null}
         </>
       )}
-
-      <Modal open={Boolean(selected)} onClose={() => setSelected(null)} title="Benchmark detail">
-        {selected ? <BenchmarkCard collegeId={selected} /> : null}
-      </Modal>
     </div>
   );
 }
