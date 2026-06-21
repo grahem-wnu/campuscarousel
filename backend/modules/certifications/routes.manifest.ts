@@ -15,16 +15,24 @@ import type { RouteDef } from '../../shared/api/index.js';
 import { dataFromEnv, type Data } from '../../shared/data/index.js';
 import { makeHandlers } from './handlers.js';
 import { makeBedrockSuggester } from './suggester.js';
+import { makeBedrockGuidanceResearcher } from './guidance.js';
+import { makeSqsGuidanceEnqueuer } from './enqueue.js';
 
 let cached: Data | undefined;
+const getData = (): Data => (cached ??= dataFromEnv());
 const handlers = makeHandlers({
-  getData: (): Data => (cached ??= dataFromEnv()),
+  getData,
   suggester: makeBedrockSuggester(),
+  // Guidance research is async: enqueue a `cert-guidance` job for the 300s worker (web-grounded
+  // research blows the request path's 30s ceiling). The worker does the web search; here we just send.
+  guidanceDispatch: makeSqsGuidanceEnqueuer(getData, makeBedrockGuidanceResearcher({ webSearch: true })),
 });
 
 export const routes: RouteDef[] = [
   { method: 'GET', path: '/certifications/expiring', handler: handlers.expiring },
   { method: 'POST', path: '/certifications/suggest', handler: handlers.suggest },
+  { method: 'POST', path: '/certifications/guidance', handler: handlers.guidance },
+  { method: 'GET', path: '/certifications/guidance/:jobId', handler: handlers.guidanceStatus },
   { method: 'GET', path: '/certifications', handler: handlers.list },
   { method: 'POST', path: '/certifications', handler: handlers.create },
   { method: 'GET', path: '/certifications/:id', handler: handlers.detail },

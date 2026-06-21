@@ -65,6 +65,16 @@ export const suggestSchema = z
 /** Path params for the by-id routes. */
 export const idParamSchema = z.object({ id: z.string().min(1) });
 
+/** Body for POST /certifications/guidance — the cert to research "how & where to get it" for. */
+export const guidanceSchema = z
+  .object({
+    certName: z.string().min(1).max(200),
+  })
+  .strict();
+
+/** Path params for GET /certifications/guidance/:jobId (polling a guidance job). */
+export const guidanceJobParamSchema = z.object({ jobId: z.string().min(1) });
+
 export type CreateInput = z.infer<typeof createSchema>;
 export type UpdateInput = z.infer<typeof updateSchema>;
 export type ListQuery = z.infer<typeof listQuerySchema>;

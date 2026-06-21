@@ -3,6 +3,7 @@
 
 import { api } from '../../shared/api';
 import type {
+  CertGuidanceJob,
   Certification,
   CertificationInput,
   ListFilters,
@@ -45,4 +46,15 @@ export function deleteCertification(id: string): Promise<void> {
 
 export function suggestCertifications(careerGoal?: string): Promise<SuggestResponse> {
   return api.post<SuggestResponse>('/certifications/suggest', careerGoal ? { careerGoal } : {});
+}
+
+/** Start an async "how & where to get this cert near me" research job (web-grounded, runs on the
+ *  worker). Poll `getCertGuidance` with the returned jobId until it settles, then render the result. */
+export function startCertGuidance(certName: string): Promise<CertGuidanceJob> {
+  return api.post<CertGuidanceJob>('/certifications/guidance', { certName });
+}
+
+/** Poll a guidance job's status + result. */
+export function getCertGuidance(jobId: string): Promise<CertGuidanceJob> {
+  return api.get<CertGuidanceJob>(`/certifications/guidance/${encodeURIComponent(jobId)}`);
 }

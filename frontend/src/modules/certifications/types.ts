@@ -71,3 +71,26 @@ export interface SuggestResponse {
 export interface ListFilters {
   status?: CertStatus;
 }
+
+/** The researched "how & where to get it" payload (mirrors backend CertGuidanceResult). */
+export interface CertGuidanceResult {
+  officialUrl?: string;
+  howToGet?: string;
+  prerequisites?: string;
+  typicalCost?: number;
+  renewalFrequency?: string;
+  localProviders?: { name: string; detail?: string; url?: string }[];
+  sources?: string[];
+}
+
+/** POST /certifications/guidance (202) + GET .../guidance/:jobId — an async guidance research job. */
+export interface CertGuidanceJob {
+  jobId: string;
+  certName: string;
+  location?: string;
+  status: 'pending' | 'complete' | 'failed';
+  result?: CertGuidanceResult;
+  error?: string;
+  createdAt: string;
+  updatedAt: string;
+}

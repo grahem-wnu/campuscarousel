@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Button, Card, EmptyState, Field, Modal, Select, Spinner } from '../../shared/ui';
+import { Button, Card, EmptyState, Spinner } from '../../shared/ui';
 import { CertificationCard } from './CertificationCard';
 import { CertForm } from './CertForm';
 import { ExpiringWidget } from './ExpiringWidget';
@@ -11,21 +11,21 @@ import {
   suggestCertifications,
   updateCertification,
 } from './api';
-import { STATUS_META, STATUS_OPTIONS, expiringWithin, sortForDisplay } from './logic';
-import type { Certification, CertificationInput, CertStatus, CertSuggestion } from './types';
+import { expiringWithin, sortForDisplay } from './logic';
+import type { Certification, CertificationInput, CertSuggestion } from './types';
 
-/** Certifications tracker — cards with status + expiration countdown, expiring-soon alerts,
- *  training progress, AI-suggested certs, and a renew flow. */
+/** Certifications tracker — expandable cards with status + expiration countdown, expiring-soon
+ *  alerts, training progress, AI-suggested certs, and "how & where to get it" guidance. */
 export default function CertificationsPage() {
   const [certs, setCerts] = useState<Certification[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [statusFilter, setStatusFilter] = useState<CertStatus | ''>('');
 
-  const [editing, setEditing] = useState<Certification | null>(null);
-  const [showForm, setShowForm] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [addBusy, setAddBusy] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
+  // Which card is expanded (one at a time). The expiring widget can open a specific card.
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const [showSuggest, setShowSuggest] = useState(false);
   const [suggestLoading, setSuggestLoading] = useState(false);
@@ -69,54 +69,31 @@ export default function CertificationsPage() {
     })();
   }, [load, fetchSuggestions]);
 
-  const filtered = useMemo(() => {
-    const visible = statusFilter ? certs.filter((c) => c.effectiveStatus === statusFilter) : certs;
-    return sortForDisplay(visible);
-  }, [certs, statusFilter]);
-
+  const ordered = useMemo(() => sortForDisplay(certs), [certs]);
   const expiring = useMemo(() => expiringWithin(certs), [certs]);
 
-  function openCreate(): void {
-    setEditing(null);
-    setFormError(null);
-    setShowForm(true);
-  }
-
-  function openEdit(cert: Certification): void {
-    setEditing(cert);
-    setFormError(null);
-    setShowForm(true);
-  }
-
-  async function submitForm(input: CertificationInput): Promise<void> {
-    setSubmitting(true);
-    setFormError(null);
+  async function submitAdd(input: CertificationInput): Promise<void> {
+    setAddBusy(true);
+    setAddError(null);
     try {
-      if (editing) await updateCertification(editing.certId, input);
-      else await createCertification(input);
-      setShowForm(false);
-      setEditing(null);
+      await createCertification(input);
+      setAdding(false);
       await load();
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'Could not save. Check the fields and try again.');
+      setAddError(err instanceof Error ? err.message : 'Could not save. Check the fields and try again.');
     } finally {
-      setSubmitting(false);
+      setAddBusy(false);
     }
   }
 
-  async function removeCert(): Promise<void> {
-    if (!editing) return;
-    setSubmitting(true);
-    try {
-      await deleteCertification(editing.certId);
-      setShowForm(false);
-      setEditing(null);
-      await load();
-    } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'Could not delete this certification.');
-    } finally {
-      setSubmitting(false);
-    }
+  // Card-driven edit/delete: reject on failure so the card surfaces the error inline and stays open.
+  async function saveCert(certId: string, input: CertificationInput): Promise<void> {
+    await updateCertification(certId, input);
+    await load();
+  }
+  async function deleteCert(certId: string): Promise<void> {
+    await deleteCertification(certId);
+    await load();
   }
 
   async function addSuggestion(s: CertSuggestion): Promise<void> {
@@ -149,13 +126,35 @@ export default function CertificationsPage() {
           <Button variant="outline" icon="star" onClick={() => void fetchSuggestions()}>
             Suggest certs
           </Button>
-          <Button icon="plus" onClick={openCreate}>
-            Add certification
+          <Button
+            icon={adding ? 'close' : 'plus'}
+            variant={adding ? 'ghost' : 'primary'}
+            onClick={() => {
+              setAdding((v) => !v);
+              setAddError(null);
+            }}
+          >
+            {adding ? 'Cancel' : 'Add certification'}
           </Button>
         </div>
       </header>
 
-      <ExpiringWidget expiring={expiring} onSelect={openEdit} />
+      <ExpiringWidget expiring={expiring} onSelect={(cert) => setExpandedId(cert.certId)} />
+
+      {adding ? (
+        <Card>
+          <h2 className="mb-3 text-sm font-semibold text-ink-700">Add a certification</h2>
+          <CertForm
+            busy={addBusy}
+            error={addError}
+            onSubmit={(input) => void submitAdd(input)}
+            onCancel={() => {
+              setAdding(false);
+              setAddError(null);
+            }}
+          />
+        </Card>
+      ) : null}
 
       {showSuggest ? (
         <SuggestionsPanel
@@ -165,24 +164,6 @@ export default function CertificationsPage() {
           onAdd={(s) => void addSuggestion(s)}
           onDismiss={() => setShowSuggest(false)}
         />
-      ) : null}
-
-      {certs.length > 0 ? (
-        <div className="flex items-end gap-3">
-          <Field label="Filter by status">
-            <Select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as CertStatus | '')}
-            >
-              <option value="">All</option>
-              {STATUS_OPTIONS.map((s) => (
-                <option key={s} value={s}>
-                  {STATUS_META[s].label}
-                </option>
-              ))}
-            </Select>
-          </Field>
-        </div>
       ) : null}
 
       {error ? (
@@ -202,36 +183,25 @@ export default function CertificationsPage() {
           title="No certifications yet"
           description="Add the certifications you've earned or plan to earn — anything that builds skills or strengthens an application — to track renewals and training. The suggestions above are tailored to your path and are a good place to start."
           action={
-            <Button icon="plus" onClick={openCreate}>
+            <Button icon="plus" onClick={() => setAdding(true)}>
               Add your first certification
             </Button>
           }
         />
-      ) : filtered.length === 0 ? (
-        <p className="py-8 text-center text-sm text-ink-500">No certifications match this filter.</p>
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          {filtered.map((cert) => (
-            <CertificationCard key={cert.certId} cert={cert} onEdit={openEdit} onRenew={openEdit} />
+          {ordered.map((cert) => (
+            <CertificationCard
+              key={cert.certId}
+              cert={cert}
+              expanded={expandedId === cert.certId}
+              onToggle={() => setExpandedId((id) => (id === cert.certId ? null : cert.certId))}
+              onSave={saveCert}
+              onDelete={deleteCert}
+            />
           ))}
         </div>
       )}
-
-      <Modal
-        open={showForm}
-        onClose={() => setShowForm(false)}
-        title={editing ? 'Edit certification' : 'Add a certification'}
-        size="lg"
-      >
-        <CertForm
-          initial={editing ?? undefined}
-          busy={submitting}
-          error={formError}
-          onSubmit={(input) => void submitForm(input)}
-          onCancel={() => setShowForm(false)}
-          onDelete={editing ? () => void removeCert() : undefined}
-        />
-      </Modal>
     </div>
   );
 }
