@@ -233,3 +233,25 @@ export function checklistPct(items: { completed: boolean }[]): number | null {
   const done = items.filter((i) => i.completed).length;
   return Math.round((done / items.length) * 100);
 }
+
+/** Split a free-text field that's secretly an enumerated list ("1) … 2) …" or "(1) … (2) …") into an
+ *  intro + bullet items, so the UI can render bullets instead of a wall of text. Returns null unless
+ *  it's a genuine list: markers numbered 1,2,3… in order (so stray "(3)" mentions don't false-trigger).
+ *  Markers may be "(1)" or "1)". Any text before marker 1 is the intro (often a header like "X: "). */
+export function bulletize(text: string): { intro: string; items: string[] } | null {
+  const markers: { start: number; end: number; num: number }[] = [];
+  for (const m of text.matchAll(/\(?(\d{1,2})\)\s+/g)) {
+    if (m.index === undefined) continue;
+    markers.push({ start: m.index, end: m.index + m[0].length, num: Number(m[1]) });
+  }
+  if (markers.length < 2 || markers[0]!.num !== 1) return null;
+  for (let i = 0; i < markers.length; i++) if (markers[i]!.num !== i + 1) return null;
+  const intro = text.slice(0, markers[0]!.start).trim();
+  const items: string[] = [];
+  for (let i = 0; i < markers.length; i++) {
+    const end = i + 1 < markers.length ? markers[i + 1]!.start : text.length;
+    const body = text.slice(markers[i]!.end, end).trim().replace(/[;\s]+$/, '');
+    if (body) items.push(body);
+  }
+  return { intro, items };
+}
