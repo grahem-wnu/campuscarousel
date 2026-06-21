@@ -7,22 +7,12 @@ describe('buildEvents — college deadlines projected onto the student cycle', (
     collegeId: 'c1',
     name: 'USC',
     status: 'researching',
-    isTopPick: true, // only top picks put deadlines on the timeline
     branding: { logoUrl: 'https://logo' },
     applicationDeadlines: {
       earlyAction: '2026-11-01 — Early Action', // Nov → senior fall
       regularDecision: 'November 30 (no year given)', // year supplied from the cycle
     },
   } as unknown as College;
-
-  it('excludes a college that is NOT a top pick (opt-in to the timeline)', () => {
-    const notPicked = { ...college, isTopPick: false } as unknown as College;
-    const events = buildEvents({
-      activities: [], goals: [], colleges: [notPicked], exams: [], visits: [], scholarships: [], certifications: [],
-      graduationYear: 2029,
-    });
-    expect(events.filter((e) => e.source === 'college')).toHaveLength(0);
-  });
 
   it('dates deadlines to the senior-year cycle (grad year) and carries the logo', () => {
     const events = buildEvents({

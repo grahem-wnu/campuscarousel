@@ -50,6 +50,20 @@ describe('GET /timeline', () => {
     const b = (await h.timeline(ctx({ query: { source: 'college' } }))).body as { events: { source: string }[] };
     expect(b.events.every((e) => e.source === 'college')).toBe(true);
   });
+
+  it('only TOP-PICK colleges put their deadlines on the timeline (opt-in)', async () => {
+    // A discovered-but-not-picked college with a deadline (OSU from the beforeEach IS a top pick).
+    await data.colleges.create({
+      name: 'Backup U',
+      status: 'researching',
+      applicationDeadlines: { regularDecision: '2026-11-15' },
+    } as Parameters<Data['colleges']['create']>[0]);
+    const titles = ((await h.timeline(ctx())).body as { events: { title: string; source: string }[] }).events
+      .filter((e) => e.source === 'college')
+      .map((e) => e.title);
+    expect(titles.some((t) => t.includes('OSU'))).toBe(true); // top pick → on the timeline
+    expect(titles.some((t) => t.includes('Backup U'))).toBe(false); // not a pick → excluded
+  });
 });
 
 describe('GET /timeline/upcoming', () => {

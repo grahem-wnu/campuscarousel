@@ -69,9 +69,6 @@ export function buildEvents(s: EventSources): TimelineEvent[] {
   for (const g of s.goals) if (g.status !== 'completed' && g.status !== 'dropped' && g.targetDate) push({ source: 'goal', type: 'deadline', title: g.title, date: g.targetDate, refId: g.goalId });
   for (const c of s.colleges) {
     if (c.status === 'removed') continue;
-    // Opt-in: only a student's TOP PICKS put their deadlines on the timeline. Discovered-but-not-
-    // picked colleges stay off it (you can track 30 and only see the 5 you've committed to).
-    if (!c.isTopPick) continue;
     const d = c.applicationDeadlines;
     const logoUrl = c.branding?.logoUrl;
     const website = c.website;
