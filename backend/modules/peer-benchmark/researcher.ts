@@ -132,26 +132,33 @@ export function parseResearch(raw: string): ResearchedProfile {
   return profile;
 }
 
+/** How many target-school rows to feed the synthesis. The gaps are aggregate, so a representative
+ *  sample is enough — and keeping the prompt + output small is what keeps this synchronous, model-only
+ *  call inside API Gateway's 30s ceiling (large lists made it generate for >30s and time out). */
+const GAPS_MAX_ROWS = 10;
+
 export function buildGapsPrompt(stats: KeiraStats, rows: readonly MatrixRow[], majors: string[] = []): string {
   const program = majorPhrase(majors, 'their intended college');
   const briefs = packFocusBriefs(majors);
-  const targets = rows
-    .filter((r) => r.benchmark.hasData)
+  const withData = rows.filter((r) => r.benchmark.hasData);
+  const targets = withData
+    .slice(0, GAPS_MAX_ROWS)
     .map(
       (r) =>
         `- ${r.collegeName}: GPA ${r.benchmark.avgGPAAdmitted ?? '?'}, entrance exam ${r.benchmark.avgTEASScore ?? '?'}, ` +
         `experience ${r.benchmark.typicalClinicalHours ?? '?'}h, volunteer ${r.benchmark.typicalVolunteerHours ?? '?'}h`,
     )
     .join('\n');
+  const more = withData.length > GAPS_MAX_ROWS ? ` (showing ${GAPS_MAX_ROWS} of ${withData.length} schools)` : '';
   return [
-    `You advise a student applying to ${program} programs. Identify their biggest competitive gaps`,
-    'and give specific, actionable recommendations to close them.',
+    `You advise a student applying to ${program} programs. Identify their 3-5 BIGGEST competitive gaps`,
+    'and give one specific, actionable recommendation for each — be concise (one sentence per recommendation).',
     ...briefs,
     `Their current stats: GPA ${stats.gpa ?? 'n/a'}, best entrance-exam score ${stats.teasScore ?? 'not taken'}, ` +
       `experience hours ${stats.clinicalHours}, volunteer hours ${stats.volunteerHours}, ` +
       `certifications: ${stats.certifications.join(', ') || 'none'}.`,
-    targets ? `Target schools (typical admitted student):\n${targets}` : 'No school benchmarks available yet.',
-    'Return ONLY a JSON object, no prose:',
+    targets ? `Target schools (typical admitted student)${more}:\n${targets}` : 'No school benchmarks available yet.',
+    'Return ONLY a JSON object, no prose (2-3 sentence summary, at most 5 gaps):',
     '{"summary": string, "gaps": [{"metric": string, "severity": "high"|"medium"|"low", "recommendation": string}]}',
   ].join('\n');
 }
