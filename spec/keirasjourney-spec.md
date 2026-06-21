@@ -1847,10 +1847,17 @@ parent); manual (staging upload of a real PDF, download, privacy check).
 
 ### Module 18 — Opportunity Finder
 
-**Purpose:** Clinical/volunteer hours are *the* BSN admission gate, yet the app only records them after
-the fact. This module helps the family **find** opportunities — hospital volunteer programs, nurse
-shadowing, CNA training courses, and relevant part-time roles near them — mirroring the existing
-College/Scholarship AI discovery pattern. Found opportunities flow into Clinical Hours / Activity Journal.
+**Purpose:** Hands-on experience hours are a key admission signal, yet the app only records them after
+the fact. This module helps the family **find** opportunities — internships/apprenticeships, volunteering,
+job shadowing, training/certification programs, summer programs, clubs, and relevant part-time roles near
+them — mirroring the existing College/Scholarship AI discovery pattern. Found opportunities flow into
+Experience Hours / Activity Journal.
+
+> **MAJOR-AWARE, not nursing-only.** Types are generic (`volunteer`, `shadowing`, `internship`,
+> `training-program`, `summer-program`, `job`, `club`, `other`) and the AI discovery is anchored to the
+> active student's intended major (+ pack guidance) — e.g. construction internships/jobsite programs for a
+> construction-management student, hospital volunteering/CNA for nursing. With no major set it stays
+> field-generic (never nursing-default).
 
 **Data Model:**
 ```

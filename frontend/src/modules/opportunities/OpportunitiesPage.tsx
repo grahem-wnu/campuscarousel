@@ -116,8 +116,8 @@ export default function OpportunitiesPage() {
       <header className="space-y-1">
         <h1 className="text-2xl font-bold text-ink-900">Opportunities</h1>
         <p className="text-sm text-ink-600">
-          Find ways to build clinical &amp; volunteer hours — hospital programs, shadowing, CNA
-          courses, and summer programs near you.
+          Find ways to build hands-on experience for your path — internships, volunteering, job
+          shadowing, training programs, and summer programs near you.
         </p>
       </header>
 
@@ -139,7 +139,7 @@ export default function OpportunitiesPage() {
           </Field>
         </div>
         <Field label="Keywords (optional)">
-          <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="pediatric, ICU, Red Cross…" />
+          <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="paid, remote, beginner-friendly…" />
         </Field>
         <div className="flex justify-end">
           <Button icon="search" loading={discovering} onClick={() => void discover()}>
@@ -194,9 +194,9 @@ export default function OpportunitiesPage() {
         </div>
       ) : items.length === 0 ? (
         <EmptyState
-          icon="clinical"
+          icon="search"
           title="Nothing tracked yet"
-          description="Use Discover above to find hospital volunteering, shadowing, or CNA programs near you."
+          description="Use Discover above to find internships, volunteering, shadowing, and programs for your path near you."
         />
       ) : (
         <div className="space-y-2">

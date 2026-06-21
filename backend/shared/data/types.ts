@@ -827,10 +827,13 @@ export interface Document extends Timestamped {
 // Volunteer / shadowing / CNA / summer programs the family can pursue to build clinical hours. The
 // app DISCOVERS these via web-grounded AI (like colleges/scholarships) and tracks the ones she picks.
 // ---------------------------------------------------------------------------
+// Major-agnostic opportunity types (the module is anchored to the student's path, not nursing). The
+// AI discovery + page copy adapt to the major; these stay generic so any field fits.
 export type OpportunityType =
-  | 'hospital-volunteer'
+  | 'volunteer'
   | 'shadowing'
-  | 'cna-program'
+  | 'internship'
+  | 'training-program'
   | 'summer-program'
   | 'job'
   | 'club'

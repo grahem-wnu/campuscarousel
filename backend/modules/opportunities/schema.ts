@@ -5,9 +5,10 @@
 import { z } from '../../shared/api/index.js';
 
 const type = z.enum([
-  'hospital-volunteer',
+  'volunteer',
   'shadowing',
-  'cna-program',
+  'internship',
+  'training-program',
   'summer-program',
   'job',
   'club',

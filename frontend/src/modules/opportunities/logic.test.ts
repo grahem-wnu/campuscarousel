@@ -3,8 +3,9 @@ import { STATUSES, statusLabel, TYPES, typeLabel } from './logic';
 
 describe('labels', () => {
   it('humanizes types', () => {
-    expect(typeLabel('hospital-volunteer')).toBe('Hospital volunteer');
-    expect(typeLabel('cna-program')).toBe('CNA program');
+    expect(typeLabel('volunteer')).toBe('Volunteering');
+    expect(typeLabel('internship')).toBe('Internship');
+    expect(typeLabel('training-program')).toBe('Training / certification');
   });
   it('humanizes statuses', () => {
     expect(statusLabel('discovered')).toBe('Discovered');

@@ -9,7 +9,7 @@ export const nav: NavEntry[] = [
     group: 'secondary',
     order: 55,
     route: '/opportunities',
-    icon: 'clinical',
+    icon: 'search',
     element: () => import('./OpportunitiesPage'),
   },
 ];

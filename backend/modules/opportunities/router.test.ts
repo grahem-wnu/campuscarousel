@@ -23,7 +23,7 @@ function event(method: string, path: string, opts: { as?: Requester; body?: unkn
 }
 const keira: Requester = { username: 'keira', role: 'student' };
 const parse = (res: { body: string }) => JSON.parse(res.body) as Record<string, unknown>;
-const stubDiscoverer: Discoverer = async () => [{ name: 'CHOC Volunteen', type: 'hospital-volunteer' }];
+const stubDiscoverer: Discoverer = async () => [{ name: 'Habitat Youth Build', type: 'volunteer' }];
 
 function harness() {
   const data: Data = makeData(new InMemoryTableClient());
@@ -43,10 +43,10 @@ describe('opportunities router integration', () => {
     const disc = await dispatch(event('POST', '/opportunities/discover', { as: keira, body: { location: 'Orange, CA' } }));
     expect(disc.statusCode).toBe(202);
     expect(parse(disc).status).toBe('complete');
-    expect((parse(disc).candidates as { name: string }[])[0]?.name).toBe('CHOC Volunteen');
+    expect((parse(disc).candidates as { name: string }[])[0]?.name).toBe('Habitat Youth Build');
 
     const created = await dispatch(
-      event('POST', '/opportunities', { as: keira, body: { name: 'Shadow ICU nurse', type: 'shadowing' } }),
+      event('POST', '/opportunities', { as: keira, body: { name: 'Shadow a site superintendent', type: 'shadowing' } }),
     );
     expect(created.statusCode).toBe(201);
 
