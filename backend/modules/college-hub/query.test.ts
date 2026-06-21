@@ -58,6 +58,19 @@ describe('sortColleges', () => {
     expect(sortColleges(items, q()).map((c) => c.name)).toEqual(['Alpha', 'Bravo', 'Charlie']);
   });
 
+  it('puts top picks first, then the chosen sort within each group', () => {
+    const mixed = [
+      college({ name: 'Bravo' }),
+      college({ name: 'Zulu', isTopPick: true }),
+      college({ name: 'Alpha', isTopPick: true }),
+      college({ name: 'Charlie' }),
+    ];
+    // picks [Alpha, Zulu] (name asc) above non-picks [Bravo, Charlie] (name asc)
+    expect(sortColleges(mixed, q()).map((c) => c.name)).toEqual(['Alpha', 'Zulu', 'Bravo', 'Charlie']);
+    // ...and still above non-picks even when a non-pick would otherwise win the sort.
+    expect(sortColleges(mixed, q({ sortBy: 'name', sortOrder: 'desc' })).map((c) => c.name)).toEqual(['Zulu', 'Alpha', 'Charlie', 'Bravo']);
+  });
+
   it('sorts by fitScore desc', () => {
     expect(sortColleges(items, q({ sortBy: 'fitScore', sortOrder: 'desc' })).map((c) => c.name)).toEqual([
       'Alpha',

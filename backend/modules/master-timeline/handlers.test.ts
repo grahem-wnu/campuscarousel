@@ -25,7 +25,7 @@ beforeEach(async () => {
   await data.activities.create({ userId: 'keira', date: '2026-06-10', category: 'volunteer', title: 'Family volunteering', visibility: 'family' } as Parameters<Data['activities']['create']>[0]);
   await data.activities.create({ userId: 'keira', date: '2026-06-12', category: 'personal', title: 'Private reflection', visibility: 'private' } as Parameters<Data['activities']['create']>[0]);
   await data.goals.create({ title: 'Submit OSU app', status: 'in-progress', targetDate: '2026-07-01' } as Parameters<Data['goals']['create']>[0]);
-  const c = await data.colleges.create({ name: 'OSU', status: 'applying', applicationDeadlines: { regularDecision: '2026-12-01' } } as Parameters<Data['colleges']['create']>[0]);
+  const c = await data.colleges.create({ name: 'OSU', status: 'applying', isTopPick: true, applicationDeadlines: { regularDecision: '2026-12-01' } } as Parameters<Data['colleges']['create']>[0]);
   await data.visits.add(c.collegeId, { date: '2026-09-01', visitType: 'campus-tour' } as Parameters<Data['visits']['add']>[1]);
 });
 
