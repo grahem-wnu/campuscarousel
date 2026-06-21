@@ -330,6 +330,15 @@ export interface Visit extends Timestamped {
   wouldAttend?: 'yes' | 'no' | 'maybe' | 'undecided';
   travelCost?: number;
   createdBy?: string;
+  /** Cached visit prep (best time, questions to ask, logistics), generated when the visit is saved so
+   *  the UI can show/hide it without re-generating each time. System-owned — never client-supplied. */
+  prep?: {
+    bestTime: string;
+    questions: string[];
+    logistics: { address?: string; parking?: string; contact?: string; campusVisitUrl?: string };
+    source: 'ai' | 'curated';
+    generatedAt?: string;
+  };
 }
 
 export interface Benchmark extends Timestamped, Hydratable {

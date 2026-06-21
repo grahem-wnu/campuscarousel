@@ -14,7 +14,7 @@ import {
   safeHref,
   type Column,
 } from '../../shared/ui';
-import { deleteVisit, getPrep, listColleges, listVisits } from './api';
+import { deleteVisit, listColleges, listVisits, regeneratePrep } from './api';
 import { VisitForm } from './VisitForm';
 import {
   buildComparison,
@@ -27,7 +27,7 @@ import {
   wouldAttendTone,
   type ComparisonRow,
 } from './logic';
-import type { CollegeOption, Visit, VisitPrep } from './types';
+import type { CollegeOption, Visit } from './types';
 
 const comparisonColumns: Column<ComparisonRow>[] = [
   { key: 'date', header: 'Date', render: (r) => r.date },
@@ -55,8 +55,8 @@ export default function VisitPlannerPage() {
 
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Visit | null>(null);
-  const [prep, setPrep] = useState<{ visit: Visit; data: VisitPrep } | null>(null);
-  const [prepLoading, setPrepLoading] = useState(false);
+  const [expandedPrep, setExpandedPrep] = useState<Set<string>>(new Set());
+  const [regenerating, setRegenerating] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -119,15 +119,34 @@ export default function VisitPlannerPage() {
     }
   }
 
-  async function openPrep(v: Visit): Promise<void> {
-    setPrepLoading(true);
+  /** (Re)generate a visit's prep on the server and cache the updated visit in state. */
+  async function regenerate(v: Visit): Promise<Visit | null> {
+    setRegenerating(v.visitId);
     try {
-      setPrep({ visit: v, data: await getPrep(collegeId, v.visitId) });
+      const updated = await regeneratePrep(collegeId, v.visitId);
+      setVisits((prev) => prev.map((x) => (x.visitId === updated.visitId ? updated : x)));
+      return updated;
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Could not generate prep.');
+      return null;
     } finally {
-      setPrepLoading(false);
+      setRegenerating(null);
     }
+  }
+
+  /** Show/hide a visit's saved prep — no server call. Visits saved before prep was cached generate it
+   *  once on first open, then it's just a toggle. */
+  async function togglePrep(v: Visit): Promise<void> {
+    if (expandedPrep.has(v.visitId)) {
+      setExpandedPrep((prev) => {
+        const next = new Set(prev);
+        next.delete(v.visitId);
+        return next;
+      });
+      return;
+    }
+    if (!v.prep && !(await regenerate(v))) return; // generation failed — don't open an empty panel
+    setExpandedPrep((prev) => new Set(prev).add(v.visitId));
   }
 
   return (
@@ -223,14 +242,60 @@ export default function VisitPlannerPage() {
                         </div>
                       ) : null}
                       <div className="mt-3 flex flex-wrap gap-2">
-                        <Button size="sm" variant="outline" icon="check" loading={prepLoading} onClick={() => void openPrep(v)}>
-                          Prep
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          icon="check"
+                          loading={regenerating === v.visitId && !expandedPrep.has(v.visitId)}
+                          onClick={() => void togglePrep(v)}
+                        >
+                          {expandedPrep.has(v.visitId) ? 'Hide prep' : 'Prep'}
                         </Button>
                         <Button size="sm" variant="ghost" onClick={() => openEdit(v)}>
                           Edit / debrief
                         </Button>
                         <Button size="sm" variant="ghost" icon="close" aria-label="Delete" onClick={() => void handleDelete(v)} />
                       </div>
+
+                      {expandedPrep.has(v.visitId) && v.prep ? (
+                        <div className="mt-3 space-y-3 rounded-lg border border-surface-border bg-surface-sunken p-3 text-sm">
+                          <div>
+                            <h4 className="font-semibold text-ink-900">Best time</h4>
+                            <p className="mt-1 text-ink-700">{v.prep.bestTime}</p>
+                          </div>
+                          <div>
+                            <h4 className="font-semibold text-ink-900">Questions to ask</h4>
+                            <ul className="mt-1 list-disc space-y-1 pl-5 text-ink-700">
+                              {v.prep.questions.map((q) => (
+                                <li key={q}>{q}</li>
+                              ))}
+                            </ul>
+                          </div>
+                          {v.prep.logistics.address || v.prep.logistics.contact || v.prep.logistics.campusVisitUrl ? (
+                            <div>
+                              <h4 className="font-semibold text-ink-900">Logistics</h4>
+                              <ul className="mt-1 space-y-0.5 text-ink-700">
+                                {v.prep.logistics.address ? <li>📍 {v.prep.logistics.address}</li> : null}
+                                {v.prep.logistics.contact ? <li>✉️ {v.prep.logistics.contact}</li> : null}
+                                {safeHref(v.prep.logistics.campusVisitUrl) ? (
+                                  <li>
+                                    🔗{' '}
+                                    <a className="text-primary-600 underline" href={safeHref(v.prep.logistics.campusVisitUrl)} target="_blank" rel="noreferrer">
+                                      Campus visit page
+                                    </a>
+                                  </li>
+                                ) : null}
+                              </ul>
+                            </div>
+                          ) : null}
+                          <div className="flex items-center justify-between gap-2 pt-1">
+                            <span className="text-xs text-ink-400">{v.prep.source === 'ai' ? 'Tailored by AI.' : 'Standard checklist.'}</span>
+                            <Button size="sm" variant="ghost" loading={regenerating === v.visitId} onClick={() => void regenerate(v)}>
+                              Regenerate
+                            </Button>
+                          </div>
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 </Card>
@@ -259,44 +324,6 @@ export default function VisitPlannerPage() {
         />
       </Modal>
 
-      <Modal open={Boolean(prep)} onClose={() => setPrep(null)} title="Visit prep">
-        {prep ? (
-          <div className="space-y-4">
-            <div>
-              <h4 className="text-sm font-semibold text-ink-900">Best time</h4>
-              <p className="mt-1 text-sm text-ink-700">{prep.data.bestTime}</p>
-            </div>
-            <div>
-              <h4 className="text-sm font-semibold text-ink-900">Questions to ask</h4>
-              <ul className="mt-1 list-disc space-y-1 pl-5 text-sm text-ink-700">
-                {prep.data.questions.map((q) => (
-                  <li key={q}>{q}</li>
-                ))}
-              </ul>
-            </div>
-            {prep.data.logistics.address || prep.data.logistics.contact || prep.data.logistics.campusVisitUrl ? (
-              <div>
-                <h4 className="text-sm font-semibold text-ink-900">Logistics</h4>
-                <ul className="mt-1 space-y-0.5 text-sm text-ink-700">
-                  {prep.data.logistics.address ? <li>📍 {prep.data.logistics.address}</li> : null}
-                  {prep.data.logistics.contact ? <li>✉️ {prep.data.logistics.contact}</li> : null}
-                  {safeHref(prep.data.logistics.campusVisitUrl) ? (
-                    <li>
-                      🔗{' '}
-                      <a className="text-primary-600 underline" href={safeHref(prep.data.logistics.campusVisitUrl)} target="_blank" rel="noreferrer">
-                        Campus visit page
-                      </a>
-                    </li>
-                  ) : null}
-                </ul>
-              </div>
-            ) : null}
-            <p className="text-xs text-ink-400">
-              {prep.data.source === 'ai' ? 'Tailored by AI.' : 'Standard checklist.'}
-            </p>
-          </div>
-        ) : null}
-      </Modal>
     </div>
   );
 }
