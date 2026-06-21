@@ -24,15 +24,15 @@ describe('makeBedrockDiscoverer', () => {
       modelId: MODEL,
       invoker: stub(
         JSON.stringify([
-          { name: 'CHOC Volunteen', type: 'hospital-volunteer', cost: 0 },
-          { name: 'Saddleback CNA', type: 'cna-program' },
+          { name: 'Habitat Youth Build', type: 'volunteer', cost: 0 },
+          { name: 'Summer Trades Academy', type: 'training-program' },
           { notName: 'dropped' }, // invalid → filtered
         ]),
       ),
     });
     const out = await discover({ limit: 2 });
-    expect(out.map((c) => c.name)).toEqual(['CHOC Volunteen', 'Saddleback CNA']);
-    expect(out[0]?.type).toBe('hospital-volunteer');
+    expect(out.map((c) => c.name)).toEqual(['Habitat Youth Build', 'Summer Trades Academy']);
+    expect(out[0]?.type).toBe('volunteer');
   });
 
   it('returns [] on invoker error (endpoint never throws)', async () => {
@@ -48,9 +48,10 @@ describe('buildDiscoverPrompt major-awareness', () => {
     expect(p).toContain('Major-specific guidance:');
   });
 
-  it('keeps the nursing-default career phrase with no majors', () => {
+  it('uses a generic (non-nursing) career phrase with no majors', () => {
     const p = buildDiscoverPrompt({});
-    expect(p).toContain('nursing (BSN) career');
+    expect(p).toContain('their intended field career');
+    expect(p).not.toMatch(/nursing|clinical|CNA/i);
     expect(p).not.toContain('Major-specific guidance:');
   });
 });

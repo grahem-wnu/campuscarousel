@@ -1,9 +1,10 @@
 // Opportunity Finder types (v2.1 Module 18) — mirrors the backend Opportunity shape.
 
 export type OpportunityType =
-  | 'hospital-volunteer'
+  | 'volunteer'
   | 'shadowing'
-  | 'cna-program'
+  | 'internship'
+  | 'training-program'
   | 'summer-program'
   | 'job'
   | 'club'

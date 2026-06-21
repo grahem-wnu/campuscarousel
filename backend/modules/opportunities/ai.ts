@@ -25,9 +25,10 @@ export interface AiOptions {
 }
 
 const TYPES: OpportunityType[] = [
-  'hospital-volunteer',
+  'volunteer',
   'shadowing',
-  'cna-program',
+  'internship',
+  'training-program',
   'summer-program',
   'job',
   'club',
@@ -81,19 +82,26 @@ function toCandidate(raw: unknown): OpportunityCandidate | null {
 
 export function buildDiscoverPrompt(input: DiscoverInput, majors: string[] = []): string {
   const limit = input.limit ?? 8;
+  const career = majorPhrase(majors, 'their intended field');
+  // Type phrasing is generic and anchored to the student's field — never nursing-specific.
   const kind =
-    input.type === 'hospital-volunteer'
-      ? 'hospital/health-system volunteer programs'
+    input.type === 'volunteer'
+      ? `volunteer opportunities relevant to ${career}`
       : input.type === 'shadowing'
-        ? 'nurse/clinician job-shadowing programs'
-        : input.type === 'cna-program'
-          ? 'CNA (Certified Nursing Assistant) training programs'
-          : input.type === 'summer-program'
-            ? 'summer healthcare/pre-nursing programs for high schoolers'
-            : 'volunteer, shadowing, CNA-training, and summer healthcare programs';
+        ? `job-shadowing opportunities with professionals in ${career}`
+        : input.type === 'internship'
+          ? `internships or apprenticeships in ${career}`
+          : input.type === 'training-program'
+            ? `training, pre-college, or certification programs for ${career}`
+            : input.type === 'summer-program'
+              ? `summer programs for high-schoolers focused on ${career}`
+              : input.type === 'job'
+                ? `part-time or entry-level jobs that build experience toward ${career}`
+                : input.type === 'club'
+                  ? `clubs, competitions, or youth organizations tied to ${career}`
+                  : `volunteer, shadowing, internship, training, club, and summer programs that build experience toward ${career}`;
   const where = input.location ? `near ${input.location}` : 'in the United States';
   const extra = input.query ? ` Also match: "${input.query}".` : '';
-  const career = majorPhrase(majors, 'nursing (BSN)');
   const guidance = packFocusBriefs(majors);
   const focus = guidance.length ? `\nMajor-specific guidance: ${guidance.join(' ')}` : '';
   return [
@@ -104,7 +112,7 @@ export function buildDiscoverPrompt(input: DiscoverInput, majors: string[] = [])
     'omit a field if you cannot verify it; partial data is fine.',
     'Respond with ONLY a JSON array (no prose, no code fences). Each element:',
     '{"name": string, "organization": string, "type":',
-    '"hospital-volunteer"|"shadowing"|"cna-program"|"summer-program"|"job"|"club"|"other",',
+    '"volunteer"|"shadowing"|"internship"|"training-program"|"summer-program"|"job"|"club"|"other",',
     '"location": string, "distanceNote": string, "description": string (one sentence),',
     '"eligibility": string[], "timeCommitment": string, "cost": number (0 if free),',
     '"applicationUrl": string, "applicationDeadline": "YYYY-MM-DD" (omit if none)}.',
@@ -124,7 +132,7 @@ async function invokeText(prompt: string, options: AiOptions): Promise<string> {
 }
 
 /** Bedrock-backed discoverer. Returns [] on any failure so the endpoint never throws. With `majors`
- *  set, the search targets that academic focus (+ pack guidance); with none it stays nursing-default. */
+ *  set, the search targets that academic focus (+ pack guidance); with none it stays field-generic. */
 export function makeBedrockDiscoverer(options: AiOptions = {}, majors: string[] = []): Discoverer {
   return async (input) => {
     try {

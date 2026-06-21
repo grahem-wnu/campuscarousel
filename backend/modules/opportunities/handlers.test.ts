@@ -7,7 +7,7 @@ import { makeHandlers, type OpportunityHandlers } from './handlers.js';
 
 const keira: Requester = { username: 'keira', role: 'student' };
 const stubDiscoverer: Discoverer = async (input) => [
-  { name: 'CHOC Volunteen', organization: 'CHOC', type: 'hospital-volunteer', location: input.location ?? 'Orange, CA' },
+  { name: 'Habitat Youth Build', organization: 'Habitat', type: 'volunteer', location: input.location ?? 'Orange, CA' },
 ];
 
 let data: Data;
@@ -49,7 +49,7 @@ describe('list filters', () => {
     await data.opportunities.create({ name: 'A', type: 'shadowing', status: 'interested' } as CreateInput);
     await data.opportunities.create({
       name: 'B',
-      type: 'cna-program',
+      type: 'training-program',
       status: 'completed',
       organization: 'Saddleback',
     } as CreateInput);
@@ -66,20 +66,20 @@ describe('list filters', () => {
 
 describe('discover / bulk-add', () => {
   it('discover runs inline (202, complete), pollable, persists nothing', async () => {
-    const res = await h.discover(ctx({ body: { location: 'Orange, CA', type: 'hospital-volunteer' } }));
+    const res = await h.discover(ctx({ body: { location: 'Orange, CA', type: 'volunteer' } }));
     expect(res.status).toBe(202);
     const job = res.body as { jobId: string; status: string; candidates?: { name: string }[] };
     expect(job.status).toBe('complete');
-    expect(job.candidates?.[0]?.name).toBe('CHOC Volunteen');
+    expect(job.candidates?.[0]?.name).toBe('Habitat Youth Build');
     expect(await data.opportunities.list()).toHaveLength(0);
 
     const poll = await h.discoverStatus(ctx({ params: { jobId: job.jobId } }));
     expect(poll.status).toBe(200);
-    expect((poll.body as { candidates: { name: string }[] }).candidates[0]?.name).toBe('CHOC Volunteen');
+    expect((poll.body as { candidates: { name: string }[] }).candidates[0]?.name).toBe('Habitat Youth Build');
   });
 
   it('bulk-add saves discovered candidates as ai-discovered/discovered', async () => {
-    const res = await h.bulkAdd(ctx({ body: { items: [{ name: 'CHOC Volunteen', type: 'hospital-volunteer' }] } }));
+    const res = await h.bulkAdd(ctx({ body: { items: [{ name: 'Habitat Youth Build', type: 'volunteer' }] } }));
     expect((res.body as { added: number }).added).toBe(1);
     const list = await data.opportunities.list();
     expect(list[0]).toMatchObject({ status: 'discovered', addedBy: 'ai-discovered' });

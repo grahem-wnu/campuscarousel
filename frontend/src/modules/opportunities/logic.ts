@@ -3,12 +3,13 @@
 import type { OpportunityStatus, OpportunityType } from './types';
 
 export const TYPE_LABELS: Record<OpportunityType, string> = {
-  'hospital-volunteer': 'Hospital volunteer',
-  shadowing: 'Shadowing',
-  'cna-program': 'CNA program',
+  volunteer: 'Volunteering',
+  shadowing: 'Job shadowing',
+  internship: 'Internship',
+  'training-program': 'Training / certification',
   'summer-program': 'Summer program',
   job: 'Job',
-  club: 'Club',
+  club: 'Club / org',
   other: 'Other',
 };
 
