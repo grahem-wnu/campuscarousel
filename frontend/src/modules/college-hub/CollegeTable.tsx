@@ -29,7 +29,10 @@ export function CollegeTable({ colleges, onOpen, onToggleTopPick }: Props) {
           {colleges.map((c) => {
             const cost = bestCost(c);
             return (
-              <tr key={c.collegeId} className="border-t border-surface-border hover:bg-surface-sunken">
+              <tr
+                key={c.collegeId}
+                className={`border-t border-surface-border hover:bg-surface-sunken${c.isTopPick ? ' bg-warn-50' : ''}`}
+              >
                 <td className="p-2">
                   <button
                     type="button"
@@ -44,6 +47,7 @@ export function CollegeTable({ colleges, onOpen, onToggleTopPick }: Props) {
                   <button type="button" onClick={() => onOpen(c)} className="flex items-center gap-2 text-left">
                     <CollegeLogo college={c} size={24} />
                     <span className="font-medium text-ink-900">{c.name}</span>
+                    {c.isTopPick ? <Badge tone="warn">★ Top pick</Badge> : null}
                     <HydrationBadge status={c.hydrationStatus} />
                   </button>
                 </td>

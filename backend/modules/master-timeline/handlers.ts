@@ -66,13 +66,15 @@ export function makeHandlers(deps: TimelineDeps): TimelineHandlers {
       data.finaid.list(),
       data.studentProfile.get(),
     ]);
-    // Visits are sub-entities under COLLEGE#<id> — list per college and flatten.
+    // Visits are sub-entities under COLLEGE#<id> — list per college (all colleges) and flatten.
     const visitLists = await Promise.all(colleges.map((c) => data.visits.list(c.collegeId)));
     const visits: Visit[] = visitLists.flat();
     return {
       activities: [], // journal entries are not timeline events
       goals,
-      colleges,
+      // Opt-in: only TOP PICKS put their application deadlines on the timeline. (Visits above are
+      // kept for every college — a planned visit shows regardless of pick status.)
+      colleges: colleges.filter((c) => c.isTopPick),
       exams,
       visits,
       scholarships,

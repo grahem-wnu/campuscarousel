@@ -49,11 +49,15 @@ const STATUS_ORDER: Record<string, number> = {
   removed: 8,
 };
 
-/** Sort a copy by the requested key + order. Default: name ascending. */
+/** Sort a copy by the requested key + order. Top picks always sort ABOVE non-picks (the chosen sort
+ *  is the tie-breaker within each group), so a student's committed shortlist stays at the top of the
+ *  list regardless of the active sort. Default within a group: name ascending. */
 export function sortColleges(items: readonly College[], q: ListQuery): College[] {
   const dir = q.sortOrder === 'desc' ? -1 : 1;
   const by = q.sortBy ?? 'name';
   const cmp = (a: College, b: College): number => {
+    // Top picks first, regardless of the chosen sort.
+    if (Boolean(a.isTopPick) !== Boolean(b.isTopPick)) return a.isTopPick ? -1 : 1;
     switch (by) {
       case 'fitScore':
         return ((a.fitScore ?? -1) - (b.fitScore ?? -1)) * dir;

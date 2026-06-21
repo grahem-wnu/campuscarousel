@@ -163,6 +163,21 @@ export default function CollegeHubPage() {
 
   const hasFilters = Boolean(status || programType);
 
+  // The list arrives top-picks-first from the API; split it so the card view can pin a "Top picks"
+  // section above the rest.
+  const topPicks = colleges.filter((c) => c.isTopPick);
+  const moreColleges = colleges.filter((c) => !c.isTopPick);
+  const renderCard = (c: College) => (
+    <CollegeCard
+      key={c.collegeId}
+      college={c}
+      selectedForCompare={compareSet.has(c.collegeId)}
+      onOpen={(x) => navigate(`/colleges/${x.collegeId}`)}
+      onToggleTopPick={(x) => void toggleTopPick(x)}
+      onToggleCompare={toggleCompare}
+    />
+  );
+
   return (
     <div className="mx-auto max-w-5xl space-y-5 p-4 sm:p-6">
       <header>
@@ -245,17 +260,21 @@ export default function CollegeHubPage() {
           }
         />
       ) : view === 'cards' ? (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {colleges.map((c) => (
-            <CollegeCard
-              key={c.collegeId}
-              college={c}
-              selectedForCompare={compareSet.has(c.collegeId)}
-              onOpen={(x) => navigate(`/colleges/${x.collegeId}`)}
-              onToggleTopPick={(x) => void toggleTopPick(x)}
-              onToggleCompare={toggleCompare}
-            />
-          ))}
+        <div className="space-y-6">
+          {topPicks.length > 0 ? (
+            <section className="space-y-2">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-warn-600">★ Top picks</h2>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">{topPicks.map(renderCard)}</div>
+            </section>
+          ) : null}
+          {moreColleges.length > 0 ? (
+            <section className="space-y-2">
+              {topPicks.length > 0 ? (
+                <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-400">More colleges</h2>
+              ) : null}
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">{moreColleges.map(renderCard)}</div>
+            </section>
+          ) : null}
         </div>
       ) : (
         <CollegeTable
