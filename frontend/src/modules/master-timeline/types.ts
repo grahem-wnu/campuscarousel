@@ -23,6 +23,29 @@ export interface UpcomingEvent extends TimelineEvent {
   group: UpcomingGroup;
 }
 
+/** One application deadline for a college, in plain language with an estimated hear-back date. */
+export interface CollegeDeadline {
+  /** Raw deadline type from the event ('early-action' | 'regular-decision' | 'program-app'). */
+  type: string;
+  /** Plain-language label, e.g. "Early Action". */
+  label: string;
+  submitDate: string;
+  submitDaysUntil: number;
+  /** Estimated decision-release date (rough — shown with a "~"), when the type is known. */
+  decisionDate?: string;
+}
+
+/** A college's whole application plan collapsed into one entry (replaces 2-3 scattered rows). */
+export interface CollegePlan {
+  collegeId?: string;
+  name: string;
+  logoUrl?: string;
+  website?: string;
+  deadlines: CollegeDeadline[];
+  /** Soonest submit deadline across this college's options (drives ordering). */
+  soonestDaysUntil: number;
+}
+
 export interface Analysis {
   priorities: string[];
   conflicts: string[];

@@ -6,14 +6,16 @@ import {
   GROUP_LABEL,
   SOURCE_DOT,
   SOURCE_LABEL,
+  collegePlans,
   countdownLabel,
   eventLink,
   eventsByDate,
+  formatLongDate,
   groupUpcoming,
   monthGrid,
   monthLabel,
 } from './logic';
-import type { Analysis, TimelineEvent, UpcomingEvent } from './types';
+import type { Analysis, CollegePlan, TimelineEvent, UpcomingEvent } from './types';
 import { clearbitLogoFromWebsite, faviconFromWebsite } from '../college-hub/logic';
 
 type TabId = 'upcoming' | 'calendar';
@@ -77,6 +79,76 @@ function TimelineSource({
   );
 }
 
+/** College logo for an application-plan row — same best-effort chain as EventIcon, school glyph fallback. */
+function CollegePlanLogo({ plan }: { plan: CollegePlan }) {
+  const candidates = [plan.logoUrl, clearbitLogoFromWebsite(plan.website), faviconFromWebsite(plan.website)].filter(
+    (u): u is string => !!u,
+  );
+  const [idx, setIdx] = useState(0);
+  const src = candidates[idx];
+  if (src) {
+    return <img src={src} alt="" className="mt-0.5 h-7 w-7 shrink-0 rounded bg-white object-contain" onError={() => setIdx((i) => i + 1)} />;
+  }
+  return (
+    <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded bg-primary-50 text-primary-600">
+      <Icon name="school" size={15} />
+    </span>
+  );
+}
+
+/** Plain-language college application plans: one card per school, each deadline shown as apply-by →
+ *  estimated hear-back, with the jargon explained once in a legend (not on every row). */
+function CollegeApplicationsCard({ plans }: { plans: CollegePlan[] }) {
+  return (
+    <Card className="space-y-3">
+      <div>
+        <h2 className="text-sm font-semibold text-ink-800">College applications</h2>
+        <p className="mt-0.5 text-xs text-ink-500">
+          When to apply to each school and when you&rsquo;ll likely hear back. Hear-back dates are estimates.
+        </p>
+      </div>
+      {/* Explain the deadline jargon once, here — not on every row. */}
+      <div className="flex flex-wrap gap-x-4 gap-y-1 rounded-md bg-surface-sunken px-3 py-2 text-[11px] text-ink-500">
+        <span><span className="font-medium text-ink-700">Early Action:</span> apply early, hear back early (not binding).</span>
+        <span><span className="font-medium text-ink-700">Regular Decision:</span> the standard deadline; decisions in spring.</span>
+      </div>
+      <ul className="divide-y divide-surface-border">
+        {plans.map((p) => (
+          <li key={p.collegeId ?? p.name}>
+            <Link
+              to={p.collegeId ? `/colleges/${p.collegeId}` : '/colleges'}
+              className="group -mx-2 flex items-start gap-3 rounded-md px-2 py-2.5 transition hover:bg-surface-sunken"
+            >
+              <CollegePlanLogo plan={p} />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium leading-snug text-ink-800 group-hover:text-primary-700">{p.name}</p>
+                <div className="mt-1 space-y-1.5">
+                  {p.deadlines.map((d) => (
+                    <div key={d.type} className="text-xs">
+                      <p className="text-ink-700">
+                        Apply by {formatLongDate(d.submitDate)}{' '}
+                        <span className="text-ink-400">· {d.label} · {countdownLabel(d.submitDaysUntil)}</span>
+                      </p>
+                      {d.decisionDate ? (
+                        <p className="text-ink-400">↳ Decision ~{formatLongDate(d.decisionDate)}</p>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <Icon
+                name="chevron-right"
+                size={16}
+                className="mt-0.5 shrink-0 text-ink-300 transition-transform group-hover:translate-x-0.5 group-hover:text-primary-500"
+              />
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </Card>
+  );
+}
+
 /** Master Timeline — one unified calendar across every module: upcoming (prioritized) + a month
  *  calendar color-coded by source, plus AI focus/conflict analysis. */
 export default function TimelinePage() {
@@ -112,7 +184,10 @@ export default function TimelinePage() {
     void load();
   }, [load]);
 
-  const grouped = useMemo(() => groupUpcoming(upcoming), [upcoming]);
+  // College deadlines get their own plain-language section (collapsed one-card-per-college); everything
+  // else keeps the chronological time-bucket grouping.
+  const plans = useMemo(() => collegePlans(upcoming), [upcoming]);
+  const grouped = useMemo(() => groupUpcoming(upcoming.filter((e) => e.source !== 'college')), [upcoming]);
   const byDate = useMemo(() => eventsByDate(all), [all]);
   const grid = useMemo(() => monthGrid(calYear, calMonth), [calYear, calMonth]);
 
@@ -181,6 +256,7 @@ export default function TimelinePage() {
         </Card>
       ) : tab === 'upcoming' ? (
         <div className="space-y-4">
+          {plans.length > 0 ? <CollegeApplicationsCard plans={plans} /> : null}
           {grouped.map(({ group, events }) => (
             <Card key={group}>
               <h2 className={`mb-2 text-sm font-semibold ${group === 'overdue' ? 'text-error-700' : 'text-ink-800'}`}>{GROUP_LABEL[group]}</h2>
@@ -195,8 +271,7 @@ export default function TimelinePage() {
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-medium leading-snug text-ink-800 group-hover:text-primary-700">{e.title}</p>
                         <p className="mt-0.5 text-xs text-ink-400">
-                          {e.source !== 'college' ? `${SOURCE_LABEL[e.source]} · ` : ''}
-                          {e.date} ·{' '}
+                          {SOURCE_LABEL[e.source]} · {e.date} ·{' '}
                           <span className={e.daysUntil < 0 ? 'font-medium text-error-600' : ''}>{countdownLabel(e.daysUntil)}</span>
                         </p>
                       </div>
