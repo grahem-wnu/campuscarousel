@@ -20,7 +20,6 @@ import {
   buildComparison,
   formatCost,
   sortVisitsByDateDesc,
-  totalTravelCost,
   visitedOn,
   visitTypeLabel,
   wouldAttendLabel,
@@ -97,7 +96,6 @@ export default function VisitPlannerPage() {
   const ordered = useMemo(() => sortVisitsByDateDesc(visits), [visits]);
   const visited = useMemo(() => visitedOn(visits), [visits]);
   const comparison = useMemo(() => buildComparison(visits), [visits]);
-  const travel = useMemo(() => totalTravelCost(visits), [visits]);
 
   function openNew(): void {
     setEditing(null);
@@ -181,7 +179,6 @@ export default function VisitPlannerPage() {
               </Select>
             </Field>
             {visited ? <Badge tone="success">Visited on {visited}</Badge> : null}
-            {travel > 0 ? <Badge tone="neutral">Travel {formatCost(travel)}</Badge> : null}
             <Button icon="plus" onClick={openNew}>
               Plan visit
             </Button>
