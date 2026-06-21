@@ -69,3 +69,23 @@ describe('POST /timeline/analyze', () => {
     expect(b.analysis.priorities).not.toContain('Family volunteering');
   });
 });
+
+describe('POST /timeline/dismiss', () => {
+  it('removes a dismissed event from every read path (timeline, upcoming, analyze)', async () => {
+    const before = (await h.timeline(ctx())).body as { events: { id: string; title: string }[] };
+    const target = before.events.find((e) => e.title === 'Submit OSU app');
+    expect(target).toBeTruthy();
+
+    const res = await h.dismiss(ctx({ body: { eventId: target!.id } }));
+    expect(res.status).toBe(204);
+
+    const t = (await h.timeline(ctx())).body as { events: { id: string }[] };
+    expect(t.events.some((e) => e.id === target!.id)).toBe(false);
+
+    const u = (await h.upcoming(ctx({ query: { horizon: '120' } }))).body as { events: { title: string }[] };
+    expect(u.events.some((e) => e.title === 'Submit OSU app')).toBe(false);
+
+    const a = (await h.analyze(ctx({ body: {} }))).body as { analysis: { priorities: string[] } };
+    expect(a.analysis.priorities).not.toContain('Submit OSU app');
+  });
+});

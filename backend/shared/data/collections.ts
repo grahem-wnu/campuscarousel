@@ -24,6 +24,7 @@ import type {
   ReminderSettings,
   SetupState,
   Student,
+  TimelineDismissals,
   StudentProfile,
   Tenant,
   Touchpoint,
@@ -435,6 +436,48 @@ export function makeSetupState(client: TableClient): SetupStateRepo {
       const now = isoNow();
       const current = existing ? toDomain<SetupState>(existing) : ({ createdAt: now } as SetupState);
       return write({ ...current, ...patch, createdAt: current.createdAt ?? now, updatedAt: now });
+    },
+  };
+}
+
+// Timeline dismissals: per-student singleton (PK=TIMELINE_DISMISSALS). Stores the ids of derived
+// timeline events the family has removed, so every read path can filter them out.
+export interface TimelineDismissalsRepo {
+  /** The dismissed event ids (empty if none recorded). */
+  list(): Promise<string[]>;
+  /** Add an event id to the dismissed set (idempotent); returns the updated list. */
+  add(eventId: string): Promise<string[]>;
+  /** Un-dismiss an event id; returns the updated list. */
+  remove(eventId: string): Promise<string[]>;
+}
+
+export function makeTimelineDismissals(client: TableClient): TimelineDismissalsRepo {
+  const PK = 'TIMELINE_DISMISSALS';
+  const read = async (): Promise<string[]> => {
+    const item = await client.get(PK, SK_DETAILS);
+    return item ? toDomain<TimelineDismissals>(item).eventIds ?? [] : [];
+  };
+  const write = async (eventIds: string[]): Promise<string[]> => {
+    const existing = await client.get(PK, SK_DETAILS);
+    const now = isoNow();
+    await client.put({
+      eventIds,
+      createdAt: (existing?.createdAt as string | undefined) ?? now,
+      updatedAt: now,
+      PK,
+      SK: SK_DETAILS,
+    });
+    return eventIds;
+  };
+  return {
+    list: read,
+    async add(eventId) {
+      const ids = await read();
+      return ids.includes(eventId) ? ids : write([...ids, eventId]);
+    },
+    async remove(eventId) {
+      const ids = await read();
+      return ids.includes(eventId) ? write(ids.filter((id) => id !== eventId)) : ids;
     },
   };
 }

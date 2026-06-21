@@ -789,6 +789,17 @@ export interface SetupState extends Timestamped {
 }
 
 // ---------------------------------------------------------------------------
+// Timeline dismissals: per-student singleton (PK=TIMELINE_DISMISSALS). The master timeline is a
+// derived stream (events are projected from colleges/visits/exams/goals…), so "deleting" a timeline
+// item can't touch a row — instead we record the event ids the family has dismissed and filter them
+// out of every read path. Lets them clear an overdue item they skipped (a missed visit) or decided
+// against, without mutating the underlying source record.
+// ---------------------------------------------------------------------------
+export interface TimelineDismissals extends Timestamped {
+  eventIds: string[];
+}
+
+// ---------------------------------------------------------------------------
 // Document (PK: DOCUMENT#<documentId>, SK: DETAILS; collection GSI1PK=DOCUMENTS) — v2.1 F2.
 // Metadata for a file stored in the private documents S3 bucket; bytes are never in DynamoDB.
 // Visibility follows the family/private model (private = Keira only; AI sees all when she's caller).

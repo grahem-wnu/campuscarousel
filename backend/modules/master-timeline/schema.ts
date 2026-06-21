@@ -22,6 +22,9 @@ export const upcomingQuerySchema = z.object({
 /** POST /timeline/analyze — optional horizon for the AI window. */
 export const analyzeSchema = z.object({ horizonDays: z.number().int().positive().max(730).optional() }).strict();
 
+/** POST /timeline/dismiss — remove a derived event from the timeline by its id. */
+export const dismissSchema = z.object({ eventId: z.string().min(1).max(300) }).strict();
+
 export type TimelineQuery = z.infer<typeof timelineQuerySchema>;
 export type UpcomingQuery = z.infer<typeof upcomingQuerySchema>;
 export type AnalyzeInput = z.infer<typeof analyzeSchema>;
