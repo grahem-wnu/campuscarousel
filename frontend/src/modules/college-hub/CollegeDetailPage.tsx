@@ -23,6 +23,7 @@ import {
   STATUS_META,
   acceptanceValue,
   assetsBusy,
+  bulletize,
   campusImageSrc,
   checklistPct,
   compactCost,
@@ -557,6 +558,23 @@ function SourcesCard({ college }: { college: College }) {
   );
 }
 
+/** Special notes — often an enumerated "1) … 2) …" blob from hydration. Render it as bullets when it
+ *  is a real list; otherwise as a plain paragraph. */
+function SpecialNotes({ text }: { text: string }) {
+  const parsed = bulletize(text);
+  if (!parsed) return <p className="text-sm text-ink-600">{text}</p>;
+  return (
+    <div className="space-y-1.5 text-sm text-ink-600">
+      {parsed.intro ? <p className="font-medium text-ink-700">{parsed.intro}</p> : null}
+      <ul className="list-disc space-y-1 pl-5">
+        {parsed.items.map((it, i) => (
+          <li key={i}>{it}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 /** Render a multi-paragraph narrative string (blank-line separated) as stacked paragraphs. */
 function Narrative({ text }: { text: string }) {
   return (
@@ -690,7 +708,7 @@ function OverviewTab({ college, onDelete }: { college: College; onDelete: () => 
             <p className="mt-1 text-sm text-ink-700">{college.requiredTests.join(', ')}</p>
           </div>
         ) : null}
-        {college.specialNotes ? <p className="text-sm text-ink-600">{college.specialNotes}</p> : null}
+        {college.specialNotes ? <SpecialNotes text={college.specialNotes} /> : null}
       </Card>
 
       {/* 5. Sources — collapsed by default; expand to verify and dig deeper. */}

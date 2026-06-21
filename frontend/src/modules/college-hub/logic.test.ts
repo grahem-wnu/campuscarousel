@@ -4,6 +4,7 @@ import {
   anyFetchingAssets,
   anyHydrating,
   bestCost,
+  bulletize,
   campusImageSrc,
   checklistPct,
   compactCost,
@@ -156,5 +157,23 @@ describe('at-a-glance snapshot extractors', () => {
     expect(acceptanceValue(college({ acceptanceRateUniversity: '~57% overall', acceptanceRateProgram: 'Not published' }))).toBe('57%');
     expect(acceptanceValue(college({ acceptanceRateProgram: 'About 30% of applicants admitted' }))).toBe('30%');
     expect(acceptanceValue(college())).toBeNull();
+  });
+});
+
+describe('bulletize', () => {
+  it('splits an enumerated blob into intro + items (handles "(1)" and "1)")', () => {
+    const paren = bulletize('HIGHLIGHTS: (1) ACCE-accredited — verify it. (2) Two internships required. (3) OSHA 30 included.');
+    expect(paren?.intro).toBe('HIGHLIGHTS:');
+    expect(paren?.items).toEqual(['ACCE-accredited — verify it.', 'Two internships required.', 'OSHA 30 included.']);
+
+    const noParen = bulletize('1) First thing here. 2) Second thing here.');
+    expect(noParen?.intro).toBe('');
+    expect(noParen?.items).toEqual(['First thing here.', 'Second thing here.']);
+  });
+
+  it('returns null for non-lists and out-of-order/partial markers (no false positives)', () => {
+    expect(bulletize('Just a normal paragraph with no list at all.')).toBeNull();
+    expect(bulletize('See note (3) for details, and item (5) elsewhere.')).toBeNull(); // not starting at 1, not consecutive
+    expect(bulletize('Tuition is $35,167 (2025-26 approved rates); verify before deciding.')).toBeNull();
   });
 });
