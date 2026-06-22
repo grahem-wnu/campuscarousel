@@ -135,7 +135,13 @@ export default function ExamPrepPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" icon="chat" onClick={() => void runAnalysis()}>
+          <Button
+            variant="outline"
+            icon="chat"
+            disabled={attempts.length === 0}
+            title={attempts.length === 0 ? 'Log a practice score first — there’s nothing to analyze yet.' : undefined}
+            onClick={() => void runAnalysis()}
+          >
             Analyze my scores
           </Button>
           <Button icon="plus" onClick={openCreate}>Log score</Button>
