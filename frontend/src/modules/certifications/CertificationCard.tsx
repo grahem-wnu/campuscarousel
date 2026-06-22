@@ -124,7 +124,7 @@ export function CertificationCard({ cert, expanded, onToggle, onSave, onDelete }
           </div>
         ) : (
           <div className="space-y-3 border-t border-surface-border pt-3">
-            <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
+            <dl className="grid grid-cols-1 gap-y-1.5 text-sm">
               {cert.dateEarned ? <Row label="Earned" value={cert.dateEarned} /> : null}
               {cert.expirationDate ? <Row label="Expires" value={cert.expirationDate} /> : null}
               {cert.renewalFrequency ? <Row label="Renews" value={cert.renewalFrequency} /> : null}
