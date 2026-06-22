@@ -53,7 +53,7 @@ describe('create / list / detail / update / remove', () => {
 
   it('422s on invalid input (bad type, out-of-range score, unknown field)', async () => {
     await expectStatus(h.create(ctx({ body: { type: 'nope', date: '2026-02-01' } })), 422);
-    await expectStatus(h.create(ctx({ body: { type: 'practice-test', date: '2026-02-01', overallScore: 120 } })), 422);
+    await expectStatus(h.create(ctx({ body: { type: 'practice-test', date: '2026-02-01', overallScore: 5000 } })), 422);
     await expectStatus(h.create(ctx({ body: { type: 'practice-test', date: '2026-02-01', bogus: 1 } })), 422);
   });
 

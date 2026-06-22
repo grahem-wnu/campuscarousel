@@ -14,6 +14,7 @@ import { SectionBreakdown } from './SectionBreakdown';
 import { RecordForm } from './RecordForm';
 import { StudyPlanPanel } from './StudyPlanPanel';
 import { TYPE_LABEL, trendLabel } from './logic';
+import { examDef } from './exams';
 import { analyze, createRecord, deleteRecord, getProgress, listRecords, updateRecord } from './api';
 import type { Analysis, ProgressResponse, ExamInput, ExamRecord } from './types';
 
@@ -60,6 +61,8 @@ export default function ExamPrepPage() {
     () => records.filter((r) => r.type !== 'study-session').slice().sort((a, b) => (a.date < b.date ? 1 : -1)),
     [records],
   );
+  // The chart + breakdown scale to whichever exam the most recent score is for.
+  const activeExam = useMemo(() => examDef(attempts[0]?.examName), [attempts]);
 
   function openCreate() {
     setEditing(null);
@@ -176,10 +179,14 @@ export default function ExamPrepPage() {
         <div className="space-y-4">
           {progress && progress.progression.length > 0 ? (
             <Card className="space-y-4">
-              <h2 className="text-sm font-semibold text-ink-800">Overall progression</h2>
-              <ScoreChart progression={progress.progression} />
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h2 className="text-sm font-semibold text-ink-800">Overall progression</h2>
+                <Badge tone="neutral">{activeExam.label}</Badge>
+              </div>
+              <ScoreChart progression={progress.progression} exam={activeExam} />
+              <p className="text-xs text-ink-400">{activeExam.hint}</p>
               <h2 className="pt-2 text-sm font-semibold text-ink-800">Latest section breakdown</h2>
-              <SectionBreakdown progression={progress.progression} />
+              <SectionBreakdown progression={progress.progression} exam={activeExam} />
             </Card>
           ) : (
             <p className="py-6 text-center text-sm text-ink-500">Log a practice test to chart your progression.</p>
@@ -194,9 +201,12 @@ export default function ExamPrepPage() {
               >
                 <span className="text-sm">
                   <span className="font-medium text-ink-900">{r.date}</span>
+                  {r.examName ? <span className="ml-2 text-ink-500">{r.examName}</span> : null}
                   <Badge tone={r.type === 'official-exam' ? 'primary' : 'neutral'} className="ml-2">{TYPE_LABEL[r.type]}</Badge>
                 </span>
-                <span className="text-lg font-semibold text-ink-900">{r.overallScore ?? '—'}</span>
+                <span className="text-lg font-semibold text-ink-900">
+                  {r.overallScore !== undefined ? `${r.overallScore} / ${examDef(r.examName).overall.max}` : '—'}
+                </span>
               </button>
             ))}
           </div>
