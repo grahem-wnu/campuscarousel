@@ -17,6 +17,8 @@ export interface ExamRecord {
   recordId: string;
   type: ExamType;
   date: string;
+  /** Which exam this score is for (e.g. "SAT", "TEAS"); drives the scoring scale shown in the UI. */
+  examName?: string;
   overallScore?: number;
   sectionScores?: SectionScores;
   source?: string;
@@ -32,6 +34,7 @@ export interface ExamRecord {
 export interface ExamInput {
   type: ExamType;
   date: string;
+  examName?: string;
   overallScore?: number;
   sectionScores?: SectionScores;
   source?: string;
