@@ -34,6 +34,7 @@ const inProgress = [{ name: 'A', hydrationStatus: 'in-progress' }, { name: 'B', 
 beforeEach(() => {
   vi.useFakeTimers();
   h.listColleges.mockReset();
+  sessionStorage.clear();
 });
 afterEach(() => {
   vi.useRealTimers();
@@ -79,5 +80,54 @@ describe('SetupProgressBanner — async seed gap', () => {
     h.listColleges.mockResolvedValue([{ name: 'A', hydrationStatus: 'complete' }, { name: 'B', hydrationStatus: 'complete' }]);
     await act(async () => { await vi.advanceTimersByTimeAsync(4000); });
     expect(screen.getByText(/2 colleges researched/i)).toBeTruthy();
+  });
+
+  // Regression: 'onboarding-finished' also makes DashboardPage refetch, which flips the page to its
+  // full-screen spinner and UNMOUNTS this banner — its in-memory justOnboarded/waitingForSeed died
+  // with it, the remounted banner saw an empty college list, and hid forever (observed on staging).
+  it('survives an unmount/remount right after onboarding (sessionStorage watch)', async () => {
+    h.listColleges.mockResolvedValue([]);
+    const first = render(<SetupProgressBanner />);
+    await act(async () => { await Promise.resolve(); });
+    await act(async () => {
+      window.dispatchEvent(new Event('onboarding-finished'));
+    });
+    first.unmount(); // the page's own refetch spinner takes the banner down mid-event
+
+    render(<SetupProgressBanner />);
+    await act(async () => { await Promise.resolve(); });
+    // The remounted banner still knows we just onboarded and keeps watching for the seed.
+    expect(screen.getByText(/setting up your plan/i)).toBeTruthy();
+
+    h.listColleges.mockResolvedValue(inProgress);
+    await act(async () => { await vi.advanceTimersByTimeAsync(4000); });
+    expect(screen.getByText(/researching your colleges/i)).toBeTruthy();
+  });
+
+  it('dispatches setup-progress-changed when observed progress moves (so the page refetches stats)', async () => {
+    const events: number[] = [];
+    const onChanged = () => events.push(1);
+    window.addEventListener('setup-progress-changed', onChanged);
+    try {
+      h.listColleges.mockResolvedValue([]);
+      render(<SetupProgressBanner />);
+      await act(async () => { await Promise.resolve(); });
+      await act(async () => {
+        window.dispatchEvent(new Event('onboarding-finished'));
+      });
+      expect(events).toHaveLength(0); // nothing observed yet — no noisy refetches
+
+      // Seed lands → progress changed → one event.
+      h.listColleges.mockResolvedValue(inProgress);
+      await act(async () => { await vi.advanceTimersByTimeAsync(4000); });
+      expect(events).toHaveLength(1);
+
+      // Research completes → progress changed again.
+      h.listColleges.mockResolvedValue([{ name: 'A', hydrationStatus: 'complete' }, { name: 'B', hydrationStatus: 'complete' }]);
+      await act(async () => { await vi.advanceTimersByTimeAsync(4000); });
+      expect(events).toHaveLength(2);
+    } finally {
+      window.removeEventListener('setup-progress-changed', onChanged);
+    }
   });
 });

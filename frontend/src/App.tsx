@@ -2,6 +2,7 @@ import { AuthProvider } from "./shared/shell/AuthContext";
 import { AuthGate } from "./shared/shell/AuthGate";
 import { AppRouter } from "./shared/shell/AppRouter";
 import { ActiveStudentProvider } from "./shared/shell/ActiveStudentContext";
+import { ChunkErrorBoundary } from "./shared/shell/ChunkErrorBoundary";
 import { ToastProvider } from "./shared/ui/Toast";
 
 /**
@@ -11,14 +12,16 @@ import { ToastProvider } from "./shared/ui/Toast";
  */
 export function App() {
   return (
-    <AuthProvider>
-      <ToastProvider>
-        <AuthGate>
-          <ActiveStudentProvider>
-            <AppRouter />
-          </ActiveStudentProvider>
-        </AuthGate>
-      </ToastProvider>
-    </AuthProvider>
+    <ChunkErrorBoundary>
+      <AuthProvider>
+        <ToastProvider>
+          <AuthGate>
+            <ActiveStudentProvider>
+              <AppRouter />
+            </ActiveStudentProvider>
+          </AuthGate>
+        </ToastProvider>
+      </AuthProvider>
+    </ChunkErrorBoundary>
   );
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { categoryRows, deadlineLabel, deadlineTone, formatDeadlineDate, gpaText, money, totalColleges } from './logic';
+import { categoryRows, deadlineLabel, deadlineTone, formatDeadlineDate, gpaText, money, READINESS_LABEL, READINESS_TONE, readinessLabel, totalColleges } from './logic';
 import type { Deadline } from './types';
 
 const dl = (daysUntil: number, date = '2026-12-01'): Deadline => ({ source: 'college', label: 'x', date, daysUntil });
@@ -42,5 +42,21 @@ describe('categoryRows / totalColleges', () => {
   it('sorts categories by hours desc and totals colleges', () => {
     expect(categoryRows({ volunteer: 8, clinical: 3 }).map((r) => r.category)).toEqual(['volunteer', 'clinical']);
     expect(totalColleges({ target: 2, applying: 1 })).toBe(3);
+  });
+});
+
+describe('readinessLabel', () => {
+  it('humanizes every readiness level (no raw enums reach the badge)', () => {
+    expect(readinessLabel('strong')).toBe('Strong');
+    expect(readinessLabel('competitive')).toBe('Competitive');
+    expect(readinessLabel('needs-work')).toBe('Needs work');
+    expect(readinessLabel('insufficient-data')).toBe('Not enough data yet');
+  });
+
+  it('covers the same levels as the tone map and falls back to the input', () => {
+    for (const level of Object.keys(READINESS_TONE)) {
+      expect(READINESS_LABEL[level], `label missing for ${level}`).toBeTruthy();
+    }
+    expect(readinessLabel('mystery')).toBe('mystery');
   });
 });

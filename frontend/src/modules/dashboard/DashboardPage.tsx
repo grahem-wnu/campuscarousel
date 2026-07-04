@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Badge, Button, Card, Icon, Spinner, cn } from '../../shared/ui';
-import { deadlineLabel, deadlineTone, gpaText, money, READINESS_TONE, SOURCE_ICON, SOURCE_TONE, totalColleges } from './logic';
+import { deadlineLabel, deadlineTone, gpaText, money, readinessLabel, READINESS_TONE, SOURCE_ICON, SOURCE_TONE, totalColleges } from './logic';
 import { getDashboard } from './api';
 import type { Dashboard } from './types';
 import { getFocus } from '../focus/api';
@@ -60,15 +60,45 @@ function NextStep({ to, children }: { to: string; children: ReactNode }) {
 // before giving up, so a seed that never lands doesn't poll for the whole session.
 const SEED_WAIT_MAX_POLLS = 30;
 
+// The just-onboarded flag must survive this banner's own unmount: finishing onboarding makes the
+// page refetch, which flips DashboardPage to its full-page spinner and unmounts the banner mid-event
+// — component state alone forgets, the on-remount college list is still empty (the seed hasn't
+// landed), and the banner hides forever. sessionStorage carries the flag across the remount.
+const SETUP_WATCH_KEY = 'cc-setup-watch';
+const SETUP_WATCH_MAX_AGE_MS = 10 * 60_000;
+
+function setupWatchArmed(): boolean {
+  try {
+    const at = Number(sessionStorage.getItem(SETUP_WATCH_KEY) ?? 0);
+    return at > 0 && Date.now() - at < SETUP_WATCH_MAX_AGE_MS;
+  } catch {
+    return false;
+  }
+}
+function armSetupWatch() {
+  try {
+    sessionStorage.setItem(SETUP_WATCH_KEY, String(Date.now()));
+  } catch {
+    /* private-mode edge: degrade to in-memory state */
+  }
+}
+function disarmSetupWatch() {
+  try {
+    sessionStorage.removeItem(SETUP_WATCH_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
 export function SetupProgressBanner() {
   const [colleges, setColleges] = useState<College[] | null>(null);
-  const [justOnboarded, setJustOnboarded] = useState(false);
+  const [justOnboarded, setJustOnboarded] = useState(setupWatchArmed);
   const [dismissed, setDismissed] = useState(false);
   // Onboarding finish enqueues seeding server-side and returns immediately, so the colleges don't
   // exist yet when we first refetch. This flag keeps us polling through that gap (finish → seed job
   // creates colleges) — without it the banner only polls once research is already in flight, so the
   // seeded colleges were never discovered until a navigation remounted the banner.
-  const [waitingForSeed, setWaitingForSeed] = useState(false);
+  const [waitingForSeed, setWaitingForSeed] = useState(setupWatchArmed);
 
   const refresh = useCallback(() => {
     listColleges()
@@ -81,8 +111,10 @@ export function SetupProgressBanner() {
   useEffect(refresh, [refresh]);
 
   // When onboarding finishes, frame this as a welcome and start watching for the seeded colleges.
+  // Arm the sessionStorage flag FIRST — the page's own refetch may unmount us before state settles.
   useEffect(() => {
     const onFinished = () => {
+      armSetupWatch();
       setJustOnboarded(true);
       setDismissed(false);
       setWaitingForSeed(true);
@@ -101,6 +133,24 @@ export function SetupProgressBanner() {
   useEffect(() => {
     if (waitingForSeed && total > 0) setWaitingForSeed(false);
   }, [waitingForSeed, total]);
+
+  // Research finished → the watch is over; a later visit shouldn't resurrect the welcome banner.
+  useEffect(() => {
+    if (colleges !== null && total > 0 && researching === 0) disarmSetupWatch();
+  }, [colleges, total, researching]);
+
+  // Tell the page when observed progress changes (seed landed, a college finished hydrating) so the
+  // headline stats (Budget, Colleges (N), deadlines) refetch quietly — they'd otherwise stay stale
+  // until a manual reload.
+  const prevProgress = useRef<string | null>(null);
+  useEffect(() => {
+    if (colleges === null) return;
+    const snapshot = `${total}:${researching}`;
+    if (prevProgress.current !== null && prevProgress.current !== snapshot) {
+      window.dispatchEvent(new Event('setup-progress-changed'));
+    }
+    prevProgress.current = snapshot;
+  }, [colleges, total, researching]);
 
   // Poll while seeding is pending (just onboarded, colleges not created yet) OR research is in flight,
   // so the banner updates on its own — no navigation/remount needed. Bounded so a seed that never
@@ -129,7 +179,10 @@ export function SetupProgressBanner() {
     <Card className="relative border border-primary-200 bg-primary-50">
       <button
         type="button"
-        onClick={() => setDismissed(true)}
+        onClick={() => {
+          setDismissed(true);
+          disarmSetupWatch();
+        }}
         aria-label="Dismiss"
         className="absolute right-3 top-3 text-primary-400 transition hover:text-primary-600"
       >
@@ -276,6 +329,22 @@ export default function DashboardPage() {
     return () => window.removeEventListener('onboarding-finished', load);
   }, []);
 
+  // While the seed/hydration works, SetupProgressBanner polls the college list; whenever it observes
+  // progress it dispatches this event so the headline stats (Budget, Colleges (N), deadlines) fill in
+  // live — quietly, without the full-page spinner load() would flash.
+  useEffect(() => {
+    const quiet = () => {
+      getDashboard()
+        .then(setD)
+        .catch(() => {});
+      listColleges()
+        .then(setColleges)
+        .catch(() => {});
+    };
+    window.addEventListener('setup-progress-changed', quiet);
+    return () => window.removeEventListener('setup-progress-changed', quiet);
+  }, []);
+
   if (loading) return <div className="flex justify-center py-24"><Spinner size={28} /></div>;
   if (error || !d) {
     return (
@@ -364,7 +433,7 @@ export default function DashboardPage() {
           <div className="p-1"><p className="text-xs text-ink-500">Budget</p><p className="font-semibold text-ink-900">{money(d.family.budget.totalBudget)}</p></div>
           <div className="p-1"><p className="text-xs text-ink-500">Scholarships won</p><p className="font-semibold text-ink-900">{money(d.family.budget.awarded)}</p></div>
           <Link to="/goals" className="rounded-lg p-1 transition hover:bg-surface-base"><p className="text-xs text-ink-500">Goals</p><p className="font-semibold text-ink-900">{d.family.goals.completed}/{d.family.goals.total} done{d.family.goals.avgProgress !== null ? ` · ${d.family.goals.avgProgress}%` : ''}</p></Link>
-          <Link to="/benchmark" className="rounded-lg p-1 transition hover:bg-surface-base"><p className="text-xs text-ink-500">Readiness</p><Badge tone={READINESS_TONE[d.family.benchmarkReadiness.level] ?? 'neutral'}>{d.family.benchmarkReadiness.level}</Badge></Link>
+          <Link to="/benchmark" className="rounded-lg p-1 transition hover:bg-surface-base"><p className="text-xs text-ink-500">Readiness</p><Badge tone={READINESS_TONE[d.family.benchmarkReadiness.level] ?? 'neutral'}>{readinessLabel(d.family.benchmarkReadiness.level)}</Badge></Link>
         </Card>
       ) : null}
 

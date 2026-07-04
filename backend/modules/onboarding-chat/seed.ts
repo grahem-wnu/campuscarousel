@@ -74,7 +74,7 @@ export async function seedStudent(deps: SeedDeps, createdBy = 'system'): Promise
   // deadlines/imagery. Skips any name already present (idempotent across re-runs).
   let collegesCreated = 0;
   try {
-    const suggestions = await collegeSeeder(majors, profile?.location ?? undefined);
+    const suggestions = await collegeSeeder(majors, profile?.location ?? undefined, profile?.collegesOfInterest ?? []);
     const existing = await data.colleges.list();
     const seen = new Set(existing.map((c) => c.name.trim().toLowerCase()));
     for (const s of suggestions.slice(0, 12)) {

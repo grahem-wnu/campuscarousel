@@ -170,6 +170,7 @@ function ReviewForm({
   const [gpa, setGpa] = useState(initial.currentGPA != null ? String(initial.currentGPA) : '');
   const [gpaType, setGpaType] = useState<'weighted' | 'unweighted'>(initial.gpaType ?? 'unweighted');
   const [location, setLocation] = useState(initial.location ?? '');
+  const [colleges, setColleges] = useState((initial.collegesOfInterest ?? []).join(', '));
   const [budget, setBudget] = useState(initial.budgetTotal != null ? String(initial.budgetTotal) : '');
 
   function submit() {
@@ -181,6 +182,8 @@ function ReviewForm({
     if (careerGoal.trim()) p.careerGoal = careerGoal.trim();
     if (gpa) p.currentGPA = Number(gpa);
     if (location.trim()) p.location = location.trim();
+    const collegeList = colleges.split(',').map((c) => c.trim()).filter(Boolean);
+    if (collegeList.length) p.collegesOfInterest = collegeList;
     if (budget) p.budgetTotal = Number(budget);
     onFinish(p);
   }
@@ -212,6 +215,9 @@ function ReviewForm({
         </Field>
         <Field label="Location (city, state)">
           <Input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Aliso Viejo, CA" />
+        </Field>
+        <Field label="Colleges on the radar" hint="Comma-separated — these lead the starter list">
+          <Input value={colleges} onChange={(e) => setColleges(e.target.value)} placeholder="e.g. Ohio State, Cedarville" />
         </Field>
         <Field label="Family college budget ($)">
           <Input type="number" value={budget} onChange={(e) => setBudget(e.target.value)} placeholder="200000" />

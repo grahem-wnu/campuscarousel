@@ -50,4 +50,29 @@ describe('OnboardingChat (dumb single-child interviewer)', () => {
     expect(onFinish).toHaveBeenCalledTimes(1);
     expect(onFinish).toHaveBeenCalledWith(expect.objectContaining({ name: 'Ava' }));
   });
+
+  it('review form shows the colleges the family named and submits edits as collegesOfInterest', async () => {
+    const user = userEvent.setup();
+    const onFinish = vi.fn().mockResolvedValue(undefined);
+    onboardingChat.mockResolvedValue({
+      reply: 'Got it!',
+      profile: { name: 'Maya', collegesOfInterest: ['Cedarville University'] },
+      done: true,
+    });
+
+    render(<OnboardingChat onFinish={onFinish} onUseForm={vi.fn()} />);
+    await user.type(screen.getByPlaceholderText(/type your answer/i), "She's interested in Cedarville");
+    await user.click(screen.getByRole('button', { name: /send/i }));
+
+    // Pre-filled from the chat; the family can correct it like any other field.
+    const collegesInput = (await screen.findByPlaceholderText(/ohio state, cedarville/i)) as HTMLInputElement;
+    expect(collegesInput.value).toBe('Cedarville University');
+
+    await user.clear(collegesInput);
+    await user.type(collegesInput, 'Cedarville University, Capital University');
+    await user.click(screen.getByRole('button', { name: /finish/i }));
+    expect(onFinish).toHaveBeenCalledWith(
+      expect.objectContaining({ collegesOfInterest: ['Cedarville University', 'Capital University'] }),
+    );
+  });
 });

@@ -2,12 +2,13 @@ import type { ReactNode } from "react";
 import { Spinner } from "../ui/Spinner";
 import { useAuth } from "./AuthContext";
 import { JoinPage } from "./JoinPage";
+import { LandingPage } from "./LandingPage";
 import { LoginPage } from "./LoginPage";
 import { SignupPage } from "./SignupPage";
 
 /**
  * Gates the app on auth state: a brief loading spinner while the session resolves,
- * the login page when signed out, and the app (children) when signed in. Visibility
+ * the public pages when signed out, and the app (children) when signed in. Visibility
  * of data is still enforced server-side off the JWT — this gate is UX, not security.
  */
 export function AuthGate({ children }: { children: ReactNode }) {
@@ -30,7 +31,14 @@ export function AuthGate({ children }: { children: ReactNode }) {
     );
   }
 
-  if (status === "unauthenticated") return <LoginPage />;
+  if (status === "unauthenticated") {
+    // Signed-out visitors to the root get the storefront, not a bare login form. Deep links
+    // (someone's bookmarked /dashboard) still go straight to sign-in and keep their path.
+    if (typeof window !== "undefined" && window.location.pathname === "/") {
+      return <LandingPage />;
+    }
+    return <LoginPage />;
+  }
 
   return <>{children}</>;
 }

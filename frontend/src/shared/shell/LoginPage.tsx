@@ -21,6 +21,14 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  // The dedicated /login path isn't an app route — once signed in, the router would 404 on it.
+  // Land on the root instead (which redirects to the first tab). Deep links keep their path.
+  function settleLoginPath() {
+    if (window.location.pathname === "/login") {
+      window.history.replaceState(null, "", "/");
+    }
+  }
+
   async function onSubmitCredentials(e: FormEvent) {
     e.preventDefault();
     setError(null);
@@ -28,6 +36,7 @@ export function LoginPage() {
     const result = await startSignIn(username.trim(), password);
     setSubmitting(false);
     if (result.status === "done") {
+      settleLoginPath();
       await refresh();
     } else if (result.status === "new_password_required") {
       setPassword("");
@@ -48,6 +57,7 @@ export function LoginPage() {
     const result = await completeNewPassword(newPassword);
     setSubmitting(false);
     if (result.status === "done") {
+      settleLoginPath();
       await refresh();
     } else if (result.status === "error") {
       setError(result.message);
@@ -59,7 +69,9 @@ export function LoginPage() {
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
           <h1 className="font-display text-4xl font-bold tracking-tight text-ink-900">
-            Campus <span className="text-primary-700">Carousel</span>
+            <a href="/" className="focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300">
+              Campus <span className="text-primary-700">Carousel</span>
+            </a>
           </h1>
           <p className="mt-2 font-display text-base text-ink-600">
             {phase === "credentials" ? "The story of the journey, kept well." : "Choose a new password"}
@@ -129,7 +141,7 @@ export function LoginPage() {
           </p>
         ) : null}
         <p className="mt-6 text-center text-xs text-ink-400">
-          Password help? Ask Grahem &mdash; resets are handled by the admin.
+          Forgot your password? Your family&rsquo;s account admin can reset it.
         </p>
       </div>
     </div>
