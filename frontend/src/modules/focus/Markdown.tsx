@@ -52,7 +52,7 @@ function Table({ lines }: { lines: string[] }) {
 export function Markdown({ text }: { text: string }) {
   const blocks = text.replace(/\r\n/g, "\n").split(/\n{2,}/);
   return (
-    <div className="space-y-3 break-words text-sm leading-relaxed text-ink-700">
+    <div className="max-w-prose space-y-4 break-words text-[15px] leading-7 text-ink-700">
       {blocks.map((block, bi) => {
         const lines = block.split("\n").filter((l) => l.length > 0);
 
@@ -61,7 +61,7 @@ export function Markdown({ text }: { text: string }) {
           const rest = lines.slice(1).join(" ").trim();
           return (
             <div key={bi}>
-              <h3 className="text-sm font-semibold text-ink-900">{inline(heading[2] ?? "")}</h3>
+              <h3 className="mt-6 border-b border-surface-border pb-1.5 font-display text-lg font-semibold text-ink-900 first:mt-0">{inline(heading[2] ?? "")}</h3>
               {rest ? <p className="mt-1">{inline(rest)}</p> : null}
             </div>
           );

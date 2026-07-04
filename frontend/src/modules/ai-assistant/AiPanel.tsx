@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
-import { Button, Icon, Spinner, Textarea } from '../../shared/ui';
+import { Button, Spinner, Textarea } from '../../shared/ui';
 import { getConversation, listConversations, sendChat } from './api';
 import { canSend, conversationLabel, moduleFromPath, toTurns } from './logic';
 import type { Conversation, Turn } from './types';
@@ -126,12 +126,23 @@ export default function AiPanel() {
         <>
           <div className="flex-1 space-y-3 overflow-y-auto p-3">
             {turns.length === 0 ? (
-              <div className="flex h-full flex-col items-center justify-center text-center text-ink-500">
-                <Icon name="chat" size={32} />
-                <p className="mt-2 max-w-xs text-sm">
-                  Ask anything about your journey — essays, interviews, college fit, your stats. I’ll use what
-                  you’ve logged to help.
+              <div className="flex h-full flex-col items-center justify-center px-4 text-center">
+                <p className="font-display text-xl font-semibold text-ink-900">What are we working on?</p>
+                <p className="mt-1.5 max-w-xs text-sm text-ink-500">
+                  I know everything you’ve logged — essays, interviews, college fit, your stats.
                 </p>
+                <div className="mt-4 flex max-w-xs flex-wrap justify-center gap-2">
+                  {['Which of my experiences fit an essay about service?', 'How close am I to my top college?', 'What should I focus on this month?'].map((q) => (
+                    <button
+                      key={q}
+                      type="button"
+                      onClick={() => setDraft(q)}
+                      className="rounded-full border border-primary-200 bg-primary-50/60 px-3 py-1.5 text-xs font-medium text-primary-800 transition hover:bg-primary-100"
+                    >
+                      {q}
+                    </button>
+                  ))}
+                </div>
               </div>
             ) : (
               turns.map((t, i) => (

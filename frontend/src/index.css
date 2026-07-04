@@ -18,6 +18,21 @@
     font-family: theme("fontFamily.sans");
   }
 
+  /* Field Notes: page titles speak in the editorial serif. One rule, every module inherits —
+     components opt in for big numbers / entry headings via the `font-display` utility. */
+  h1 {
+    font-family: theme("fontFamily.display");
+    letter-spacing: -0.015em;
+    @apply text-ink-900;
+  }
+
+  /* Native controls pick up the warm palette (date pickers, selects, checkboxes). */
+  input,
+  select,
+  textarea {
+    accent-color: theme("colors.primary.600");
+  }
+
   /* Respect users who prefer reduced motion. */
   @media (prefers-reduced-motion: reduce) {
     *,
