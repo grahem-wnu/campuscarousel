@@ -86,27 +86,35 @@ export function RecommendationBoard() {
 
   return (
     <div className="space-y-4">
+      <p className="text-sm text-ink-600">
+        Most colleges ask for 2–4 recommendation letters, each written by an adult who knows the
+        student — a teacher, a supervisor, a coach. Plan the asks here: add each person, track the
+        ask from Identified to Submitted, and generate a one-page brief to hand them so their letter
+        is specific. Letters themselves are never pasted here — recommenders send them to colleges
+        directly.
+      </p>
+
       <Card>
         <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
-          <Field label="Recommender slot">
+          <Field label="Type of letter" hint="Admissions offices want a mix — one from each type is the classic four.">
             <Select value={slot} onChange={(e) => setSlot(e.target.value as RecommendationSlot)}>
               {RECOMMENDATION_SLOTS.map((s) => (
                 <option key={s} value={s}>{SLOT_LABELS[s]}</option>
               ))}
             </Select>
           </Field>
-          <Field label="Who (optional)">
+          <Field label="Recommender's name (optional)" hint="The teacher or mentor you plan to ask — leave blank if undecided.">
             <Input value={contactName} onChange={(e) => setContactName(e.target.value)} placeholder="e.g. Ms. Alvarez" />
           </Field>
-          <Button icon="plus" loading={adding} onClick={() => void add()}>Add</Button>
+          <Button icon="plus" loading={adding} onClick={() => void add()}>Plan this letter</Button>
         </div>
       </Card>
 
       {recs.length === 0 ? (
         <EmptyState
           icon="application"
-          title="No recommenders yet"
-          description="Plan your four letters: a STEM teacher, a humanities teacher, a clinical/volunteer supervisor, and a community leader."
+          title="No letters planned yet"
+          description="Start with the classic four: a STEM teacher, a humanities teacher, a clinical/volunteer supervisor, and a community leader. Add one above."
         />
       ) : (
         recs.map((rec) => {

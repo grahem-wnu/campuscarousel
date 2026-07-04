@@ -59,9 +59,9 @@ export function LoginPage() {
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
           <h1 className="font-display text-4xl font-bold tracking-tight text-ink-900">
-            Campus <em className="text-primary-700">Carousel</em>
+            Campus <span className="text-primary-700">Carousel</span>
           </h1>
-          <p className="mt-2 font-display text-base italic text-ink-600">
+          <p className="mt-2 font-display text-base text-ink-600">
             {phase === "credentials" ? "The story of the journey, kept well." : "Choose a new password"}
           </p>
         </div>

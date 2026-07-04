@@ -350,7 +350,7 @@ export default function DashboardPage() {
       {/* Student motivational / family financial band */}
       {d.student ? (
         <div className="flex flex-wrap items-center justify-between gap-3 border-l-2 border-secondary-400 py-1 pl-4">
-          <p className="font-display text-lg italic text-ink-700">{d.student.motivationalStat}</p>
+          <p className="font-display text-lg text-ink-700">{d.student.motivationalStat}</p>
           {d.student.interviewReadiness.avgRating !== null ? (
             <Link to="/interviews" className="rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300">
               <Badge tone="primary">Interview readiness {d.student.interviewReadiness.avgRating}/5</Badge>
