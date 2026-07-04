@@ -147,7 +147,7 @@ export const fontFamily = {
   ],
   /** Editorial display face — page titles, entry headings, big numbers. Source Serif 4: sturdy
    *  print-grade serif, deliberately free of swashy/cursive quirk. */
-  display: ["Source Serif 4", "Georgia", "Cambria", "Times New Roman", "serif"],
+  display: ['"Source Serif 4"', "Georgia", "Cambria", '"Times New Roman"', "serif"],
 } as const;
 
 export const fontSize = {
