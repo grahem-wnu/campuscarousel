@@ -55,29 +55,27 @@ export function CollegeCard({ college, selectedForCompare, onOpen, onToggleTopPi
           <div className="absolute inset-x-0 bottom-0 flex items-end gap-2 p-3">
             <CollegeLogo college={college} size={36} className="shrink-0 bg-white ring-1 ring-white/70" />
             <button type="button" onClick={() => onOpen(college)} className="min-w-0 flex-1 text-left">
-              <h3 className="truncate text-sm font-semibold text-white drop-shadow">{college.name}</h3>
+              <h3 className="truncate font-display text-base font-semibold text-white drop-shadow">{college.name}</h3>
               <p className="truncate text-xs text-white/85 drop-shadow">{subtitle}</p>
             </button>
           </div>
         </div>
-      ) : null}
+      ) : (
+        <div className="flex items-center gap-3 border-b border-surface-border bg-primary-50/50 px-4 py-3">
+          <CollegeLogo college={college} size={40} className="shrink-0" />
+          <button type="button" onClick={() => onOpen(college)} className="min-w-0 flex-1 text-left">
+            <h3 className="truncate font-display text-base font-semibold text-ink-900">{college.name}</h3>
+            <p className="truncate text-xs text-ink-500">{subtitle}</p>
+          </button>
+        </div>
+      )}
 
       <div className="flex flex-1 flex-col gap-3 p-4">
-        {hero ? (
-          college.campusImageCredit ? (
-            <p className="truncate text-[10px] text-ink-400" title={college.campusImageCredit}>
-              {college.campusImageCredit}
-            </p>
-          ) : null
-        ) : (
-          <div className="flex items-start gap-3">
-            <CollegeLogo college={college} size={44} />
-            <button type="button" onClick={() => onOpen(college)} className="min-w-0 flex-1 text-left">
-              <h3 className="truncate text-base font-semibold text-ink-900">{college.name}</h3>
-              <p className="truncate text-sm text-ink-500">{subtitle}</p>
-            </button>
-          </div>
-        )}
+        {hero && college.campusImageCredit ? (
+          <p className="truncate text-[10px] text-ink-400" title={college.campusImageCredit}>
+            {college.campusImageCredit}
+          </p>
+        ) : null}
 
         <div className="flex flex-wrap items-center gap-1.5">
           {college.isTopPick ? <Badge tone="warn">★ Top pick</Badge> : null}

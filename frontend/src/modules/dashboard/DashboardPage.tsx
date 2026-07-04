@@ -23,15 +23,13 @@ function FocusBanner() {
   if (!focus || focus.packs.length === 0) return null;
   return (
     <Link to="/focus" className="group block rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300">
-      <Card className="flex items-center gap-3 border border-primary-200 bg-primary-50 transition hover:-translate-y-0.5 hover:shadow-md">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-100 text-primary-600">
-          <Icon name="star" size={20} />
-        </span>
+      <Card className="flex items-center gap-4 border-primary-200 bg-primary-50/70 transition hover:-translate-y-0.5 hover:shadow-md">
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-primary-800">Your focus: {focus.packs.map((p) => p.label).join(' + ')}</p>
-          <p className="text-xs text-primary-700">Tailored exam, certifications, and prep — plus an AI overview of the path.</p>
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-primary-700">Your focus</p>
+          <p className="mt-0.5 truncate font-display text-lg font-semibold text-ink-900">{focus.packs.map((p) => p.label).join(' + ')}</p>
+          <p className="mt-0.5 text-xs text-primary-800/80">Tailored exam, certifications, and prep — plus an AI overview of the path.</p>
         </div>
-        <Icon name="chevron-right" size={18} className="text-primary-400 transition-transform group-hover:translate-x-0.5" />
+        <Icon name="chevron-right" size={18} className="shrink-0 text-primary-500 transition-transform group-hover:translate-x-0.5" />
       </Card>
     </Link>
   );
@@ -215,11 +213,9 @@ function CardTitle({ children }: { children: ReactNode }) {
 function StartCard({ to, icon, title, body }: { to: string; icon: 'star' | 'school' | 'heart' | 'course'; title: string; body: string }) {
   return (
     <LinkCard to={to} className="flex items-start gap-3">
-      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-50 text-primary-600">
-        <Icon name={icon} size={20} />
-      </span>
+      <Icon name={icon} size={18} className="mt-0.5 shrink-0 text-secondary-600" />
       <div className="min-w-0">
-        <p className="flex items-center gap-1 text-sm font-semibold text-ink-800">
+        <p className="flex items-center gap-1 font-display text-[15px] font-semibold text-ink-900">
           {title}
           <Icon name="chevron-right" size={14} className="text-ink-300 transition-transform group-hover:translate-x-0.5 group-hover:text-primary-500" />
         </p>
@@ -229,19 +225,20 @@ function StartCard({ to, icon, title, body }: { to: string; icon: 'star' | 'scho
   );
 }
 
-/** A compact stat tile that links to its page. */
+/** An editorial stat — a naked rule-and-number on the paper, not another card. The serif numeral
+ *  carries the hierarchy; the rule warms to amber on hover to signal the link. */
 function Stat({ to, label, value, sub, icon }: { to: string; label: string; value: string; sub?: string; icon: 'course' | 'heart' | 'clinical' | 'teas' }) {
   return (
-    <LinkCard to={to} className="flex items-center gap-3">
-      <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-50 text-primary-600">
-        <Icon name={icon} size={20} />
-      </span>
-      <div className="min-w-0">
-        <p className="text-xs text-ink-500">{label}</p>
-        <p className="text-xl font-bold text-ink-900">{value}</p>
-        {sub ? <p className="text-xs text-ink-400">{sub}</p> : null}
-      </div>
-    </LinkCard>
+    <Link
+      to={to}
+      className="group block min-w-0 border-l-2 border-ink-300 py-1 pl-3 transition-colors hover:border-secondary-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300 sm:pl-4"
+    >
+      <p className="flex items-center gap-1.5 truncate text-[11px] font-semibold uppercase tracking-wider text-ink-500">
+        <Icon name={icon} size={13} className="shrink-0 text-secondary-600" /> {label}
+      </p>
+      <p className="mt-1.5 font-display text-3xl font-bold leading-none text-ink-900">{value}</p>
+      {sub ? <p className="mt-1.5 truncate text-xs text-ink-400">{sub}</p> : null}
+    </Link>
   );
 }
 
@@ -352,14 +349,14 @@ export default function DashboardPage() {
 
       {/* Student motivational / family financial band */}
       {d.student ? (
-        <Card className="flex flex-wrap items-center justify-between gap-3 border border-primary-200 bg-primary-50">
-          <p className="text-sm font-medium text-primary-800">{d.student.motivationalStat}</p>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-l-2 border-secondary-400 py-1 pl-4">
+          <p className="font-display text-lg italic text-ink-700">{d.student.motivationalStat}</p>
           {d.student.interviewReadiness.avgRating !== null ? (
             <Link to="/interviews" className="rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300">
               <Badge tone="primary">Interview readiness {d.student.interviewReadiness.avgRating}/5</Badge>
             </Link>
           ) : null}
-        </Card>
+        </div>
       ) : d.family ? (
         <Card className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {/* Budget + Scholarships won are read-only stats, not links — they used to navigate to FinAid,

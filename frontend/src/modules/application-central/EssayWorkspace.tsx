@@ -131,8 +131,8 @@ export function EssayWorkspace({ essay, collegeName, onChanged, onBack }: Props)
         {/* AI coach sidebar */}
         <div className="space-y-3">
           <Card className="space-y-2 border border-primary-200 bg-primary-50">
-            <div className="flex items-center gap-1.5 text-sm font-semibold text-primary-800">
-              <Icon name="star" size={15} /> Essay coach
+            <div className="flex items-center gap-1.5 font-display text-base font-semibold text-primary-900">
+              <Icon name="star" size={15} className="text-secondary-600" /> Essay coach
             </div>
             <Button size="sm" variant="outline" block loading={finding} onClick={() => void runFind()}>Find relevant experiences</Button>
             <Button size="sm" variant="outline" block loading={practicing} onClick={() => void runPractice()}>Practice questions</Button>

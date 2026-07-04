@@ -58,13 +58,15 @@ export function LoginPage() {
     <div className="flex min-h-full items-center justify-center bg-surface-base px-4 py-12">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
-          <h1 className="text-2xl font-bold text-primary-700">Campus Carousel</h1>
-          <p className="mt-1 text-sm text-ink-500">
-            {phase === "credentials" ? "Sign in to continue" : "Choose a new password"}
+          <h1 className="font-display text-4xl font-bold tracking-tight text-ink-900">
+            Campus <em className="text-primary-700">Carousel</em>
+          </h1>
+          <p className="mt-2 font-display text-base italic text-ink-600">
+            {phase === "credentials" ? "The story of the journey, kept well." : "Choose a new password"}
           </p>
         </div>
 
-        <div className="rounded-2xl border border-surface-border bg-surface-raised p-6 shadow-sm">
+        <div className="rounded-xl border border-surface-border bg-surface-raised p-6 shadow-md">
           {phase === "credentials" ? (
             <form onSubmit={onSubmitCredentials} className="flex flex-col gap-4">
               <TextField

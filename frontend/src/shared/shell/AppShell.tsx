@@ -53,11 +53,13 @@ export function AppShell({ nav }: { nav: AssembledNav }) {
       {/* Top navigation */}
       <header className="sticky top-0 z-nav border-b border-surface-border bg-surface-raised/95 backdrop-blur">
         <div className="mx-auto flex h-nav-h max-w-6xl items-center gap-3 px-4">
-          <NavLink to="/" className="flex shrink-0 items-center gap-2 font-bold text-primary-700">
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary-600 text-white">
+          <NavLink to="/" className="flex shrink-0 items-center gap-2">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary-700 text-ink-50">
               <Icon name="school" size={18} />
             </span>
-            <span className="hidden whitespace-nowrap sm:inline">Campus Carousel</span>
+            <span className="hidden whitespace-nowrap font-display text-lg font-bold tracking-tight text-ink-900 sm:inline">
+              Campus <em className="text-primary-700">Carousel</em>
+            </span>
           </NavLink>
 
           {/* Desktop primary tabs (capped to keep the bar on one line; the rest fold into More).
@@ -230,7 +232,7 @@ function TopTab({ entry }: { entry: NavEntry }) {
       className={({ isActive }) =>
         cn(
           "flex shrink-0 items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-          isActive ? "bg-primary-50 text-primary-700" : "text-ink-600 hover:bg-ink-100",
+          isActive ? "bg-primary-100/70 text-primary-800" : "text-ink-600 hover:bg-ink-100",
         )
       }
     >
@@ -247,8 +249,8 @@ function BottomTab({ entry }: { entry: NavEntry }) {
       data-tour={entry.route}
       className={({ isActive }) =>
         cn(
-          "flex flex-1 flex-col items-center justify-center gap-0.5 text-xs",
-          isActive ? "text-primary-700" : "text-ink-500",
+          "flex flex-1 flex-col items-center justify-center gap-0.5 border-t-2 text-xs transition-colors",
+          isActive ? "border-primary-700 font-semibold text-primary-800" : "border-transparent text-ink-500",
         )
       }
     >
