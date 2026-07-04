@@ -7,16 +7,17 @@ import { describe, expect, it, vi } from 'vitest';
 import { EssayWorkspace } from './EssayWorkspace';
 import type { Essay } from './types';
 
-const { reviewEssay, getPracticeQuestions } = vi.hoisted(() => ({
+const { reviewEssay, getPracticeQuestions, updateEssay } = vi.hoisted(() => ({
   reviewEssay: vi.fn(),
   getPracticeQuestions: vi.fn(),
+  updateEssay: vi.fn(),
 }));
 vi.mock('./api', () => ({
   addDraft: vi.fn(),
   findExperiences: vi.fn(),
   getPracticeQuestions,
   reviewEssay,
-  updateEssay: vi.fn(),
+  updateEssay,
 }));
 
 const essay: Essay = {
@@ -30,13 +31,26 @@ const essay: Essay = {
 };
 
 describe('EssayWorkspace — essay coach', () => {
-  it('copies the essay text for pasting into a portal', async () => {
+  it('copies the essay text for pasting into a portal, then nudges to mark it final', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.assign(navigator, { clipboard: { writeText } });
-    render(<EssayWorkspace essay={essay} onChanged={() => {}} onBack={() => {}} />);
+    updateEssay.mockResolvedValue({ ...essay, status: 'final' });
+    const onChanged = vi.fn();
+    render(<EssayWorkspace essay={essay} onChanged={onChanged} onBack={() => {}} />);
     await userEvent.click(screen.getByRole('button', { name: /copy essay/i }));
     expect(writeText).toHaveBeenCalledWith('My draft about the ICU.');
-    expect(await screen.findByRole('button', { name: /copied/i })).toBeInTheDocument();
+    expect(await screen.findByText(/pasted into the portal/i)).toBeInTheDocument();
+    await userEvent.click(screen.getAllByRole('button', { name: /mark final/i }).at(-1)!);
+    expect(updateEssay).toHaveBeenCalledWith('e1', { status: 'final' });
+    expect(onChanged).toHaveBeenCalledWith(expect.objectContaining({ status: 'final' }));
+  });
+
+  it('the nudge is dismissible', async () => {
+    Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } });
+    render(<EssayWorkspace essay={essay} onChanged={() => {}} onBack={() => {}} />);
+    await userEvent.click(screen.getByRole('button', { name: /copy essay/i }));
+    await userEvent.click(await screen.findByRole('button', { name: /not yet/i }));
+    expect(screen.queryByText(/pasted into the portal/i)).not.toBeInTheDocument();
   });
 
 

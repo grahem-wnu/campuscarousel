@@ -23,6 +23,7 @@ export function EssayWorkspace({ essay, collegeName, onChanged, onBack }: Props)
   const [text, setText] = useState(latest?.content ?? '');
   const [savingDraft, setSavingDraft] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [showFinalNudge, setShowFinalNudge] = useState(false);
 
   const [target, setTarget] = useState<number>(essay.targetWords ?? DEFAULT_TARGET_WORDS);
 
@@ -98,6 +99,7 @@ export function EssayWorkspace({ essay, collegeName, onChanged, onBack }: Props)
     try {
       await navigator.clipboard.writeText(text.trim());
       setCopied(true);
+      if (essay.status !== 'final') setShowFinalNudge(true);
       setTimeout(() => setCopied(false), 2500);
     } catch {
       setError('Could not copy — select the text in the editor and copy it manually.');
@@ -170,6 +172,15 @@ export function EssayWorkspace({ essay, collegeName, onChanged, onBack }: Props)
               </Button>
             </span>
           </div>
+          {showFinalNudge && essay.status !== 'final' ? (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-secondary-200 bg-secondary-50 px-3 py-2">
+              <p className="text-sm text-ink-700">Pasted into the portal? Mark this essay final so the tracker stays honest.</p>
+              <span className="flex items-center gap-1.5">
+                <Button size="sm" variant="secondary" onClick={() => void setStatus('final')}>Mark final</Button>
+                <Button size="sm" variant="ghost" onClick={() => setShowFinalNudge(false)}>Not yet</Button>
+              </span>
+            </div>
+          ) : null}
           {essay.drafts && essay.drafts.length > 0 ? (
             <p className="text-xs text-ink-400">Version history: {essay.drafts.map((d) => `v${d.version} (${d.wordCount ?? wordCount(d.content)}w)`).join(' · ')}</p>
           ) : null}
