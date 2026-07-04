@@ -22,3 +22,12 @@ export const redeemSchema = z
     familyName: z.string().max(120).optional(),
   })
   .strict();
+
+// Public open-signup body (the redeem body minus the invite code; validated at the same entry).
+export const signupSchema = z
+  .object({
+    email: z.string().email().max(320),
+    password: z.string().min(8).max(256),
+    familyName: z.string().max(120).optional(),
+  })
+  .strict();

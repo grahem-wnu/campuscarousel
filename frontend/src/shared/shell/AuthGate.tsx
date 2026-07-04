@@ -3,6 +3,7 @@ import { Spinner } from "../ui/Spinner";
 import { useAuth } from "./AuthContext";
 import { JoinPage } from "./JoinPage";
 import { LoginPage } from "./LoginPage";
+import { SignupPage } from "./SignupPage";
 
 /**
  * Gates the app on auth state: a brief loading spinner while the session resolves,
@@ -12,9 +13,13 @@ import { LoginPage } from "./LoginPage";
 export function AuthGate({ children }: { children: ReactNode }) {
   const { status } = useAuth();
 
-  // PUBLIC self-signup: /join must work WITHOUT auth (an invited family has no account yet).
+  // PUBLIC pages: /join (invite redemption) and /signup (open signup) must work WITHOUT auth —
+  // the arriving family has no account yet.
   if (typeof window !== "undefined" && window.location.pathname.startsWith("/join")) {
     return <JoinPage />;
+  }
+  if (typeof window !== "undefined" && window.location.pathname.startsWith("/signup")) {
+    return <SignupPage />;
   }
 
   if (status === "loading") {
