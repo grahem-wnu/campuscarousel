@@ -58,7 +58,7 @@ export function AppShell({ nav }: { nav: AssembledNav }) {
               <Icon name="school" size={18} />
             </span>
             <span className="hidden whitespace-nowrap font-display text-lg font-bold tracking-tight text-ink-900 sm:inline">
-              Campus <em className="text-primary-700">Carousel</em>
+              Campus <span className="text-primary-700">Carousel</span>
             </span>
           </NavLink>
 

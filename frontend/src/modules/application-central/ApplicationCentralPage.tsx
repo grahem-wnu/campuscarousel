@@ -101,7 +101,14 @@ export default function ApplicationCentralPage() {
         <>
           <Tabs items={tabs} value={tab} onChange={(t) => setTab(t as TabId)} />
           {tab === 'overview' ? (
-            <ApplicationOverview />
+            <ApplicationOverview
+              onStartEssay={(cid) => {
+                setTab('essays');
+                setCollegeId(cid);
+                setShowNew(true);
+              }}
+              onViewEssays={() => setTab('essays')}
+            />
           ) : tab === 'recommenders' ? (
             <RecommendationBoard />
           ) : tab === 'scores' ? (
