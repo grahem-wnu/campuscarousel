@@ -54,6 +54,8 @@ export interface OnboardingProfile {
   location?: string;
   highSchool?: string;
   interests?: string[];
+  /** Colleges the family explicitly named — reviewed on the confirm step and guaranteed to seed. */
+  collegesOfInterest?: string[];
   budgetTotal?: number;
 }
 

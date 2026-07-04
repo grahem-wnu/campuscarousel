@@ -1000,6 +1000,9 @@ export interface StudentProfile extends Timestamped {
    *  AI college matching/benchmarks and genericizes the app away from a hardcoded nursing/BSN focus.
    *  Empty/undefined → the AI and copy use a neutral "their intended program". */
   intendedMajors?: string[];
+  /** Colleges the family explicitly named during onboarding — the seeder must include these, so a
+   *  school a parent mentioned in chat is never missing from the seeded list. */
+  collegesOfInterest?: string[];
   dreamSchool?: string;
   interests?: string[];
   currentActivities?: { name: string; type?: string; organization?: string }[];

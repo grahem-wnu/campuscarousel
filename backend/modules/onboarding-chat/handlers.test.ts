@@ -81,6 +81,14 @@ describe('POST /onboarding/finish', () => {
     expect(await data.goals.list()).toEqual([]); // nothing seeded synchronously
   });
 
+  it('persists the colleges the family named (collegesOfInterest) onto the profile', async () => {
+    const res = await makeOnboarding().finish(
+      ctx({ body: { profile: { intendedMajors: ['Nursing'], collegesOfInterest: ['Cedarville University', 'Capital University'] } } }),
+    );
+    expect(res.status).toBe(202);
+    expect((await data.studentProfile.get())?.collegesOfInterest).toEqual(['Cedarville University', 'Capital University']);
+  });
+
   it('still returns 202 (profile saved) even if the seed dispatch fails', async () => {
     const angryDispatch: SeedDispatcher = async () => {
       throw new Error('queue down');

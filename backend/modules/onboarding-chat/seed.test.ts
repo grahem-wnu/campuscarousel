@@ -68,6 +68,23 @@ describe('seedStudent', () => {
     expect((await data.budget.get())?.totalBudget).toBe(200000);
   });
 
+  it("passes the family's named colleges through to the seeder", async () => {
+    await data.studentProfile.put({
+      onboardingComplete: true,
+      intendedMajors: ['Nursing'],
+      location: 'Columbus, Ohio',
+      collegesOfInterest: ['Cedarville University'],
+    } as Parameters<Data['studentProfile']['put']>[0]);
+    let receivedMustInclude: string[] | undefined;
+    const spySeeder: CollegeSeeder = async (_majors, _location, mustInclude) => {
+      receivedMustInclude = mustInclude;
+      return (mustInclude ?? []).map((name) => ({ name }));
+    };
+    await seedStudent(deps({ collegeSeeder: spySeeder }));
+    expect(receivedMustInclude).toEqual(['Cedarville University']);
+    expect((await data.colleges.list()).map((c) => c.name)).toContain('Cedarville University');
+  });
+
   it('does not duplicate a college that already exists', async () => {
     await data.colleges.create({ name: 'State University', status: 'researching' } as Parameters<Data['colleges']['create']>[0]);
     await seedStudent(deps());

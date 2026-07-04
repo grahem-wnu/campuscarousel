@@ -37,6 +37,7 @@ function toProfilePatch(p: OnboardingProfile): Partial<StudentProfile> {
   if (p.careerGoal) patch.careerGoal = p.careerGoal;
   if (p.intendedMajors && p.intendedMajors.length) patch.intendedMajors = p.intendedMajors;
   if (p.interests && p.interests.length) patch.interests = p.interests;
+  if (p.collegesOfInterest && p.collegesOfInterest.length) patch.collegesOfInterest = p.collegesOfInterest;
   if (p.budgetTotal != null) patch.budget = { total: p.budgetTotal, currency: 'USD' };
   return patch;
 }

@@ -63,6 +63,18 @@ export const READINESS_TONE: Record<string, BadgeTone> = {
   'insufficient-data': 'neutral',
 };
 
+/** Human text for the readiness badge — the raw enum ("insufficient-data") is not user-facing copy. */
+export const READINESS_LABEL: Record<string, string> = {
+  strong: 'Strong',
+  competitive: 'Competitive',
+  'needs-work': 'Needs work',
+  'insufficient-data': 'Not enough data yet',
+};
+
+export function readinessLabel(level: string): string {
+  return READINESS_LABEL[level] ?? level;
+}
+
 /** Category → hours rows, descending. */
 export function categoryRows(hoursByCategory: Record<string, number>): { category: string; hours: number }[] {
   return Object.entries(hoursByCategory)

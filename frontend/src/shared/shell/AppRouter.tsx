@@ -21,7 +21,7 @@ function Welcome() {
     <EmptyState
       icon="school"
       title="Welcome to Campus Carousel"
-      description="Your modules will appear here as they come online. This is the home of the path to a BSN."
+      description="Your modules will appear here as they come online. This is the home of the journey to college."
     />
   );
 }

@@ -24,6 +24,7 @@ const onboardingProfileSchema = z.object({
   location: z.string().max(200).optional(),
   highSchool: z.string().max(200).optional(),
   interests: z.array(z.string().max(80)).max(50).optional(),
+  collegesOfInterest: z.array(z.string().max(120)).max(15).optional(),
   budgetTotal: z.coerce.number().min(0).optional(),
 });
 
