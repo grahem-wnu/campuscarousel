@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DECISION_META, deadlineLabel, essaySummary, latestDraft, netCostLabel, RECOMMENDATION_STATUS_META, SLOT_LABELS, wordCount, wordTargetTone } from './logic';
+import { DECISION_META, deadlineLabel, essaySummary, latestDraft, netCostLabel, RECOMMENDATION_STATUS_META, ratingRows, ratingTone, SLOT_LABELS, VERDICT_META, wordCount, wordTargetTone } from './logic';
 import type { ApplicationRow, Essay } from './types';
 
 const row = (over: Partial<ApplicationRow>): ApplicationRow => ({
@@ -66,5 +66,28 @@ describe('decision + recommender metadata', () => {
     expect(netCostLabel(18000, 60000)).toBe('$18,000');
     expect(netCostLabel(undefined, 60000)).toBe('$60,000');
     expect(netCostLabel(undefined, undefined)).toBe('—');
+  });
+});
+
+describe('review rubric helpers', () => {
+  it('ratingTone maps 1-10 scores to tones', () => {
+    expect(ratingTone(9)).toBe('success');
+    expect(ratingTone(8)).toBe('success');
+    expect(ratingTone(6)).toBe('warn');
+    expect(ratingTone(5)).toBe('error');
+  });
+
+  it('ratingRows orders the rubric and includes collegeFit only when present', () => {
+    const rows = ratingRows({ promptFit: 8, voice: 7, structure: 6, specificity: 5, collegeFit: 9 });
+    expect(rows.map((r) => r.key)).toEqual(['promptFit', 'voice', 'structure', 'specificity', 'collegeFit']);
+    const noCollege = ratingRows({ promptFit: 8, voice: 7, structure: 6, specificity: 5 });
+    expect(noCollege.map((r) => r.key)).toEqual(['promptFit', 'voice', 'structure', 'specificity']);
+    expect(noCollege[0]).toEqual({ key: 'promptFit', label: 'Answers the prompt', score: 8 });
+  });
+
+  it('VERDICT_META covers every verdict', () => {
+    expect(VERDICT_META.ready.tone).toBe('success');
+    expect(VERDICT_META.close.tone).toBe('warn');
+    expect(VERDICT_META['keep-working'].tone).toBe('error');
   });
 });

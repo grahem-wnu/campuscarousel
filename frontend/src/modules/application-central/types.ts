@@ -11,6 +11,17 @@ export interface EssayDraft {
   wordCount?: number;
 }
 
+export const REVIEW_VERDICTS = ['ready', 'close', 'keep-working'] as const;
+export type ReviewVerdict = (typeof REVIEW_VERDICTS)[number];
+
+export interface LastReview {
+  overall: number;
+  verdict: ReviewVerdict;
+  wordCount: number;
+  version?: number;
+  reviewedAt: string;
+}
+
 export interface Essay {
   essayId: string;
   collegeId?: string;
@@ -20,6 +31,7 @@ export interface Essay {
   status?: EssayStatus;
   aiSuggestedActivities?: string[];
   aiSuggestedAngles?: string[];
+  lastReview?: LastReview;
   notes?: string;
   createdAt: string;
   updatedAt: string;
@@ -48,14 +60,44 @@ export interface FindResponse {
   basedOn: { activities: number; experiences: number; motivations: number };
 }
 
+export interface ReviewRatings {
+  promptFit: number;
+  voice: number;
+  structure: number;
+  specificity: number;
+  collegeFit?: number;
+}
+
 export interface EssayReview {
   strengths: string[];
   improvements: string[];
   authenticity: string;
+  /** 1-10 rubric — present only when the real AI path produced the review. */
+  ratings?: ReviewRatings;
+  overall?: number;
+  verdict?: ReviewVerdict;
   wordCount: number;
   onTarget: boolean | null;
   rewrote: false;
   source: 'ai' | 'curated';
+}
+
+export interface PracticeQuestion {
+  question: string;
+  why: string;
+  tip: string;
+}
+export interface PracticeQuestionSet {
+  questions: PracticeQuestion[];
+  source: 'ai' | 'curated';
+  collegeName?: string;
+}
+
+/** Just enough of a college to pick one and offer its real prompts. */
+export interface CollegeOption {
+  collegeId: string;
+  name: string;
+  essayPrompts?: string[];
 }
 
 export interface ApplicationRow {

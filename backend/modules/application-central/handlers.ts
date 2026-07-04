@@ -21,6 +21,7 @@ import {
   findExperiencesSchema,
   idParamSchema,
   listQuerySchema,
+  practiceQuestionsSchema,
   recommendationCreateSchema,
   recommendationUpdateSchema,
   recommenderBriefSchema,
@@ -30,16 +31,18 @@ import {
   testScoreUpdateSchema,
   updateSchema,
 } from './schema.js';
-import { gatherExperiences, gatherSharedExperiences } from './grounding.js';
+import { gatherCollegeContext, gatherExperiences, gatherSharedExperiences } from './grounding.js';
 import { buildOverview } from './overview.js';
 import { buildDecisionMatrix } from './decision.js';
 import {
   makeBedrockEssayReviewer,
   makeBedrockExperienceFinder,
+  makeBedrockPracticeQuestions,
   makeBedrockRecommenderBrief,
   wordCountOf,
   type EssayReviewer,
   type ExperienceFinder,
+  type PracticeQuestionGenerator,
   type RecommenderBriefer,
 } from './ai.js';
 
@@ -52,6 +55,7 @@ export interface AppCentralHandlers {
   addDraft: Handler;
   findExperiences: Handler;
   review: Handler;
+  practiceQuestions: Handler;
   overview: Handler;
   // Application tracker
   listApplications: Handler;
@@ -78,6 +82,7 @@ export interface AppCentralDeps {
   finder?: ExperienceFinder;
   reviewer?: EssayReviewer;
   briefer?: RecommenderBriefer;
+  practice?: PracticeQuestionGenerator;
   now?: () => Date;
 }
 
@@ -89,6 +94,7 @@ export function makeHandlers(deps: AppCentralDeps): AppCentralHandlers {
   const finder = deps.finder ?? makeBedrockExperienceFinder();
   const reviewer = deps.reviewer ?? makeBedrockEssayReviewer();
   const briefer = deps.briefer ?? makeBedrockRecommenderBrief();
+  const practice = deps.practice ?? makeBedrockPracticeQuestions();
 
   async function requireEssay(id: string): Promise<Essay> {
     const e = await getData().essays.get(id);
@@ -173,22 +179,55 @@ export function makeHandlers(deps: AppCentralDeps): AppCentralHandlers {
       const body = validateBody(findExperiencesSchema, ctx);
       const data = getData();
       const essay = await requireEssay(id);
-      const pool = await gatherExperiences(data, ctx.requester);
-      const result = await finder({ prompt: body.prompt ?? essay.prompt ?? '', pool, majors: await activeMajors() });
+      const [pool, college] = await Promise.all([gatherExperiences(data, ctx.requester), gatherCollegeContext(data, essay.collegeId)]);
+      const result = await finder({ prompt: body.prompt ?? essay.prompt ?? '', pool, majors: await activeMajors(), college });
       return { status: 200, body: { result, basedOn: pool.counts } };
     },
 
-    // POST /essays/:id/review — AI feedback on a draft. NEVER rewrites (review.rewrote === false).
+    // POST /essays/:id/review — AI feedback + rubric rating on a draft. NEVER rewrites
+    // (review.rewrote === false). Grounded in the target college's admissions data when linked.
+    // Persists only the compact lastReview summary (derived from the draft text alone — no private
+    // entries are in the review path); the full review is returned live.
     review: async (ctx) => {
       const { id } = validateParams(idParamSchema, ctx);
       const body = validateBody(reviewSchema, ctx);
+      const data = getData();
       const essay = await requireEssay(id);
-      const content =
-        body.content ??
-        (body.version !== undefined ? (essay.drafts ?? []).find((d) => d.version === body.version)?.content : latestDraft(essay)?.content);
+      const reviewedDraft =
+        body.content !== undefined
+          ? undefined
+          : body.version !== undefined
+            ? (essay.drafts ?? []).find((d) => d.version === body.version)
+            : latestDraft(essay);
+      const content = body.content ?? reviewedDraft?.content;
       if (!content) throw Errors.validation('No draft content to review — add a draft or pass content.');
-      const review = await reviewer({ prompt: essay.prompt ?? '', content, targetWords: body.targetWords });
-      return { status: 200, body: { review } };
+      const college = await gatherCollegeContext(data, essay.collegeId);
+      const review = await reviewer({ prompt: essay.prompt ?? '', content, targetWords: body.targetWords, college });
+      let updated = essay;
+      if (review.source === 'ai' && review.overall !== undefined && review.verdict !== undefined) {
+        updated = await data.essays.update(id, {
+          lastReview: {
+            overall: review.overall,
+            verdict: review.verdict,
+            wordCount: review.wordCount,
+            ...(reviewedDraft ? { version: reviewedDraft.version } : {}),
+            reviewedAt: now().toISOString(),
+          },
+        });
+      }
+      return { status: 200, body: { review, essay: updated } };
+    },
+
+    // POST /essays/:id/practice-questions — AI sample application questions in the target college's
+    // style (its real prompts + admissions emphasis). College-agnostic Common-App style when unlinked.
+    practiceQuestions: async (ctx) => {
+      const { id } = validateParams(idParamSchema, ctx);
+      const body = validateBody(practiceQuestionsSchema, ctx);
+      const data = getData();
+      const essay = await requireEssay(id);
+      const college = await gatherCollegeContext(data, essay.collegeId);
+      const result = await practice({ college, majors: await activeMajors(), count: body.count });
+      return { status: 200, body: { ...result, collegeName: college?.name } };
     },
 
     // GET /applications/overview — derived per-college status (deadlines, essays, scores).
@@ -370,6 +409,7 @@ export function buildRoutes(h: AppCentralHandlers) {
     { method: 'POST' as const, path: '/essays/:id/draft', handler: h.addDraft },
     { method: 'POST' as const, path: '/essays/:id/find-experiences', handler: h.findExperiences },
     { method: 'POST' as const, path: '/essays/:id/review', handler: h.review },
+    { method: 'POST' as const, path: '/essays/:id/practice-questions', handler: h.practiceQuestions },
     { method: 'GET' as const, path: '/recommendations', handler: h.listRecommendations },
     { method: 'POST' as const, path: '/recommendations', handler: h.createRecommendation },
     { method: 'PUT' as const, path: '/recommendations/:id', handler: h.updateRecommendation },

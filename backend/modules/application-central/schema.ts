@@ -59,6 +59,13 @@ export const reviewSchema = z
   })
   .strict();
 
+/** POST /essays/:id/practice-questions — AI sample questions in the target college's style. */
+export const practiceQuestionsSchema = z
+  .object({
+    count: z.number().int().min(3).max(8).optional(),
+  })
+  .strict();
+
 export const idParamSchema = z.object({ id: z.string().min(1) });
 
 // ---------------------------------------------------------------------------

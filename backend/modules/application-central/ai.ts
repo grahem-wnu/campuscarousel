@@ -1,13 +1,16 @@
-// AI essay partner for Application Central. Two capabilities, both Bedrock-backed behind an injectable
-// seam with deterministic curated fallback (model id from BEDROCK_MODEL_ID, never hardcoded):
-//   • findExperiences — surface the logged experiences + angles most relevant to a prompt.
-//   • reviewEssay     — structural/authenticity feedback on a draft. NEVER rewrites the essay.
-// Both receive an already-privacy-filtered ExperiencePool (grounding.ts), so this layer can't leak
-// private entries and its output is returned live (never persisted).
+// AI essay coach for Application Central. Bedrock-backed behind an injectable seam with
+// deterministic curated fallback (model id from BEDROCK_MODEL_ID, never hardcoded):
+//   • findExperiences     — surface the logged experiences + angles most relevant to a prompt.
+//   • reviewEssay         — feedback + rubric rating on a draft. NEVER rewrites the essay.
+//   • practiceQuestions   — sample application questions in the target college's style.
+// The coach contract: suggest, question, critique — never write, rewrite, or supply essay
+// sentences. Experience inputs arrive already privacy-filtered (grounding.ts), so this layer
+// can't leak private entries; find/review output is returned live (only the compact lastReview
+// summary is persisted, and it derives solely from the draft text).
 
 import { majorPhrase } from '../../shared/ai/major.js';
 import { packFocusBriefs } from '../../shared/packs/index.js';
-import { poolToText, type Experience, type ExperiencePool } from './grounding.js';
+import { collegeToText, poolToText, type CollegeContext, type Experience, type ExperiencePool } from './grounding.js';
 
 /** Major-specific guidance line for a prompt — empty when no major or no matching pack. */
 function majorGuidanceLine(majors: string[] = []): string {
@@ -33,12 +36,33 @@ export interface FindResult {
   angles: string[];
   source: 'ai' | 'curated';
 }
-export type ExperienceFinder = (input: { prompt: string; pool: ExperiencePool; majors?: string[] }) => Promise<FindResult>;
+export type ExperienceFinder = (input: {
+  prompt: string;
+  pool: ExperiencePool;
+  majors?: string[];
+  college?: CollegeContext;
+}) => Promise<FindResult>;
+
+export const REVIEW_VERDICTS = ['ready', 'close', 'keep-working'] as const;
+export type ReviewVerdict = (typeof REVIEW_VERDICTS)[number];
+
+/** 1-10 rubric scores. collegeFit only when the essay is linked to a college. */
+export interface ReviewRatings {
+  promptFit: number;
+  voice: number;
+  structure: number;
+  specificity: number;
+  collegeFit?: number;
+}
 
 export interface EssayReview {
   strengths: string[];
   improvements: string[];
   authenticity: string;
+  /** Rubric rating — present only on the real AI path; the curated fallback never fakes scores. */
+  ratings?: ReviewRatings;
+  overall?: number;
+  verdict?: ReviewVerdict;
   wordCount: number;
   onTarget: boolean | null;
   /** Hard guarantee surfaced to the UI: this path gives feedback, never a rewrite. */
@@ -49,7 +73,23 @@ export type EssayReviewer = (input: {
   prompt: string;
   content: string;
   targetWords?: number;
+  college?: CollegeContext;
 }) => Promise<EssayReview>;
+
+export interface PracticeQuestion {
+  question: string;
+  why: string;
+  tip: string;
+}
+export interface PracticeQuestionSet {
+  questions: PracticeQuestion[];
+  source: 'ai' | 'curated';
+}
+export type PracticeQuestionGenerator = (input: {
+  college?: CollegeContext;
+  majors?: string[];
+  count?: number;
+}) => Promise<PracticeQuestionSet>;
 
 export interface RecommenderBrief {
   /** A short paragraph the student can hand a recommender to jog their memory. */
@@ -180,12 +220,14 @@ export const curatedRecommenderBrief: RecommenderBriefer = async ({ slot, contac
 
 // ---- Bedrock-backed (with curated fallback) -------------------------------
 
-export function buildFindPrompt(input: { prompt: string; pool: ExperiencePool; majors?: string[] }): string {
+export function buildFindPrompt(input: { prompt: string; pool: ExperiencePool; majors?: string[]; college?: CollegeContext }): string {
   const applicant = `a college applicant pursuing ${majorPhrase(input.majors, 'their intended college program')}`;
   return [
     `You are a college-essay brainstorming partner for ${applicant}. Given the prompt and the`,
     "applicant's REAL logged experiences, suggest which experiences to write about and a few angles.",
+    'You are a coach, not a writer: suggest and explain — never draft sentences for the essay.',
     majorGuidanceLine(input.majors),
+    input.college ? `${collegeToText(input.college)}\nFavor experiences and angles that speak to what this school values.` : '',
     'Respond with ONLY JSON (no prose/fences): {"suggestedExperiences": [{"title": string,',
     '"kind": "activity"|"experience"|"motivation", "why": string}], "angles": string[]}.',
     `Prompt: ${input.prompt || '(general personal statement)'}`,
@@ -218,15 +260,44 @@ export function makeBedrockExperienceFinder(options: AiOptions = {}, fallback: E
   };
 }
 
-function buildReviewPrompt(input: { prompt: string; content: string; targetWords?: number }): string {
+export function buildReviewPrompt(input: { prompt: string; content: string; targetWords?: number; college?: CollegeContext }): string {
   return [
-    'You are an honest, supportive college-essay coach. Give FEEDBACK ONLY — never rewrite or draft',
-    'the essay for the student. Respond with ONLY JSON (no prose/fences): {"strengths": string[],',
-    '"improvements": string[], "authenticity": string}.',
+    'You are an honest, supportive college-essay coach reviewing a draft. Give FEEDBACK ONLY —',
+    'never rewrite the essay, never draft replacement sentences or paragraphs for the student.',
+    'Also rate the draft on a 1-10 rubric (10 = ready to submit to a selective program):',
+    '  promptFit — does it actually answer the prompt?',
+    '  voice — does it sound like a real, specific person (not an admissions template)?',
+    '  structure — does it open in a scene, build, and land on growth?',
+    '  specificity — concrete detail over generic claims?',
+    input.college ? '  collegeFit — does it connect to what this specific school values?' : '',
+    'And give an overall 1-10 plus a verdict: "ready" (submit-worthy), "close" (one more pass),',
+    'or "keep-working". Be honest — a first draft is rarely above 6.',
+    'Respond with ONLY JSON (no prose/fences): {"strengths": string[], "improvements": string[],',
+    '"authenticity": string, "ratings": {"promptFit": number, "voice": number, "structure": number,',
+    `"specificity": number${input.college ? ', "collegeFit": number' : ''}}, "overall": number, "verdict": "ready"|"close"|"keep-working"}.`,
+    input.college ? collegeToText(input.college) : '',
     `Prompt: ${input.prompt || '(general)'}`,
     input.targetWords ? `Target words: ${input.targetWords}.` : '',
     `Essay draft:\n${input.content}`,
-  ].join('\n');
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
+const score = (v: unknown): number | undefined => {
+  const n = typeof v === 'number' ? v : NaN;
+  return Number.isFinite(n) && n >= 1 && n <= 10 ? Math.round(n) : undefined;
+};
+
+export function parseRatings(raw: unknown, expectCollegeFit: boolean): ReviewRatings | undefined {
+  const o = (raw ?? {}) as Record<string, unknown>;
+  const promptFit = score(o.promptFit);
+  const voice = score(o.voice);
+  const structure = score(o.structure);
+  const specificity = score(o.specificity);
+  if (promptFit === undefined || voice === undefined || structure === undefined || specificity === undefined) return undefined;
+  const collegeFit = expectCollegeFit ? score(o.collegeFit) : undefined;
+  return { promptFit, voice, structure, specificity, ...(collegeFit !== undefined ? { collegeFit } : {}) };
 }
 
 export function makeBedrockEssayReviewer(options: AiOptions = {}, fallback: EssayReviewer = curatedEssayReviewer): EssayReviewer {
@@ -237,10 +308,16 @@ export function makeBedrockEssayReviewer(options: AiOptions = {}, fallback: Essa
       const improvements = strArr(raw.improvements);
       if (strengths.length === 0 && improvements.length === 0) return fallback(input);
       const wc = wordCountOf(input.content);
+      const ratings = parseRatings(raw.ratings, input.college !== undefined);
+      const overall = score(raw.overall);
+      const verdict = REVIEW_VERDICTS.includes(raw.verdict as ReviewVerdict) ? (raw.verdict as ReviewVerdict) : undefined;
       return {
         strengths,
         improvements,
         authenticity: typeof raw.authenticity === 'string' ? raw.authenticity : '',
+        ...(ratings ? { ratings } : {}),
+        ...(overall !== undefined ? { overall } : {}),
+        ...(verdict ? { verdict } : {}),
         wordCount: wc,
         onTarget: input.targetWords ? Math.abs(wc - input.targetWords) <= Math.max(25, input.targetWords * 0.1) : null,
         rewrote: false,
@@ -248,6 +325,92 @@ export function makeBedrockEssayReviewer(options: AiOptions = {}, fallback: Essa
       };
     } catch {
       return fallback(input);
+    }
+  };
+}
+
+// ---- Practice questions ---------------------------------------------------
+
+export const curatedPracticeQuestions: PracticeQuestionGenerator = async ({ college, count = 5 }) => {
+  const base: PracticeQuestion[] = [
+    {
+      question: 'Describe a moment that made you certain about your intended path. What did it change?',
+      why: 'The core "why us / why this field" question nearly every application asks in some form.',
+      tip: 'Pick one specific moment and stay in the scene — resist summarizing your whole journey.',
+    },
+    {
+      question: 'Tell us about a time you faced a setback. How did you respond, and what did you learn?',
+      why: 'Schools want evidence of resilience and honest self-reflection.',
+      tip: 'The setback matters less than what you did next — spend most words on the response.',
+    },
+    {
+      question: 'Describe a community you belong to and your role within it.',
+      why: 'A Common App staple — reveals values and how you show up for others.',
+      tip: 'Define "community" narrowly (a shift crew, a study group) — small and vivid beats big and vague.',
+    },
+    {
+      question: 'What experience with someone different from you changed how you see the world?',
+      why: 'Tests empathy and perspective-taking — central to service-oriented programs.',
+      tip: 'Show the shift: what you assumed before, the moment it cracked, what you believe now.',
+    },
+    {
+      question: 'Why this school specifically — what would you contribute here that someone else would not?',
+      why: 'The "why us" supplemental. Generic answers are the most common reason essays fall flat.',
+      tip: 'Name specific programs, values, or people at the school and tie each to a real experience.',
+    },
+  ];
+  const questions = college?.essayPrompts?.length
+    ? [
+        ...college.essayPrompts.slice(0, 2).map((p) => ({
+          question: p,
+          why: `A real ${college.name} prompt — practice on the actual question.`,
+          tip: 'Draft an outline first: scene, stakes, turn, growth.',
+        })),
+        ...base,
+      ].slice(0, count)
+    : base.slice(0, count);
+  return { questions, source: 'curated' };
+};
+
+export function buildPracticePrompt(input: { college?: CollegeContext; majors?: string[]; count: number }): string {
+  const applicant = `a college applicant pursuing ${majorPhrase(input.majors, 'their intended college program')}`;
+  return [
+    `You create realistic practice application questions for ${applicant}.`,
+    input.college
+      ? `${collegeToText(input.college)}\nWrite questions in THIS school's authentic style — echo its real prompts and what its admissions process emphasizes.`
+      : 'No target school given — write Common-App-style personal statement and supplemental questions.',
+    majorGuidanceLine(input.majors),
+    `Generate exactly ${input.count} questions. For each: "why" = what admissions is really probing for,`,
+    '"tip" = one concrete coaching tip for approaching it (never sample essay text).',
+    'Respond with ONLY JSON (no prose/fences): {"questions": [{"question": string, "why": string, "tip": string}]}.',
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
+export function makeBedrockPracticeQuestions(
+  options: AiOptions = {},
+  fallback: PracticeQuestionGenerator = curatedPracticeQuestions,
+): PracticeQuestionGenerator {
+  return async (input) => {
+    const count = Math.min(Math.max(input.count ?? 5, 3), 8);
+    try {
+      const raw = extractJson(await invokeText(buildPracticePrompt({ ...input, count }), options)) as Record<string, unknown>;
+      const list = Array.isArray(raw.questions) ? raw.questions : [];
+      const questions = list
+        .map((q) => {
+          const o = (q ?? {}) as Record<string, unknown>;
+          const question = typeof o.question === 'string' ? o.question : '';
+          const why = typeof o.why === 'string' ? o.why : '';
+          const tip = typeof o.tip === 'string' ? o.tip : '';
+          return question ? { question, why, tip } : null;
+        })
+        .filter((q): q is PracticeQuestion => q !== null)
+        .slice(0, count);
+      if (questions.length === 0) return fallback({ ...input, count });
+      return { questions, source: 'ai' };
+    } catch {
+      return fallback({ ...input, count });
     }
   };
 }

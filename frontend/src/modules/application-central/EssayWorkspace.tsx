@@ -1,21 +1,23 @@
 import { useState } from 'react';
 import { Badge, Button, Card, Icon, Spinner, Textarea } from '../../shared/ui';
-import { ESSAY_STATUS_META, wordCount, wordTargetTone } from './logic';
-import { addDraft, findExperiences, reviewEssay, updateEssay } from './api';
-import type { Essay, EssayReview, FindResult } from './types';
+import { ESSAY_STATUS_META, VERDICT_META, ratingRows, ratingTone, wordCount, wordTargetTone } from './logic';
+import { addDraft, findExperiences, getPracticeQuestions, reviewEssay, updateEssay } from './api';
+import type { Essay, EssayReview, FindResult, PracticeQuestionSet } from './types';
 
 interface Props {
   essay: Essay;
+  collegeName?: string;
   onChanged: (essay: Essay) => void;
   onBack: () => void;
 }
 
 const TARGET_WORDS = 650; // common-app-ish default
 
-/** The essay workspace: prompt, editor with live word count + version history, and an AI context
- *  sidebar — "Find relevant experiences" (grounded in her real, privacy-filtered data) and
- *  "Check my essay" (feedback only, never a rewrite). */
-export function EssayWorkspace({ essay, onChanged, onBack }: Props) {
+/** The essay workspace: prompt, editor with live word count + version history, and an AI coach
+ *  sidebar — "Find relevant experiences" (grounded in her real, privacy-filtered data + what the
+ *  target college looks for), "Practice questions" (sample prompts in the college's style), and
+ *  "Check my essay" (rubric-rated feedback — never a rewrite). */
+export function EssayWorkspace({ essay, collegeName, onChanged, onBack }: Props) {
   const latest = (essay.drafts ?? []).at(-1);
   const [text, setText] = useState(latest?.content ?? '');
   const [savingDraft, setSavingDraft] = useState(false);
@@ -24,6 +26,8 @@ export function EssayWorkspace({ essay, onChanged, onBack }: Props) {
   const [finding, setFinding] = useState(false);
   const [review, setReview] = useState<EssayReview | null>(null);
   const [reviewing, setReviewing] = useState(false);
+  const [practice, setPractice] = useState<PracticeQuestionSet | null>(null);
+  const [practicing, setPracticing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const wc = wordCount(text);
@@ -54,12 +58,26 @@ export function EssayWorkspace({ essay, onChanged, onBack }: Props) {
     }
   }
 
+  async function runPractice() {
+    setPracticing(true);
+    setError(null);
+    try {
+      setPractice(await getPracticeQuestions(essay.essayId));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not generate practice questions.');
+    } finally {
+      setPracticing(false);
+    }
+  }
+
   async function runReview() {
     if (!text.trim()) return;
     setReviewing(true);
     setError(null);
     try {
-      setReview(await reviewEssay(essay.essayId, { content: text, targetWords: TARGET_WORDS }));
+      const res = await reviewEssay(essay.essayId, { content: text, targetWords: TARGET_WORDS });
+      setReview(res.review);
+      onChanged(res.essay);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not review the essay.');
     } finally {
@@ -84,7 +102,14 @@ export function EssayWorkspace({ essay, onChanged, onBack }: Props) {
       </div>
 
       <Card>
-        <p className="text-xs font-semibold uppercase tracking-wide text-ink-500">Prompt</p>
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs font-semibold uppercase tracking-wide text-ink-500">Prompt</p>
+          {collegeName ? (
+            <span className="flex items-center gap-1 text-xs font-medium text-primary-700">
+              <Icon name="school" size={13} /> {collegeName}
+            </span>
+          ) : null}
+        </div>
         <p className="mt-1 text-sm text-ink-800">{essay.prompt || 'No prompt set — add one in the essay’s details.'}</p>
       </Card>
 
@@ -103,15 +128,18 @@ export function EssayWorkspace({ essay, onChanged, onBack }: Props) {
           ) : null}
         </div>
 
-        {/* AI sidebar */}
+        {/* AI coach sidebar */}
         <div className="space-y-3">
           <Card className="space-y-2 border border-primary-200 bg-primary-50">
             <div className="flex items-center gap-1.5 text-sm font-semibold text-primary-800">
-              <Icon name="star" size={15} /> Essay partner
+              <Icon name="star" size={15} /> Essay coach
             </div>
             <Button size="sm" variant="outline" block loading={finding} onClick={() => void runFind()}>Find relevant experiences</Button>
-            <Button size="sm" variant="outline" block loading={reviewing} disabled={!text.trim()} onClick={() => void runReview()}>Check my essay (feedback only)</Button>
-            <p className="text-[11px] text-primary-700">The AI suggests and critiques — it never writes the essay for you.</p>
+            <Button size="sm" variant="outline" block loading={practicing} onClick={() => void runPractice()}>Practice questions</Button>
+            <Button size="sm" variant="outline" block loading={reviewing} disabled={!text.trim()} onClick={() => void runReview()}>Check &amp; rate my essay</Button>
+            <p className="text-[11px] text-primary-700">
+              Grounded in your logged experiences{collegeName ? ` and what ${collegeName} looks for` : ''}. The AI coaches and rates — it never writes the essay for you.
+            </p>
           </Card>
 
           {finding ? <div className="flex justify-center py-3"><Spinner /></div> : find ? (
@@ -131,12 +159,55 @@ export function EssayWorkspace({ essay, onChanged, onBack }: Props) {
             </Card>
           ) : null}
 
+          {practicing ? <div className="flex justify-center py-3"><Spinner /></div> : practice ? (
+            <Card className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-ink-500">
+                Practice questions{practice.collegeName ? ` · ${practice.collegeName} style` : ''}
+              </p>
+              <ul className="space-y-2 text-sm">
+                {practice.questions.map((q, i) => (
+                  <li key={i} className="space-y-0.5">
+                    <p className="font-medium text-ink-800">{q.question}</p>
+                    {q.why ? <p className="text-xs text-ink-500">{q.why}</p> : null}
+                    {q.tip ? <p className="text-xs italic text-primary-700">Tip: {q.tip}</p> : null}
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          ) : null}
+
           {reviewing ? <div className="flex justify-center py-3"><Spinner /></div> : review ? (
             <Card className="space-y-2">
               <div className="flex items-center justify-between">
                 <p className="text-xs font-semibold uppercase tracking-wide text-ink-500">Feedback</p>
-                <Badge tone="neutral">{review.wordCount}w · feedback only</Badge>
+                <Badge tone="neutral">{review.wordCount}w · never a rewrite</Badge>
               </div>
+              {review.overall !== undefined && review.verdict ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-2xl font-bold text-ink-900">{review.overall}<span className="text-sm font-normal text-ink-400">/10</span></span>
+                  <Badge tone={VERDICT_META[review.verdict].tone}>{VERDICT_META[review.verdict].label}</Badge>
+                </div>
+              ) : review.source === 'curated' ? (
+                <p className="text-xs text-ink-400">AI rating unavailable right now — showing basic checks.</p>
+              ) : null}
+              {review.ratings ? (
+                <ul className="space-y-1">
+                  {ratingRows(review.ratings).map((r) => (
+                    <li key={r.key} className="flex items-center justify-between gap-2 text-sm">
+                      <span className="text-ink-600">{r.label}</span>
+                      <span className="flex items-center gap-1.5">
+                        <span className="h-1.5 w-16 overflow-hidden rounded-full bg-surface-sunken">
+                          <span
+                            className={`block h-full rounded-full ${ratingTone(r.score) === 'success' ? 'bg-success-500' : ratingTone(r.score) === 'warn' ? 'bg-warn-500' : 'bg-error-500'}`}
+                            style={{ width: `${r.score * 10}%` }}
+                          />
+                        </span>
+                        <span className="w-4 text-right text-xs font-semibold text-ink-700">{r.score}</span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
               {review.strengths.length ? <div><p className="text-xs font-medium text-success-700">Strengths</p><ul className="list-disc pl-5 text-sm text-ink-700">{review.strengths.map((s, i) => <li key={i}>{s}</li>)}</ul></div> : null}
               {review.improvements.length ? <div><p className="text-xs font-medium text-warn-700">Improve</p><ul className="list-disc pl-5 text-sm text-ink-700">{review.improvements.map((s, i) => <li key={i}>{s}</li>)}</ul></div> : null}
               {review.authenticity ? <p className="text-sm italic text-ink-600">{review.authenticity}</p> : null}

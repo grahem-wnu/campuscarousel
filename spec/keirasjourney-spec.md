@@ -901,17 +901,34 @@ All suggestions are presented as a checklist — user can accept, modify, or del
 - Deadline countdown (days remaining, color-coded)
 
 **Essay Workspace:**
-This is the killer feature. For each essay:
+This is the killer feature — the app's end goal is helping the student write authentic application
+essays, and this is where it happens. The AI is a **coach, not a ghostwriter**: it suggests,
+questions, and critiques; it never writes, rewrites, or supplies sentences/paragraphs for the essay.
 
-- **Prompt display** at top
-- **AI Context Panel** (sidebar):
-  - "Find relevant experiences" button → AI searches all journal entries (including Keira's private ones when she is the authenticated user) and surfaces the most relevant activities, reflections, and achievements
-  - Shows suggested narrative angles with brief explanations
-  - "What makes me unique for this school?" button → AI generates a brief analysis based on Keira's full profile vs. the specific school's values
-- **Writing area**: Rich text editor for drafting
+For each essay:
+
+- **College-linked prompts**: an essay can be linked to a college from the roster. Creating an essay
+  offers that college's real, hydrated `essayPrompts` as one-tap starting points (promptSource:
+  "college"), or a free-text prompt for Common App / practice work.
+- **Prompt display** at top, with the linked college shown as a chip
+- **AI Context Panel** (sidebar) — every AI action is grounded in a cross-section of the collected
+  data (activities, clinical/experience hours, Why-Nursing motivations — including Keira's private
+  entries when she is the authenticated caller) **and** in what the target college is looking for
+  (overview, admissions deep-dive, essay prompts, benchmark competitive edges) when a college is linked:
+  - "Find relevant experiences" button → AI surfaces the most relevant activities, reflections, and
+    achievements, plus suggested narrative angles with brief explanations
+  - "Practice questions" button → AI generates sample application/supplemental questions in the
+    style of the target college (grounded in its real prompts + admissions data) for practice runs
+- **Writing area**: editor for drafting
 - **Version history**: Save drafts, compare versions
 - **Word count**: With target range (e.g., Common App: 250-650 words)
-- **AI Review** (optional): "Check my essay" → AI provides feedback on clarity, authenticity, and alignment with the prompt (does NOT rewrite — gives specific, actionable suggestions)
+- **AI Review with rating**: "Check my essay" → AI returns structured feedback (strengths,
+  improvements, authenticity note — does NOT rewrite) **plus a rubric rating**: 1-10 scores for
+  prompt fit, voice/authenticity, structure, specificity, and (when a college is linked) college
+  alignment; an overall 1-10 score; and a readiness verdict (`ready` / `close` / `keep-working`).
+  A compact `lastReview` summary (overall, verdict, when, which draft) is persisted on the essay so
+  progress shows in the essay list; the full review is returned live and never persisted. Ratings
+  come only from the real AI path — the deterministic fallback gives basic feedback without scores.
 
 **Recommendation Tracker:**
 - Who's been asked
@@ -1422,7 +1439,12 @@ Attributes:
 - `PUT /essays/:id` — Update essay (add draft, change status)
 - `DELETE /essays/:id` — Delete essay
 - `POST /essays/:id/find-experiences` — AI finds relevant journal entries for this essay prompt
-- `POST /essays/:id/review` — AI reviews current draft and provides feedback
+  (grounded in the linked college's admissions data when the essay has a collegeId)
+- `POST /essays/:id/review` — AI reviews a draft: feedback + 1-10 rubric ratings (prompt fit, voice,
+  structure, specificity, college alignment), overall score, readiness verdict. Persists a compact
+  `lastReview` summary on the essay; full review returned live only. Never rewrites.
+- `POST /essays/:id/practice-questions` — AI generates sample application questions in the target
+  college's style (from its real essayPrompts + admissions deep-dive) for practice
 
 ### AI Assistant
 - `POST /ai/chat` — Send message to AI assistant
@@ -1542,8 +1564,10 @@ Attributes:
 
 ### Navigation
 - Top nav bar: Logo ("Keira's Journey") + primary module tabs
-- Primary tabs: Dashboard, Journal, Colleges, Scholarships, Timeline
-- Secondary nav (dropdown or sidebar): Goals, Courses, TEAS Prep, Clinical Log, Certifications, Why Nursing, Contacts, Interview Prep, Applications
+- Primary tabs (mobile bottom bar, first 5): Dashboard, Focus, Journal, Colleges, Applications
+  (Applications is primary — essay writing is the app's end goal, so managing essays/applications
+  must be one tap away on mobile; Scholarships and Timeline overflow to the More menu / drawer)
+- Secondary nav (dropdown or sidebar): Scholarships, Timeline, Goals, Courses, TEAS Prep, Clinical Log, Certifications, Why Nursing, Contacts, Interview Prep
 - Organize by usage frequency — Dashboard/Journal/Colleges are daily, others are weekly or seasonal
 - User avatar + name in top right (switch not needed — each user logs in separately)
 - AI chat button: floating bottom-right, opens slide-over panel

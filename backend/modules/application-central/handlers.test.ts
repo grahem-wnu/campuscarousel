@@ -110,3 +110,80 @@ describe('applications overview (derived)', () => {
     expect(apps[0]?.essays.final).toBe(1);
   });
 });
+
+describe('essay coach — college grounding, rated review, practice questions', () => {
+  async function seedCollege() {
+    const college = await data.colleges.create({
+      name: 'Ohio State',
+      essayPrompts: ['Why OSU nursing?'],
+      admissionsDeepDive: 'Holistic direct admit.',
+    } as Parameters<Data['colleges']['create']>[0]);
+    return college.collegeId;
+  }
+
+  it('passes the linked college to the finder and practice generator', async () => {
+    const collegeId = await seedCollege();
+    const seen: Array<string | undefined> = [];
+    const localH = makeHandlers({
+      getData: () => data,
+      now,
+      finder: async ({ college, pool }) => { seen.push(college?.name); return stubFinder({ prompt: '', pool }); },
+      practice: async ({ college }) => { seen.push(college?.name); return { questions: [{ question: 'q', why: 'w', tip: 't' }], source: 'curated' as const }; },
+    });
+    const linked = (await localH.createEssay(ctx({ body: { collegeId, prompt: 'p' } }))).body as { essayId: string };
+    await localH.findExperiences(ctx({ params: { id: linked.essayId }, body: {} }));
+    const pq = await localH.practiceQuestions(ctx({ params: { id: linked.essayId }, body: {} }));
+    expect(seen).toEqual(['Ohio State', 'Ohio State']);
+    expect((pq.body as { collegeName?: string }).collegeName).toBe('Ohio State');
+
+    const unlinked = (await localH.createEssay(ctx({ body: { prompt: 'p' } }))).body as { essayId: string };
+    const pq2 = await localH.practiceQuestions(ctx({ params: { id: unlinked.essayId }, body: {} }));
+    expect(seen.at(-1)).toBeUndefined();
+    expect((pq2.body as { collegeName?: string }).collegeName).toBeUndefined();
+  });
+
+  it('persists a compact lastReview from an AI rubric review (with the reviewed draft version)', async () => {
+    const localH = makeHandlers({
+      getData: () => data,
+      now,
+      reviewer: async ({ content }) => ({
+        strengths: ['s'], improvements: ['i'], authenticity: 'a',
+        ratings: { promptFit: 8, voice: 9, structure: 7, specificity: 8 },
+        overall: 8, verdict: 'close' as const,
+        wordCount: content.split(/\s+/).length, onTarget: null, rewrote: false as const, source: 'ai' as const,
+      }),
+    });
+    const id = ((await localH.createEssay(ctx({ body: { prompt: 'p' } }))).body as { essayId: string }).essayId;
+    await localH.addDraft(ctx({ params: { id }, body: { content: 'my draft words' } }));
+    const res = await localH.review(ctx({ params: { id }, body: {} }));
+    const body = res.body as { review: { overall?: number }; essay: { lastReview?: { overall: number; verdict: string; version?: number; reviewedAt: string } } };
+    expect(body.review.overall).toBe(8);
+    expect(body.essay.lastReview).toMatchObject({ overall: 8, verdict: 'close', version: 1, reviewedAt: now().toISOString() });
+    const stored = await data.essays.get(id);
+    expect(stored?.lastReview?.overall).toBe(8);
+  });
+
+  it('does NOT persist lastReview from the curated fallback (no fake scores)', async () => {
+    const id = await createEssay();
+    await h.addDraft(ctx({ params: { id }, body: { content: 'my draft words' } }));
+    await h.review(ctx({ params: { id }, body: {} }));
+    expect((await data.essays.get(id))?.lastReview).toBeUndefined();
+  });
+
+  it('ad-hoc content review records no draft version', async () => {
+    const localH = makeHandlers({
+      getData: () => data,
+      now,
+      reviewer: async () => ({
+        strengths: ['s'], improvements: [], authenticity: '',
+        overall: 6, verdict: 'keep-working' as const,
+        wordCount: 2, onTarget: null, rewrote: false as const, source: 'ai' as const,
+      }),
+    });
+    const id = ((await localH.createEssay(ctx({ body: { prompt: 'p' } }))).body as { essayId: string }).essayId;
+    const res = await localH.review(ctx({ params: { id }, body: { content: 'unsaved text' } }));
+    const lastReview = (res.body as { essay: { lastReview?: { version?: number } } }).essay.lastReview;
+    expect(lastReview).toBeDefined();
+    expect(lastReview?.version).toBeUndefined();
+  });
+});

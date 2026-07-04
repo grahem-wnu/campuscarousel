@@ -5,12 +5,14 @@ import type {
   Application,
   ApplicationInput,
   ApplicationRow,
+  CollegeOption,
   DecisionRow,
   Essay,
   EssayInput,
   EssayReview,
   EssayStatus,
   FindResponse,
+  PracticeQuestionSet,
   Recommendation,
   RecommendationInput,
   RecommenderBrief,
@@ -47,9 +49,21 @@ export function findExperiences(id: string, prompt?: string): Promise<FindRespon
   return api.post<FindResponse>(`/essays/${encodeURIComponent(id)}/find-experiences`, prompt ? { prompt } : {});
 }
 
-export async function reviewEssay(id: string, opts: { version?: number; content?: string; targetWords?: number } = {}): Promise<EssayReview> {
-  const res = await api.post<{ review: EssayReview }>(`/essays/${encodeURIComponent(id)}/review`, opts);
-  return res.review;
+export function reviewEssay(
+  id: string,
+  opts: { version?: number; content?: string; targetWords?: number } = {},
+): Promise<{ review: EssayReview; essay: Essay }> {
+  return api.post<{ review: EssayReview; essay: Essay }>(`/essays/${encodeURIComponent(id)}/review`, opts);
+}
+
+export function getPracticeQuestions(id: string, count?: number): Promise<PracticeQuestionSet> {
+  return api.post<PracticeQuestionSet>(`/essays/${encodeURIComponent(id)}/practice-questions`, count ? { count } : {});
+}
+
+/** Roster colleges, slimmed to what the essay UI needs (picker + real prompts). */
+export async function listCollegeOptions(): Promise<CollegeOption[]> {
+  const res = await api.get<{ colleges: Array<CollegeOption & Record<string, unknown>> }>('/colleges');
+  return res.colleges.map((c) => ({ collegeId: c.collegeId, name: c.name, essayPrompts: c.essayPrompts }));
 }
 
 export async function getOverview(): Promise<ApplicationRow[]> {
