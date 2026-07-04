@@ -120,6 +120,14 @@ export function LoginPage() {
           )}
         </div>
 
+        {phase === "credentials" ? (
+          <p className="mt-6 text-center text-sm text-ink-500">
+            New here?{" "}
+            <a href="/signup" className="font-medium text-primary-700 hover:underline">
+              Create an account
+            </a>
+          </p>
+        ) : null}
         <p className="mt-6 text-center text-xs text-ink-400">
           Password help? Ask Grahem &mdash; resets are handled by the admin.
         </p>

@@ -130,10 +130,13 @@ export class ApiStack extends Stack {
       }),
     );
 
-    // Public redeem/self-signup Lambda (SaaS sub-project 2) — the ONE unauthenticated endpoint. A new
-    // parent has no token yet, so this is NOT behind the JWT authorizer. It provisions a family tenant +
-    // the parent's Cognito account from a valid invite code. Least-privilege: table CRUD (global invite/
-    // tenant registries) + Cognito AdminCreateUser/AdminSetUserPassword on THIS pool only.
+    // Public auth Lambda (SaaS sub-project 2) — the only unauthenticated endpoints: invite
+    // redemption (POST /auth/redeem) and open self-serve signup (POST /auth/signup). A new parent
+    // has no token yet, so neither is behind the JWT authorizer. Both provision a family tenant +
+    // the parent's Cognito account; the handler dispatches on path. Least-privilege: table CRUD
+    // (global invite/tenant registries) + Cognito AdminCreateUser/AdminSetUserPassword on THIS
+    // pool only. PUBLIC_SIGNUP_ENABLED is the signup kill switch — flip to "false" and deploy to
+    // close open signup without touching the invite flow.
     const redeem = new LambdaFunction(this, "RedeemFn", {
       functionName: `${config.namePrefix}-auth-redeem`,
       runtime: Runtime.NODEJS_20_X,
@@ -142,7 +145,11 @@ export class ApiStack extends Stack {
       timeout: Duration.seconds(30),
       memorySize: 256,
       logRetention: RetentionDays.ONE_MONTH,
-      environment: { TABLE_NAME: table.tableName, USER_POOL_ID: userPool.userPoolId },
+      environment: {
+        TABLE_NAME: table.tableName,
+        USER_POOL_ID: userPool.userPoolId,
+        PUBLIC_SIGNUP_ENABLED: "true",
+      },
     });
     table.grantReadWriteData(redeem);
     redeem.addToRolePolicy(
@@ -208,11 +215,18 @@ export class ApiStack extends Stack {
       authorizer,
     });
 
-    // PUBLIC route — invite redemption / self-signup. NO authorizer (the parent has no token yet).
+    // PUBLIC routes — invite redemption + open self-serve signup. NO authorizer (the parent has
+    // no token yet). One Lambda serves both; it dispatches on the request path.
+    const publicAuthIntegration = new HttpLambdaIntegration("RedeemIntegration", redeem);
     api.addRoutes({
       path: "/auth/redeem",
       methods: [HttpMethod.POST],
-      integration: new HttpLambdaIntegration("RedeemIntegration", redeem),
+      integration: publicAuthIntegration,
+    });
+    api.addRoutes({
+      path: "/auth/signup",
+      methods: [HttpMethod.POST],
+      integration: publicAuthIntegration,
     });
 
     this.httpApiName = `${config.namePrefix}-api`;
