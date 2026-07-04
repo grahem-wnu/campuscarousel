@@ -187,3 +187,31 @@ describe('essay coach — college grounding, rated review, practice questions', 
     expect(lastReview?.version).toBeUndefined();
   });
 });
+
+describe('per-essay word target', () => {
+  it('parses a stated count from the prompt at creation; silent prompts get none', async () => {
+    const res = await h.createEssay(ctx({ body: { prompt: 'Why us? In 350 words or fewer.' } }));
+    expect((res.body as { targetWords?: number }).targetWords).toBe(350);
+    const silent = await h.createEssay(ctx({ body: { prompt: 'Why nursing?' } }));
+    expect((silent.body as { targetWords?: number }).targetWords).toBeUndefined();
+    const explicit = await h.createEssay(ctx({ body: { prompt: 'In 350 words.', targetWords: 500 } }));
+    expect((explicit.body as { targetWords?: number }).targetWords).toBe(500);
+  });
+
+  it('review falls back to the essay target when the body sends none', async () => {
+    const seen: Array<number | undefined> = [];
+    const localH = makeHandlers({
+      getData: () => data,
+      now,
+      reviewer: async ({ content, targetWords }) => {
+        seen.push(targetWords);
+        return stubReviewer({ prompt: '', content });
+      },
+    });
+    const id = ((await localH.createEssay(ctx({ body: { prompt: 'A 300-word response.' } }))).body as { essayId: string }).essayId;
+    await localH.addDraft(ctx({ params: { id }, body: { content: 'my draft' } }));
+    await localH.review(ctx({ params: { id }, body: {} }));
+    await localH.review(ctx({ params: { id }, body: { targetWords: 650 } }));
+    expect(seen).toEqual([300, 650]);
+  });
+});

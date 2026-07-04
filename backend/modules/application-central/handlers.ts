@@ -32,6 +32,7 @@ import {
   updateSchema,
 } from './schema.js';
 import { gatherCollegeContext, gatherExperiences, gatherSharedExperiences } from './grounding.js';
+import { parseTargetWords } from './words.js';
 import { buildOverview } from './overview.js';
 import { buildDecisionMatrix } from './decision.js';
 import {
@@ -137,6 +138,7 @@ export function makeHandlers(deps: AppCentralDeps): AppCentralHandlers {
       const input = validateBody(createSchema, ctx);
       const created = await getData().essays.create({
         ...input,
+        targetWords: input.targetWords ?? parseTargetWords(input.prompt),
         status: input.status ?? 'brainstorming',
         createdBy: ctx.requester.username,
       } as Parameters<Data['essays']['create']>[0]);
@@ -202,7 +204,7 @@ export function makeHandlers(deps: AppCentralDeps): AppCentralHandlers {
       const content = body.content ?? reviewedDraft?.content;
       if (!content) throw Errors.validation('No draft content to review — add a draft or pass content.');
       const college = await gatherCollegeContext(data, essay.collegeId);
-      const review = await reviewer({ prompt: essay.prompt ?? '', content, targetWords: body.targetWords, college });
+      const review = await reviewer({ prompt: essay.prompt ?? '', content, targetWords: body.targetWords ?? essay.targetWords, college });
       let updated = essay;
       if (review.source === 'ai' && review.overall !== undefined && review.verdict !== undefined) {
         updated = await data.essays.update(id, {

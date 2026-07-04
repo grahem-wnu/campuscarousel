@@ -27,6 +27,7 @@ export interface Essay {
   collegeId?: string;
   prompt?: string;
   promptSource?: string;
+  targetWords?: number;
   drafts?: EssayDraft[];
   status?: EssayStatus;
   aiSuggestedActivities?: string[];
@@ -41,6 +42,7 @@ export interface EssayInput {
   collegeId?: string;
   prompt?: string;
   promptSource?: string;
+  targetWords?: number;
   status?: EssayStatus;
   notes?: string;
 }
