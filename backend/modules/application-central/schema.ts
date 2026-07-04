@@ -20,6 +20,7 @@ export const createSchema = z
     collegeId: z.string().max(200).optional(),
     prompt: z.string().max(5000).optional(),
     promptSource: z.string().max(200).optional(),
+    targetWords: z.number().int().min(50).max(5000).optional(),
     status: z.enum(ESSAY_STATUSES).optional(),
     drafts: z.array(draft).max(100).optional(),
     notes: z.string().max(20000).optional(),

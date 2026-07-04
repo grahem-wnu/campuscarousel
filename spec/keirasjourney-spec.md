@@ -921,7 +921,10 @@ For each essay:
     style of the target college (grounded in its real prompts + admissions data) for practice runs
 - **Writing area**: editor for drafting
 - **Version history**: Save drafts, compare versions
-- **Word count**: With target range (e.g., Common App: 250-650 words)
+- **Word count**: live counter against a **per-essay word target** — a coaching target, never a
+  hard limit. Defaults to the count stated in the prompt text when present ("in 500 words or
+  fewer" → 500, ranges use the upper bound), else the Common App 650; editable inline in the
+  workspace. The AI review judges "on target" against the essay's own target.
 - **AI Review with rating**: "Check my essay" → AI returns structured feedback (strengths,
   improvements, authenticity note — does NOT rewrite) **plus a rubric rating**: 1-10 scores for
   prompt fit, voice/authenticity, structure, specificity, and (when a college is linked) college

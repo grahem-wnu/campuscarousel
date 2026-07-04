@@ -11,7 +11,8 @@ interface Props {
   onBack: () => void;
 }
 
-const TARGET_WORDS = 650; // common-app-ish default
+/** Common App cap — the coaching default when an essay has no target of its own. */
+const DEFAULT_TARGET_WORDS = 650;
 
 /** The essay workspace: prompt, editor with live word count + version history, and an AI coach
  *  sidebar — "Find relevant experiences" (grounded in her real, privacy-filtered data + what the
@@ -21,6 +22,8 @@ export function EssayWorkspace({ essay, collegeName, onChanged, onBack }: Props)
   const latest = (essay.drafts ?? []).at(-1);
   const [text, setText] = useState(latest?.content ?? '');
   const [savingDraft, setSavingDraft] = useState(false);
+
+  const [target, setTarget] = useState<number>(essay.targetWords ?? DEFAULT_TARGET_WORDS);
 
   const [find, setFind] = useState<FindResult | null>(null);
   const [finding, setFinding] = useState(false);
@@ -75,7 +78,7 @@ export function EssayWorkspace({ essay, collegeName, onChanged, onBack }: Props)
     setReviewing(true);
     setError(null);
     try {
-      const res = await reviewEssay(essay.essayId, { content: text, targetWords: TARGET_WORDS });
+      const res = await reviewEssay(essay.essayId, { content: text, targetWords: target });
       setReview(res.review);
       onChanged(res.essay);
     } catch (err) {
@@ -87,6 +90,18 @@ export function EssayWorkspace({ essay, collegeName, onChanged, onBack }: Props)
 
   async function setStatus(status: Essay['status']) {
     onChanged(await updateEssay(essay.essayId, { status }));
+  }
+
+  /** Persist an edited word target (a coaching target, never a hard limit). */
+  async function saveTarget() {
+    const clamped = Math.min(5000, Math.max(50, Math.round(target) || DEFAULT_TARGET_WORDS));
+    if (clamped !== target) setTarget(clamped);
+    if (clamped === (essay.targetWords ?? DEFAULT_TARGET_WORDS)) return;
+    try {
+      onChanged(await updateEssay(essay.essayId, { targetWords: clamped }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not save the word target.');
+    }
   }
 
   return (
@@ -117,8 +132,23 @@ export function EssayWorkspace({ essay, collegeName, onChanged, onBack }: Props)
         {/* Editor */}
         <div className="space-y-2 lg:col-span-2">
           <Textarea rows={16} value={text} onChange={(e) => setText(e.target.value)} placeholder="Write your essay here…" className="font-serif" />
-          <div className="flex items-center justify-between text-sm">
-            <Badge tone={wordTargetTone(wc, TARGET_WORDS)}>{wc} / {TARGET_WORDS} words</Badge>
+          <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+            <span className="flex items-center gap-2">
+              <Badge tone={wordTargetTone(wc, target)}>{wc} / {target} words</Badge>
+              <label className="flex items-center gap-1 text-xs text-ink-500">
+                target
+                <input
+                  type="number"
+                  min={50}
+                  max={5000}
+                  value={target}
+                  onChange={(e) => setTarget(Number(e.target.value) || DEFAULT_TARGET_WORDS)}
+                  onBlur={() => void saveTarget()}
+                  className="w-16 rounded-md border border-surface-border bg-surface-raised px-1.5 py-0.5 text-xs text-ink-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300"
+                  aria-label="Word target for this essay"
+                />
+              </label>
+            </span>
             <Button size="sm" loading={savingDraft} disabled={!text.trim()} onClick={() => void saveDraft()}>
               Save draft v{(essay.drafts?.length ?? 0) + 1}
             </Button>

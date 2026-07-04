@@ -30,6 +30,13 @@ const essay: Essay = {
 };
 
 describe('EssayWorkspace — essay coach', () => {
+  it('honors the essay\'s own word target (falls back to 650 only when unset)', () => {
+    render(<EssayWorkspace essay={{ ...essay, targetWords: 350 }} collegeName="Ohio State" onChanged={() => {}} onBack={() => {}} />);
+    expect(screen.getByText(/\/ 350 words/)).toBeInTheDocument();
+    expect(screen.getByLabelText('Word target for this essay')).toHaveValue(350);
+  });
+
+
   it('shows the college chip and renders a rated review', async () => {
     reviewEssay.mockResolvedValue({
       review: {

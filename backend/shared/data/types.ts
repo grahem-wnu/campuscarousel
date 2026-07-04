@@ -461,6 +461,9 @@ export interface Essay extends Timestamped {
   collegeId?: string;
   prompt?: string;
   promptSource?: string;
+  /** Coaching word target — parsed from the prompt at creation when it states a count,
+   *  else the Common App 650; editable per essay. A target, never a hard limit. */
+  targetWords?: number;
   drafts?: { version: number; content: string; createdAt: string; wordCount?: number }[];
   status?: 'brainstorming' | 'drafting' | 'reviewing' | 'final';
   aiSuggestedActivities?: string[];
