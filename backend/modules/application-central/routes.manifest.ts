@@ -27,6 +27,7 @@ export const routes: RouteDef[] = [
   { method: 'POST', path: '/essays/:id/draft', handler: h.addDraft },
   { method: 'POST', path: '/essays/:id/find-experiences', handler: h.findExperiences },
   { method: 'POST', path: '/essays/:id/review', handler: h.review },
+  { method: 'POST', path: '/essays/:id/practice-questions', handler: h.practiceQuestions },
   { method: 'GET', path: '/recommendations', handler: h.listRecommendations },
   { method: 'POST', path: '/recommendations', handler: h.createRecommendation },
   { method: 'PUT', path: '/recommendations/:id', handler: h.updateRecommendation },

@@ -23,6 +23,7 @@ describe('routes.manifest ↔ buildRoutes', () => {
         'POST /essays/:id/draft',
         'POST /essays/:id/find-experiences',
         'POST /essays/:id/review',
+        'POST /essays/:id/practice-questions',
         // Application tracker + decision matrix
         'GET /applications/overview',
         'GET /applications/decision-matrix',

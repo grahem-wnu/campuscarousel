@@ -85,3 +85,52 @@ export function poolToText(pool: ExperiencePool, limit = 30): string {
     .map((e) => `- [${e.kind} ${e.date}] ${e.title}${e.detail ? `: ${e.detail}` : ''}`)
     .join('\n');
 }
+
+// ---------------------------------------------------------------------------
+// Target-college context — "what this school is looking for", assembled from the
+// hydrated college record + its benchmark. All fields are family-visible AI-hydrated
+// data, so no privacy filtering is needed here.
+// ---------------------------------------------------------------------------
+
+export interface CollegeContext {
+  collegeId: string;
+  name: string;
+  overview?: string;
+  admissionsDeepDive?: string;
+  essayPrompts?: string[];
+  competitiveEdges?: string[];
+}
+
+/** Load the essay's target-college context. Returns undefined when the essay has no college,
+ *  the id doesn't resolve, or the lookup fails — the AI degrades to college-agnostic coaching. */
+export async function gatherCollegeContext(data: Data, collegeId?: string): Promise<CollegeContext | undefined> {
+  if (!collegeId) return undefined;
+  try {
+    const college = await data.colleges.get(collegeId);
+    if (!college) return undefined;
+    const benchmark = await data.benchmarks.get(collegeId).catch(() => undefined);
+    return {
+      collegeId: college.collegeId,
+      name: college.name,
+      overview: clip(college.overview, 500),
+      admissionsDeepDive: clip(college.admissionsDeepDive, 700),
+      essayPrompts: college.essayPrompts?.slice(0, 8),
+      competitiveEdges: benchmark?.competitiveEdges?.slice(0, 6),
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+/** Compact text rendering of the college context for an AI prompt. */
+export function collegeToText(college: CollegeContext): string {
+  return [
+    `Target college: ${college.name}`,
+    college.overview ? `About the school: ${college.overview}` : '',
+    college.admissionsDeepDive ? `How admissions works there: ${college.admissionsDeepDive}` : '',
+    college.essayPrompts?.length ? `Their real essay prompts:\n${college.essayPrompts.map((p) => `  - ${p}`).join('\n')}` : '',
+    college.competitiveEdges?.length ? `What makes applicants stand out there: ${college.competitiveEdges.join('; ')}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n');
+}

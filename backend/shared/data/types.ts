@@ -465,6 +465,15 @@ export interface Essay extends Timestamped {
   status?: 'brainstorming' | 'drafting' | 'reviewing' | 'final';
   aiSuggestedActivities?: string[];
   aiSuggestedAngles?: string[];
+  /** Compact summary of the most recent AI rubric review (full review is returned live, never
+   *  persisted). Safe to store: derived only from the draft text, never from private entries. */
+  lastReview?: {
+    overall: number;
+    verdict: 'ready' | 'close' | 'keep-working';
+    wordCount: number;
+    version?: number;
+    reviewedAt: string;
+  };
   notes?: string;
   createdBy?: string;
 }

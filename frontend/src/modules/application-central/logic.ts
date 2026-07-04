@@ -9,6 +9,8 @@ import type {
   EssayStatus,
   RecommendationSlot,
   RecommendationStatus,
+  ReviewRatings,
+  ReviewVerdict,
 } from './types';
 
 export const ESSAY_STATUS_META: Record<EssayStatus, { label: string; tone: BadgeTone }> = {
@@ -82,4 +84,35 @@ export function essaySummary(row: ApplicationRow): { text: string; tone: BadgeTo
 export function wordTargetTone(count: number, target?: number): BadgeTone {
   if (!target) return 'neutral';
   return Math.abs(count - target) <= Math.max(25, target * 0.1) ? 'success' : 'warn';
+}
+
+// --- AI review rubric -------------------------------------------------------
+
+export const VERDICT_META: Record<ReviewVerdict, { label: string; tone: BadgeTone }> = {
+  ready: { label: 'Ready to submit', tone: 'success' },
+  close: { label: 'One more pass', tone: 'warn' },
+  'keep-working': { label: 'Keep working', tone: 'error' },
+};
+
+/** Tone for a 1-10 rubric score. */
+export function ratingTone(score: number): BadgeTone {
+  if (score >= 8) return 'success';
+  if (score >= 6) return 'warn';
+  return 'error';
+}
+
+export const RATING_LABELS: Record<keyof ReviewRatings, string> = {
+  promptFit: 'Answers the prompt',
+  voice: 'Voice & authenticity',
+  structure: 'Structure',
+  specificity: 'Specific detail',
+  collegeFit: 'College fit',
+};
+
+/** Ordered rows for rendering a ratings rubric (collegeFit only when present). */
+export function ratingRows(ratings: ReviewRatings): Array<{ key: keyof ReviewRatings; label: string; score: number }> {
+  const keys: Array<keyof ReviewRatings> = ['promptFit', 'voice', 'structure', 'specificity', 'collegeFit'];
+  return keys
+    .map((key) => ({ key, label: RATING_LABELS[key], score: ratings[key] }))
+    .filter((r): r is { key: keyof ReviewRatings; label: string; score: number } => typeof r.score === 'number');
 }
