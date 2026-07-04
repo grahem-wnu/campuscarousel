@@ -57,8 +57,8 @@ export function ApplicationOverview({ onStartEssay, onViewEssays }: Props) {
             <tr>
               <th className="p-2 font-medium">College</th>
               <th className="p-2 font-medium">Deadline</th>
-              <th className="p-2 font-medium">Essays</th>
-              <th className="p-2 font-medium">Exam</th>
+              <th className="hidden p-2 font-medium sm:table-cell">Essays</th>
+              <th className="hidden p-2 font-medium sm:table-cell">Exam</th>
               <th className="p-2 font-medium"><span className="sr-only">Action</span></th>
             </tr>
           </thead>
@@ -80,8 +80,8 @@ export function ApplicationOverview({ onStartEssay, onViewEssays }: Props) {
                     <span className="text-xs capitalize text-ink-400">{r.status ?? ''}</span>
                   </td>
                   <td className="p-2">{dl ? <Badge tone={dl.tone}>{dl.text}</Badge> : <span className="text-ink-400">—</span>}</td>
-                  <td className="p-2"><Badge tone={es.tone}>{es.text}</Badge></td>
-                  <td className="p-2">{r.hasExamScore ? <Icon name="check" size={16} className="text-success-600" /> : <span className="text-ink-400">—</span>}</td>
+                  <td className="hidden p-2 sm:table-cell"><Badge tone={es.tone}>{es.text}</Badge></td>
+                  <td className="hidden p-2 sm:table-cell">{r.hasExamScore ? <Icon name="check" size={16} className="text-success-600" /> : <span className="text-ink-400">—</span>}</td>
                   <td className="p-2 text-right">
                     <Button
                       size="sm"
