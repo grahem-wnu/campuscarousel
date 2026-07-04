@@ -22,6 +22,7 @@ export function EssayWorkspace({ essay, collegeName, onChanged, onBack }: Props)
   const latest = (essay.drafts ?? []).at(-1);
   const [text, setText] = useState(latest?.content ?? '');
   const [savingDraft, setSavingDraft] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const [target, setTarget] = useState<number>(essay.targetWords ?? DEFAULT_TARGET_WORDS);
 
@@ -92,6 +93,17 @@ export function EssayWorkspace({ essay, collegeName, onChanged, onBack }: Props)
     onChanged(await updateEssay(essay.essayId, { status }));
   }
 
+  /** Copy the current essay text, ready to paste into the Common App / a college portal. */
+  async function copyEssay() {
+    try {
+      await navigator.clipboard.writeText(text.trim());
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    } catch {
+      setError('Could not copy — select the text in the editor and copy it manually.');
+    }
+  }
+
   /** Persist an edited word target (a coaching target, never a hard limit). */
   async function saveTarget() {
     const clamped = Math.min(5000, Math.max(50, Math.round(target) || DEFAULT_TARGET_WORDS));
@@ -149,9 +161,14 @@ export function EssayWorkspace({ essay, collegeName, onChanged, onBack }: Props)
                 />
               </label>
             </span>
-            <Button size="sm" loading={savingDraft} disabled={!text.trim()} onClick={() => void saveDraft()}>
-              Save draft v{(essay.drafts?.length ?? 0) + 1}
-            </Button>
+            <span className="flex items-center gap-2">
+              <Button size="sm" variant="outline" icon={copied ? 'check' : 'copy'} disabled={!text.trim()} onClick={() => void copyEssay()}>
+                {copied ? 'Copied' : 'Copy essay'}
+              </Button>
+              <Button size="sm" loading={savingDraft} disabled={!text.trim()} onClick={() => void saveDraft()}>
+                Save draft v{(essay.drafts?.length ?? 0) + 1}
+              </Button>
+            </span>
           </div>
           {essay.drafts && essay.drafts.length > 0 ? (
             <p className="text-xs text-ink-400">Version history: {essay.drafts.map((d) => `v${d.version} (${d.wordCount ?? wordCount(d.content)}w)`).join(' · ')}</p>

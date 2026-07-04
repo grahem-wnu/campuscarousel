@@ -30,6 +30,16 @@ const essay: Essay = {
 };
 
 describe('EssayWorkspace — essay coach', () => {
+  it('copies the essay text for pasting into a portal', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    render(<EssayWorkspace essay={essay} onChanged={() => {}} onBack={() => {}} />);
+    await userEvent.click(screen.getByRole('button', { name: /copy essay/i }));
+    expect(writeText).toHaveBeenCalledWith('My draft about the ICU.');
+    expect(await screen.findByRole('button', { name: /copied/i })).toBeInTheDocument();
+  });
+
+
   it('honors the essay\'s own word target (falls back to 650 only when unset)', () => {
     render(<EssayWorkspace essay={{ ...essay, targetWords: 350 }} collegeName="Ohio State" onChanged={() => {}} onBack={() => {}} />);
     expect(screen.getByText(/\/ 350 words/)).toBeInTheDocument();

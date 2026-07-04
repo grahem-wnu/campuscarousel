@@ -921,6 +921,9 @@ For each essay:
     style of the target college (grounded in its real prompts + admissions data) for practice runs
 - **Writing area**: editor for drafting
 - **Version history**: Save drafts, compare versions
+- **Copy to portal**: one-tap "Copy essay" puts the current text on the clipboard, ready to paste
+  into the Common App or a college's own application portal (essays are always submitted there —
+  the workspace is where they're written, not where they're sent)
 - **Word count**: live counter against a **per-essay word target** — a coaching target, never a
   hard limit. Defaults to the count stated in the prompt text when present ("in 500 words or
   fewer" → 500, ranges use the upper bound), else the Common App 650; editable inline in the
