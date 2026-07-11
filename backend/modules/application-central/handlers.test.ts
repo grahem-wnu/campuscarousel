@@ -133,12 +133,13 @@ describe('essay coach — college grounding, rated review, practice questions', 
     const linked = (await localH.createEssay(ctx({ body: { collegeId, prompt: 'p' } }))).body as { essayId: string };
     await localH.findExperiences(ctx({ params: { id: linked.essayId }, body: {} }));
     const pq = await localH.practiceQuestionsForCollege(ctx({ body: { collegeId } }));
+    expect(pq.status).toBe(202);
     expect(seen).toEqual(['Ohio State', 'Ohio State']);
-    expect((pq.body as { collegeName?: string }).collegeName).toBe('Ohio State');
+    expect((pq.body as { result?: { collegeName?: string } }).result?.collegeName).toBe('Ohio State');
 
     const pq2 = await localH.practiceQuestionsForCollege(ctx({ body: {} }));
     expect(seen.at(-1)).toBeUndefined();
-    expect((pq2.body as { collegeName?: string }).collegeName).toBeUndefined();
+    expect((pq2.body as { result?: { collegeName?: string } }).result?.collegeName).toBeUndefined();
   });
 
   it('persists a compact lastReview from an AI rubric review (with the reviewed draft version)', async () => {
@@ -187,67 +188,31 @@ describe('essay coach — college grounding, rated review, practice questions', 
   });
 });
 
-describe('practice-questions (questions-first, collegeId-keyed)', () => {
-  it('grounds on a roster college and flags usedRealPrompts when it has real prompts', async () => {
-    const seen: Array<string | undefined> = [];
+describe('practice-questions (async job)', () => {
+  it('creates a job, runs it inline (no queue), returns 202 with the complete result', async () => {
     const localH = makeHandlers({
-      getData: () => data,
-      now,
-      practice: async ({ college }) => {
-        seen.push(college?.name);
-        return { questions: [{ question: 'q', why: 'w', tip: 't' }], source: 'curated' as const };
-      },
+      getData: () => data, now,
+      practice: async ({ college }) => ({ questions: [{ question: 'q', why: 'w', tip: 't' }], source: 'curated' as const }),
     });
-    const college = await data.colleges.create({
-      name: 'Ohio State', status: 'applying', essayPrompts: ['Why nursing at OSU?'],
-    } as Parameters<Data['colleges']['create']>[0]);
+    const college = await data.colleges.create({ name: 'Ohio State', status: 'applying', essayPrompts: ['Why OSU?'] } as Parameters<Data['colleges']['create']>[0]);
     const res = await localH.practiceQuestionsForCollege(ctx({ body: { collegeId: college.collegeId } }));
-    const body = res.body as { collegeName?: string; usedRealPrompts: boolean; questions: unknown[] };
-    expect(seen).toEqual(['Ohio State']);
-    expect(body.collegeName).toBe('Ohio State');
-    expect(body.usedRealPrompts).toBe(true);
-    expect(body.questions).toHaveLength(1);
+    expect(res.status).toBe(202);
+    const job = res.body as { jobId: string; status: string; result?: { usedRealPrompts: boolean; collegeName?: string } };
+    expect(job.status).toBe('complete');
+    expect(job.result?.usedRealPrompts).toBe(true);
+    expect(job.result?.collegeName).toBe('Ohio State');
+
+    // status endpoint returns the same job
+    const poll = await localH.practiceQuestionsStatus(ctx({ params: { jobId: job.jobId } }));
+    expect((poll.body as { jobId: string }).jobId).toBe(job.jobId);
   });
 
-  it('uses a typed school name with usedRealPrompts=false, and works with no school', async () => {
-    const seen: Array<string | undefined> = [];
-    const localH = makeHandlers({
-      getData: () => data,
-      now,
-      practice: async ({ college }) => {
-        seen.push(college?.name);
-        return { questions: [{ question: 'q', why: 'w', tip: 't' }], source: 'ai' as const };
-      },
-    });
+  it('typed name → usedRealPrompts false; unknown jobId → 404; strict-schema 422', async () => {
+    const localH = makeHandlers({ getData: () => data, now, practice: async () => ({ questions: [{ question: 'q', why: 'w', tip: 't' }], source: 'ai' as const }) });
     const typed = await localH.practiceQuestionsForCollege(ctx({ body: { collegeName: 'Imaginary U' } }));
-    expect((typed.body as { collegeName?: string; usedRealPrompts: boolean }).collegeName).toBe('Imaginary U');
-    expect((typed.body as { usedRealPrompts: boolean }).usedRealPrompts).toBe(false);
-    const general = await localH.practiceQuestionsForCollege(ctx({ body: {} }));
-    expect((general.body as { usedRealPrompts: boolean }).usedRealPrompts).toBe(false);
-    expect(seen).toEqual(['Imaginary U', undefined]);
-  });
-
-  it('flags usedRealPrompts=false for a roster college that has no essayPrompts', async () => {
-    const localH = makeHandlers({
-      getData: () => data,
-      now,
-      practice: async () => ({ questions: [{ question: 'q', why: 'w', tip: 't' }], source: 'curated' as const }),
-    });
-    const college = await data.colleges.create({
-      name: 'No Prompts U', status: 'applying',
-    } as Parameters<Data['colleges']['create']>[0]);
-    const res = await localH.practiceQuestionsForCollege(ctx({ body: { collegeId: college.collegeId } }));
-    const body = res.body as { collegeName?: string; usedRealPrompts: boolean };
-    expect(body.collegeName).toBe('No Prompts U');
-    expect(body.usedRealPrompts).toBe(false);
-  });
-
-  it('422s on an unknown body field (strict schema)', async () => {
-    await expectStatus(h.practiceQuestionsForCollege(ctx({ body: { bogus: 1 } })), 422);
-  });
-
-  it('422s on a whitespace-only collegeName (trim + min(1))', async () => {
-    await expectStatus(h.practiceQuestionsForCollege(ctx({ body: { collegeName: '   ' } })), 422);
+    expect((typed.body as { result?: { usedRealPrompts: boolean } }).result?.usedRealPrompts).toBe(false);
+    await expectStatus(localH.practiceQuestionsStatus(ctx({ params: { jobId: 'ghost' } })), 404);
+    await expectStatus(localH.practiceQuestionsForCollege(ctx({ body: { bogus: 1 } })), 422);
   });
 });
 

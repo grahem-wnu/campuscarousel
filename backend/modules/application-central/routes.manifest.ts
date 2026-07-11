@@ -7,9 +7,17 @@
 import type { RouteDef } from '../../shared/api/index.js';
 import { dataFromEnv, type Data } from '../../shared/data/index.js';
 import { makeHandlers } from './handlers.js';
+import { makeSqsPracticeEnqueuer, makeBedrockPracticeQuestions } from './practice.js';
 
 let cached: Data | undefined;
-const h = makeHandlers({ getData: (): Data => (cached ??= dataFromEnv()) });
+const getData = (): Data => (cached ??= dataFromEnv());
+// Practice-question generation is async: enqueue a `practice-questions` job for the 300s worker
+// (model-only generation still blows the request path's ~30s ceiling). Reuses the interactive focus
+// queue — no new infra. The worker runs the generation; here we just send.
+const h = makeHandlers({
+  getData,
+  practiceDispatch: makeSqsPracticeEnqueuer(getData, makeBedrockPracticeQuestions()),
+});
 
 export const routes: RouteDef[] = [
   { method: 'GET', path: '/applications/overview', handler: h.overview },
@@ -22,6 +30,7 @@ export const routes: RouteDef[] = [
   { method: 'GET', path: '/essays', handler: h.listEssays },
   { method: 'POST', path: '/essays', handler: h.createEssay },
   { method: 'POST', path: '/essays/practice-questions', handler: h.practiceQuestionsForCollege },
+  { method: 'GET', path: '/essays/practice-questions/:jobId', handler: h.practiceQuestionsStatus },
   { method: 'GET', path: '/essays/:id', handler: h.detailEssay },
   { method: 'PUT', path: '/essays/:id', handler: h.updateEssay },
   { method: 'DELETE', path: '/essays/:id', handler: h.removeEssay },

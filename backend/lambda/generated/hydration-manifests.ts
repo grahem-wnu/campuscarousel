@@ -3,6 +3,7 @@
 // worker (backend/lambda/hydration.ts builds its registry from these). Regenerated on every
 // `npm run -w backend build:lambda`; committed so `tsc --noEmit` typechecks the worker entry.
 import type { HydrationRegistration } from '../hydration.js';
+import { hydration as applicationCentralHydration } from '../../modules/application-central/hydration.manifest.js';
 import { hydration as certificationsHydration } from '../../modules/certifications/hydration.manifest.js';
 import { hydration as collegeAssetsHydration } from '../../modules/college-assets/hydration.manifest.js';
 import { hydration as collegeHubHydration } from '../../modules/college-hub/hydration.manifest.js';
@@ -13,6 +14,7 @@ import { hydration as peerBenchmarkHydration } from '../../modules/peer-benchmar
 import { hydration as scholarshipTrackerHydration } from '../../modules/scholarship-tracker/hydration.manifest.js';
 
 export const hydrationRegistrations: HydrationRegistration[] = [
+  applicationCentralHydration,
   certificationsHydration,
   collegeAssetsHydration,
   collegeHubHydration,

@@ -59,6 +59,7 @@ import type {
   Opportunity,
   OpportunityDiscoveryJob,
   Interview,
+  PracticeQuestionJob,
   Recommendation,
   Scholarship,
   TestScore,
@@ -207,6 +208,12 @@ export function makeData(
     idField: 'jobId',
   });
 
+  // Transient async practice-question generation jobs (no collection — fetched by id while polling).
+  const practiceQuestionJobs = makeDetailsRepo<PracticeQuestionJob, 'jobId'>(client, {
+    prefix: 'PRACTICEQUESTIONS',
+    idField: 'jobId',
+  });
+
   const interviews = makeDetailsRepo<Interview, 'sessionId'>(client, {
     prefix: 'INTERVIEW',
     idField: 'sessionId',
@@ -260,6 +267,7 @@ export function makeData(
     essays,
     certifications,
     certGuidanceJobs,
+    practiceQuestionJobs,
     interviews,
     motivations,
     contacts,
