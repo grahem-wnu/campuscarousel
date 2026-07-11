@@ -81,9 +81,8 @@ export function CollegeEssayView({ college, startMode, onBack }: Props) {
   useEffect(() => {
     void loadAttempts();
     if (startMode === 'new') void search();
-    // Seeds are fixed for this mounted view; loadAttempts/search are stable closures.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    // Seeds are fixed for this mounted view; loadAttempts/search are stable useCallback closures.
+  }, [loadAttempts, search, startMode]);
 
   function onEssayChanged(updated: Essay) {
     setSelected(updated);

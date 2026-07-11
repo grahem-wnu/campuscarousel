@@ -14,6 +14,6 @@ export const nav: NavEntry[] = [
     order: 35,
     route: '/essays',
     icon: 'application',
-    element: () => import('./ApplicationCentralPage'),
+    element: () => import('./EssayCenterPage'),
   },
 ];
