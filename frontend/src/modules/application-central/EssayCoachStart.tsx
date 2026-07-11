@@ -37,9 +37,9 @@ export function EssayCoachStart({ colleges, initialCollegeId, onWrite, onCancel 
   }
 
   // Pre-seeded from the overview's "Start an essay" → jump straight to that school's questions.
+  // Intentionally keyed on initialCollegeId only; loadQuestions is a stable local closure.
   useEffect(() => {
     if (initialCollegeId) void loadQuestions({ collegeId: initialCollegeId });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialCollegeId]);
 
   async function write(question: string, idx: number) {
