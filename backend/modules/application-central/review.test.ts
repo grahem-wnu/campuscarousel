@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { InMemoryTableClient, makeData, type Data } from '../../shared/data/index.js';
 import { runWithStudent, runWithTenant } from '../../shared/tenant/index.js';
 import { makeSqsReviewEnqueuer, runReviewJob, type SqsSender } from './review.js';
-import type { EssayReview, EssayReviewer } from './ai.js';
+import type { EssayReviewer } from './ai.js';
 
 const now = () => new Date('2026-06-06T00:00:00Z');
 
@@ -126,7 +126,3 @@ describe('makeSqsReviewEnqueuer', () => {
     }
   });
 });
-
-// Keep an explicit reference to EssayReview so the type import is exercised.
-const _shape: EssayReview['rewrote'] = false;
-void _shape;
