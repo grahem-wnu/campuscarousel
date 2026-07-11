@@ -76,6 +76,7 @@ for (const stage of stages) {
     hydrationQueue: asyncStack.hydrationQueue,
     assetsQueue: asyncStack.assetsQueue,
     focusQueue: asyncStack.focusQueue,
+    essayCoachQueue: asyncStack.essayCoachQueue,
   });
 
   // --- Web (private S3 + CloudFront OAC) ---
