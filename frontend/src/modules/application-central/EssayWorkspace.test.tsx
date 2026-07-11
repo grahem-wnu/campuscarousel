@@ -7,15 +7,14 @@ import { describe, expect, it, vi } from 'vitest';
 import { EssayWorkspace } from './EssayWorkspace';
 import type { Essay } from './types';
 
-const { reviewEssay, getPracticeQuestions, updateEssay } = vi.hoisted(() => ({
+const { addDraft, reviewEssay, updateEssay } = vi.hoisted(() => ({
+  addDraft: vi.fn(),
   reviewEssay: vi.fn(),
-  getPracticeQuestions: vi.fn(),
   updateEssay: vi.fn(),
 }));
 vi.mock('./api', () => ({
-  addDraft: vi.fn(),
+  addDraft,
   findExperiences: vi.fn(),
-  getPracticeQuestions,
   reviewEssay,
   updateEssay,
 }));
@@ -92,17 +91,12 @@ describe('EssayWorkspace — essay coach', () => {
     expect(onChanged).toHaveBeenCalledWith(expect.objectContaining({ lastReview: expect.objectContaining({ overall: 8 }) }));
   });
 
-  it('renders practice questions in the college style', async () => {
-    getPracticeQuestions.mockResolvedValue({
-      questions: [{ question: 'Why OSU nursing?', why: 'their real prompt', tip: 'outline first' }],
-      source: 'ai',
-      collegeName: 'Ohio State',
-    });
-    render(<EssayWorkspace essay={essay} collegeName="Ohio State" onChanged={() => {}} onBack={() => {}} />);
-
-    await userEvent.click(screen.getByRole('button', { name: /practice questions/i }));
-    expect(await screen.findByText('Why OSU nursing?')).toBeInTheDocument();
-    expect(screen.getByText(/Ohio State style/)).toBeInTheDocument();
-    expect(screen.getByText(/outline first/)).toBeInTheDocument();
+  it('auto-saves then returns to questions on "Try a different question"', async () => {
+    addDraft.mockResolvedValue({ ...essay });
+    const onTryAnother = vi.fn();
+    render(<EssayWorkspace essay={essay} onChanged={vi.fn()} onBack={() => {}} onTryAnother={onTryAnother} />);
+    await userEvent.click(screen.getByRole('button', { name: /try a different question/i }));
+    expect(addDraft).toHaveBeenCalled();          // current text preserved as an attempt
+    expect(onTryAnother).toHaveBeenCalled();
   });
 });

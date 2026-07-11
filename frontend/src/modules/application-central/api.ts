@@ -56,10 +56,6 @@ export function reviewEssay(
   return api.post<{ review: EssayReview; essay: Essay }>(`/essays/${encodeURIComponent(id)}/review`, opts);
 }
 
-export function getPracticeQuestions(id: string, count?: number): Promise<PracticeQuestionSet> {
-  return api.post<PracticeQuestionSet>(`/essays/${encodeURIComponent(id)}/practice-questions`, count ? { count } : {});
-}
-
 /** Questions-first: sample questions for a college BEFORE an essay exists. */
 export function getPracticeQuestionsForCollege(
   input: { collegeId?: string; collegeName?: string; count?: number } = {},

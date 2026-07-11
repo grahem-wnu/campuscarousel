@@ -1,14 +1,16 @@
 import { useState } from 'react';
 import { Badge, Button, Card, Icon, Spinner, Textarea } from '../../shared/ui';
 import { ESSAY_STATUS_META, VERDICT_META, ratingRows, ratingTone, wordCount, wordTargetTone } from './logic';
-import { addDraft, findExperiences, getPracticeQuestions, reviewEssay, updateEssay } from './api';
-import type { Essay, EssayReview, FindResult, PracticeQuestionSet } from './types';
+import { addDraft, findExperiences, reviewEssay, updateEssay } from './api';
+import type { Essay, EssayReview, FindResult } from './types';
 
 interface Props {
   essay: Essay;
   collegeName?: string;
   onChanged: (essay: Essay) => void;
   onBack: () => void;
+  /** Return to the questions-first front door (auto-saving the current draft first). */
+  onTryAnother?: () => void;
 }
 
 /** Common App cap — the coaching default when an essay has no target of its own. */
@@ -18,7 +20,7 @@ const DEFAULT_TARGET_WORDS = 650;
  *  sidebar — "Find relevant experiences" (grounded in her real, privacy-filtered data + what the
  *  target college looks for), "Practice questions" (sample prompts in the college's style), and
  *  "Check my essay" (rubric-rated feedback — never a rewrite). */
-export function EssayWorkspace({ essay, collegeName, onChanged, onBack }: Props) {
+export function EssayWorkspace({ essay, collegeName, onChanged, onBack, onTryAnother }: Props) {
   const latest = (essay.drafts ?? []).at(-1);
   const [text, setText] = useState(latest?.content ?? '');
   const [savingDraft, setSavingDraft] = useState(false);
@@ -31,8 +33,6 @@ export function EssayWorkspace({ essay, collegeName, onChanged, onBack }: Props)
   const [finding, setFinding] = useState(false);
   const [review, setReview] = useState<EssayReview | null>(null);
   const [reviewing, setReviewing] = useState(false);
-  const [practice, setPractice] = useState<PracticeQuestionSet | null>(null);
-  const [practicing, setPracticing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const wc = wordCount(text);
@@ -63,16 +63,10 @@ export function EssayWorkspace({ essay, collegeName, onChanged, onBack }: Props)
     }
   }
 
-  async function runPractice() {
-    setPracticing(true);
-    setError(null);
-    try {
-      setPractice(await getPracticeQuestions(essay.essayId));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not generate practice questions.');
-    } finally {
-      setPracticing(false);
-    }
+  /** Preserve the current draft as an attempt, then return to the questions-first front door. */
+  async function tryAnother() {
+    if (text.trim()) await saveDraft();
+    onTryAnother?.();
   }
 
   async function runReview() {
@@ -193,7 +187,9 @@ export function EssayWorkspace({ essay, collegeName, onChanged, onBack }: Props)
               <Icon name="star" size={15} className="text-secondary-600" /> Essay coach
             </div>
             <Button size="sm" variant="outline" block loading={finding} onClick={() => void runFind()}>Find relevant experiences</Button>
-            <Button size="sm" variant="outline" block loading={practicing} onClick={() => void runPractice()}>Practice questions</Button>
+            {onTryAnother ? (
+              <Button size="sm" variant="outline" block loading={savingDraft} onClick={() => void tryAnother()}>Try a different question</Button>
+            ) : null}
             <Button size="sm" variant="outline" block loading={reviewing} disabled={!text.trim()} onClick={() => void runReview()}>Check &amp; rate my essay</Button>
             <p className="text-[11px] text-primary-700">
               Grounded in your logged experiences{collegeName ? ` and what ${collegeName} looks for` : ''}. The AI coaches and rates — it never writes the essay for you.
@@ -217,24 +213,7 @@ export function EssayWorkspace({ essay, collegeName, onChanged, onBack }: Props)
             </Card>
           ) : null}
 
-          {practicing ? <div className="flex justify-center py-3"><Spinner /></div> : practice ? (
-            <Card className="space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-wide text-ink-500">
-                Practice questions{practice.collegeName ? ` · ${practice.collegeName} style` : ''}
-              </p>
-              <ul className="space-y-2 text-sm">
-                {practice.questions.map((q, i) => (
-                  <li key={i} className="space-y-0.5">
-                    <p className="font-medium text-ink-800">{q.question}</p>
-                    {q.why ? <p className="text-xs text-ink-500">{q.why}</p> : null}
-                    {q.tip ? <p className="text-xs italic text-primary-700">Tip: {q.tip}</p> : null}
-                  </li>
-                ))}
-              </ul>
-            </Card>
-          ) : null}
-
-          {reviewing ? <div className="flex justify-center py-3"><Spinner /></div> : review ? (
+          {reviewing ?<div className="flex justify-center py-3"><Spinner /></div> : review ? (
             <Card className="space-y-2">
               <div className="flex items-center justify-between">
                 <p className="text-xs font-semibold uppercase tracking-wide text-ink-500">Feedback</p>

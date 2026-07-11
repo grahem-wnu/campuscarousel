@@ -79,7 +79,17 @@ export default function ApplicationCentralPage() {
       </header>
 
       {selected ? (
-        <EssayWorkspace essay={selected} collegeName={collegeName(selected.collegeId)} onChanged={onEssayChanged} onBack={() => setSelected(null)} />
+        <EssayWorkspace
+          essay={selected}
+          collegeName={collegeName(selected.collegeId)}
+          onChanged={onEssayChanged}
+          onBack={() => setSelected(null)}
+          onTryAnother={() => {
+            setStartCollegeId(selected.collegeId);
+            setSelected(null);
+            setStarting(true);
+          }}
+        />
       ) : (
         <>
           <Tabs items={tabs} value={tab} onChange={(t) => setTab(t as TabId)} />
