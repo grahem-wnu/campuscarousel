@@ -50,7 +50,7 @@ export interface PracticeQuestionJob extends Timestamped {
     idField: 'jobId',
   });
 ```
-Add `practiceQuestionJobs,` to the return object, and `PracticeQuestionJob`/`PracticeQuestionResult` to the type imports at the top of `index.ts` (it re-exports the data types — follow how `CertGuidanceJob` is imported/exported there).
+Add `practiceQuestionJobs,` to the return object, and add ONLY `PracticeQuestionJob` to the top-of-file `import type` list (it's needed for the `makeDetailsRepo` generic). Do NOT import `PracticeQuestionResult` there — it rides `export * from './types.js'`, exactly like `CertGuidanceResult` (which is deliberately not in that import list, only `CertGuidanceJob` is).
 
 - [ ] **Step 3: Typecheck + commit**
 
@@ -325,7 +325,9 @@ describe('practice-questions (async job)', () => {
   });
 });
 ```
-Also migrate the older "passes the linked college…" test if it still calls `practiceQuestionsForCollege` and inspects `body` directly — it now returns a 202 job whose `.result` holds the set.
+**Also REWRITE the pre-existing test** "passes the linked college to the finder and practice generator" (`handlers.test.ts` ~124-142). It calls `practiceQuestionsForCollege(...)` and reads `pq.body.collegeName` / `pq2.body.collegeName` and implicitly expects status 200. Under the async shape these become status **202** and `pq.body.result.collegeName` / `pq2.body.result.collegeName` (the inline dispatcher completes the job before the re-read). Update both assertions and any status check, or the suite breaks.
+
+`index.ts` import mirror (nit): add only `PracticeQuestionJob` to the top-of-file `import type` list (it's the `makeDetailsRepo` generic). Do NOT add `PracticeQuestionResult` there — like `CertGuidanceResult`, it rides `export * from './types.js'`; an unused import would trip eslint `no-unused-vars`.
 
 - [ ] **Step 2: Run → fail** (`practiceQuestionsStatus`/202 shape missing).
 
@@ -337,7 +339,7 @@ export const jobIdParamSchema = z.object({ jobId: z.string().min(1) });
 ```
 
 `handlers.ts`:
-- Imports: add `type PracticeDispatcher, makeInlineDispatcher, makeBedrockPracticeQuestions` from `./practice.js`; add `jobIdParamSchema` from `./schema.js`; keep `collegePracticeSchema`. Remove the now-unused inline `gatherCollegeContext` usage in the practice path if it's no longer referenced elsewhere (it is still used by `findExperiences`/`review`, so keep the import).
+- Imports: add `type PracticeDispatcher, makeInlineDispatcher` from `./practice.js`; add `jobIdParamSchema` from `./schema.js`; keep `collegePracticeSchema`. **Do NOT re-import `makeBedrockPracticeQuestions` from `./practice.js`** — `handlers.ts` already imports it from `./ai.js` (~line 41); reuse that existing import (a second import is a redeclared-identifier error). `gatherCollegeContext` is still used by `findExperiences`/`review`, so keep its import; the practice path no longer calls it directly (that moved into `practice.ts`).
 - `AppCentralHandlers`: replace nothing removed; add `practiceQuestionsStatus: Handler;` (keep `practiceQuestionsForCollege`).
 - `AppCentralDeps`: add `practiceDispatch?: PracticeDispatcher;` (keep `practice?`).
 - In `makeHandlers`: `const practice = deps.practice ?? makeBedrockPracticeQuestions();` and `const practiceDispatch = deps.practiceDispatch ?? makeInlineDispatcher(getData, practice);`
@@ -453,7 +455,22 @@ startPracticeQuestions.mockResolvedValue({
   result: { questions: [{ question: 'Why nursing at OSU?', why: 'w', tip: 't' }], source: 'curated', collegeName: 'Ohio State', usedRealPrompts: true },
 });
 ```
-Update all existing EssayCoachStart tests (roster real-prompts, typed disclosure, createEssay-rejection, zero-questions) to this shape — `result` carries the same `PracticeQuestionSet` the render already reads, so only the fetch mock changes. Add one test where `startPracticeQuestions` returns `{jobId, status:'pending'}` and the first `getPracticeQuestionJob` returns a `complete` job → assert questions render (proves the poll path). Zero-questions: `result.questions: []`.
+Update all existing EssayCoachStart tests (roster real-prompts, typed disclosure, createEssay-rejection, zero-questions) to this shape — `result` carries the same `PracticeQuestionSet` the render already reads, so only the fetch mock changes. These 5 need NO fake timers (a `complete` job exits the loop before any `setTimeout`).
+
+Add one test that proves the poll path: `startPracticeQuestions` returns `{jobId:'j1', status:'pending'}`, then `getPracticeQuestionJob` resolves a `complete` job. Because `loadQuestions` awaits `setTimeout(POLL_MS=3000)` before the first poll, this test MUST control timers or it will exceed RTL's 1000ms `findBy` default. Use fake timers:
+```typescript
+import { afterEach, beforeEach } from 'vitest';
+// in the poll test:
+vi.useFakeTimers();
+const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTimeAsync });
+startPracticeQuestions.mockResolvedValue({ jobId: 'j1', status: 'pending' });
+getPracticeQuestionJob.mockResolvedValue({ jobId: 'j1', status: 'complete', result: { questions: [{ question: 'Polled Q', why: 'w', tip: 't' }], source: 'ai', usedRealPrompts: false } });
+// ...trigger loadQuestions (e.g. General practice), then:
+await vi.advanceTimersByTimeAsync(POLL_MS);
+expect(await screen.findByText('Polled Q')).toBeInTheDocument();
+vi.useRealTimers();
+```
+(Only this one test uses fake timers — keep it isolated so the others run on real timers.) Zero-questions: `result.questions: []`.
 
 - [ ] **Step 2: Run → fail.**
 
