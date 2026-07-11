@@ -53,6 +53,7 @@ import type {
   DiscoveryJob,
   Document,
   Essay,
+  EssayReviewJob,
   ExamScore,
   FinAidItem,
   Goal,
@@ -214,6 +215,12 @@ export function makeData(
     idField: 'jobId',
   });
 
+  // Transient async essay-evaluation jobs (no collection — fetched by id while polling).
+  const essayReviewJobs = makeDetailsRepo<EssayReviewJob, 'jobId'>(client, {
+    prefix: 'ESSAYREVIEW',
+    idField: 'jobId',
+  });
+
   const interviews = makeDetailsRepo<Interview, 'sessionId'>(client, {
     prefix: 'INTERVIEW',
     idField: 'sessionId',
@@ -268,6 +275,7 @@ export function makeData(
     certifications,
     certGuidanceJobs,
     practiceQuestionJobs,
+    essayReviewJobs,
     interviews,
     motivations,
     contacts,

@@ -8,10 +8,11 @@ import { currentStudentId, currentTenantId } from '../../shared/tenant/index.js'
 import { gatherCollegeContext, type CollegeContext } from './grounding.js';
 import { makeBedrockPracticeQuestions, type PracticeQuestionGenerator } from './ai.js';
 
-export const PRACTICE_QUESTIONS_TYPE = 'practice-questions';
+export const ESSAY_COACH_TYPE = 'essay-coach';
 
 export interface PracticeQuestionMessage {
-  type: typeof PRACTICE_QUESTIONS_TYPE;
+  type: typeof ESSAY_COACH_TYPE;
+  kind: 'questions';
   jobId: string;
 }
 
@@ -88,14 +89,14 @@ export interface SqsSender {
 }
 
 export interface SqsPracticeEnqueuerOptions {
-  /** Defaults to FOCUS_QUEUE_URL (interactive lane) then HYDRATION_QUEUE_URL. */
+  /** Defaults to ESSAY_COACH_QUEUE_URL (dedicated lane) then FOCUS_QUEUE_URL then HYDRATION_QUEUE_URL. */
   queueUrl?: string;
   client?: SqsSender;
   fallback?: PracticeDispatcher;
 }
 
-/** Production dispatcher: enqueue a `practice-questions` job onto the interactive (focus) queue. On any
- *  enqueue failure, degrade to inline generation (logged, not swallowed). */
+/** Production dispatcher: enqueue an `essay-coach` (kind: 'questions') job onto the dedicated essay-coach
+ *  lane (fallback focus/hydration). On any enqueue failure, degrade to inline generation (logged). */
 export function makeSqsPracticeEnqueuer(
   getData: () => Data,
   generator: PracticeQuestionGenerator,
@@ -103,7 +104,8 @@ export function makeSqsPracticeEnqueuer(
 ): PracticeDispatcher {
   const fallback = options.fallback ?? makeInlineDispatcher(getData, generator);
   return async (jobId) => {
-    const queueUrl = options.queueUrl ?? process.env.FOCUS_QUEUE_URL ?? process.env.HYDRATION_QUEUE_URL;
+    const queueUrl =
+      options.queueUrl ?? process.env.ESSAY_COACH_QUEUE_URL ?? process.env.FOCUS_QUEUE_URL ?? process.env.HYDRATION_QUEUE_URL;
     if (!queueUrl) return fallback(jobId);
     try {
       const { SQSClient, SendMessageCommand } = await import('@aws-sdk/client-sqs');
@@ -112,7 +114,8 @@ export function makeSqsPracticeEnqueuer(
         new SendMessageCommand({
           QueueUrl: queueUrl,
           MessageBody: JSON.stringify({
-            type: PRACTICE_QUESTIONS_TYPE,
+            type: ESSAY_COACH_TYPE,
+            kind: 'questions',
             jobId,
             tenantId: currentTenantId(),
             studentId: currentStudentId(),

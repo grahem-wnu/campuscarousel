@@ -9,7 +9,7 @@ import type {
   DecisionRow,
   Essay,
   EssayInput,
-  EssayReview,
+  EssayReviewJob,
   EssayStatus,
   FindResponse,
   PracticeQuestionJob,
@@ -49,11 +49,19 @@ export function findExperiences(id: string, prompt?: string): Promise<FindRespon
   return api.post<FindResponse>(`/essays/${encodeURIComponent(id)}/find-experiences`, prompt ? { prompt } : {});
 }
 
-export function reviewEssay(
-  id: string,
-  opts: { version?: number; content?: string; targetWords?: number } = {},
-): Promise<{ review: EssayReview; essay: Essay }> {
-  return api.post<{ review: EssayReview; essay: Essay }>(`/essays/${encodeURIComponent(id)}/review`, opts);
+/** Start an async essay evaluation. The review runs ~15–20s on the essay-coach worker (near the
+ *  request path's ~30s ceiling), so POST returns 202 with a pending job; poll getEssayEvaluationJob
+ *  with the returned jobId until it settles, then render the result (never a rewrite). */
+export function startEssayEvaluation(
+  essayId: string,
+  opts: { content?: string; targetWords?: number } = {},
+): Promise<EssayReviewJob> {
+  return api.post<EssayReviewJob>(`/essays/${encodeURIComponent(essayId)}/review`, opts);
+}
+
+/** Poll an essay-evaluation job's status + result. */
+export function getEssayEvaluationJob(essayId: string, jobId: string): Promise<EssayReviewJob> {
+  return api.get<EssayReviewJob>(`/essays/${encodeURIComponent(essayId)}/review/${encodeURIComponent(jobId)}`);
 }
 
 /** Start an async practice-question job (questions-first: sample questions for a college BEFORE an

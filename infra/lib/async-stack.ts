@@ -46,6 +46,11 @@ export class AsyncStack extends Stack {
   public readonly focusQueue: Queue;
   public readonly focusDeadLetterQueue: Queue;
   public readonly focusWorkerFunctionName: string;
+  /** Interactive essay-coach lane: user-initiated essay questions + evaluation jobs run here so they
+   *  never queue behind bulk college hydration. The API Lambda sends via ESSAY_COACH_QUEUE_URL. */
+  public readonly essayCoachQueue: Queue;
+  public readonly essayCoachDeadLetterQueue: Queue;
+  public readonly essayCoachWorkerFunctionName: string;
 
   constructor(scope: Construct, id: string, props: AsyncStackProps) {
     super(scope, id, props);
@@ -279,5 +284,63 @@ export class AsyncStack extends Stack {
 
     new CfnOutput(this, "FocusQueueUrl", { value: this.focusQueue.queueUrl });
     new CfnOutput(this, "FocusDlqUrl", { value: this.focusDeadLetterQueue.queueUrl });
+
+    // --- Interactive essay-coach lane: priority queue + worker ------------------------------------
+    // User-initiated essay-coach jobs (practice questions + essay evaluation) are INTERACTIVE — a
+    // person is watching a spinner ("up to a minute"). A separate queue + worker (reusing the SAME
+    // bundle; the shared registry routes the `essay-coach` type, sub-routed by `kind`) keeps them off
+    // the bulk hydration lanes so a click runs immediately no matter how big the hydrate backlog is.
+    // Unlike focus/hydration these jobs are MODEL-ONLY (no web search) — so NO AI_WEB_SEARCH env.
+    this.essayCoachDeadLetterQueue = new Queue(this, "EssayCoachDlq", {
+      queueName: `${config.namePrefix}-essay-coach-dlq`,
+      retentionPeriod: Duration.days(14),
+      enforceSSL: true,
+    });
+
+    this.essayCoachQueue = new Queue(this, "EssayCoachQueue", {
+      queueName: `${config.namePrefix}-essay-coach`,
+      // >= 6x the worker timeout (300s), matching the hydration/focus queues, so a slow/retried run
+      // isn't redelivered mid-processing.
+      visibilityTimeout: Duration.seconds(1800),
+      retentionPeriod: Duration.days(4),
+      enforceSSL: true,
+      deadLetterQueue: { queue: this.essayCoachDeadLetterQueue, maxReceiveCount: 3 },
+    });
+
+    const essayCoachWorker = new LambdaFunction(this, "EssayCoachWorker", {
+      functionName: `${config.namePrefix}-essay-coach-worker`,
+      runtime: Runtime.NODEJS_20_X,
+      handler: "index.handler",
+      code: Code.fromAsset(join(__dirname, "../../backend/dist/hydration")),
+      timeout: Duration.seconds(300),
+      memorySize: 512,
+      // Small dedicated lane for interactive essay-coach jobs — low volume (one per user click), so a
+      // few lanes keep questions/evaluate responsive without competing with bulk hydration for Bedrock.
+      reservedConcurrentExecutions: 5,
+      tracing: Tracing.ACTIVE,
+      logRetention: RetentionDays.ONE_MONTH,
+      environment: {
+        TABLE_NAME: table.tableName,
+        BEDROCK_MODEL_ID: config.bedrockSonnetProfile,
+        SSM_PREFIX: config.ssmPrefix,
+        STAGE: config.stage,
+      },
+    });
+    this.essayCoachWorkerFunctionName = essayCoachWorker.functionName;
+
+    essayCoachWorker.addEventSource(
+      new SqsEventSource(this.essayCoachQueue, { batchSize: 1, reportBatchItemFailures: true }),
+    );
+
+    table.grantReadWriteData(essayCoachWorker);
+    essayCoachWorker.addToRolePolicy(bedrockInvokeStatement(this.account, config.bedrockSonnetProfile));
+    essayCoachWorker.addToRolePolicy(ssmReadConfigStatement(this.region, this.account, config.ssmPrefix));
+
+    putOutput(this, config, "essayCoachQueueUrl", this.essayCoachQueue.queueUrl, "Essay-coach (interactive) SQS URL");
+    putOutput(this, config, "essayCoachQueueArn", this.essayCoachQueue.queueArn, "Essay-coach (interactive) SQS ARN");
+    putOutput(this, config, "essayCoachDlqUrl", this.essayCoachDeadLetterQueue.queueUrl, "Essay-coach DLQ URL");
+
+    new CfnOutput(this, "EssayCoachQueueUrl", { value: this.essayCoachQueue.queueUrl });
+    new CfnOutput(this, "EssayCoachDlqUrl", { value: this.essayCoachDeadLetterQueue.queueUrl });
   }
 }

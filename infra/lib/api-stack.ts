@@ -26,6 +26,8 @@ export interface ApiStackProps extends StackProps {
   readonly assetsQueue: Queue;
   /** Interactive lane for user-initiated focus overview / career-path jobs (AsyncStack). */
   readonly focusQueue: Queue;
+  /** Interactive lane for user-initiated essay-coach jobs (questions + evaluation) (AsyncStack). */
+  readonly essayCoachQueue: Queue;
 }
 
 /**
@@ -49,7 +51,7 @@ export class ApiStack extends Stack {
 
   constructor(scope: Construct, id: string, props: ApiStackProps) {
     super(scope, id, props);
-    const { config, table, documentsBucket, userPool, userPoolClient, hydrationQueue, assetsQueue, focusQueue } = props;
+    const { config, table, documentsBucket, userPool, userPoolClient, hydrationQueue, assetsQueue, focusQueue, essayCoachQueue } = props;
 
     const routing = new LambdaFunction(this, "RoutingFn", {
       functionName: `${config.namePrefix}-api-routing`,
@@ -87,6 +89,10 @@ export class ApiStack extends Stack {
         // Interactive focus jobs go to their own queue so a "Generate" click never waits behind bulk
         // college hydration. The focus dispatchers prefer this; they fall back to HYDRATION_QUEUE_URL.
         FOCUS_QUEUE_URL: focusQueue.queueUrl,
+        // Interactive essay-coach jobs (practice questions + evaluation) go to their own model-only
+        // queue so a click never waits behind bulk hydration. The enqueuers prefer this; they fall
+        // back to FOCUS_QUEUE_URL / HYDRATION_QUEUE_URL.
+        ESSAY_COACH_QUEUE_URL: essayCoachQueue.queueUrl,
         USER_POOL_ID: userPool.userPoolId,
         USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId,
         BEDROCK_MODEL_ID: config.bedrockSonnetProfile,
@@ -106,6 +112,7 @@ export class ApiStack extends Stack {
     hydrationQueue.grantSendMessages(routing);
     assetsQueue.grantSendMessages(routing);
     focusQueue.grantSendMessages(routing);
+    essayCoachQueue.grantSendMessages(routing);
     routing.addToRolePolicy(bedrockInvokeStatement(this.account, config.bedrockSonnetProfile));
     // Send reminder test emails + invite/family-member emails via SES (verified domain identity).
     routing.addToRolePolicy(sesSendStatement(this.region, this.account));
