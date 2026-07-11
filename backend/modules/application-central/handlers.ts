@@ -48,6 +48,7 @@ import {
   type RecommenderBriefer,
 } from './ai.js';
 import { makeInlineDispatcher, type PracticeDispatcher } from './practice.js';
+import { makeInlineReviewDispatcher, type ReviewDispatcher } from './review.js';
 
 export interface AppCentralHandlers {
   listEssays: Handler;
@@ -57,7 +58,8 @@ export interface AppCentralHandlers {
   removeEssay: Handler;
   addDraft: Handler;
   findExperiences: Handler;
-  review: Handler;
+  startReview: Handler;
+  reviewStatus: Handler;
   practiceQuestionsForCollege: Handler;
   practiceQuestionsStatus: Handler;
   overview: Handler;
@@ -90,6 +92,9 @@ export interface AppCentralDeps {
   /** Dispatcher for async practice-question jobs; production injects the SQS enqueuer. Defaults to
    *  running inline with the Bedrock generator (so tests/no-queue complete the job before the re-read). */
   practiceDispatch?: PracticeDispatcher;
+  /** Dispatcher for async essay-evaluation jobs; production injects the SQS enqueuer. Defaults to
+   *  running inline with the Bedrock reviewer (so tests/no-queue complete the job before the re-read). */
+  reviewDispatch?: ReviewDispatcher;
   now?: () => Date;
 }
 
@@ -103,8 +108,9 @@ export function makeHandlers(deps: AppCentralDeps): AppCentralHandlers {
   const briefer = deps.briefer ?? makeBedrockRecommenderBrief();
   const practice = deps.practice ?? makeBedrockPracticeQuestions();
   // Default dispatch (tests / no queue): generate inline so the re-read returns a completed job.
-  // Production injects the SQS enqueuer (focus queue) via routes.manifest.
+  // Production injects the SQS enqueuer (essay-coach queue) via routes.manifest.
   const practiceDispatch = deps.practiceDispatch ?? makeInlineDispatcher(getData, practice);
+  const reviewDispatch = deps.reviewDispatch ?? makeInlineReviewDispatcher(getData, reviewer, now);
 
   async function requireEssay(id: string): Promise<Essay> {
     const e = await getData().essays.get(id);
@@ -120,11 +126,6 @@ export function makeHandlers(deps: AppCentralDeps): AppCentralHandlers {
       return [];
     }
   }
-
-  const latestDraft = (essay: Essay): Draft | undefined => {
-    const drafts = essay.drafts ?? [];
-    return drafts.length ? drafts[drafts.length - 1] : undefined;
-  };
 
   return {
     // GET /essays — list, filter by college / status.
@@ -195,38 +196,31 @@ export function makeHandlers(deps: AppCentralDeps): AppCentralHandlers {
       return { status: 200, body: { result, basedOn: pool.counts } };
     },
 
-    // POST /essays/:id/review — AI feedback + rubric rating on a draft. NEVER rewrites
-    // (review.rewrote === false). Grounded in the target college's admissions data when linked.
-    // Persists only the compact lastReview summary (derived from the draft text alone — no private
-    // entries are in the review path); the full review is returned live.
-    review: async (ctx) => {
+    // POST /essays/:id/review — ASYNC. Evaluation runs ~15-20s (near the 30s ceiling), so create a job,
+    // dispatch to the essay-coach worker, return 202; the frontend polls reviewStatus. NEVER rewrites
+    // (result.rewrote === false). Grounded in the target college's admissions data when linked. The
+    // worker persists only the compact lastReview summary (derived from the passed content alone).
+    startReview: async (ctx) => {
       const { id } = validateParams(idParamSchema, ctx);
       const body = validateBody(reviewSchema, ctx);
-      const data = getData();
-      const essay = await requireEssay(id);
-      const reviewedDraft =
-        body.content !== undefined
-          ? undefined
-          : body.version !== undefined
-            ? (essay.drafts ?? []).find((d) => d.version === body.version)
-            : latestDraft(essay);
-      const content = body.content ?? reviewedDraft?.content;
-      if (!content) throw Errors.validation('No draft content to review — add a draft or pass content.');
-      const college = await gatherCollegeContext(data, essay.collegeId);
-      const review = await reviewer({ prompt: essay.prompt ?? '', content, targetWords: body.targetWords ?? essay.targetWords, college });
-      let updated = essay;
-      if (review.source === 'ai' && review.overall !== undefined && review.verdict !== undefined) {
-        updated = await data.essays.update(id, {
-          lastReview: {
-            overall: review.overall,
-            verdict: review.verdict,
-            wordCount: review.wordCount,
-            ...(reviewedDraft ? { version: reviewedDraft.version } : {}),
-            reviewedAt: now().toISOString(),
-          },
-        });
-      }
-      return { status: 200, body: { review, essay: updated } };
+      await requireEssay(id);
+      const job = await getData().essayReviewJobs.create({
+        essayId: id,
+        ...(body.content !== undefined ? { content: body.content } : {}),
+        ...(body.targetWords !== undefined ? { targetWords: body.targetWords } : {}),
+        status: 'pending',
+      } as Parameters<Data['essayReviewJobs']['create']>[0]);
+      await reviewDispatch(job.jobId);
+      const after = await getData().essayReviewJobs.get(job.jobId);
+      return { status: 202, body: after ?? job };
+    },
+
+    // GET /essays/:id/review/:jobId — poll an evaluation job (by globally-unique jobId; :id is contextual).
+    reviewStatus: async (ctx) => {
+      const { jobId } = validateParams(jobIdParamSchema, ctx);
+      const job = await getData().essayReviewJobs.get(jobId);
+      if (!job) throw Errors.notFound('Evaluation job not found');
+      return { status: 200, body: job };
     },
 
     // POST /essays/practice-questions — ASYNC. Model-only generation runs ~25–30s and 503s at the
@@ -434,7 +428,8 @@ export function buildRoutes(h: AppCentralHandlers) {
     { method: 'DELETE' as const, path: '/essays/:id', handler: h.removeEssay },
     { method: 'POST' as const, path: '/essays/:id/draft', handler: h.addDraft },
     { method: 'POST' as const, path: '/essays/:id/find-experiences', handler: h.findExperiences },
-    { method: 'POST' as const, path: '/essays/:id/review', handler: h.review },
+    { method: 'POST' as const, path: '/essays/:id/review', handler: h.startReview },
+    { method: 'GET' as const, path: '/essays/:id/review/:jobId', handler: h.reviewStatus },
     { method: 'GET' as const, path: '/recommendations', handler: h.listRecommendations },
     { method: 'POST' as const, path: '/recommendations', handler: h.createRecommendation },
     { method: 'PUT' as const, path: '/recommendations/:id', handler: h.updateRecommendation },

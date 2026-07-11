@@ -85,17 +85,22 @@ describe('find-experiences — PRIVACY', () => {
   });
 });
 
-describe('review — never rewrites', () => {
-  it('reviews the latest draft and never returns a rewrite', async () => {
+describe('review — async job, never rewrites', () => {
+  it('starts an evaluation job (202) that completes inline and never returns a rewrite', async () => {
     const id = await createEssay();
-    await h.addDraft(ctx({ params: { id }, body: { content: 'My essay draft about nursing.' } }));
-    const res = await h.review(ctx({ params: { id }, body: {} }));
-    expect((res.body as { review: { rewrote: boolean } }).review.rewrote).toBe(false);
+    const res = await h.startReview(ctx({ params: { id }, body: { content: 'My essay draft about nursing.' } }));
+    expect(res.status).toBe(202);
+    const job = res.body as { jobId: string; status: string; result?: { rewrote: boolean } };
+    expect(job.status).toBe('complete');
+    expect(job.result?.rewrote).toBe(false);
+    // status endpoint returns the same job
+    const poll = await h.reviewStatus(ctx({ params: { jobId: job.jobId } }));
+    expect((poll.body as { jobId: string }).jobId).toBe(job.jobId);
   });
 
-  it('422s when there is no content to review', async () => {
-    const id = await createEssay();
-    await expectStatus(h.review(ctx({ params: { id }, body: {} })), 422);
+  it('404s startReview for an unknown essay; 404s reviewStatus for an unknown job', async () => {
+    await expectStatus(h.startReview(ctx({ params: { id: 'ghost' }, body: { content: 'x' } })), 404);
+    await expectStatus(h.reviewStatus(ctx({ params: { jobId: 'ghost' } })), 404);
   });
 });
 
@@ -142,7 +147,7 @@ describe('essay coach — college grounding, rated review, practice questions', 
     expect((pq2.body as { result?: { collegeName?: string } }).result?.collegeName).toBeUndefined();
   });
 
-  it('persists a compact lastReview from an AI rubric review (with the reviewed draft version)', async () => {
+  it('persists a compact lastReview from an AI rubric review (via the async job)', async () => {
     const localH = makeHandlers({
       getData: () => data,
       now,
@@ -154,23 +159,22 @@ describe('essay coach — college grounding, rated review, practice questions', 
       }),
     });
     const id = ((await localH.createEssay(ctx({ body: { prompt: 'p' } }))).body as { essayId: string }).essayId;
-    await localH.addDraft(ctx({ params: { id }, body: { content: 'my draft words' } }));
-    const res = await localH.review(ctx({ params: { id }, body: {} }));
-    const body = res.body as { review: { overall?: number }; essay: { lastReview?: { overall: number; verdict: string; version?: number; reviewedAt: string } } };
-    expect(body.review.overall).toBe(8);
-    expect(body.essay.lastReview).toMatchObject({ overall: 8, verdict: 'close', version: 1, reviewedAt: now().toISOString() });
+    const res = await localH.startReview(ctx({ params: { id }, body: { content: 'my draft words' } }));
+    expect(res.status).toBe(202);
+    const job = res.body as { status: string; result?: { overall?: number } };
+    expect(job.status).toBe('complete');
+    expect(job.result?.overall).toBe(8);
     const stored = await data.essays.get(id);
-    expect(stored?.lastReview?.overall).toBe(8);
+    expect(stored?.lastReview).toMatchObject({ overall: 8, verdict: 'close', reviewedAt: now().toISOString() });
   });
 
   it('does NOT persist lastReview from the curated fallback (no fake scores)', async () => {
     const id = await createEssay();
-    await h.addDraft(ctx({ params: { id }, body: { content: 'my draft words' } }));
-    await h.review(ctx({ params: { id }, body: {} }));
+    await h.startReview(ctx({ params: { id }, body: { content: 'my draft words' } }));
     expect((await data.essays.get(id))?.lastReview).toBeUndefined();
   });
 
-  it('ad-hoc content review records no draft version', async () => {
+  it('records no draft version on the persisted lastReview', async () => {
     const localH = makeHandlers({
       getData: () => data,
       now,
@@ -181,8 +185,8 @@ describe('essay coach — college grounding, rated review, practice questions', 
       }),
     });
     const id = ((await localH.createEssay(ctx({ body: { prompt: 'p' } }))).body as { essayId: string }).essayId;
-    const res = await localH.review(ctx({ params: { id }, body: { content: 'unsaved text' } }));
-    const lastReview = (res.body as { essay: { lastReview?: { version?: number } } }).essay.lastReview;
+    await localH.startReview(ctx({ params: { id }, body: { content: 'unsaved text' } }));
+    const lastReview = (await data.essays.get(id))?.lastReview;
     expect(lastReview).toBeDefined();
     expect(lastReview?.version).toBeUndefined();
   });
@@ -237,9 +241,8 @@ describe('per-essay word target', () => {
       },
     });
     const id = ((await localH.createEssay(ctx({ body: { prompt: 'A 300-word response.' } }))).body as { essayId: string }).essayId;
-    await localH.addDraft(ctx({ params: { id }, body: { content: 'my draft' } }));
-    await localH.review(ctx({ params: { id }, body: {} }));
-    await localH.review(ctx({ params: { id }, body: { targetWords: 650 } }));
+    await localH.startReview(ctx({ params: { id }, body: { content: 'my draft' } }));
+    await localH.startReview(ctx({ params: { id }, body: { content: 'my draft', targetWords: 650 } }));
     expect(seen).toEqual([300, 650]);
   });
 });

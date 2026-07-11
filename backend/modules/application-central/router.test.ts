@@ -53,9 +53,16 @@ describe('router integration', () => {
     expect(find.statusCode).toBe(200);
     expect((parse(find).result as { source: string }).source).toBe('curated');
 
-    const review = await dispatch(event('POST', `/essays/${id}/review`, { as: keira, body: {} }));
-    expect(review.statusCode).toBe(200);
-    expect((parse(review).review as { rewrote: boolean }).rewrote).toBe(false);
+    // Evaluation is async now: POST returns 202 + a job; the inline dispatcher (no queue configured)
+    // completes it immediately, so polling the status endpoint yields the finished review.
+    const review = await dispatch(event('POST', `/essays/${id}/review`, { as: keira, body: { content: 'A first draft about my path to nursing.' } }));
+    expect(review.statusCode).toBe(202);
+    const jobId = (parse(review) as { jobId: string }).jobId;
+    const poll = await dispatch(event('GET', `/essays/${id}/review/${jobId}`, { as: keira }));
+    expect(poll.statusCode).toBe(200);
+    const job = parse(poll) as { status: string; result?: { rewrote: boolean } };
+    expect(job.status).toBe('complete');
+    expect(job.result?.rewrote).toBe(false);
   });
 
   it('routes /applications/overview (static beats :id)', async () => {

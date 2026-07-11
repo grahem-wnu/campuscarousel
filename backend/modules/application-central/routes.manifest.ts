@@ -8,15 +8,17 @@ import type { RouteDef } from '../../shared/api/index.js';
 import { dataFromEnv, type Data } from '../../shared/data/index.js';
 import { makeHandlers } from './handlers.js';
 import { makeSqsPracticeEnqueuer, makeBedrockPracticeQuestions } from './practice.js';
+import { makeSqsReviewEnqueuer, makeBedrockEssayReviewer } from './review.js';
 
 let cached: Data | undefined;
 const getData = (): Data => (cached ??= dataFromEnv());
-// Practice-question generation is async: enqueue a `practice-questions` job for the 300s worker
-// (model-only generation still blows the request path's ~30s ceiling). Reuses the interactive focus
-// queue — no new infra. The worker runs the generation; here we just send.
+// Practice-question generation AND essay evaluation are async `essay-coach` jobs for the 300s worker
+// (model-only, but both blow the request path's ~30s ceiling). They enqueue onto the dedicated
+// essay-coach queue (ESSAY_COACH_QUEUE_URL, fallback focus/hydration); the worker runs the work.
 const h = makeHandlers({
   getData,
   practiceDispatch: makeSqsPracticeEnqueuer(getData, makeBedrockPracticeQuestions()),
+  reviewDispatch: makeSqsReviewEnqueuer(getData, makeBedrockEssayReviewer(), () => new Date()),
 });
 
 export const routes: RouteDef[] = [
@@ -36,7 +38,8 @@ export const routes: RouteDef[] = [
   { method: 'DELETE', path: '/essays/:id', handler: h.removeEssay },
   { method: 'POST', path: '/essays/:id/draft', handler: h.addDraft },
   { method: 'POST', path: '/essays/:id/find-experiences', handler: h.findExperiences },
-  { method: 'POST', path: '/essays/:id/review', handler: h.review },
+  { method: 'POST', path: '/essays/:id/review', handler: h.startReview },
+  { method: 'GET', path: '/essays/:id/review/:jobId', handler: h.reviewStatus },
   { method: 'GET', path: '/recommendations', handler: h.listRecommendations },
   { method: 'POST', path: '/recommendations', handler: h.createRecommendation },
   { method: 'PUT', path: '/recommendations/:id', handler: h.updateRecommendation },
