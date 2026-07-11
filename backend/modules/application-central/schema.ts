@@ -62,7 +62,8 @@ export const reviewSchema = z
   .strict();
 
 /** POST /essays/practice-questions — questions-first: sample questions for a college (roster id,
- *  typed name, or general) BEFORE any essay exists. Model-only; safe in the request path. */
+ *  typed name, or general) BEFORE any essay exists. Generation runs on the async worker (off the
+ *  request path — model-only, but slow enough to blow the ~30s API ceiling); the frontend polls. */
 export const collegePracticeSchema = z
   .object({
     collegeId: z.string().max(200).optional(),
