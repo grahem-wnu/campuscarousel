@@ -459,6 +459,8 @@ export interface Course extends Timestamped {
 export interface Essay extends Timestamped {
   essayId: string;
   collegeId?: string;
+  /** Free-text school label for a typed, non-roster practice school (roster essays use collegeId). */
+  collegeName?: string;
   prompt?: string;
   promptSource?: string;
   /** Coaching word target — parsed from the prompt at creation when it states a count,
