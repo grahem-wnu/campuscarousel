@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Badge, Button, Card, Icon, Spinner, Textarea } from '../../shared/ui';
 import { ESSAY_STATUS_META, VERDICT_META, ratingRows, ratingTone, wordCount, wordTargetTone } from './logic';
-import { addDraft, findExperiences, reviewEssay, updateEssay } from './api';
+import { addDraft, findExperiences, getEssayEvaluationJob, startEssayEvaluation, updateEssay } from './api';
 import type { Essay, EssayReview, FindResult } from './types';
 
 interface Props {
@@ -16,10 +16,19 @@ interface Props {
 /** Common App cap — the coaching default when an essay has no target of its own. */
 const DEFAULT_TARGET_WORDS = 650;
 
+/** Async evaluation runs ~15–20s on the essay-coach worker; poll until it settles. */
+export const POLL_MS = 3000;
+const MAX_POLLS = 30; // ~90s ceiling — the worker has 300s but a review is usually well under a minute.
+
+/** The workspace has three views: `editing` (prompt, editor, coach sidebar), `evaluating` (a clear
+ *  full "up to a minute" panel while the async job runs), and `result` (the rubric-rated feedback —
+ *  bars + score + verdict + strengths/improve, never a rewrite — with "Back to editing"). */
+type Mode = 'editing' | 'evaluating' | 'result';
+
 /** The essay workspace: prompt, editor with live word count + version history, and an AI coach
  *  sidebar — "Find relevant experiences" (grounded in her real, privacy-filtered data + what the
  *  target college looks for), "Try a different question" (autosave the draft, then back to the
- *  questions-first front door), and "Check my essay" (rubric-rated feedback — never a rewrite). */
+ *  questions-first front door), and "Evaluate" (async rubric-rated feedback — never a rewrite). */
 export function EssayWorkspace({ essay, collegeName, onChanged, onBack, onTryAnother }: Props) {
   const latest = (essay.drafts ?? []).at(-1);
   const [text, setText] = useState(latest?.content ?? '');
@@ -31,9 +40,11 @@ export function EssayWorkspace({ essay, collegeName, onChanged, onBack, onTryAno
 
   const [find, setFind] = useState<FindResult | null>(null);
   const [finding, setFinding] = useState(false);
+  const [mode, setMode] = useState<Mode>('editing');
   const [review, setReview] = useState<EssayReview | null>(null);
-  const [reviewing, setReviewing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Monotonic request id: a slow evaluation must never overwrite a newer one (or a "Back to editing").
+  const reqRef = useRef(0);
 
   const wc = wordCount(text);
   const meta = ESSAY_STATUS_META[essay.status ?? 'brainstorming'];
@@ -74,19 +85,47 @@ export function EssayWorkspace({ essay, collegeName, onChanged, onBack, onTryAno
     if (ok) onTryAnother?.();
   }
 
-  async function runReview() {
+  /** Start an async evaluation and poll until it settles. Evaluation runs ~15–20s (near the request
+   *  path's ~30s ceiling), so the API returns 202 and the essay-coach worker fills the result. The
+   *  reqRef stale-guard wraps the WHOLE start+poll sequence (a newer Evaluate, or "Back to editing",
+   *  bumps it and this run bails without touching state). */
+  async function evaluate() {
     if (!text.trim()) return;
-    setReviewing(true);
+    const myReq = ++reqRef.current;
+    setMode('evaluating');
+    setReview(null);
     setError(null);
     try {
-      const res = await reviewEssay(essay.essayId, { content: text, targetWords: target });
-      setReview(res.review);
-      onChanged(res.essay);
+      let job = await startEssayEvaluation(essay.essayId, { content: text, targetWords: target });
+      for (let i = 0; job.status === 'pending' && i < MAX_POLLS; i++) {
+        await new Promise((r) => setTimeout(r, POLL_MS));
+        if (myReq !== reqRef.current) return; // superseded by a newer request
+        job = await getEssayEvaluationJob(essay.essayId, job.jobId);
+      }
+      if (myReq !== reqRef.current) return;
+      if (job.status === 'failed' || (job.status === 'complete' && !job.result)) {
+        setError('Could not evaluate your essay right now — please try again in a moment.');
+        setMode('editing');
+        return;
+      }
+      if (job.status === 'pending') {
+        setError('Evaluation is taking longer than expected — please try again in a moment.');
+        setMode('editing');
+        return;
+      }
+      setReview(job.result ?? null);
+      setMode('result');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not review the essay.');
-    } finally {
-      setReviewing(false);
+      if (myReq !== reqRef.current) return;
+      setError(err instanceof Error ? err.message : 'Could not evaluate the essay.');
+      setMode('editing');
     }
+  }
+
+  /** Return to the editor from the result view (the draft is preserved in local state). */
+  function backToEditing() {
+    reqRef.current++; // invalidate any in-flight evaluation
+    setMode('editing');
   }
 
   async function setStatus(status: Essay['status']) {
@@ -117,6 +156,70 @@ export function EssayWorkspace({ essay, collegeName, onChanged, onBack, onTryAno
     }
   }
 
+  // Evaluating — a clear full panel while the async essay-coach job runs.
+  if (mode === 'evaluating') {
+    return (
+      <Card role="status" className="flex flex-col items-center gap-3 py-16 text-center">
+        <Spinner />
+        <p className="font-display text-base font-semibold text-ink-800">
+          Evaluating your essay — this can take up to a minute.
+        </p>
+        <p className="text-sm text-ink-500">The coach is reading your draft and rating it against the rubric.</p>
+      </Card>
+    );
+  }
+
+  // Result — the rubric-rated feedback, with a way back to the editor (draft preserved).
+  if (mode === 'result' && review) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <Button size="sm" variant="ghost" onClick={backToEditing}>← Back</Button>
+          <Badge tone={meta.tone}>{meta.label}</Badge>
+        </div>
+        <Card className="space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold uppercase tracking-wide text-ink-500">Feedback</p>
+            <Badge tone="neutral">{review.wordCount}w · never a rewrite</Badge>
+          </div>
+          {review.overall !== undefined && review.verdict ? (
+            <div className="flex items-center gap-2">
+              <span className="text-2xl font-bold text-ink-900">{review.overall}<span className="text-sm font-normal text-ink-400">/10</span></span>
+              <Badge tone={VERDICT_META[review.verdict].tone}>{VERDICT_META[review.verdict].label}</Badge>
+            </div>
+          ) : review.source === 'curated' ? (
+            <p className="text-xs text-ink-400">AI rating unavailable right now — showing basic checks.</p>
+          ) : null}
+          {review.ratings ? (
+            <ul className="space-y-1">
+              {ratingRows(review.ratings).map((r) => (
+                <li key={r.key} className="flex items-center justify-between gap-2 text-sm">
+                  <span className="text-ink-600">{r.label}</span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="h-1.5 w-16 overflow-hidden rounded-full bg-surface-sunken">
+                      <span
+                        className={`block h-full rounded-full ${ratingTone(r.score) === 'success' ? 'bg-success-500' : ratingTone(r.score) === 'warn' ? 'bg-warn-500' : 'bg-error-500'}`}
+                        style={{ width: `${r.score * 10}%` }}
+                      />
+                    </span>
+                    <span className="w-4 text-right text-xs font-semibold text-ink-700">{r.score}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {review.strengths.length ? <div><p className="text-xs font-medium text-success-700">Strengths</p><ul className="list-disc pl-5 text-sm text-ink-700">{review.strengths.map((s, i) => <li key={i}>{s}</li>)}</ul></div> : null}
+          {review.improvements.length ? <div><p className="text-xs font-medium text-warn-700">Improve</p><ul className="list-disc pl-5 text-sm text-ink-700">{review.improvements.map((s, i) => <li key={i}>{s}</li>)}</ul></div> : null}
+          {review.authenticity ? <p className="text-sm italic text-ink-600">{review.authenticity}</p> : null}
+        </Card>
+        <div>
+          <Button size="sm" onClick={backToEditing}>Back to editing</Button>
+        </div>
+      </div>
+    );
+  }
+
+  // Editing — the writing surface with the coach sidebar.
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -195,7 +298,7 @@ export function EssayWorkspace({ essay, collegeName, onChanged, onBack, onTryAno
             {onTryAnother ? (
               <Button size="sm" variant="outline" block loading={savingDraft} onClick={() => void tryAnother()}>Try a different question</Button>
             ) : null}
-            <Button size="sm" variant="outline" block loading={reviewing} disabled={!text.trim()} onClick={() => void runReview()}>Check &amp; rate my essay</Button>
+            <Button size="sm" variant="outline" block disabled={!text.trim()} onClick={() => void evaluate()}>Evaluate</Button>
             <p className="text-[11px] text-primary-700">
               Grounded in your logged experiences{collegeName ? ` and what ${collegeName} looks for` : ''}. The AI coaches and rates — it never writes the essay for you.
             </p>
@@ -215,44 +318,6 @@ export function EssayWorkspace({ essay, collegeName, onChanged, onBack, onTryAno
                   <ul className="list-disc space-y-0.5 pl-5 text-sm text-ink-700">{find.angles.map((a, i) => <li key={i}>{a}</li>)}</ul>
                 </>
               ) : null}
-            </Card>
-          ) : null}
-
-          {reviewing ? <div className="flex justify-center py-3"><Spinner /></div> : review ? (
-            <Card className="space-y-2">
-              <div className="flex items-center justify-between">
-                <p className="text-xs font-semibold uppercase tracking-wide text-ink-500">Feedback</p>
-                <Badge tone="neutral">{review.wordCount}w · never a rewrite</Badge>
-              </div>
-              {review.overall !== undefined && review.verdict ? (
-                <div className="flex items-center gap-2">
-                  <span className="text-2xl font-bold text-ink-900">{review.overall}<span className="text-sm font-normal text-ink-400">/10</span></span>
-                  <Badge tone={VERDICT_META[review.verdict].tone}>{VERDICT_META[review.verdict].label}</Badge>
-                </div>
-              ) : review.source === 'curated' ? (
-                <p className="text-xs text-ink-400">AI rating unavailable right now — showing basic checks.</p>
-              ) : null}
-              {review.ratings ? (
-                <ul className="space-y-1">
-                  {ratingRows(review.ratings).map((r) => (
-                    <li key={r.key} className="flex items-center justify-between gap-2 text-sm">
-                      <span className="text-ink-600">{r.label}</span>
-                      <span className="flex items-center gap-1.5">
-                        <span className="h-1.5 w-16 overflow-hidden rounded-full bg-surface-sunken">
-                          <span
-                            className={`block h-full rounded-full ${ratingTone(r.score) === 'success' ? 'bg-success-500' : ratingTone(r.score) === 'warn' ? 'bg-warn-500' : 'bg-error-500'}`}
-                            style={{ width: `${r.score * 10}%` }}
-                          />
-                        </span>
-                        <span className="w-4 text-right text-xs font-semibold text-ink-700">{r.score}</span>
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-              {review.strengths.length ? <div><p className="text-xs font-medium text-success-700">Strengths</p><ul className="list-disc pl-5 text-sm text-ink-700">{review.strengths.map((s, i) => <li key={i}>{s}</li>)}</ul></div> : null}
-              {review.improvements.length ? <div><p className="text-xs font-medium text-warn-700">Improve</p><ul className="list-disc pl-5 text-sm text-ink-700">{review.improvements.map((s, i) => <li key={i}>{s}</li>)}</ul></div> : null}
-              {review.authenticity ? <p className="text-sm italic text-ink-600">{review.authenticity}</p> : null}
             </Card>
           ) : null}
         </div>

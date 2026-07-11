@@ -110,6 +110,17 @@ export interface PracticeQuestionJob {
   error?: string;
 }
 
+/** Async essay-evaluation job: POST /essays/:id/review returns 202 with this (pending); the frontend
+ *  polls getEssayEvaluationJob until it settles. `result` carries the same EssayReview the workspace
+ *  renders (bars + score + verdict + strengths/improve — never a rewrite). */
+export interface EssayReviewJob {
+  jobId: string;
+  essayId: string;
+  status: 'pending' | 'complete' | 'failed';
+  result?: EssayReview;
+  error?: string;
+}
+
 /** Just enough of a college to pick one and offer its real prompts. */
 export interface CollegeOption {
   collegeId: string;
