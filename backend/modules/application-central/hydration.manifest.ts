@@ -4,10 +4,10 @@
 // the slow, model-only generation the API can't run inline).
 
 import { dataFromEnv, type Data } from '../../shared/data/index.js';
-import { PRACTICE_QUESTIONS_TYPE, makeBedrockPracticeQuestions, makeWorkerHandler } from './practice.js';
+import { ESSAY_COACH_TYPE, makeBedrockPracticeQuestions, makeWorkerHandler } from './practice.js';
 
 let cached: Data | undefined;
 const getData = (): Data => (cached ??= dataFromEnv());
 const handler = makeWorkerHandler(getData, makeBedrockPracticeQuestions());
 
-export const hydration = { type: PRACTICE_QUESTIONS_TYPE, handler };
+export const hydration = { type: ESSAY_COACH_TYPE, handler };

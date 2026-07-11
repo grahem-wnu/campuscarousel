@@ -42,8 +42,10 @@ describe('runPracticeJob', () => {
 describe('makeSqsPracticeEnqueuer', () => {
   it('falls back to inline generation when no queue is configured', async () => {
     const data = await mk();
+    const prevEssayCoach = process.env.ESSAY_COACH_QUEUE_URL;
     const prevFocus = process.env.FOCUS_QUEUE_URL;
     const prevHydration = process.env.HYDRATION_QUEUE_URL;
+    delete process.env.ESSAY_COACH_QUEUE_URL;
     delete process.env.FOCUS_QUEUE_URL;
     delete process.env.HYDRATION_QUEUE_URL;
     try {
@@ -53,6 +55,7 @@ describe('makeSqsPracticeEnqueuer', () => {
       // No queue → ran inline, so the job is already complete (no polling needed).
       expect((await data.practiceQuestionJobs.get(job.jobId))?.status).toBe('complete');
     } finally {
+      if (prevEssayCoach !== undefined) process.env.ESSAY_COACH_QUEUE_URL = prevEssayCoach; else delete process.env.ESSAY_COACH_QUEUE_URL;
       if (prevFocus !== undefined) process.env.FOCUS_QUEUE_URL = prevFocus; else delete process.env.FOCUS_QUEUE_URL;
       if (prevHydration !== undefined) process.env.HYDRATION_QUEUE_URL = prevHydration; else delete process.env.HYDRATION_QUEUE_URL;
     }
@@ -67,7 +70,7 @@ describe('makeSqsPracticeEnqueuer', () => {
     await runWithTenant('tenant-1', () => runWithStudent('student-1', () => enqueue(job.jobId)));
     expect(sent).toHaveLength(1);
     const body = JSON.parse((sent[0] as { input: { MessageBody: string } }).input.MessageBody) as Record<string, unknown>;
-    expect(body).toMatchObject({ type: 'practice-questions', jobId: job.jobId, tenantId: 'tenant-1', studentId: 'student-1' });
+    expect(body).toMatchObject({ type: 'essay-coach', kind: 'questions', jobId: job.jobId, tenantId: 'tenant-1', studentId: 'student-1' });
     // Enqueue path does NOT generate inline — the job is left for the worker to complete.
     expect((await data.practiceQuestionJobs.get(job.jobId))?.status).toBe('pending');
   });
