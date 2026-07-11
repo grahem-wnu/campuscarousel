@@ -735,6 +735,11 @@ export interface EssayReviewJob extends Timestamped {
   essayId: string;
   content?: string;
   targetWords?: number;
+  /** The caller who requested the evaluation (from the JWT). The worker reconstructs a Requester
+   *  from these to privacy-filter the experience pool, and reviewStatus reads are creator-guarded
+   *  off reviewerUsername — a full review may reference private-derived experiences. */
+  reviewerUsername: string;
+  reviewerRole: Role;
   status: 'pending' | 'complete' | 'failed';
   result?: PersistedEssayReview;
   error?: string;
