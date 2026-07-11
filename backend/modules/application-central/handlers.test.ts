@@ -227,8 +227,27 @@ describe('practice-questions (questions-first, collegeId-keyed)', () => {
     expect(seen).toEqual(['Imaginary U', undefined]);
   });
 
+  it('flags usedRealPrompts=false for a roster college that has no essayPrompts', async () => {
+    const localH = makeHandlers({
+      getData: () => data,
+      now,
+      practice: async () => ({ questions: [{ question: 'q', why: 'w', tip: 't' }], source: 'curated' as const }),
+    });
+    const college = await data.colleges.create({
+      name: 'No Prompts U', status: 'applying',
+    } as Parameters<Data['colleges']['create']>[0]);
+    const res = await localH.practiceQuestionsForCollege(ctx({ body: { collegeId: college.collegeId } }));
+    const body = res.body as { collegeName?: string; usedRealPrompts: boolean };
+    expect(body.collegeName).toBe('No Prompts U');
+    expect(body.usedRealPrompts).toBe(false);
+  });
+
   it('422s on an unknown body field (strict schema)', async () => {
     await expectStatus(h.practiceQuestionsForCollege(ctx({ body: { bogus: 1 } })), 422);
+  });
+
+  it('422s on a whitespace-only collegeName (trim + min(1))', async () => {
+    await expectStatus(h.practiceQuestionsForCollege(ctx({ body: { collegeName: '   ' } })), 422);
   });
 });
 

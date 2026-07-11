@@ -18,7 +18,7 @@ const draft = z
 export const createSchema = z
   .object({
     collegeId: z.string().max(200).optional(),
-    collegeName: z.string().max(200).optional(),
+    collegeName: z.string().trim().min(1).max(200).optional(),
     prompt: z.string().max(5000).optional(),
     promptSource: z.string().max(200).optional(),
     targetWords: z.number().int().min(50).max(5000).optional(),
@@ -66,7 +66,7 @@ export const reviewSchema = z
 export const collegePracticeSchema = z
   .object({
     collegeId: z.string().max(200).optional(),
-    collegeName: z.string().max(200).optional(),
+    collegeName: z.string().trim().min(1).max(200).optional(),
     count: z.number().int().min(3).max(8).optional(),
   })
   .strict();
