@@ -18,8 +18,8 @@ const DEFAULT_TARGET_WORDS = 650;
 
 /** The essay workspace: prompt, editor with live word count + version history, and an AI coach
  *  sidebar — "Find relevant experiences" (grounded in her real, privacy-filtered data + what the
- *  target college looks for), "Practice questions" (sample prompts in the college's style), and
- *  "Check my essay" (rubric-rated feedback — never a rewrite). */
+ *  target college looks for), "Try a different question" (autosave the draft, then back to the
+ *  questions-first front door), and "Check my essay" (rubric-rated feedback — never a rewrite). */
 export function EssayWorkspace({ essay, collegeName, onChanged, onBack, onTryAnother }: Props) {
   const latest = (essay.drafts ?? []).at(-1);
   const [text, setText] = useState(latest?.content ?? '');
@@ -38,14 +38,18 @@ export function EssayWorkspace({ essay, collegeName, onChanged, onBack, onTryAno
   const wc = wordCount(text);
   const meta = ESSAY_STATUS_META[essay.status ?? 'brainstorming'];
 
-  async function saveDraft() {
-    if (!text.trim()) return;
+  /** Persist the current text as a new draft. Returns true on success, false if the save failed
+   *  (so callers that navigate away can abort and avoid losing the draft). */
+  async function saveDraft(): Promise<boolean> {
+    if (!text.trim()) return true;
     setSavingDraft(true);
     setError(null);
     try {
       onChanged(await addDraft(essay.essayId, text));
+      return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save the draft.');
+      return false;
     } finally {
       setSavingDraft(false);
     }
@@ -63,10 +67,11 @@ export function EssayWorkspace({ essay, collegeName, onChanged, onBack, onTryAno
     }
   }
 
-  /** Preserve the current draft as an attempt, then return to the questions-first front door. */
+  /** Preserve the current draft as an attempt, then return to the questions-first front door.
+   *  If the autosave fails, stay put (the error is shown) so the draft is never silently lost. */
   async function tryAnother() {
-    if (text.trim()) await saveDraft();
-    onTryAnother?.();
+    const ok = text.trim() ? await saveDraft() : true;
+    if (ok) onTryAnother?.();
   }
 
   async function runReview() {
@@ -213,7 +218,7 @@ export function EssayWorkspace({ essay, collegeName, onChanged, onBack, onTryAno
             </Card>
           ) : null}
 
-          {reviewing ?<div className="flex justify-center py-3"><Spinner /></div> : review ? (
+          {reviewing ? <div className="flex justify-center py-3"><Spinner /></div> : review ? (
             <Card className="space-y-2">
               <div className="flex items-center justify-between">
                 <p className="text-xs font-semibold uppercase tracking-wide text-ink-500">Feedback</p>

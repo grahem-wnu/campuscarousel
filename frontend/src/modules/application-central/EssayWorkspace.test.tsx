@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
-// The essay coach sidebar: rated review (rubric + verdict) and college-style practice questions.
+// The essay coach sidebar: rated review (rubric + verdict) and "Try a different question"
+// (autosave the current draft, then return to the questions-first front door).
 
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -98,5 +99,15 @@ describe('EssayWorkspace — essay coach', () => {
     await userEvent.click(screen.getByRole('button', { name: /try a different question/i }));
     expect(addDraft).toHaveBeenCalled();          // current text preserved as an attempt
     expect(onTryAnother).toHaveBeenCalled();
+  });
+
+  it('does NOT navigate away (and shows the error) when the autosave fails', async () => {
+    addDraft.mockRejectedValue(new Error('network down'));
+    const onTryAnother = vi.fn();
+    render(<EssayWorkspace essay={essay} onChanged={vi.fn()} onBack={() => {}} onTryAnother={onTryAnother} />);
+    await userEvent.click(screen.getByRole('button', { name: /try a different question/i }));
+    expect(addDraft).toHaveBeenCalled();
+    expect(onTryAnother).not.toHaveBeenCalled();  // draft not lost — stay put
+    expect(await screen.findByText(/network down/i)).toBeInTheDocument();
   });
 });
