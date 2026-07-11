@@ -14,16 +14,18 @@
 
 ## Chunk A: Backend — grounded evaluation + privacy guard
 
-### Task A1: Job carries the caller identity
+> **Commit ordering (important — avoid tsc-red commits):** Do **A2 first** (it edits `ai.ts` only and compiles standalone → its own commit). Then land **A1 + A3 + A4 as ONE commit** — adding the required `reviewerUsername`/`reviewerRole` to `EssayReviewJob` (A1) makes `review.ts` (A3, which reads them) and the 7 existing `review.test.ts` `create` calls red until they're all updated together. Do NOT commit A1's type change on its own.
+
+### Task A1: Job carries the caller identity  *(land together with A3 + A4)*
 **Files:** `backend/shared/data/types.ts`
-- [ ] **Step 1:** Add to `EssayReviewJob` (which already has jobId/essayId/content?/targetWords?/status/result?/error?):
+- [ ] Add to `EssayReviewJob` (which already has jobId/essayId/content?/targetWords?/status/result?/error?):
 ```typescript
   reviewerUsername: string;
   reviewerRole: Role;   // Role is already exported from this file
 ```
-- [ ] **Step 2:** `cd backend && npx tsc --noEmit` → expect FAIL only where `startReview` creates the job without these (fixed in A4) — do not commit yet; this task's commit is folded with A4. (Or add the fields as optional temporarily — NO, keep required and commit A1–A4 together at A4 Step 5.)
+Do not compile/commit in isolation — required fields break `review.ts` + `review.test.ts` until A3/A4. This commits in the combined A4 commit.
 
-### Task A2: Reviewer reads the experience pool
+### Task A2: Reviewer reads the experience pool  *(standalone commit)*
 **Files:** `backend/modules/application-central/ai.ts`
 - [ ] **Step 1: Write failing test** (in `ai.test.ts`): `buildReviewPrompt` with a `pool` includes the experience text (`poolToText`) and a "name a real logged experience" instruction; without a pool it does not. (Use a small `ExperiencePool` fixture.)
 - [ ] **Step 2:** Extend the `EssayReviewer` input type (`ai.ts:72-77`) with `pool?: ExperiencePool` (import `ExperiencePool` — already imported at `ai.ts:13`). Update `buildReviewPrompt` (`ai.ts:263`) signature to accept `pool?: ExperiencePool` and, when present, append before the essay draft:
@@ -38,7 +40,7 @@
 
 ### Task A3: Worker gathers privacy-filtered experiences
 **Files:** `backend/modules/application-central/review.ts`, `review.test.ts`
-- [ ] **Step 1: Update the failing tests** in `review.test.ts`: `runReviewJob` for a job with `reviewerRole:'student'` passes a pool INCLUDING private entries to the reviewer; a job with `reviewerRole:'parent'` passes a pool WITHOUT private entries. (Seed a private + a family activity via `data.activities.create`, inject a reviewer spy that captures `input.pool`, assert on `pool.includesPrivate` / counts.)
+- [ ] **Step 1: Update `review.test.ts`.** FIRST: the 7 existing `essayReviewJobs.create({...})` calls (≈ lines 29, 42, 55, 65, 87, 101, 116) now need the new required fields — add `reviewerUsername: 'keira', reviewerRole: 'student'` to each (they're uncast, so tsc fails without them). THEN add the pool-by-role tests: `runReviewJob` for a job with `reviewerRole:'student'` passes a pool INCLUDING private entries to the reviewer; a job with `reviewerRole:'parent'` passes a pool WITHOUT private entries. (Seed a private + a family activity via `data.activities.create`, inject a reviewer spy that captures `input.pool`, assert on `pool.includesPrivate` / counts.)
 - [ ] **Step 2:** In `runReviewJob` (`review.ts:19-47`), after loading the job, add:
 ```typescript
     const requester = { username: job.reviewerUsername, role: job.reviewerRole };
@@ -46,7 +48,7 @@
 ```
 and pass `pool` into the `reviewer({ prompt, content, targetWords, college, pool })` call. Import `gatherExperiences` from `./grounding.js` (already imports `gatherCollegeContext` from there).
 - [ ] **Step 3: Update the stale comment** at `grounding.ts:1-5`: the essay-review path now persists AI output (on the creator-guarded job); the creator-only read guard — not non-persistence — is the leak barrier. (Keep the find-experiences description accurate for THAT path, which still returns live.)
-- [ ] **Step 4:** Run → pass; `tsc` clean. Commit: `feat(essay-center): evaluation grounds in the caller's privacy-filtered experiences`
+- [ ] **Step 4:** Run → pass; `tsc` clean. **This commit includes A1's `types.ts` change** (types + review.ts + review.test land together, all green — `handlers.ts:207`'s cast keeps `startReview` compiling before A4 populates the fields). Commit: `feat(essay-center): evaluation grounds in the caller's privacy-filtered experiences`
 
 ### Task A4: Handlers — stamp identity + creator-only read guard
 **Files:** `backend/modules/application-central/handlers.ts`, `handlers.test.ts`
@@ -64,7 +66,7 @@ In `reviewStatus`, replace the load+notFound with the creator guard:
 ```
 - [ ] **Step 3: Update the stale comments** at `handlers.ts:4-5` (module header) and the `startReview` comment (~199-202): the full review is persisted on the creator-guarded job; the guard (not non-persistence) prevents a later cross-caller read; `lastReview` is scores-only.
 - [ ] **Step 4:** `cd backend && npx tsc --noEmit` (now clean — A1 fields are populated). Run `cd /mnt/c/Keira/keiras-journey && npx vitest run backend/modules/application-central/ --exclude '**/agents/**' && npm run check:routes` → PASS.
-- [ ] **Step 5:** Commit (folds A1's type change): `feat(essay-center): stamp reviewer identity + creator-only read of evaluation jobs (privacy)`
+- [ ] **Step 5:** Commit: `feat(essay-center): stamp reviewer identity + creator-only read of evaluation jobs (privacy)`
 
 ### Task A5: Full backend green
 - [ ] `cd backend && npx tsc --noEmit && npx vitest run` (root, agents excluded) → PASS. Commit if anything changed.
@@ -76,8 +78,9 @@ In `reviewStatus`, replace the load+notFound with the creator guard:
 ### Task B1: `EssayWorkspace` trim + autosave
 **Files:** `frontend/src/modules/application-central/{EssayWorkspace.tsx,EssayWorkspace.test.tsx}`
 - [ ] **Step 1: Update tests** first: EssayWorkspace no longer renders "Find relevant experiences", "Mark final", "Save draft v", "Version history", or the word-target `<input>`; it DOES render the editor, a word count, "Copy essay", "Evaluate", "Try a different question". Editing text and blurring autosaves via `updateEssay(id, { drafts: [{ version:1, content, ... }] })` (mock `updateEssay`, assert called with a single-draft payload). Keep the existing Evaluate-loop and "Try a different question autosave" tests (the latter now asserts `updateEssay`, not `addDraft`).
+- [ ] **Step 2a (FE type — REQUIRED, else tsc red):** In `frontend/src/modules/application-central/types.ts`, add `drafts?: EssayDraft[];` to `EssayInput` (the FE `EssayInput` is hand-written and currently has NO `drafts` field, so `updateEssay(id, {drafts:[...]})` would be an excess-property error). `EssayDraft` is already declared in that file.
 - [ ] **Step 2: Implement.** In `EssayWorkspace.tsx`:
-  - Imports: drop `findExperiences`, `addDraft`; drop `FindResult`, `ESSAY_STATUS_META`, `wordTargetTone` if now unused; keep `updateEssay`, `wordCount`, `VERDICT_META`, `ratingRows`, `ratingTone`.
+  - Imports: drop `findExperiences`, `addDraft`; drop `FindResult`, `ESSAY_STATUS_META`. **KEEP** `Spinner` (evaluating view), `Icon` (prompt card), `wordTargetTone` (the `{wc}/{target}` badge tone), `updateEssay`, `wordCount`, `VERDICT_META`, `ratingRows`, `ratingTone`.
   - Remove state: `find`, `finding`, `showFinalNudge`, `savingDraft` (replace with `saving`), the editable `target` state → use a const `const target = essay.targetWords ?? DEFAULT_TARGET_WORDS`. Remove `runFind`, `saveTarget`, `setStatus`, `saveDraft` (replace with `saveBody`).
   - **`saveBody`** (single-slot overwrite):
 ```typescript
