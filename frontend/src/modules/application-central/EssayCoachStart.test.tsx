@@ -51,4 +51,45 @@ describe('EssayCoachStart', () => {
       expect.objectContaining({ collegeName: 'Imaginary U', promptSource: 'practice' }),
     );
   });
+
+  it('shows an empty-state (no "Write about this one") when a school returns zero questions', async () => {
+    getPracticeQuestionsForCollege.mockResolvedValue({
+      questions: [], source: 'ai', collegeName: 'Empty U', usedRealPrompts: false,
+    });
+    render(<EssayCoachStart colleges={colleges} onWrite={vi.fn()} onCancel={() => {}} />);
+
+    await userEvent.type(screen.getByLabelText(/different school/i), 'Empty U');
+    await userEvent.click(screen.getByRole('button', { name: /see questions/i }));
+    expect(await screen.findByText(/couldn.t pull any questions for .*Empty U/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /write about this one/i })).not.toBeInTheDocument();
+  });
+
+  it('resets the writing state and surfaces the error when createEssay fails', async () => {
+    getPracticeQuestionsForCollege.mockResolvedValue({
+      questions: [{ question: 'Why nursing at OSU?', why: 'w', tip: 't' }],
+      source: 'curated', collegeName: 'Ohio State', usedRealPrompts: true,
+    });
+    createEssay.mockRejectedValue(new Error('could not create'));
+    const onWrite = vi.fn();
+    render(<EssayCoachStart colleges={colleges} onWrite={onWrite} onCancel={() => {}} />);
+
+    await userEvent.click(screen.getByRole('button', { name: /Ohio State/ }));
+    const writeBtn = await screen.findByRole('button', { name: /write about this one/i });
+    await userEvent.click(writeBtn);
+    expect(await screen.findByText(/could not create/i)).toBeInTheDocument();
+    expect(onWrite).not.toHaveBeenCalled();
+    // writingIdx reset → the button is interactive again (not stuck disabled/loading).
+    expect(screen.getByRole('button', { name: /write about this one/i })).toBeEnabled();
+  });
+
+  it('auto-loads the pre-seeded school on mount via initialCollegeId', async () => {
+    getPracticeQuestionsForCollege.mockResolvedValue({
+      questions: [{ question: 'Why nursing at OSU?', why: 'w', tip: 't' }],
+      source: 'curated', collegeName: 'Ohio State', usedRealPrompts: true,
+    });
+    render(<EssayCoachStart colleges={colleges} initialCollegeId="osu" onWrite={vi.fn()} onCancel={() => {}} />);
+
+    expect(await screen.findByText('Why nursing at OSU?')).toBeInTheDocument();
+    expect(getPracticeQuestionsForCollege).toHaveBeenCalledWith(expect.objectContaining({ collegeId: 'osu' }));
+  });
 });

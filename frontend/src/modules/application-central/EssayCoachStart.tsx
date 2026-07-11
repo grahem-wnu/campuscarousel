@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button, Card, Input } from '../../shared/ui';
 import { createEssay, getPracticeQuestionsForCollege } from './api';
 import type { CollegeOption, Essay, PracticeQuestionSet } from './types';
@@ -22,17 +22,23 @@ export function EssayCoachStart({ colleges, initialCollegeId, onWrite, onCancel 
   const [loading, setLoading] = useState(false);
   const [writingIdx, setWritingIdx] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Monotonic request id: a slow load must never overwrite the result of a newer one.
+  const reqRef = useRef(0);
 
   async function loadQuestions(o: Origin) {
+    const myReq = ++reqRef.current;
     setOrigin(o);
     setLoading(true);
     setError(null);
     try {
-      setSet(await getPracticeQuestionsForCollege(o));
+      const r = await getPracticeQuestionsForCollege(o);
+      if (myReq !== reqRef.current) return; // a newer load has superseded this one
+      setSet(r);
     } catch (err) {
+      if (myReq !== reqRef.current) return;
       setError(err instanceof Error ? err.message : 'Could not load practice questions.');
     } finally {
-      setLoading(false);
+      if (myReq === reqRef.current) setLoading(false);
     }
   }
 
@@ -67,28 +73,41 @@ export function EssayCoachStart({ colleges, initialCollegeId, onWrite, onCancel 
           <Button size="sm" variant="ghost" onClick={() => setSet(null)}>← Pick a different school</Button>
           <Button size="sm" variant="ghost" onClick={onCancel}>Cancel</Button>
         </div>
-        {set.usedRealPrompts === false ? (
-          <Card className="border border-secondary-200 bg-secondary-50">
+        {set.usedRealPrompts === false && set.questions.length > 0 ? (
+          <Card role="status" className="border border-secondary-200 bg-secondary-50">
             <p className="text-sm text-ink-700">
               I couldn’t find {set.collegeName ?? 'this school'}’s current essay questions, so these are general
               practice prompts of the kind admissions essays ask.
             </p>
           </Card>
         ) : null}
-        <div className="space-y-2">
-          {set.questions.map((q, i) => (
-            <Card key={i} className="space-y-1.5">
-              <p className="font-serif text-base text-ink-900">{q.question}</p>
-              {q.why ? <p className="text-xs text-ink-500">{q.why}</p> : null}
-              {q.tip ? <p className="text-xs italic text-primary-700">Tip: {q.tip}</p> : null}
-              <div>
-                <Button size="sm" loading={writingIdx === i} onClick={() => void write(q.question, i)}>
-                  Write about this one
-                </Button>
-              </div>
-            </Card>
-          ))}
-        </div>
+        {set.questions.length === 0 ? (
+          <Card role="status" className="border border-secondary-200 bg-secondary-50">
+            <p className="text-sm text-ink-700">
+              I couldn’t pull any questions for {set.collegeName ?? 'this school'} — pick a different school and try again.
+            </p>
+          </Card>
+        ) : (
+          <div className="space-y-2">
+            {set.questions.map((q, i) => (
+              <Card key={i} className="space-y-1.5">
+                <p className="font-serif text-base text-ink-900">{q.question}</p>
+                {q.why ? <p className="text-xs text-ink-500">{q.why}</p> : null}
+                {q.tip ? <p className="text-xs italic text-primary-700">Tip: {q.tip}</p> : null}
+                <div>
+                  <Button
+                    size="sm"
+                    loading={writingIdx === i}
+                    disabled={writingIdx !== null}
+                    onClick={() => void write(q.question, i)}
+                  >
+                    Write about this one
+                  </Button>
+                </div>
+              </Card>
+            ))}
+          </div>
+        )}
         {error ? <p className="text-sm text-error-600">{error}</p> : null}
       </div>
     );
@@ -109,7 +128,7 @@ export function EssayCoachStart({ colleges, initialCollegeId, onWrite, onCancel 
           <p className="text-xs font-semibold uppercase tracking-wide text-ink-500">Your schools</p>
           <div className="flex flex-wrap gap-2">
             {colleges.map((c) => (
-              <Button key={c.collegeId} size="sm" variant="outline" onClick={() => void loadQuestions({ collegeId: c.collegeId })}>
+              <Button key={c.collegeId} size="sm" variant="outline" disabled={loading} onClick={() => void loadQuestions({ collegeId: c.collegeId })}>
                 {c.name}
               </Button>
             ))}
@@ -130,7 +149,7 @@ export function EssayCoachStart({ colleges, initialCollegeId, onWrite, onCancel 
           />
           <Button
             loading={loading}
-            disabled={!typedName.trim()}
+            disabled={loading || !typedName.trim()}
             onClick={() => void loadQuestions({ collegeName: typedName.trim() })}
           >
             See questions
@@ -138,7 +157,7 @@ export function EssayCoachStart({ colleges, initialCollegeId, onWrite, onCancel 
         </div>
       </div>
       <div className="flex gap-2">
-        <Button variant="ghost" onClick={() => void loadQuestions({})}>General practice (no school)</Button>
+        <Button variant="ghost" disabled={loading} onClick={() => void loadQuestions({})}>General practice (no school)</Button>
         <Button variant="ghost" onClick={onCancel}>Cancel</Button>
       </div>
       {error ? <p className="text-sm text-error-600">{error}</p> : null}
