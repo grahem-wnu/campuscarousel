@@ -1,23 +1,21 @@
 // @vitest-environment jsdom
-// The essay coach workspace: "Try a different question" (autosave the current draft, then return to
-// the questions-first front door) and async "Evaluate" — a full "up to a minute" view while the
-// essay-coach worker rates the draft, then the rubric result, then back to editing (draft intact).
+// The essay coach workspace: a single autosaved body (debounce + blur), "Copy essay", "Try a
+// different question" (autosave the current body, then return to the questions-first front door),
+// and async "Evaluate" — a full "up to a minute" view while the essay-coach worker rates the draft,
+// then the rubric result, then back to editing (body intact).
 
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { EssayWorkspace, POLL_MS } from './EssayWorkspace';
 import type { Essay, EssayReview } from './types';
 
-const { addDraft, startEssayEvaluation, getEssayEvaluationJob, updateEssay } = vi.hoisted(() => ({
-  addDraft: vi.fn(),
+const { startEssayEvaluation, getEssayEvaluationJob, updateEssay } = vi.hoisted(() => ({
   startEssayEvaluation: vi.fn(),
   getEssayEvaluationJob: vi.fn(),
   updateEssay: vi.fn(),
 }));
 vi.mock('./api', () => ({
-  addDraft,
-  findExperiences: vi.fn(),
   startEssayEvaluation,
   getEssayEvaluationJob,
   updateEssay,
@@ -52,32 +50,56 @@ describe('EssayWorkspace — essay coach', () => {
     vi.useRealTimers(); // safety net: never leak fake timers into the next test
   });
 
-  it('copies the essay text for pasting into a portal, then nudges to mark it final', async () => {
-    const writeText = vi.fn().mockResolvedValue(undefined);
-    Object.assign(navigator, { clipboard: { writeText } });
-    updateEssay.mockResolvedValue({ ...essay, status: 'final' });
-    const onChanged = vi.fn();
-    render(<EssayWorkspace essay={essay} onChanged={onChanged} onBack={() => {}} />);
-    await userEvent.click(screen.getByRole('button', { name: /copy essay/i }));
-    expect(writeText).toHaveBeenCalledWith('My draft about the ICU.');
-    expect(await screen.findByText(/pasted into the portal/i)).toBeInTheDocument();
-    await userEvent.click(screen.getAllByRole('button', { name: /mark final/i }).at(-1)!);
-    expect(updateEssay).toHaveBeenCalledWith('e1', { status: 'final' });
-    expect(onChanged).toHaveBeenCalledWith(expect.objectContaining({ status: 'final' }));
+  it('is stripped to editor + count + Copy + Evaluate — no Find / Mark final / Save draft / version history / target input', () => {
+    render(<EssayWorkspace essay={{ ...essay, targetWords: 350 }} collegeName="Ohio State" onChanged={() => {}} onBack={() => {}} />);
+    // Kept surfaces.
+    expect(screen.getByPlaceholderText(/write your essay/i)).toBeInTheDocument();
+    expect(screen.getByText(/\/ 350 words/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /copy essay/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^evaluate$/i })).toBeInTheDocument();
+    // Removed surfaces.
+    expect(screen.queryByRole('button', { name: /find relevant experiences/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /mark final/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /save draft/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/version history/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/word target/i)).not.toBeInTheDocument();
   });
 
-  it('the nudge is dismissible', async () => {
-    Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } });
+  it('copies the essay text for pasting into a portal (no mark-final nudge)', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
     render(<EssayWorkspace essay={essay} onChanged={() => {}} onBack={() => {}} />);
     await userEvent.click(screen.getByRole('button', { name: /copy essay/i }));
-    await userEvent.click(await screen.findByRole('button', { name: /not yet/i }));
+    expect(writeText).toHaveBeenCalledWith('My draft about the ICU.');
     expect(screen.queryByText(/pasted into the portal/i)).not.toBeInTheDocument();
   });
 
-  it('honors the essay\'s own word target (falls back to 650 only when unset)', () => {
+  it('honors the essay\'s own word target in the badge (falls back to 650 only when unset)', () => {
     render(<EssayWorkspace essay={{ ...essay, targetWords: 350 }} collegeName="Ohio State" onChanged={() => {}} onBack={() => {}} />);
     expect(screen.getByText(/\/ 350 words/)).toBeInTheDocument();
-    expect(screen.getByLabelText('Word target for this essay')).toHaveValue(350);
+    render(<EssayWorkspace essay={{ ...essay, targetWords: undefined }} onChanged={() => {}} onBack={() => {}} />);
+    expect(screen.getByText(/\/ 650 words/)).toBeInTheDocument();
+  });
+
+  it('autosaves the body on blur via a single-slot draft overwrite', async () => {
+    updateEssay.mockResolvedValue({ ...essay });
+    const onChanged = vi.fn();
+    render(<EssayWorkspace essay={essay} onChanged={onChanged} onBack={() => {}} />);
+    const editor = screen.getByPlaceholderText(/write your essay/i);
+    await userEvent.clear(editor);
+    await userEvent.type(editor, 'A brand new body');
+    fireEvent.blur(editor);
+    await waitFor(() => expect(updateEssay).toHaveBeenCalled());
+    expect(updateEssay).toHaveBeenCalledWith('e1', {
+      drafts: [expect.objectContaining({ version: 1, content: 'A brand new body', wordCount: 4 })],
+    });
+    expect(onChanged).toHaveBeenCalled();
+  });
+
+  it('does not autosave the seeded body on mount (the debounce skips the seed)', () => {
+    render(<EssayWorkspace essay={essay} onChanged={() => {}} onBack={() => {}} />);
+    // The dirtyRef guard means the seeded value never triggers a debounced save on mount.
+    expect(updateEssay).not.toHaveBeenCalled();
   });
 
   it('shows the college chip and the coach copy', () => {
@@ -109,7 +131,7 @@ describe('EssayWorkspace — essay coach', () => {
     expect(startEssayEvaluation).toHaveBeenCalledWith('e1', expect.objectContaining({ content: 'My draft about the ICU.' }));
   });
 
-  it('returns to the editor with the draft intact on "Back to editing"', async () => {
+  it('returns to the editor with the body intact on "Back to editing"', async () => {
     startEssayEvaluation.mockResolvedValue({ jobId: 'j1', essayId: 'e1', status: 'complete', result: review });
     render(<EssayWorkspace essay={essay} collegeName="Ohio State" onChanged={vi.fn()} onBack={() => {}} />);
 
@@ -149,22 +171,24 @@ describe('EssayWorkspace — essay coach', () => {
     expect(screen.getByPlaceholderText(/write your essay/i)).toHaveValue('My draft about the ICU.');
   });
 
-  it('auto-saves then returns to questions on "Try a different question"', async () => {
-    addDraft.mockResolvedValue({ ...essay });
+  it('autosaves the body then returns to questions on "Try a different question"', async () => {
+    updateEssay.mockResolvedValue({ ...essay });
     const onTryAnother = vi.fn();
     render(<EssayWorkspace essay={essay} onChanged={vi.fn()} onBack={() => {}} onTryAnother={onTryAnother} />);
     await userEvent.click(screen.getByRole('button', { name: /try a different question/i }));
-    expect(addDraft).toHaveBeenCalled();          // current text preserved as an attempt
+    expect(updateEssay).toHaveBeenCalledWith('e1', {
+      drafts: [expect.objectContaining({ version: 1, content: 'My draft about the ICU.' })],
+    });
     expect(onTryAnother).toHaveBeenCalled();
   });
 
   it('does NOT navigate away (and shows the error) when the autosave fails', async () => {
-    addDraft.mockRejectedValue(new Error('network down'));
+    updateEssay.mockRejectedValue(new Error('network down'));
     const onTryAnother = vi.fn();
     render(<EssayWorkspace essay={essay} onChanged={vi.fn()} onBack={() => {}} onTryAnother={onTryAnother} />);
     await userEvent.click(screen.getByRole('button', { name: /try a different question/i }));
-    expect(addDraft).toHaveBeenCalled();
-    expect(onTryAnother).not.toHaveBeenCalled();  // draft not lost — stay put
+    expect(updateEssay).toHaveBeenCalled();
+    expect(onTryAnother).not.toHaveBeenCalled();  // body not lost — stay put
     expect(await screen.findByText(/network down/i)).toBeInTheDocument();
   });
 });

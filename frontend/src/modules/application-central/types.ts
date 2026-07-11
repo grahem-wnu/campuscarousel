@@ -45,6 +45,7 @@ export interface EssayInput {
   prompt?: string;
   promptSource?: string;
   targetWords?: number;
+  drafts?: EssayDraft[];
   status?: EssayStatus;
   notes?: string;
 }
