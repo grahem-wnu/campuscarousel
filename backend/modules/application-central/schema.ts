@@ -18,6 +18,7 @@ const draft = z
 export const createSchema = z
   .object({
     collegeId: z.string().max(200).optional(),
+    collegeName: z.string().max(200).optional(),
     prompt: z.string().max(5000).optional(),
     promptSource: z.string().max(200).optional(),
     targetWords: z.number().int().min(50).max(5000).optional(),
@@ -60,9 +61,12 @@ export const reviewSchema = z
   })
   .strict();
 
-/** POST /essays/:id/practice-questions — AI sample questions in the target college's style. */
-export const practiceQuestionsSchema = z
+/** POST /essays/practice-questions — questions-first: sample questions for a college (roster id,
+ *  typed name, or general) BEFORE any essay exists. Model-only; safe in the request path. */
+export const collegePracticeSchema = z
   .object({
+    collegeId: z.string().max(200).optional(),
+    collegeName: z.string().max(200).optional(),
     count: z.number().int().min(3).max(8).optional(),
   })
   .strict();
