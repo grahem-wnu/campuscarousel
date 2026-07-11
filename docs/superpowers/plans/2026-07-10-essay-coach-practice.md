@@ -88,12 +88,17 @@ export const collegePracticeSchema = z
 Run: `cd backend && npx tsc --noEmit`
 Expected: FAIL — `practiceQuestionsSchema` is still imported in `handlers.ts`. That import is removed in Task 1.3. This is the one intentionally-broken intermediate state; proceed to 1.3 before committing.
 
-### Task 1.3: Handler — new `practiceQuestionsForCollege`, remove old `practiceQuestions`
+### Task 1.3: Handler + routes + tests — new `practiceQuestionsForCollege`, remove old `practiceQuestions`
+
+This task makes ALL the code changes needed to compile — handler, interface, `buildRoutes`, the route manifest, the manifest parity test, and the one pre-existing test that used the old route — so the **first backend commit lands typecheck-green** (no dangling `h.practiceQuestions` references).
 
 **Files:**
-- Modify: `backend/modules/application-central/handlers.ts` — imports (`:20-33`, `:34`), interface (`:59`), handler body (`:223-233`)
+- Modify: `backend/modules/application-central/handlers.ts` — imports (`:20-33`, `:34`), interface (`:59`), handler body (`:223-233`), `buildRoutes` (`:414`)
+- Modify: `backend/modules/application-central/routes.manifest.ts:30`
+- Modify: `backend/modules/application-central/manifest.test.ts:26` (hardcoded endpoint list)
+- Modify: `backend/modules/application-central/handlers.test.ts` — new tests + migrate the old practice test
 
-- [ ] **Step 1: Write the failing test** (in `handlers.test.ts` — added in full in Task 1.5; if doing strict TDD, add just this describe block first)
+- [ ] **Step 1: Write the failing test**
 
 Add to `backend/modules/application-central/handlers.test.ts`:
 
@@ -190,84 +195,62 @@ Replace the `practiceQuestions` handler (lines 223-233) with:
     },
 ```
 
-- [ ] **Step 6: Run the tests to verify they pass**
+- [ ] **Step 6: Run the new tests to verify they pass**
 
 Run: `cd backend && npx vitest run modules/application-central/handlers.test.ts -t "questions-first"`
-Expected: PASS (all 3).
+Expected: PASS (all 3). (Full `tsc` is still red here — `buildRoutes`/manifest still name `h.practiceQuestions`; fixed in the next steps before any commit.)
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 7: Swap `buildRoutes` (handlers.ts) + the route manifest**
 
-```bash
-git add backend/modules/application-central/schema.ts backend/modules/application-central/handlers.ts backend/modules/application-central/handlers.test.ts
-git commit -m "feat(essay-coach): questions-first practice route (collegeId/name/general)"
-```
-
-### Task 1.4: Route table — swap the manifest + buildRoutes entries
-
-**Files:**
-- Modify: `backend/modules/application-central/routes.manifest.ts:30`
-- Modify: `backend/modules/application-central/handlers.ts:414`
-
-- [ ] **Step 1: Update `routes.manifest.ts`**
-
-Replace line 30 (`POST /essays/:id/practice-questions`) with the questions-first route, placed just after `POST /essays` for readability (order is irrelevant to matching — the router keys on method + segment count and sorts static > param):
+In `handlers.ts` `buildRoutes` (around line 414): remove the `/essays/:id/practice-questions` row, and add after the `POST /essays` row:
 
 ```typescript
-  { method: 'POST', path: '/essays', handler: h.createEssay },
+    { method: 'POST' as const, path: '/essays/practice-questions', handler: h.practiceQuestionsForCollege },
+```
+
+In `routes.manifest.ts`: delete line 30 (`POST /essays/:id/practice-questions`) and add after the `POST /essays` row (order is irrelevant to matching — the router keys on method + segment count and sorts static > param):
+
+```typescript
   { method: 'POST', path: '/essays/practice-questions', handler: h.practiceQuestionsForCollege },
 ```
 
-...and delete the old `{ method: 'POST', path: '/essays/:id/practice-questions', handler: h.practiceQuestions },` line.
+- [ ] **Step 8: Fix the hardcoded endpoint list in `manifest.test.ts`**
 
-- [ ] **Step 2: Update `buildRoutes` in `handlers.ts`**
+`manifest.test.ts` (line ~15-26) asserts the endpoint set as a literal array compared against `manifestRoutes.map(sig).sort()` — so **the literal must stay in sorted order**. Remove `'POST /essays/:id/practice-questions'` and insert `'POST /essays/practice-questions'` at its correct sorted position: `'/essays/practice-questions'` sorts *after* all `'/essays/:id/*'` entries (since `'p'` > `':'`), i.e. right after `'POST /essays/:id/review'`. If unsure, temporarily run the test to see the actual sorted output and match it exactly.
 
-Mirror the same swap in the `buildRoutes` table (around line 414): remove the `/essays/:id/practice-questions` row, add `{ method: 'POST' as const, path: '/essays/practice-questions', handler: h.practiceQuestionsForCollege },` after the `POST /essays` row.
+- [ ] **Step 9: Migrate the pre-existing practice test**
 
-- [ ] **Step 3: Verify route guard + manifest parity test**
-
-Run: `cd backend && npx vitest run modules/application-central/manifest.test.ts && npm run check:routes`
-Expected: PASS — manifest and buildRoutes agree; no duplicate routes.
-
-- [ ] **Step 4: Commit**
-
-```bash
-git add backend/modules/application-central/routes.manifest.ts backend/modules/application-central/handlers.ts
-git commit -m "feat(essay-coach): register /essays/practice-questions, drop :id practice route"
-```
-
-### Task 1.5: Fix the pre-existing test that used the old handler + full backend green
-
-**Files:**
-- Modify: `backend/modules/application-central/handlers.test.ts:124-143`
-
-- [ ] **Step 1: Update the old "passes the linked college to the finder and practice generator" test**
-
-That test (around lines 124-143) calls `localH.practiceQuestions(ctx({ params: { id: ... } }))`. The `/essays/:id/practice-questions` handler is gone. Change the two `practiceQuestions` calls to the new signature — no essay needed, pass `collegeId` / no college directly:
+In `handlers.test.ts`, the older "passes the linked college to the finder and practice generator" test (around lines 124-143) calls `localH.practiceQuestions(ctx({ params: { id } }))`. That handler is gone. Change the two calls to the new signature (no essay needed):
 
 ```typescript
     const pq = await localH.practiceQuestionsForCollege(ctx({ body: { collegeId } }));
-    // ...assert seen includes the college name as before...
+    // ...keep the assertion that `seen` includes the college name...
     const pq2 = await localH.practiceQuestionsForCollege(ctx({ body: {} }));
 ```
 
-Keep the finder assertion (still via `findExperiences` on a linked essay). Remove any now-dead essay creation that only existed to call the old practice route.
+Keep the finder assertion (still via `findExperiences` on a linked essay). Remove any essay creation that existed only to feed the old practice route.
 
-- [ ] **Step 2: Run the whole module test suite**
+- [ ] **Step 10: Full backend typecheck + tests + route guard (all green)**
 
-Run: `cd backend && npx vitest run modules/application-central/`
-Expected: PASS (all files green, including `ai.test.ts`, `handlers.test.ts`, `manifest.test.ts`).
+Run: `cd backend && npx tsc --noEmit && npx vitest run modules/application-central/`
+Then from the repo root: `cd /mnt/c/Keira/keiras-journey && npm run check:routes`
+Expected: PASS everywhere — `tsc` clean (no dangling `practiceQuestions`), all module tests green (`ai.test.ts`, `handlers.test.ts`, `manifest.test.ts`), and the duplicate-route guard passes (the new 2-segment static route is unique).
 
-- [ ] **Step 3: Full backend typecheck + tests**
+> Note: `check:routes` is a **root** script (`scripts/check-routes.mjs`); `backend/package.json` has no such script — run it from the repo root.
 
-Run: `cd backend && npx tsc --noEmit && npx vitest run`
-Expected: PASS.
-
-- [ ] **Step 4: Commit**
+- [ ] **Step 11: Commit (green)**
 
 ```bash
-git add backend/modules/application-central/handlers.test.ts
-git commit -m "test(essay-coach): migrate practice-generator test to questions-first handler"
+git add backend/modules/application-central/schema.ts backend/modules/application-central/handlers.ts backend/modules/application-central/routes.manifest.ts backend/modules/application-central/manifest.test.ts backend/modules/application-central/handlers.test.ts
+git commit -m "feat(essay-coach): questions-first practice route (collegeId/name/general)"
 ```
+
+### Task 1.4: Full backend suite green
+
+- [ ] **Step 1: Whole backend typecheck + tests**
+
+Run: `cd backend && npx tsc --noEmit && npx vitest run`
+Expected: PASS (no regressions outside the module).
 
 ---
 
@@ -306,9 +289,9 @@ git commit -m "feat(essay-coach): FE types — usedRealPrompts + essay collegeNa
 **Files:**
 - Modify: `frontend/src/modules/application-central/api.ts:59-61`
 
-- [ ] **Step 1: Replace `getPracticeQuestions`**
+- [ ] **Step 1: Add `getPracticeQuestionsForCollege` (keep `getPracticeQuestions` for now)**
 
-Remove the `getPracticeQuestions(id, count)` function and add:
+Add the new function alongside the existing `getPracticeQuestions` (its last caller — `EssayWorkspace` — is removed in Task 3.3, and the old function is deleted there so every commit stays green):
 
 ```typescript
 /** Questions-first: sample questions for a college BEFORE an essay exists. */
@@ -319,12 +302,10 @@ export function getPracticeQuestionsForCollege(
 }
 ```
 
-- [ ] **Step 2: Typecheck (expect KNOWN failures in EssayWorkspace)**
+- [ ] **Step 2: Typecheck (clean)**
 
 Run: `cd frontend && npx tsc --noEmit`
-Expected: FAIL — `EssayWorkspace.tsx` and `EssayWorkspace.test.tsx` still import `getPracticeQuestions`. Fixed in Chunk 3 (Task 3.3). Do not commit yet; finish Task 2.3 first, then this compiles clean only after Chunk 3. To keep commits green, commit this together with Task 3.3, OR temporarily leave `getPracticeQuestions` in place and remove it in 3.3.
-
-> **Sequencing note:** To keep every commit green, KEEP `getPracticeQuestions` for now (add the new function alongside it) and delete it in Task 3.3 when its last caller is gone. Adjust Step 1 accordingly: add the new function, don't remove the old one yet.
+Expected: PASS — purely additive; the old function still exists for its current caller.
 
 - [ ] **Step 3: Commit**
 
@@ -344,8 +325,9 @@ git commit -m "feat(essay-coach): add getPracticeQuestionsForCollege API client"
 Add to `logic.test.ts`:
 
 ```typescript
+// `Essay` is already imported at the top of logic.test.ts — do NOT re-import it (duplicate identifier).
+// Add `groupEssaysByCollege` to the existing `./logic` import, and add this describe block.
 import { groupEssaysByCollege } from './logic';
-import type { Essay } from './types';
 
 const mk = (over: Partial<Essay>): Essay => ({ essayId: 'x', createdAt: '', updatedAt: '', ...over });
 
@@ -505,8 +487,8 @@ Expected: FAIL — module `./EssayCoachStart` not found.
 Create the component. Follow the module's existing UI imports (`Button`, `Card`, `Field`, `Select`, `Spinner`, `EmptyState` from `../../shared/ui`) and copy the Field-Notes styling idiom from `ApplicationCentralPage.tsx` / `EssayWorkspace.tsx` (no icon-circles/card-grid slop). Full reference implementation:
 
 ```typescript
-import { useState } from 'react';
-import { Button, Card, Field, Input, Select, Spinner } from '../../shared/ui';
+import { useEffect, useState } from 'react';
+import { Button, Card, Input } from '../../shared/ui';
 import { createEssay, getPracticeQuestionsForCollege } from './api';
 import type { CollegeOption, Essay, PracticeQuestionSet } from './types';
 
@@ -517,28 +499,25 @@ interface Props {
   onCancel: () => void;
 }
 
-const GENERAL = '__general__';
-const TYPED = '__typed__';
+/** Where the questions came from — threaded into createEssay so the attempt keeps its school. */
+type Origin = { collegeId?: string; collegeName?: string };
 
 /** Questions-first front door for the essay coach: pick a school, get its real (or clearly-disclosed
  *  generic) essay questions, then "Write about this one" to start a coached practice attempt. */
 export function EssayCoachStart({ colleges, initialCollegeId, onWrite, onCancel }: Props) {
-  const [pick, setPick] = useState<string>(initialCollegeId ?? '');
   const [typedName, setTypedName] = useState('');
+  const [origin, setOrigin] = useState<Origin>({});
   const [set, setSet] = useState<PracticeQuestionSet | null>(null);
   const [loading, setLoading] = useState(false);
   const [writingIdx, setWritingIdx] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const roster = colleges.find((c) => c.collegeId === pick);
-
-  async function loadQuestions() {
+  async function loadQuestions(o: Origin) {
+    setOrigin(o);
     setLoading(true);
     setError(null);
     try {
-      const input =
-        pick === TYPED ? { collegeName: typedName.trim() } : pick === GENERAL || !pick ? {} : { collegeId: pick };
-      setSet(await getPracticeQuestionsForCollege(input));
+      setSet(await getPracticeQuestionsForCollege(o));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load practice questions.');
     } finally {
@@ -546,13 +525,19 @@ export function EssayCoachStart({ colleges, initialCollegeId, onWrite, onCancel 
     }
   }
 
+  // Pre-seeded from the overview's "Start an essay" → jump straight to that school's questions.
+  useEffect(() => {
+    if (initialCollegeId) void loadQuestions({ collegeId: initialCollegeId });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialCollegeId]);
+
   async function write(question: string, idx: number) {
     setWritingIdx(idx);
     setError(null);
     try {
       const essay = await createEssay({
-        collegeId: pick && pick !== TYPED && pick !== GENERAL ? pick : undefined,
-        collegeName: pick === TYPED ? typedName.trim() : undefined,
+        collegeId: origin.collegeId,
+        collegeName: origin.collegeName,
         prompt: question,
         promptSource: set?.usedRealPrompts ? 'college' : 'practice',
       });
@@ -598,7 +583,7 @@ export function EssayCoachStart({ colleges, initialCollegeId, onWrite, onCancel 
     );
   }
 
-  // Step 1 — school picker
+  // Step 1 — school picker (roster schools are buttons that load immediately; typed + general below)
   return (
     <Card className="space-y-3">
       <div>
@@ -608,41 +593,50 @@ export function EssayCoachStart({ colleges, initialCollegeId, onWrite, onCancel 
           asks, you write, and I coach you. I never write the essay for you.
         </p>
       </div>
-      <Field label="School">
-        <Select value={pick} onChange={(e) => setPick(e.target.value)}>
-          <option value="">Choose a school…</option>
-          {colleges.map((c) => (
-            <option key={c.collegeId} value={c.collegeId}>{c.name}</option>
-          ))}
-          <option value={TYPED}>Practice on a different school…</option>
-          <option value={GENERAL}>General practice (no school)</option>
-        </Select>
-      </Field>
-      {pick === TYPED ? (
-        <Field label="Which school? (different school)">
-          <Input value={typedName} onChange={(e) => setTypedName(e.target.value)} placeholder="e.g. Duke University" />
-        </Field>
+      {colleges.length ? (
+        <div className="space-y-1.5">
+          <p className="text-xs font-semibold uppercase tracking-wide text-ink-500">Your schools</p>
+          <div className="flex flex-wrap gap-2">
+            {colleges.map((c) => (
+              <Button key={c.collegeId} size="sm" variant="outline" onClick={() => void loadQuestions({ collegeId: c.collegeId })}>
+                {c.name}
+              </Button>
+            ))}
+          </div>
+        </div>
       ) : null}
+      <div className="space-y-1.5">
+        <label className="text-xs font-semibold uppercase tracking-wide text-ink-500" htmlFor="coach-typed-school">
+          Practice on a different school
+        </label>
+        <div className="flex gap-2">
+          <Input
+            id="coach-typed-school"
+            aria-label="Practice on a different school"
+            value={typedName}
+            onChange={(e) => setTypedName(e.target.value)}
+            placeholder="e.g. Duke University"
+          />
+          <Button
+            loading={loading}
+            disabled={!typedName.trim()}
+            onClick={() => void loadQuestions({ collegeName: typedName.trim() })}
+          >
+            See questions
+          </Button>
+        </div>
+      </div>
       <div className="flex gap-2">
-        <Button
-          loading={loading}
-          disabled={!pick || (pick === TYPED && !typedName.trim())}
-          onClick={() => void loadQuestions()}
-        >
-          See questions
-        </Button>
+        <Button variant="ghost" onClick={() => void loadQuestions({})}>General practice (no school)</Button>
         <Button variant="ghost" onClick={onCancel}>Cancel</Button>
       </div>
-      {roster?.essayPrompts?.length ? (
-        <p className="text-xs text-ink-400">{roster.name} has {roster.essayPrompts.length} real prompt(s) on file.</p>
-      ) : null}
       {error ? <p className="text-sm text-error-600">{error}</p> : null}
     </Card>
   );
 }
 ```
 
-> Verify `Input` is the correct export name in `../../shared/ui` (grep the shared UI barrel). If the text input primitive is named differently (e.g. `TextInput`), use that. The `aria-label` the test queries (`/different school/i`) comes from the `Field label`; keep the label text containing "different school".
+> The typed input carries an explicit `id` + matching `aria-label` ("Practice on a different school"), so `getByLabelText(/different school/i)` resolves deterministically — do NOT rely on the shared `Field` wrapper for label wiring (it does not auto-wire `htmlFor`). Roster schools are `<Button>`s (so `getByRole('button', { name: /Ohio State/ })` works and loads that school's questions in one click). Confirm `Input` is exported from `../../shared/ui` (it is) before relying on it.
 
 - [ ] **Step 4: Run the tests to verify they pass**
 
@@ -708,7 +702,7 @@ Expected: FAIL — no "Start practicing" button yet.
 - [ ] **Step 3: Implement the rewire**
 
 In `ApplicationCentralPage.tsx`:
-- Remove the `Modal`/`Field`/`Select`/`Textarea` import usages tied to the create modal, the `showNew`/`prompt`/`collegeId`/`creating` state, the `suggestedPrompts` memo, and the `create()` function and its `<Modal>` block (lines ~156-184).
+- Remove the create modal entirely: the `showNew`/`prompt`/`collegeId`/`creating` state, the `suggestedPrompts` memo, the `create()` function, and its `<Modal>` block (lines ~156-184). **Also delete the now-unused named imports** `Modal`, `Field`, `Select`, `Textarea` from the `../../shared/ui` import line (the root `eslint .` step in Task 3.4 flags unused imports — leaving them fails lint). Keep imports still used elsewhere (`Badge`, `Button`, `Card`, `EmptyState`, `Spinner`, `Tabs`, `type TabItem`) — grep the file after editing to confirm which remain referenced.
 - Add `const [starting, setStarting] = useState(false)` and `const [startCollegeId, setStartCollegeId] = useState<string | undefined>(undefined)`.
 - Import `EssayCoachStart` and `groupEssaysByCollege`.
 - **Empty state** (`essays.length === 0`): render a coach intro + a **"Start practicing"** button that sets `setStarting(true)`.
