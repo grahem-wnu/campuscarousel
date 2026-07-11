@@ -116,3 +116,20 @@ export function ratingRows(ratings: ReviewRatings): Array<{ key: keyof ReviewRat
     .map((key) => ({ key, label: RATING_LABELS[key], score: ratings[key] }))
     .filter((r): r is { key: keyof ReviewRatings; label: string; score: number } => typeof r.score === 'number');
 }
+
+/** Group essays into per-school buckets for the attempts view. `labelFor` resolves each essay's
+ *  display label (roster name by collegeId, else its typed collegeName, else "General practice").
+ *  Insertion-ordered: a school's first attempt fixes its position. */
+export function groupEssaysByCollege(
+  essays: Essay[],
+  labelFor: (essay: Essay) => string,
+): Array<{ label: string; essays: Essay[] }> {
+  const groups = new Map<string, Essay[]>();
+  for (const essay of essays) {
+    const label = labelFor(essay);
+    const bucket = groups.get(label);
+    if (bucket) bucket.push(essay);
+    else groups.set(label, [essay]);
+  }
+  return [...groups.entries()].map(([label, list]) => ({ label, essays: list }));
+}

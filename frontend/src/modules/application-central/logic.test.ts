@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DECISION_META, deadlineLabel, essaySummary, latestDraft, netCostLabel, RECOMMENDATION_STATUS_META, ratingRows, ratingTone, SLOT_LABELS, VERDICT_META, wordCount, wordTargetTone } from './logic';
+import { DECISION_META, deadlineLabel, essaySummary, groupEssaysByCollege, latestDraft, netCostLabel, RECOMMENDATION_STATUS_META, ratingRows, ratingTone, SLOT_LABELS, VERDICT_META, wordCount, wordTargetTone } from './logic';
 import type { ApplicationRow, Essay } from './types';
 
 const row = (over: Partial<ApplicationRow>): ApplicationRow => ({
@@ -89,5 +89,35 @@ describe('review rubric helpers', () => {
     expect(VERDICT_META.ready.tone).toBe('success');
     expect(VERDICT_META.close.tone).toBe('warn');
     expect(VERDICT_META['keep-working'].tone).toBe('error');
+  });
+});
+
+const mk = (over: Partial<Essay>): Essay => ({ essayId: 'x', createdAt: '', updatedAt: '', ...over });
+
+describe('groupEssaysByCollege', () => {
+  const label = (e: Essay) =>
+    e.collegeId === 'osu' ? 'Ohio State' : e.collegeName ?? 'General practice';
+
+  it('reuses a bucket for a recurring label interleaved with another', () => {
+    const essays = [
+      mk({ essayId: 'a', collegeId: 'osu' }),
+      mk({ essayId: 'c', collegeName: 'Imaginary U' }),
+      mk({ essayId: 'b', collegeId: 'osu' }),
+    ];
+    const groups = groupEssaysByCollege(essays, label);
+    expect(groups.map((g) => g.label)).toEqual(['Ohio State', 'Imaginary U']);
+    expect(groups[0]!.essays.map((e) => e.essayId)).toEqual(['a', 'b']);
+  });
+
+  it('groups by resolved school label and falls back to General practice', () => {
+    const essays = [
+      mk({ essayId: 'a', collegeId: 'osu' }),
+      mk({ essayId: 'b', collegeId: 'osu' }),
+      mk({ essayId: 'c', collegeName: 'Imaginary U' }),
+      mk({ essayId: 'd' }),
+    ];
+    const groups = groupEssaysByCollege(essays, label);
+    expect(groups.map((g) => g.label)).toEqual(['Ohio State', 'Imaginary U', 'General practice']);
+    expect(groups[0]!.essays.map((e) => e.essayId)).toEqual(['a', 'b']);
   });
 });

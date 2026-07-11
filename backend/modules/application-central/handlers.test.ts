@@ -132,12 +132,11 @@ describe('essay coach — college grounding, rated review, practice questions', 
     });
     const linked = (await localH.createEssay(ctx({ body: { collegeId, prompt: 'p' } }))).body as { essayId: string };
     await localH.findExperiences(ctx({ params: { id: linked.essayId }, body: {} }));
-    const pq = await localH.practiceQuestions(ctx({ params: { id: linked.essayId }, body: {} }));
+    const pq = await localH.practiceQuestionsForCollege(ctx({ body: { collegeId } }));
     expect(seen).toEqual(['Ohio State', 'Ohio State']);
     expect((pq.body as { collegeName?: string }).collegeName).toBe('Ohio State');
 
-    const unlinked = (await localH.createEssay(ctx({ body: { prompt: 'p' } }))).body as { essayId: string };
-    const pq2 = await localH.practiceQuestions(ctx({ params: { id: unlinked.essayId }, body: {} }));
+    const pq2 = await localH.practiceQuestionsForCollege(ctx({ body: {} }));
     expect(seen.at(-1)).toBeUndefined();
     expect((pq2.body as { collegeName?: string }).collegeName).toBeUndefined();
   });
@@ -185,6 +184,70 @@ describe('essay coach — college grounding, rated review, practice questions', 
     const lastReview = (res.body as { essay: { lastReview?: { version?: number } } }).essay.lastReview;
     expect(lastReview).toBeDefined();
     expect(lastReview?.version).toBeUndefined();
+  });
+});
+
+describe('practice-questions (questions-first, collegeId-keyed)', () => {
+  it('grounds on a roster college and flags usedRealPrompts when it has real prompts', async () => {
+    const seen: Array<string | undefined> = [];
+    const localH = makeHandlers({
+      getData: () => data,
+      now,
+      practice: async ({ college }) => {
+        seen.push(college?.name);
+        return { questions: [{ question: 'q', why: 'w', tip: 't' }], source: 'curated' as const };
+      },
+    });
+    const college = await data.colleges.create({
+      name: 'Ohio State', status: 'applying', essayPrompts: ['Why nursing at OSU?'],
+    } as Parameters<Data['colleges']['create']>[0]);
+    const res = await localH.practiceQuestionsForCollege(ctx({ body: { collegeId: college.collegeId } }));
+    const body = res.body as { collegeName?: string; usedRealPrompts: boolean; questions: unknown[] };
+    expect(seen).toEqual(['Ohio State']);
+    expect(body.collegeName).toBe('Ohio State');
+    expect(body.usedRealPrompts).toBe(true);
+    expect(body.questions).toHaveLength(1);
+  });
+
+  it('uses a typed school name with usedRealPrompts=false, and works with no school', async () => {
+    const seen: Array<string | undefined> = [];
+    const localH = makeHandlers({
+      getData: () => data,
+      now,
+      practice: async ({ college }) => {
+        seen.push(college?.name);
+        return { questions: [{ question: 'q', why: 'w', tip: 't' }], source: 'ai' as const };
+      },
+    });
+    const typed = await localH.practiceQuestionsForCollege(ctx({ body: { collegeName: 'Imaginary U' } }));
+    expect((typed.body as { collegeName?: string; usedRealPrompts: boolean }).collegeName).toBe('Imaginary U');
+    expect((typed.body as { usedRealPrompts: boolean }).usedRealPrompts).toBe(false);
+    const general = await localH.practiceQuestionsForCollege(ctx({ body: {} }));
+    expect((general.body as { usedRealPrompts: boolean }).usedRealPrompts).toBe(false);
+    expect(seen).toEqual(['Imaginary U', undefined]);
+  });
+
+  it('flags usedRealPrompts=false for a roster college that has no essayPrompts', async () => {
+    const localH = makeHandlers({
+      getData: () => data,
+      now,
+      practice: async () => ({ questions: [{ question: 'q', why: 'w', tip: 't' }], source: 'curated' as const }),
+    });
+    const college = await data.colleges.create({
+      name: 'No Prompts U', status: 'applying',
+    } as Parameters<Data['colleges']['create']>[0]);
+    const res = await localH.practiceQuestionsForCollege(ctx({ body: { collegeId: college.collegeId } }));
+    const body = res.body as { collegeName?: string; usedRealPrompts: boolean };
+    expect(body.collegeName).toBe('No Prompts U');
+    expect(body.usedRealPrompts).toBe(false);
+  });
+
+  it('422s on an unknown body field (strict schema)', async () => {
+    await expectStatus(h.practiceQuestionsForCollege(ctx({ body: { bogus: 1 } })), 422);
+  });
+
+  it('422s on a whitespace-only collegeName (trim + min(1))', async () => {
+    await expectStatus(h.practiceQuestionsForCollege(ctx({ body: { collegeName: '   ' } })), 422);
   });
 });
 

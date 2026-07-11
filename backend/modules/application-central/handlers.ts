@@ -17,11 +17,11 @@ import {
   applicationCreateSchema,
   applicationQuerySchema,
   applicationUpdateSchema,
+  collegePracticeSchema,
   createSchema,
   findExperiencesSchema,
   idParamSchema,
   listQuerySchema,
-  practiceQuestionsSchema,
   recommendationCreateSchema,
   recommendationUpdateSchema,
   recommenderBriefSchema,
@@ -31,7 +31,7 @@ import {
   testScoreUpdateSchema,
   updateSchema,
 } from './schema.js';
-import { gatherCollegeContext, gatherExperiences, gatherSharedExperiences } from './grounding.js';
+import { gatherCollegeContext, gatherExperiences, gatherSharedExperiences, type CollegeContext } from './grounding.js';
 import { parseTargetWords } from './words.js';
 import { buildOverview } from './overview.js';
 import { buildDecisionMatrix } from './decision.js';
@@ -56,7 +56,7 @@ export interface AppCentralHandlers {
   addDraft: Handler;
   findExperiences: Handler;
   review: Handler;
-  practiceQuestions: Handler;
+  practiceQuestionsForCollege: Handler;
   overview: Handler;
   // Application tracker
   listApplications: Handler;
@@ -220,16 +220,23 @@ export function makeHandlers(deps: AppCentralDeps): AppCentralHandlers {
       return { status: 200, body: { review, essay: updated } };
     },
 
-    // POST /essays/:id/practice-questions — AI sample application questions in the target college's
-    // style (its real prompts + admissions emphasis). College-agnostic Common-App style when unlinked.
-    practiceQuestions: async (ctx) => {
-      const { id } = validateParams(idParamSchema, ctx);
-      const body = validateBody(practiceQuestionsSchema, ctx);
+    // POST /essays/practice-questions — questions-first: sample application questions for a college,
+    // fetched BEFORE any essay exists. Roster id → real hydrated prompts; typed name → school-styled;
+    // neither → Common-App style. Model-only (no web search), safe in the request path.
+    // usedRealPrompts is true only when a roster college's real essayPrompts grounded the set.
+    practiceQuestionsForCollege: async (ctx) => {
+      const body = validateBody(collegePracticeSchema, ctx);
       const data = getData();
-      const essay = await requireEssay(id);
-      const college = await gatherCollegeContext(data, essay.collegeId);
+      const college: CollegeContext | undefined = body.collegeId
+        ? await gatherCollegeContext(data, body.collegeId)
+        : body.collegeName
+          ? { collegeId: '', name: body.collegeName }
+          : undefined;
       const result = await practice({ college, majors: await activeMajors(), count: body.count });
-      return { status: 200, body: { ...result, collegeName: college?.name } };
+      return {
+        status: 200,
+        body: { ...result, collegeName: college?.name, usedRealPrompts: (college?.essayPrompts?.length ?? 0) > 0 },
+      };
     },
 
     // GET /applications/overview — derived per-college status (deadlines, essays, scores).
@@ -405,13 +412,13 @@ export function buildRoutes(h: AppCentralHandlers) {
     { method: 'DELETE' as const, path: '/applications/:id', handler: h.removeApplication },
     { method: 'GET' as const, path: '/essays', handler: h.listEssays },
     { method: 'POST' as const, path: '/essays', handler: h.createEssay },
+    { method: 'POST' as const, path: '/essays/practice-questions', handler: h.practiceQuestionsForCollege },
     { method: 'GET' as const, path: '/essays/:id', handler: h.detailEssay },
     { method: 'PUT' as const, path: '/essays/:id', handler: h.updateEssay },
     { method: 'DELETE' as const, path: '/essays/:id', handler: h.removeEssay },
     { method: 'POST' as const, path: '/essays/:id/draft', handler: h.addDraft },
     { method: 'POST' as const, path: '/essays/:id/find-experiences', handler: h.findExperiences },
     { method: 'POST' as const, path: '/essays/:id/review', handler: h.review },
-    { method: 'POST' as const, path: '/essays/:id/practice-questions', handler: h.practiceQuestions },
     { method: 'GET' as const, path: '/recommendations', handler: h.listRecommendations },
     { method: 'POST' as const, path: '/recommendations', handler: h.createRecommendation },
     { method: 'PUT' as const, path: '/recommendations/:id', handler: h.updateRecommendation },

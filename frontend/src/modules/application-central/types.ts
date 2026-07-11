@@ -25,6 +25,7 @@ export interface LastReview {
 export interface Essay {
   essayId: string;
   collegeId?: string;
+  collegeName?: string;
   prompt?: string;
   promptSource?: string;
   targetWords?: number;
@@ -40,6 +41,7 @@ export interface Essay {
 
 export interface EssayInput {
   collegeId?: string;
+  collegeName?: string;
   prompt?: string;
   promptSource?: string;
   targetWords?: number;
@@ -93,6 +95,7 @@ export interface PracticeQuestionSet {
   questions: PracticeQuestion[];
   source: 'ai' | 'curated';
   collegeName?: string;
+  usedRealPrompts?: boolean;
 }
 
 /** Just enough of a college to pick one and offer its real prompts. */
