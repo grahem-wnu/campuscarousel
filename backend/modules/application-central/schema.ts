@@ -73,6 +73,9 @@ export const collegePracticeSchema = z
 
 export const idParamSchema = z.object({ id: z.string().min(1) });
 
+/** GET /essays/practice-questions/:jobId — poll a practice-question job by id. */
+export const jobIdParamSchema = z.object({ jobId: z.string().min(1) });
+
 // ---------------------------------------------------------------------------
 // Application tracker (APPLICATION# entity) — one row per college.
 // ---------------------------------------------------------------------------

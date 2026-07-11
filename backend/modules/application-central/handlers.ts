@@ -21,6 +21,7 @@ import {
   createSchema,
   findExperiencesSchema,
   idParamSchema,
+  jobIdParamSchema,
   listQuerySchema,
   recommendationCreateSchema,
   recommendationUpdateSchema,
@@ -31,7 +32,7 @@ import {
   testScoreUpdateSchema,
   updateSchema,
 } from './schema.js';
-import { gatherCollegeContext, gatherExperiences, gatherSharedExperiences, type CollegeContext } from './grounding.js';
+import { gatherCollegeContext, gatherExperiences, gatherSharedExperiences } from './grounding.js';
 import { parseTargetWords } from './words.js';
 import { buildOverview } from './overview.js';
 import { buildDecisionMatrix } from './decision.js';
@@ -46,6 +47,7 @@ import {
   type PracticeQuestionGenerator,
   type RecommenderBriefer,
 } from './ai.js';
+import { makeInlineDispatcher, type PracticeDispatcher } from './practice.js';
 
 export interface AppCentralHandlers {
   listEssays: Handler;
@@ -57,6 +59,7 @@ export interface AppCentralHandlers {
   findExperiences: Handler;
   review: Handler;
   practiceQuestionsForCollege: Handler;
+  practiceQuestionsStatus: Handler;
   overview: Handler;
   // Application tracker
   listApplications: Handler;
@@ -84,6 +87,9 @@ export interface AppCentralDeps {
   reviewer?: EssayReviewer;
   briefer?: RecommenderBriefer;
   practice?: PracticeQuestionGenerator;
+  /** Dispatcher for async practice-question jobs; production injects the SQS enqueuer. Defaults to
+   *  running inline with the Bedrock generator (so tests/no-queue complete the job before the re-read). */
+  practiceDispatch?: PracticeDispatcher;
   now?: () => Date;
 }
 
@@ -96,6 +102,9 @@ export function makeHandlers(deps: AppCentralDeps): AppCentralHandlers {
   const reviewer = deps.reviewer ?? makeBedrockEssayReviewer();
   const briefer = deps.briefer ?? makeBedrockRecommenderBrief();
   const practice = deps.practice ?? makeBedrockPracticeQuestions();
+  // Default dispatch (tests / no queue): generate inline so the re-read returns a completed job.
+  // Production injects the SQS enqueuer (focus queue) via routes.manifest.
+  const practiceDispatch = deps.practiceDispatch ?? makeInlineDispatcher(getData, practice);
 
   async function requireEssay(id: string): Promise<Essay> {
     const e = await getData().essays.get(id);
@@ -220,23 +229,29 @@ export function makeHandlers(deps: AppCentralDeps): AppCentralHandlers {
       return { status: 200, body: { review, essay: updated } };
     },
 
-    // POST /essays/practice-questions — questions-first: sample application questions for a college,
-    // fetched BEFORE any essay exists. Roster id → real hydrated prompts; typed name → school-styled;
-    // neither → Common-App style. Model-only (no web search), safe in the request path.
-    // usedRealPrompts is true only when a roster college's real essayPrompts grounded the set.
+    // POST /essays/practice-questions — ASYNC. Model-only generation runs ~25–30s and 503s at the
+    // request path's ~30s ceiling, so create a job, enqueue it (focus queue), return 202; the worker
+    // fills the result and the frontend polls practiceQuestionsStatus.
     practiceQuestionsForCollege: async (ctx) => {
       const body = validateBody(collegePracticeSchema, ctx);
       const data = getData();
-      const college: CollegeContext | undefined = body.collegeId
-        ? await gatherCollegeContext(data, body.collegeId)
-        : body.collegeName
-          ? { collegeId: '', name: body.collegeName }
-          : undefined;
-      const result = await practice({ college, majors: await activeMajors(), count: body.count });
-      return {
-        status: 200,
-        body: { ...result, collegeName: college?.name, usedRealPrompts: (college?.essayPrompts?.length ?? 0) > 0 },
-      };
+      const job = await data.practiceQuestionJobs.create({
+        ...(body.collegeId ? { collegeId: body.collegeId } : {}),
+        ...(body.collegeName ? { collegeName: body.collegeName } : {}),
+        ...(body.count ? { count: body.count } : {}),
+        status: 'pending',
+      } as Parameters<Data['practiceQuestionJobs']['create']>[0]);
+      await practiceDispatch(job.jobId);
+      const after = await data.practiceQuestionJobs.get(job.jobId);
+      return { status: 202, body: after ?? job };
+    },
+
+    // GET /essays/practice-questions/:jobId — poll a practice job's status + result.
+    practiceQuestionsStatus: async (ctx) => {
+      const { jobId } = validateParams(jobIdParamSchema, ctx);
+      const job = await getData().practiceQuestionJobs.get(jobId);
+      if (!job) throw Errors.notFound('Practice question job not found');
+      return { status: 200, body: job };
     },
 
     // GET /applications/overview — derived per-college status (deadlines, essays, scores).
@@ -413,6 +428,7 @@ export function buildRoutes(h: AppCentralHandlers) {
     { method: 'GET' as const, path: '/essays', handler: h.listEssays },
     { method: 'POST' as const, path: '/essays', handler: h.createEssay },
     { method: 'POST' as const, path: '/essays/practice-questions', handler: h.practiceQuestionsForCollege },
+    { method: 'GET' as const, path: '/essays/practice-questions/:jobId', handler: h.practiceQuestionsStatus },
     { method: 'GET' as const, path: '/essays/:id', handler: h.detailEssay },
     { method: 'PUT' as const, path: '/essays/:id', handler: h.updateEssay },
     { method: 'DELETE' as const, path: '/essays/:id', handler: h.removeEssay },
