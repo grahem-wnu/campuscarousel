@@ -23,6 +23,7 @@ export const ESSAY_COACH_TYPE = 'essay-coach';
 export interface PracticeQuestionMessage { type: typeof ESSAY_COACH_TYPE; kind: 'questions'; jobId: string; }
 ```
 In `makeSqsPracticeEnqueuer`, the `MessageBody` becomes `{ type: ESSAY_COACH_TYPE, kind: 'questions', jobId, tenantId: currentTenantId(), studentId: currentStudentId() }`, and the default `queueUrl` becomes `process.env.ESSAY_COACH_QUEUE_URL ?? process.env.FOCUS_QUEUE_URL ?? process.env.HYDRATION_QUEUE_URL`. `makeWorkerHandler` stays keyed by `jobId` (it's invoked by the manifest only for `kind:'questions'`). Keep `runPracticeJob`/`makeInlineDispatcher` unchanged.
+- [ ] **Step 1b (avoid a tsc-red commit):** `hydration.manifest.ts` currently imports `PRACTICE_QUESTIONS_TYPE` from `./practice.js` — that export no longer exists after the rename. Update the manifest's two references (`import` + `export const hydration = { type: ... }`) to `ESSAY_COACH_TYPE` now (A4 rewrites this file fully, but this keeps A1's commit compilable). Do NOT leave a dangling `PRACTICE_QUESTIONS_TYPE` import.
 - [ ] **Step 2:** Update `practice.test.ts` enqueuer tests: assert the `MessageBody` now parses to `{ type: 'essay-coach', kind: 'questions', jobId, tenantId, studentId }`, and set `options.queueUrl` explicitly so it doesn't depend on env.
 - [ ] **Step 3:** `cd backend && npx tsc --noEmit`; `cd /mnt/c/Keira/keiras-journey && npx vitest run backend/modules/application-central/practice.test.ts --exclude '**/agents/**'` → PASS.
 - [ ] **Step 4:** Commit: `refactor(essay-center): unify async worker type to 'essay-coach' with kind='questions'`
@@ -39,11 +40,26 @@ export interface EssayReviewJob extends Timestamped {
   content?: string;
   targetWords?: number;
   status: 'pending' | 'complete' | 'failed';
-  result?: EssayReview;   // fully JSON-serializable
+  result?: PersistedEssayReview;   // fully JSON-serializable (declared below)
   error?: string;
 }
 ```
-`EssayReview` is already exported from data types? It lives in `application-central/ai.ts`. Add a structural copy to `types.ts` OR import shape — simplest: define `EssayReview` fields inline as the `result` type is only read via the FE type. **Check** whether `EssayReview` is re-exported from `shared/data`; if not, declare a `PersistedEssayReview` interface in `types.ts` mirroring `ai.ts:58-71` (strengths/improvements/authenticity/ratings?/overall?/verdict?/wordCount/onTarget/rewrote:false/source) and use it as `result`.
+**`result` MUST use a self-contained `PersistedEssayReview` declared in `types.ts`.** `EssayReview` lives in `application-central/ai.ts` (a module); `shared/data` imports from no module and `ai.ts` imports up into `shared/` — importing it down into `types.ts` is a cyclic/backwards layering violation. So mirror `ai.ts:46-71` as a fully self-contained interface in `types.ts` (inline the `ratings` object and the `verdict` string-union too, since `ReviewRatings`/`ReviewVerdict` also live in `ai.ts`) — same precedent as `PracticeQuestionResult` (types.ts:695):
+```typescript
+export interface PersistedEssayReview {
+  strengths: string[];
+  improvements: string[];
+  authenticity: string;
+  ratings?: { promptFit: number; voice: number; structure: number; specificity: number; collegeFit?: number };
+  overall?: number;
+  verdict?: 'ready' | 'close' | 'keep-working';
+  wordCount: number;
+  onTarget: boolean | null;
+  rewrote: false;
+  source: 'ai' | 'curated';
+}
+```
+Then `EssayReviewJob.result?: PersistedEssayReview`. (`makeBedrockEssayReviewer` returns the `ai.ts` `EssayReview`, which is structurally assignable to `PersistedEssayReview` — the worker writes it directly.)
 - [ ] **Step 2:** In `index.ts`: `const essayReviewJobs = makeDetailsRepo<EssayReviewJob, 'jobId'>(client, { prefix: 'ESSAYREVIEW', idField: 'jobId' });` + expose in the return; add only `EssayReviewJob` to the top `import type` list (mirror `PracticeQuestionJob`).
 - [ ] **Step 3:** `cd backend && npx tsc --noEmit` → PASS. Commit: `feat(essay-center): EssayReviewJob record type + repo`
 
@@ -104,7 +120,7 @@ export const hydration = { type: ESSAY_COACH_TYPE, handler };
 - [ ] **Step 3:** Commit (include the regenerated barrel): `feat(essay-center): one essay-coach manifest routing questions + review by kind`
 
 ### Task A5: Handlers — async `startReview` + `reviewStatus`, drop sync review
-**Files:** `backend/modules/application-central/{handlers.ts,routes.manifest.ts,manifest.test.ts,handlers.test.ts}`
+**Files:** `backend/modules/application-central/{handlers.ts,routes.manifest.ts,manifest.test.ts,handlers.test.ts,router.test.ts}`
 - [ ] **Step 1:** Rewrite the practice/review tests in `handlers.test.ts`: the `review` describe becomes async — `startReview` returns 202 + a job that (via the inline dispatcher) is already `complete` with `result`, and (when the injected reviewer returns `source:'ai'`) the essay's `lastReview` is persisted; `reviewStatus` returns the job; unknown jobId → 404. Keep the never-a-rewrite assertion (`result.rewrote === false`).
 - [ ] **Step 2:** Run → fail.
 - [ ] **Step 3:** Implement:
@@ -134,7 +150,8 @@ export const hydration = { type: ESSAY_COACH_TYPE, handler };
       return { status: 200, body: job };
     },
 ```
-  Update the `AppCentralHandlers` interface: replace `review: Handler` with `startReview: Handler; reviewStatus: Handler;`. Remove the now-unused sync-review `now`/`latestDraft`/`reviewedDraft` logic if nothing else uses it (find-experiences/addDraft still use `now`/`latestDraft` — keep them).
+  Update the `AppCentralHandlers` interface: replace `review: Handler` with `startReview: Handler; reviewStatus: Handler;`. **Delete the now-dead `latestDraft` helper** (handlers.ts:124) — it was referenced ONLY by the sync `review` handler (`addDraft` computes its version via `drafts.reduce`, `findExperiences` doesn't use it). **Keep `now`** — `addDraft` and `overview` still use it.
+  - `router.test.ts`: the "create → draft → find-experiences → review" test asserts the OLD sync contract (`POST /essays/:id/review` → `statusCode 200`, `parse(review).review.rewrote === false`). Update the review step to expect **202** + an `EssayReviewJob` (poll `GET /essays/:id/review/:jobId` for the completed `result.rewrote === false`, since the inline dispatcher completes it), or drop the review assertion from that flow test. This file MUST be updated or A5 Step 5 is test-red.
   - `routes.manifest.ts` + `buildRoutes`: replace `POST /essays/:id/review → h.review` with `→ h.startReview`; add `GET /essays/:id/review/:jobId → h.reviewStatus`. Inject `reviewDispatch: makeSqsReviewEnqueuer(getData, makeBedrockEssayReviewer(), () => new Date())` into `makeHandlers`.
   - `manifest.test.ts`: add `'GET /essays/:id/review/:jobId'` to the hardcoded list (both sides sorted, so position-agnostic).
 - [ ] **Step 4:** Route-matcher depth check — this is the first 4-segment route. Run `router.test.ts`; if the matcher is depth-capped, note it (unlikely; it splits by `/`). 
@@ -155,7 +172,7 @@ export const hydration = { type: ESSAY_COACH_TYPE, handler };
 ### Task B2: Thread the queue into ApiStack
 **Files:** `infra/bin/infra.ts`, `infra/lib/api-stack.ts`
 - [ ] **Step 1:** `bin/infra.ts`: pass `essayCoachQueue: asyncStack.essayCoachQueue` into `ApiStack` props (next to `focusQueue`).
-- [ ] **Step 2:** `api-stack.ts`: add `essayCoachQueue: IQueue` to the props interface; add env `ESSAY_COACH_QUEUE_URL: essayCoachQueue.queueUrl`; add `essayCoachQueue.grantSendMessages(routing)`.
+- [ ] **Step 2:** `api-stack.ts`: add `essayCoachQueue: Queue` to the props interface (use the concrete `Queue` to match `focusQueue`/`hydrationQueue`/`assetsQueue` — don't introduce `IQueue`); add env `ESSAY_COACH_QUEUE_URL: essayCoachQueue.queueUrl`; add `essayCoachQueue.grantSendMessages(routing)`.
 - [ ] **Step 3:** `cd infra && npx tsc --noEmit` → PASS. `npx cdk synth --profile wnu ...` (or the repo's synth command) to confirm it builds. Commit: `feat(infra): grant API Lambda send on essay-coach queue + ESSAY_COACH_QUEUE_URL`
 
 *(The enqueuers were already pointed at `ESSAY_COACH_QUEUE_URL ?? FOCUS_QUEUE_URL ?? HYDRATION_QUEUE_URL` in A1/A3, so no code change here.)*
