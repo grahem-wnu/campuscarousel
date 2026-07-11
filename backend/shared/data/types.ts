@@ -691,6 +691,26 @@ export interface CertGuidanceJob extends Timestamped {
   error?: string;
 }
 
+/** The augmented practice-question payload the worker computes and the UI renders. */
+export interface PracticeQuestionResult {
+  questions: { question: string; why: string; tip: string }[];
+  source: 'ai' | 'curated';
+  collegeName?: string;
+  usedRealPrompts: boolean;
+}
+
+/** Async practice-question generation job. Model-only Bedrock, but slow enough to blow the request
+ *  path's ~30s ceiling, so it runs on the worker and the frontend polls. PK=PRACTICEQUESTIONS#<jobId>. */
+export interface PracticeQuestionJob extends Timestamped {
+  jobId: string;
+  collegeId?: string;
+  collegeName?: string;
+  count?: number;
+  status: 'pending' | 'complete' | 'failed';
+  result?: PracticeQuestionResult;
+  error?: string;
+}
+
 // ---------------------------------------------------------------------------
 // Exam record (PK: EXAM#<id>, SK: DETAILS) — GSI4 date
 // ---------------------------------------------------------------------------
