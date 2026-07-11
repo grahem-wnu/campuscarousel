@@ -106,7 +106,8 @@ question", which routes to the new collegeId flow). Its frontend counterparts ar
 **Request** (strict): `{ collegeId?: string, collegeName?: string, count?: number (3–8, default 5) }`
 **Response**: `200 { questions: PracticeQuestion[], source: 'ai' | 'curated', collegeName?: string, usedRealPrompts: boolean }`
 - `usedRealPrompts` is `true` only when a roster college with real `essayPrompts` grounded the set.
-- Route registered before `/essays/:id/*` to avoid path shadowing.
+- Registration order is irrelevant: the router matches by method + segment count and sorts by
+  static specificity, so this 2-segment static route cannot be shadowed by `/essays/:id/*`.
 
 `PracticeQuestion = { question: string, why: string, tip: string }` (unchanged).
 
