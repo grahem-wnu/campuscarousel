@@ -25,10 +25,18 @@ export default function ApplicationCentralPage() {
 
   const [starting, setStarting] = useState(false);
   const [startCollegeId, setStartCollegeId] = useState<string | undefined>(undefined);
+  const [startCollegeName, setStartCollegeName] = useState<string | undefined>(undefined);
 
   const collegeName = useMemo(() => {
     const byId = new Map(colleges.map((c) => [c.collegeId, c.name]));
     return (id?: string) => (id ? byId.get(id) ?? id : undefined);
+  }, [colleges]);
+
+  // Roster name for an id, or undefined on a miss (a removed/typed school) — so labels fall back
+  // to the essay's own collegeName instead of flashing a raw id.
+  const rosterNameById = useMemo(() => {
+    const byId = new Map(colleges.map((c) => [c.collegeId, c.name]));
+    return (id?: string) => (id ? byId.get(id) : undefined);
   }, [colleges]);
 
   const load = useCallback(async () => {
@@ -56,10 +64,16 @@ export default function ApplicationCentralPage() {
 
   /** Display label for an attempt: roster name by id, else its typed name, else general practice. */
   const labelFor = useCallback(
-    (e: Essay) =>
-      e.collegeId ? collegeName(e.collegeId) ?? e.collegeName ?? e.collegeId : e.collegeName ?? 'General practice',
-    [collegeName],
+    (e: Essay) => rosterNameById(e.collegeId) ?? e.collegeName ?? 'General practice',
+    [rosterNameById],
   );
+
+  // Open the front door with no pre-seeded school (the picker), clearing any prior seed.
+  const startFresh = useCallback(() => {
+    setStartCollegeId(undefined);
+    setStartCollegeName(undefined);
+    setStarting(true);
+  }, []);
 
   const tabs: TabItem[] = [
     { id: 'overview', label: 'Applications' },
@@ -86,6 +100,7 @@ export default function ApplicationCentralPage() {
           onBack={() => setSelected(null)}
           onTryAnother={() => {
             setStartCollegeId(selected.collegeId);
+            setStartCollegeName(selected.collegeName);
             setSelected(null);
             setStarting(true);
           }}
@@ -98,6 +113,7 @@ export default function ApplicationCentralPage() {
               onStartEssay={(cid) => {
                 setTab('essays');
                 setStartCollegeId(cid);
+                setStartCollegeName(undefined);
                 setStarting(true);
               }}
               onViewEssays={() => setTab('essays')}
@@ -112,6 +128,7 @@ export default function ApplicationCentralPage() {
             <EssayCoachStart
               colleges={colleges}
               initialCollegeId={startCollegeId}
+              initialCollegeName={startCollegeName}
               onWrite={(e) => {
                 setStarting(false);
                 setSelected(e);
@@ -130,13 +147,13 @@ export default function ApplicationCentralPage() {
                   icon="application"
                   title="Practice makes a standout essay"
                   description="Pick a school and I’ll pull up the kinds of essay questions it asks. You write; I coach you and rate it — I never write it for you."
-                  action={<Button onClick={() => setStarting(true)}>Start practicing</Button>}
+                  action={<Button onClick={startFresh}>Start practicing</Button>}
                 />
               ) : (
                 <>
                   <div className="flex items-center justify-between gap-2">
                     <h2 className="font-display text-lg font-semibold text-ink-900">Your attempts</h2>
-                    <Button size="sm" icon="plus" onClick={() => setStarting(true)}>Practice a new essay</Button>
+                    <Button size="sm" icon="plus" onClick={startFresh}>Practice a new essay</Button>
                   </div>
                   {groupEssaysByCollege(essays, labelFor).map((group) => (
                     <div key={group.label} className="space-y-2">

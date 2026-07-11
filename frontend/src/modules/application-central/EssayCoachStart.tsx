@@ -6,6 +6,8 @@ import type { CollegeOption, Essay, PracticeQuestionSet } from './types';
 interface Props {
   colleges: CollegeOption[];
   initialCollegeId?: string;
+  /** Pre-seed a typed-only school (no roster id) — the escape-hatch's return path. */
+  initialCollegeName?: string;
   onWrite: (essay: Essay) => void;
   onCancel: () => void;
 }
@@ -15,7 +17,7 @@ type Origin = { collegeId?: string; collegeName?: string };
 
 /** Questions-first front door for the essay coach: pick a school, get its real (or clearly-disclosed
  *  generic) essay questions, then "Write about this one" to start a coached practice attempt. */
-export function EssayCoachStart({ colleges, initialCollegeId, onWrite, onCancel }: Props) {
+export function EssayCoachStart({ colleges, initialCollegeId, initialCollegeName, onWrite, onCancel }: Props) {
   const [typedName, setTypedName] = useState('');
   const [origin, setOrigin] = useState<Origin>({});
   const [set, setSet] = useState<PracticeQuestionSet | null>(null);
@@ -42,11 +44,13 @@ export function EssayCoachStart({ colleges, initialCollegeId, onWrite, onCancel 
     }
   }
 
-  // Pre-seeded from the overview's "Start an essay" → jump straight to that school's questions.
-  // Intentionally keyed on initialCollegeId only; loadQuestions is a stable local closure.
+  // Pre-seeded from the overview's "Start an essay" or the workspace's "Try a different question" →
+  // jump straight to that school's questions (roster id preferred; else the typed-only name).
+  // Intentionally keyed on the seeds only; loadQuestions is a stable local closure.
   useEffect(() => {
     if (initialCollegeId) void loadQuestions({ collegeId: initialCollegeId });
-  }, [initialCollegeId]);
+    else if (initialCollegeName) void loadQuestions({ collegeName: initialCollegeName });
+  }, [initialCollegeId, initialCollegeName]);
 
   async function write(question: string, idx: number) {
     setWritingIdx(idx);
