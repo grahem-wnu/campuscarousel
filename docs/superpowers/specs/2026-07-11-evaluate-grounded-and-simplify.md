@@ -25,7 +25,8 @@ Because evaluation is async, the review **result is persisted** on the `EssayRev
 `gatherSharedExperiences` (family-only, never private) is NOT what we want here — use `gatherExperiences(data, requester)` so Keira gets her full pool. The pool feeds the prompt only; the model is instructed to reference experiences by their (already-clipped, non-sensitive) titles.
 
 ## Backend changes
-- **`EssayReviewJob`** (`shared/data/types.ts`): add `reviewerUsername: string`, `reviewerRole: 'admin'|'parent'|'student'|'member'` (reuse the `Role` type shape). These carry the caller identity for filtering + the creator-only guard.
+- **`EssayReviewJob`** (`shared/data/types.ts`): add `reviewerUsername: string`, `reviewerRole: Role` (reuse the exported `Role` union — do NOT re-spell the literals). These carry the caller identity for filtering + the creator-only guard.
+- **Update the now-stale privacy comments** — these document the privacy invariant, so leaving them makes the codebase actively misleading. After this change the FULL review (with private-derived `improvements`) is persisted on the creator-guarded job, and the `reviewerUsername` guard — NOT non-persistence — is what prevents a later leak. Fix: `ai.ts:6-9` (the "only the compact lastReview is persisted / derives solely from draft text" claim), `grounding.ts:1-5` ("AI output is returned live, never persisted, so … can't leak through a later read"), and `handlers.ts:4-5` + the `startReview` comment (`handlers.ts:~199-202`). Each should state that the review result is persisted on the creator-guarded `EssayReviewJob` and that the guard (not non-persistence) is the leak barrier; `lastReview` remains scores-only and family-safe.
 - **`startReview` handler** (`handlers.ts`): stamp `reviewerUsername: ctx.requester.username`, `reviewerRole: ctx.requester.role` on the created job.
 - **`reviewStatus` handler**: after loading the job, `if (!job || job.reviewerUsername !== ctx.requester.username) throw Errors.notFound('Evaluation job not found')`.
 - **`runReviewJob`** (`review.ts`): reconstruct `const requester = { username: job.reviewerUsername, role: job.reviewerRole }`; `const pool = await gatherExperiences(data, requester)`; pass `pool` to the reviewer alongside prompt/content/college. (Import `gatherExperiences` from `./grounding.js`.)
@@ -45,7 +46,10 @@ Because evaluation is async, the review **result is persisted** on the `EssayRev
 - **Frontend**: EssayWorkspace no longer renders Find/Mark-final/version/target; Evaluate loop intact; autosave calls `updateEssay` with a single-draft payload on edit/blur; "Try a different question" still autosaves. Attempts list shows last score, no status badge.
 - **Staging E2E**: as Keira, write a thin essay → Evaluate → confirm the feedback references a real logged experience (or notes generic-ness), and the never-rewrite guarantee holds. Confirm a parent account cannot fetch that evaluation job (privacy guard) — prove parent ≠ creator gets 404.
 
+## Notes
+- **Old jobs (pre-deploy)** lack `reviewerUsername`, so `reviewStatus` on them → `notFound`. That's fail-closed (safe) and jobs are transient — not a bug; note it during QA so it isn't mistaken for one.
+
 ## Out of scope
-- Removing the backend `find-experiences` endpoint (leave dead) and its `api.ts` client.
+- Removing the backend `find-experiences` endpoint (leave dead — it returns live, never-persisted, keira-only output; no leak) and its `api.ts` client.
 - The essay `status` field stays in the data model (just unused in UI); no migration.
 - Prod.
