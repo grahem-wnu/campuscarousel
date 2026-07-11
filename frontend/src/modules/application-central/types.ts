@@ -98,6 +98,18 @@ export interface PracticeQuestionSet {
   usedRealPrompts?: boolean;
 }
 
+/** Async practice-question job: POST returns 202 with this (pending), the frontend polls until it
+ *  settles. `result` carries the same PracticeQuestionSet the UI renders. */
+export interface PracticeQuestionJob {
+  jobId: string;
+  status: 'pending' | 'complete' | 'failed';
+  collegeId?: string;
+  collegeName?: string;
+  count?: number;
+  result?: PracticeQuestionSet;
+  error?: string;
+}
+
 /** Just enough of a college to pick one and offer its real prompts. */
 export interface CollegeOption {
   collegeId: string;

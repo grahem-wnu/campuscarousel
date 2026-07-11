@@ -8,7 +8,7 @@ const { listEssays, listCollegeOptions } = vi.hoisted(() => ({
   listEssays: vi.fn(),
   listCollegeOptions: vi.fn(),
 }));
-vi.mock('./api', () => ({ listEssays, listCollegeOptions, createEssay: vi.fn(), getPracticeQuestionsForCollege: vi.fn() }));
+vi.mock('./api', () => ({ listEssays, listCollegeOptions, createEssay: vi.fn(), startPracticeQuestions: vi.fn(), getPracticeQuestionJob: vi.fn() }));
 // Stub the heavy sub-views so the test focuses on the Essays tab.
 vi.mock('./ApplicationOverview', () => ({ ApplicationOverview: () => <div /> }));
 vi.mock('./RecommendationBoard', () => ({ RecommendationBoard: () => <div /> }));

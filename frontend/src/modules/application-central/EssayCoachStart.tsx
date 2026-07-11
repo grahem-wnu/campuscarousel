@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button, Card, Input } from '../../shared/ui';
-import { createEssay, getPracticeQuestionsForCollege } from './api';
+import { createEssay, getPracticeQuestionJob, startPracticeQuestions } from './api';
 import type { CollegeOption, Essay, PracticeQuestionSet } from './types';
+
+export const POLL_MS = 3000;
+const MAX_POLLS = 40; // ~2 min; generation runs on the 300s worker but is usually ~25-40s
 
 interface Props {
   colleges: CollegeOption[];
@@ -27,15 +30,32 @@ export function EssayCoachStart({ colleges, initialCollegeId, initialCollegeName
   // Monotonic request id: a slow load must never overwrite the result of a newer one.
   const reqRef = useRef(0);
 
+  // Start an async practice-question job and poll until it settles. The model-only generation runs
+  // ~25–30s and 503s at the request path's ~30s ceiling, so the API returns 202 immediately and the
+  // worker fills the result. The reqRef stale-guard wraps the WHOLE start+poll sequence: a slower pick
+  // must never overwrite a newer one.
   async function loadQuestions(o: Origin) {
     const myReq = ++reqRef.current;
     setOrigin(o);
     setLoading(true);
     setError(null);
     try {
-      const r = await getPracticeQuestionsForCollege(o);
+      let job = await startPracticeQuestions(o);
+      for (let i = 0; job.status === 'pending' && i < MAX_POLLS; i++) {
+        await new Promise((r) => setTimeout(r, POLL_MS));
+        if (myReq !== reqRef.current) return; // superseded by a newer pick
+        job = await getPracticeQuestionJob(job.jobId);
+      }
       if (myReq !== reqRef.current) return; // a newer load has superseded this one
-      setSet(r);
+      if (job.status === 'failed') {
+        setError('Could not pull questions right now — please try again in a moment.');
+        return;
+      }
+      if (job.status === 'pending') {
+        setError('This is taking longer than expected — please try again in a moment.');
+        return;
+      }
+      setSet(job.result ?? { questions: [], source: 'ai', usedRealPrompts: false });
     } catch (err) {
       if (myReq !== reqRef.current) return;
       setError(err instanceof Error ? err.message : 'Could not load practice questions.');

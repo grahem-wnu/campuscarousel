@@ -12,7 +12,7 @@ import type {
   EssayReview,
   EssayStatus,
   FindResponse,
-  PracticeQuestionSet,
+  PracticeQuestionJob,
   Recommendation,
   RecommendationInput,
   RecommenderBrief,
@@ -56,11 +56,18 @@ export function reviewEssay(
   return api.post<{ review: EssayReview; essay: Essay }>(`/essays/${encodeURIComponent(id)}/review`, opts);
 }
 
-/** Questions-first: sample questions for a college BEFORE an essay exists. */
-export function getPracticeQuestionsForCollege(
+/** Start an async practice-question job (questions-first: sample questions for a college BEFORE an
+ *  essay exists). Model-only generation runs ~25–30s and 503s at the request path's ~30s ceiling, so
+ *  poll getPracticeQuestionJob with the returned jobId until it settles, then render the result. */
+export function startPracticeQuestions(
   input: { collegeId?: string; collegeName?: string; count?: number } = {},
-): Promise<PracticeQuestionSet> {
-  return api.post<PracticeQuestionSet>('/essays/practice-questions', input);
+): Promise<PracticeQuestionJob> {
+  return api.post<PracticeQuestionJob>('/essays/practice-questions', input);
+}
+
+/** Poll a practice-question job's status + result. */
+export function getPracticeQuestionJob(jobId: string): Promise<PracticeQuestionJob> {
+  return api.get<PracticeQuestionJob>(`/essays/practice-questions/${encodeURIComponent(jobId)}`);
 }
 
 /** Roster colleges, slimmed to what the essay UI needs (picker + real prompts). */
