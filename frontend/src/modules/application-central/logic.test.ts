@@ -95,6 +95,20 @@ describe('review rubric helpers', () => {
 const mk = (over: Partial<Essay>): Essay => ({ essayId: 'x', createdAt: '', updatedAt: '', ...over });
 
 describe('groupEssaysByCollege', () => {
+  const label = (e: Essay) =>
+    e.collegeId === 'osu' ? 'Ohio State' : e.collegeName ?? 'General practice';
+
+  it('reuses a bucket for a recurring label interleaved with another', () => {
+    const essays = [
+      mk({ essayId: 'a', collegeId: 'osu' }),
+      mk({ essayId: 'c', collegeName: 'Imaginary U' }),
+      mk({ essayId: 'b', collegeId: 'osu' }),
+    ];
+    const groups = groupEssaysByCollege(essays, label);
+    expect(groups.map((g) => g.label)).toEqual(['Ohio State', 'Imaginary U']);
+    expect(groups[0]!.essays.map((e) => e.essayId)).toEqual(['a', 'b']);
+  });
+
   it('groups by resolved school label and falls back to General practice', () => {
     const essays = [
       mk({ essayId: 'a', collegeId: 'osu' }),
@@ -102,8 +116,6 @@ describe('groupEssaysByCollege', () => {
       mk({ essayId: 'c', collegeName: 'Imaginary U' }),
       mk({ essayId: 'd' }),
     ];
-    const label = (e: Essay) =>
-      e.collegeId === 'osu' ? 'Ohio State' : e.collegeName ?? 'General practice';
     const groups = groupEssaysByCollege(essays, label);
     expect(groups.map((g) => g.label)).toEqual(['Ohio State', 'Imaginary U', 'General practice']);
     expect(groups[0]!.essays.map((e) => e.essayId)).toEqual(['a', 'b']);
