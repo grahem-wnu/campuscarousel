@@ -1,8 +1,11 @@
 // Application Central handlers — essay workspace + AI essay partner + a derived application overview.
 // Essays are the student's working documents; identity comes from the JWT and the router 401s
-// unauthenticated callers. PRIVACY: /find-experiences grounds in activities/experience/motivation via
-// gatherExperiences (aiVisibleSet off the JWT) — private entries surface only when keira is the
-// caller — and AI output is returned LIVE (never persisted), so it can't leak through a later read.
+// unauthenticated callers. PRIVACY: /find-experiences AND evaluation ground in activities/experience/
+// motivation via gatherExperiences (aiVisibleSet off the JWT) — private entries surface only when keira
+// is the caller. find-experiences output is returned LIVE (never persisted). The evaluation persists its
+// full review (which may quote private-derived experiences) on the EssayReviewJob; a later cross-caller
+// read is blocked by reviewStatus's creator-only guard, not by non-persistence. essay.lastReview is
+// scores-only (derived from the draft text alone) and safe to store.
 
 import {
   Errors,
@@ -198,8 +201,10 @@ export function makeHandlers(deps: AppCentralDeps): AppCentralHandlers {
 
     // POST /essays/:id/review — ASYNC. Evaluation runs ~15-20s (near the 30s ceiling), so create a job,
     // dispatch to the essay-coach worker, return 202; the frontend polls reviewStatus. NEVER rewrites
-    // (result.rewrote === false). Grounded in the target college's admissions data when linked. The
-    // worker persists only the compact lastReview summary (derived from the passed content alone).
+    // (result.rewrote === false). Grounded in the target college's admissions data when linked AND in the
+    // caller's privacy-filtered logged experiences — so we STAMP the caller's identity (reviewerUsername/
+    // reviewerRole) onto the job: the worker reconstructs a Requester from it to filter the pool, and the
+    // full review is persisted on the job behind reviewStatus's creator-only guard. lastReview stays scores-only.
     startReview: async (ctx) => {
       const { id } = validateParams(idParamSchema, ctx);
       const body = validateBody(reviewSchema, ctx);
@@ -208,6 +213,8 @@ export function makeHandlers(deps: AppCentralDeps): AppCentralHandlers {
         essayId: id,
         ...(body.content !== undefined ? { content: body.content } : {}),
         ...(body.targetWords !== undefined ? { targetWords: body.targetWords } : {}),
+        reviewerUsername: ctx.requester.username,
+        reviewerRole: ctx.requester.role,
         status: 'pending',
       } as Parameters<Data['essayReviewJobs']['create']>[0]);
       await reviewDispatch(job.jobId);
@@ -219,7 +226,10 @@ export function makeHandlers(deps: AppCentralDeps): AppCentralHandlers {
     reviewStatus: async (ctx) => {
       const { jobId } = validateParams(jobIdParamSchema, ctx);
       const job = await getData().essayReviewJobs.get(jobId);
-      if (!job) throw Errors.notFound('Evaluation job not found');
+      // Creator-only read: the persisted review may quote private-derived experiences, so only the
+      // caller who requested the evaluation may read it back. A different family caller gets 404
+      // (fail-closed also covers pre-identity jobs, which lack reviewerUsername).
+      if (!job || job.reviewerUsername !== ctx.requester.username) throw Errors.notFound('Evaluation job not found');
       return { status: 200, body: job };
     },
 

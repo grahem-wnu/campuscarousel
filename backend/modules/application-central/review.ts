@@ -5,7 +5,7 @@
 
 import type { Data } from '../../shared/data/index.js';
 import { currentStudentId, currentTenantId } from '../../shared/tenant/index.js';
-import { gatherCollegeContext } from './grounding.js';
+import { gatherCollegeContext, gatherExperiences } from './grounding.js';
 import { makeBedrockEssayReviewer, type EssayReviewer } from './ai.js';
 import { ESSAY_COACH_TYPE, type SqsSender } from './practice.js';
 
@@ -30,7 +30,11 @@ export async function runReviewJob(
     if (!essay) throw new Error('essay not found');
     const content = job.content ?? '';
     const college = await gatherCollegeContext(data, essay.collegeId);
-    const review = await reviewer({ prompt: essay.prompt ?? '', content, targetWords: job.targetWords ?? essay.targetWords, college });
+    // Privacy-filter the experience pool by whoever requested the evaluation: keira (student) →
+    // private entries included; a parent/admin → family-visible only. Enforced off the job's stamped identity.
+    const requester = { username: job.reviewerUsername, role: job.reviewerRole };
+    const pool = await gatherExperiences(data, requester);
+    const review = await reviewer({ prompt: essay.prompt ?? '', content, targetWords: job.targetWords ?? essay.targetWords, college, pool });
     await data.essayReviewJobs.update(jobId, { status: 'complete', result: review });
     if (review.source === 'ai' && review.overall !== undefined && review.verdict !== undefined) {
       await data.essays.update(job.essayId, {

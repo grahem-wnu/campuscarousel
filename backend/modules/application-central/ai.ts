@@ -5,8 +5,10 @@
 //   • practiceQuestions   — sample application questions in the target college's style.
 // The coach contract: suggest, question, critique — never write, rewrite, or supply essay
 // sentences. Experience inputs arrive already privacy-filtered (grounding.ts), so this layer
-// can't leak private entries; find/review output is returned live (only the compact lastReview
-// summary is persisted, and it derives solely from the draft text).
+// can't leak private entries. The full review (whose improvements may reference private-derived
+// experiences) is persisted on the creator-guarded EssayReviewJob — a later cross-caller read is
+// blocked by that guard, not by non-persistence. The compact essay.lastReview stays scores-only
+// (overall/verdict/wordCount), derived solely from the draft text.
 
 import { majorPhrase } from '../../shared/ai/major.js';
 import { packFocusBriefs } from '../../shared/packs/index.js';
@@ -74,6 +76,9 @@ export type EssayReviewer = (input: {
   content: string;
   targetWords?: number;
   college?: CollegeContext;
+  /** The caller's privacy-filtered logged experiences, so the review can name what the essay
+   *  omits/underuses. Already filtered by role in grounding.ts — this layer can't leak private entries. */
+  pool?: ExperiencePool;
 }) => Promise<EssayReview>;
 
 export interface PracticeQuestion {
@@ -260,7 +265,7 @@ export function makeBedrockExperienceFinder(options: AiOptions = {}, fallback: E
   };
 }
 
-export function buildReviewPrompt(input: { prompt: string; content: string; targetWords?: number; college?: CollegeContext }): string {
+export function buildReviewPrompt(input: { prompt: string; content: string; targetWords?: number; college?: CollegeContext; pool?: ExperiencePool }): string {
   return [
     'You are an honest, supportive college-essay coach reviewing a draft. Give FEEDBACK ONLY —',
     'never rewrite the essay, never draft replacement sentences or paragraphs for the student.',
@@ -278,6 +283,9 @@ export function buildReviewPrompt(input: { prompt: string; content: string; targ
     input.college ? collegeToText(input.college) : '',
     `Prompt: ${input.prompt || '(general)'}`,
     input.targetWords ? `Target words: ${input.targetWords}.` : '',
+    input.pool && input.pool.experiences.length
+      ? `The student's REAL logged experiences (use ONLY these; never invent details):\n${poolToText(input.pool)}\nIn "improvements", name specific logged experiences the essay omits or underuses, or where it stays generic instead of drawing on this real material. Reference experiences by their title.`
+      : '',
     `Essay draft:\n${input.content}`,
   ]
     .filter(Boolean)

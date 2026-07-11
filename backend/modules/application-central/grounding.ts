@@ -1,8 +1,10 @@
-// PRIVACY-CRITICAL: the essay AI's "find relevant experiences" path is the canonical case where a
+// PRIVACY-CRITICAL: the essay AI (find-experiences AND evaluation) is the canonical case where a
 // PRIVATE journal/experience/motivation entry IS surfaced — but ONLY when keira (the student) is the
 // authenticated caller. A parent/admin gets family-visible experiences only. Filtering uses the
-// frozen shared `aiVisibleSet`. AI output is returned live (never persisted), so private-derived
-// suggestions can't leak through a later read.
+// frozen shared `aiVisibleSet`. find-experiences output is returned live (never persisted). The essay
+// EVALUATION persists its AI output (whose feedback may reference private-derived experiences) on the
+// EssayReviewJob — a later cross-caller read is blocked by the creator-only read guard, not by
+// non-persistence.
 
 import { aiVisibleSet, type Requester } from '../../shared/auth/index.js';
 import type { Data } from '../../shared/data/index.js';

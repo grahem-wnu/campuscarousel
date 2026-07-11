@@ -102,6 +102,25 @@ describe('review — async job, never rewrites', () => {
     await expectStatus(h.startReview(ctx({ params: { id: 'ghost' }, body: { content: 'x' } })), 404);
     await expectStatus(h.reviewStatus(ctx({ params: { jobId: 'ghost' } })), 404);
   });
+
+  it('stamps the reviewer identity (username + role) from ctx.requester onto the job', async () => {
+    const id = await createEssay();
+    const res = await h.startReview(ctx({ params: { id }, body: { content: 'My essay draft.' } }));
+    const job = res.body as { reviewerUsername: string; reviewerRole: string };
+    expect(job.reviewerUsername).toBe('keira');
+    expect(job.reviewerRole).toBe('student');
+  });
+
+  it('reviewStatus returns the job to its creator but 404s a DIFFERENT caller (privacy guard)', async () => {
+    const id = await createEssay();
+    const res = await h.startReview(ctx({ params: { id }, body: { content: 'My essay draft.' } }));
+    const { jobId } = res.body as { jobId: string };
+    // the creator (keira) reads her own evaluation
+    const mine = await h.reviewStatus(ctx({ params: { jobId } }));
+    expect((mine.body as { jobId: string }).jobId).toBe(jobId);
+    // a different family account (kate, a parent) must NOT be able to read it
+    await expectStatus(h.reviewStatus(ctx({ requester: kate, params: { jobId } })), 404);
+  });
 });
 
 describe('applications overview (derived)', () => {

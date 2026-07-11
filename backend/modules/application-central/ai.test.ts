@@ -15,7 +15,7 @@ import {
   wordCountOf,
   type BedrockInvoker,
 } from './ai.js';
-import type { ExperiencePool } from './grounding.js';
+import { poolToText, type ExperiencePool } from './grounding.js';
 
 const MODEL = 'us.anthropic.test-model';
 function stub(text: string): BedrockInvoker {
@@ -124,6 +124,27 @@ describe('college-aware prompts', () => {
     const without = buildReviewPrompt({ prompt: 'p', content: 'draft' });
     expect(without).not.toContain('"collegeFit"');
     expect(without).toContain('never rewrite the essay');
+  });
+});
+
+describe('review prompt grounds in the logged experience pool', () => {
+  it('includes the pool text and a name-a-real-experience instruction when a pool is given', () => {
+    const p = buildReviewPrompt({ prompt: 'p', content: 'draft', pool });
+    expect(p).toContain(poolToText(pool));
+    expect(p).toContain('County Hospital');
+    expect(p).toContain('name specific logged experiences');
+  });
+
+  it('omits the experience grounding when no pool is given', () => {
+    const p = buildReviewPrompt({ prompt: 'p', content: 'draft' });
+    expect(p).not.toContain('County Hospital');
+    expect(p).not.toContain('name specific logged experiences');
+  });
+
+  it('omits the grounding when the pool is empty', () => {
+    const empty: ExperiencePool = { experiences: [], includesPrivate: false, counts: { activities: 0, experiences: 0, motivations: 0 } };
+    const p = buildReviewPrompt({ prompt: 'p', content: 'draft', pool: empty });
+    expect(p).not.toContain('name specific logged experiences');
   });
 });
 
