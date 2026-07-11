@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Badge, Button, Card, Spinner } from '../../shared/ui';
 import { EssayWorkspace } from './EssayWorkspace';
-import { ESSAY_STATUS_META, VERDICT_META, latestDraft } from './logic';
+import { VERDICT_META, latestDraft } from './logic';
 import { createEssay, getPracticeQuestionJob, listEssays, startPracticeQuestions } from './api';
 import type { Essay, PracticeQuestionSet } from './types';
 
@@ -221,7 +221,6 @@ export function CollegeEssayView({ college, startMode, onBack }: Props) {
       ) : (
         <div className="space-y-2">
           {essays.map((e) => {
-            const meta = ESSAY_STATUS_META[e.status ?? 'brainstorming'];
             const ld = latestDraft(e);
             return (
               <button
@@ -236,7 +235,6 @@ export function CollegeEssayView({ college, startMode, onBack }: Props) {
                     {e.lastReview ? (
                       <Badge tone={VERDICT_META[e.lastReview.verdict].tone}>{e.lastReview.overall}/10</Badge>
                     ) : null}
-                    <Badge tone={meta.tone}>{meta.label}</Badge>
                   </span>
                 </div>
                 <p className="mt-0.5 text-xs text-ink-500">
