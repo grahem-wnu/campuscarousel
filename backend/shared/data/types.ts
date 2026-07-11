@@ -711,6 +711,35 @@ export interface PracticeQuestionJob extends Timestamped {
   error?: string;
 }
 
+/** Fully JSON-serializable essay-review payload persisted on the job (mirrors `EssayReview` from
+ *  application-central/ai.ts — declared self-contained here because shared/data imports from no module
+ *  and ai.ts imports up into shared/; importing it down would be a backwards layering violation. Same
+ *  precedent as PracticeQuestionResult above). */
+export interface PersistedEssayReview {
+  strengths: string[];
+  improvements: string[];
+  authenticity: string;
+  ratings?: { promptFit: number; voice: number; structure: number; specificity: number; collegeFit?: number };
+  overall?: number;
+  verdict?: 'ready' | 'close' | 'keep-working';
+  wordCount: number;
+  onTarget: boolean | null;
+  rewrote: false;
+  source: 'ai' | 'curated';
+}
+
+/** Async essay-evaluation job. The review runs ~15-20s on Sonnet (near the request-path ceiling), so
+ *  it runs on the essay-coach worker and the frontend polls. PK=ESSAYREVIEW#<jobId>. */
+export interface EssayReviewJob extends Timestamped {
+  jobId: string;
+  essayId: string;
+  content?: string;
+  targetWords?: number;
+  status: 'pending' | 'complete' | 'failed';
+  result?: PersistedEssayReview;
+  error?: string;
+}
+
 // ---------------------------------------------------------------------------
 // Exam record (PK: EXAM#<id>, SK: DETAILS) — GSI4 date
 // ---------------------------------------------------------------------------
