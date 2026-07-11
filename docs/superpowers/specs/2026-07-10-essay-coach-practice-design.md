@@ -38,6 +38,8 @@ application.
 - **Architecture**: Question generation is a single **model-only** Bedrock call (`invokeText`,
   no web search) — safe in the request path, **no async/SQS worker**. Real prompts piggyback on
   the college's already-hydrated `essayPrompts`.
+- **Data model**: one **additive, optional** field only (`collegeName` free-text, to label
+  typed non-roster schools — see below). No breaking changes; no new entities.
 
 ## What already exists (reused as-is)
 
@@ -68,25 +70,27 @@ the moment she peeks at questions — exactly the "never lose / never clutter" p
 
 | File | Change |
 |------|--------|
-| `backend/modules/application-central/schema.ts` | Add `collegePracticeSchema` = `{ collegeId?: string, collegeName?: string, count?: number (3–8) }` (strict). |
-| `backend/modules/application-central/ai.ts` | `buildPracticePrompt` / `curatedPracticeQuestions` already accept a `college?: CollegeContext`. Allow a **name-only** college (typed non-roster school) so the generator can echo its style without a hydrated record. No signature break. |
-| `backend/modules/application-central/handlers.ts` | New `practiceQuestionsForCollege` handler: `POST /essays/practice-questions` (no `:id`). Body → if `collegeId`, `gatherCollegeContext(data, collegeId)`; else if `collegeName`, synthesize a name-only `CollegeContext`; else no college. Call `practice({ college, majors: await activeMajors(), count })`. Return `PracticeQuestionSet & { usedRealPrompts: boolean; collegeName?: string }`, where `usedRealPrompts = (college?.essayPrompts?.length ?? 0) > 0`. |
-| `backend/modules/application-central/routes.manifest.ts` | Register `POST /essays/practice-questions` **before** the `:id` routes so it is not shadowed by `/essays/:id/...`. |
+| `backend/modules/application-central/schema.ts` | Add `collegePracticeSchema` = `{ collegeId?: string, collegeName?: string, count?: number (3–8) }` (strict). Add optional `collegeName?: string (≤200)` to `createSchema`/`EssayInput` so a typed non-roster school's label persists on the attempt (roster essays keep using `collegeId`). |
+| `backend/modules/application-central/ai.ts` | `buildPracticePrompt` / `curatedPracticeQuestions` already accept a `college?: CollegeContext`. Allow a **name-only** college (typed non-roster school) so the generator can echo its style without a hydrated record. `CollegeContext` requires `collegeId` + `name`; synthesize with a placeholder `collegeId: ''` (nothing reads it in the generator path). No signature break. |
+| `backend/modules/application-central/handlers.ts` | New `practiceQuestionsForCollege` handler: `POST /essays/practice-questions` (no `:id`). Body → if `collegeId`, `gatherCollegeContext(data, collegeId)`; else if `collegeName`, synthesize a name-only `CollegeContext` (`{ collegeId: '', name }`); else no college. Call `practice({ college, majors: await activeMajors(), count })` (`activeMajors` is the in-scope closure inside `makeHandlers`). Return `PracticeQuestionSet & { usedRealPrompts: boolean; collegeName?: string }`, where `usedRealPrompts = (college?.essayPrompts?.length ?? 0) > 0`. |
+| `backend/modules/application-central/routes.manifest.ts` | Register `POST /essays/practice-questions`. (Route order is irrelevant — the router matches by method + segment count and sorts by static specificity, so a 2-segment static route cannot be shadowed by the 3-segment `/essays/:id/*`. No ordering requirement.) |
 | `backend/modules/application-central/handlers.test.ts` | Tests: collegeId path returns `usedRealPrompts: true` when the college has `essayPrompts`; name-only path returns generated questions with `usedRealPrompts: false`; no-college path returns Common-App-style set; generator failure falls back to curated. |
 
-The existing `POST /essays/:id/practice-questions` route stays (still used from inside the
-workspace to fetch "other questions" for an essay that already has a college).
+The existing `POST /essays/:id/practice-questions` route/handler is **removed** — after this change
+it has no caller (the workspace's old "Practice questions" button becomes "Try a different
+question", which routes to the new collegeId flow). Its frontend counterparts are deleted too
+(see the `EssayWorkspace.tsx` row).
 
 ### Frontend
 
 | File | Change |
 |------|--------|
-| `frontend/src/modules/application-central/types.ts` | Add `usedRealPrompts?: boolean` to `PracticeQuestionSet`. |
-| `frontend/src/modules/application-central/api.ts` | Add `getPracticeQuestionsForCollege({ collegeId?, collegeName?, count? })` → `POST /essays/practice-questions`. |
-| `frontend/src/modules/application-central/EssayCoachStart.tsx` (new) | The questions-first front door. **Step 1 — school picker**: Hub colleges (from `listCollegeOptions`), a "different school" free-text input, and a "General practice (no school)" option. **Step 2 — question list**: fetch via `getPracticeQuestionsForCollege`; render each `PracticeQuestion` (question / why / tip) as a card with a **"Write about this one"** button; show a disclosure banner when `!usedRealPrompts`: *"I couldn't find {School}'s current essay questions, so these are general practice prompts of the kind admissions essays ask."* "Write about this one" calls `createEssay({ collegeId?, prompt: question, promptSource: usedRealPrompts ? 'college' : 'practice' })` then opens the workspace. |
-| `frontend/src/modules/application-central/ApplicationCentralPage.tsx` | **Remove** the "Start a new essay" `Modal` (college select + prompt textarea + Create) and the `prompt`/`showNew`/`create` state. Essays tab now renders: **empty state** → an Essay-Coach intro card + **"Start practicing"** (opens `EssayCoachStart`); **populated** → "Your attempts" grouped by college + a **"Practice a new essay"** button (opens `EssayCoachStart`). `ApplicationOverview.onStartEssay(cid)` opens `EssayCoachStart` pre-seeded to that college instead of the old modal. |
-| `frontend/src/modules/application-central/EssayWorkspace.tsx` | Keep the Prompt card (now always populated with the chosen question) and the rubric + /10 + verdict render (unchanged per decision). Repurpose the sidebar **"Practice questions"** button to **"Try a different question"** → returns to `EssayCoachStart`'s question list for this college (a *new* attempt; the current draft is auto-saved first — see below). Keep "Find relevant experiences", Copy essay, Mark final, Check & rate. |
-| `frontend/src/modules/application-central/logic.ts` | Add `groupEssaysByCollege(essays, collegeName)` for the attempts view. |
+| `frontend/src/modules/application-central/types.ts` | Add `usedRealPrompts?: boolean` to `PracticeQuestionSet`. Add `collegeName?: string` to `Essay` and `EssayInput`. |
+| `frontend/src/modules/application-central/api.ts` | Add `getPracticeQuestionsForCollege({ collegeId?, collegeName?, count? })` → `POST /essays/practice-questions`. **Remove** `getPracticeQuestions(essayId, …)` (its `/essays/:id/practice-questions` route is gone). |
+| `frontend/src/modules/application-central/EssayCoachStart.tsx` (new) | The questions-first front door. **Step 1 — school picker**: Hub colleges (from `listCollegeOptions`), a "different school" free-text input, and a "General practice (no school)" option. **Step 2 — question list**: fetch via `getPracticeQuestionsForCollege` (pass `collegeId` for a roster school, `collegeName` for a typed one); render each `PracticeQuestion` (question / why / tip) as a card with a **"Write about this one"** button; show a disclosure banner when `!usedRealPrompts`: *"I couldn't find {School}'s current essay questions, so these are general practice prompts of the kind admissions essays ask."* "Write about this one" calls `createEssay({ collegeId?, collegeName?, prompt: question, promptSource: usedRealPrompts ? 'college' : 'practice' })` (roster school → `collegeId`; typed school → `collegeName`) then opens the workspace. |
+| `frontend/src/modules/application-central/ApplicationCentralPage.tsx` | **Remove** the "Start a new essay" `Modal` (college select + prompt textarea + Create) and the `prompt`/`showNew`/`create` state. Essays tab now renders: **empty state** → an Essay-Coach intro card + **"Start practicing"** (opens `EssayCoachStart`); **populated** → "Your attempts" grouped by school + a **"Practice a new essay"** button (opens `EssayCoachStart`). `ApplicationOverview.onStartEssay(cid)` opens `EssayCoachStart` pre-seeded to that college instead of the old modal. School label resolves `collegeId` via the roster, falling back to the essay's `collegeName`. |
+| `frontend/src/modules/application-central/EssayWorkspace.tsx` | Keep the Prompt card (now always populated with the chosen question) and the rubric + /10 + verdict render (unchanged per decision). **Delete the dead in-workspace practice-questions code** (`getPracticeQuestions` call, `practice`/`practicing` state, and its render block). Replace the sidebar **"Practice questions"** button with **"Try a different question"** → auto-saves the current draft, then returns to `EssayCoachStart`'s question list for this school (starting a *new* attempt). Keep "Find relevant experiences", Copy essay, Mark final, Check & rate. |
+| `frontend/src/modules/application-central/logic.ts` | Add `groupEssaysByCollege(essays, collegeLabel)` for the attempts view, where `collegeLabel(essay)` = roster name by `collegeId` ?? `essay.collegeName` ?? "General practice". |
 
 ### Attempts & "never lose work"
 
@@ -139,4 +143,5 @@ workspace to fetch "other questions" for an essay that already has a college).
 ## Out of scope
 - No changes to Applications / Recommenders / Test scores / Decisions tabs.
 - No async/SQS work; no college-hydration changes (real prompts come from existing hydration).
-- No billing, auth, or data-model changes.
+- No billing or auth changes. The only data-model change is the single additive optional
+  `collegeName` field on the essay (for typed non-roster schools).
