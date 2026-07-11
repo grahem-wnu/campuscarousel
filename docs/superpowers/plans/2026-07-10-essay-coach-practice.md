@@ -484,7 +484,7 @@ Expected: FAIL — module `./EssayCoachStart` not found.
 
 - [ ] **Step 3: Implement `EssayCoachStart.tsx`**
 
-Create the component. Follow the module's existing UI imports (`Button`, `Card`, `Field`, `Select`, `Spinner`, `EmptyState` from `../../shared/ui`) and copy the Field-Notes styling idiom from `ApplicationCentralPage.tsx` / `EssayWorkspace.tsx` (no icon-circles/card-grid slop). Full reference implementation:
+Create the component using the shared UI primitives it needs (`Button`, `Card`, `Input` from `../../shared/ui`) and copy the Field-Notes styling idiom from `ApplicationCentralPage.tsx` / `EssayWorkspace.tsx` (no icon-circles/card-grid slop). Full reference implementation:
 
 ```typescript
 import { useEffect, useState } from 'react';
