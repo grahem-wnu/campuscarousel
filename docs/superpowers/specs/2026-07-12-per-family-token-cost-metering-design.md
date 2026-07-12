@@ -36,17 +36,21 @@ is where `usage` lives.
 All 16 Bedrock call sites use `InvokeModelCommand` with the Anthropic Messages API
 (`anthropic_version: bedrock-2023-05-31`). None use the Converse API. None read `usage`.
 
-**Group A — route through the shared web-grounded wrapper** `backend/shared/ai/bedrock.ts`
-(`converseWithSearch` → `callModel`, which does `InvokeModel` per search round):
-peer-benchmark, certifications/guidance, college-hub (ai/checklist-ai/prep-ai), focus/ai,
-onboarding-chat/ai, opportunities/ai, scholarship-tracker (ai/discover).
+**Group A — ~10 logical callers that all route through the shared web-grounded wrapper**
+`backend/shared/ai/bedrock.ts` (`converseWithSearch` → `callModel`, which does `InvokeModel` per
+search round): peer-benchmark, certifications/guidance, college-hub (ai/checklist-ai/prep-ai),
+focus/ai, onboarding-chat/ai, opportunities/ai, scholarship-tracker (ai/discover). Because they
+share one wrapper, the **refactor surface for Group A is a single send point** inside `callModel`.
 
 **Group B — build their own `InvokeModelCommand`, bypassing the wrapper (8 sites):**
 `goal-tracker/bedrock.ts`, `demonstrated-interest-contacts/bedrock.ts`, `ai-assistant/bedrock.ts`,
 `application-central/ai.ts`, `campus-visit-planner/prep.ts`, `certifications/suggester.ts`,
 `exam-prep/ai.ts`, `master-timeline/ai.ts`.
 
-There is **no single choke point** today, and **no pricing/cost config** anywhere.
+**Refactor surface = 9 edit points:** 1 wrapper send (`callModel`) covering all of Group A, plus
+the 8 Group B sites. Implementation must itemize and check off each of the 9 — a missed site is
+silent unmetered spend (reconciliation flags it, but only after the fact). There is **no single
+choke point** today, and **no pricing/cost config** anywhere.
 
 **Tenant identity:** `backend/shared/auth/requester.ts` `getRequester(event)` reads the validated
 Cognito JWT claims → `{ username, role, tenantId (custom:tenantId), platformAdmin }`. The tenant id
@@ -85,6 +89,13 @@ Rejected alternatives:
   not pass `tenantId` explicitly.
 - **`invokeModelMetered.ts`** — the single seam. Sends the `InvokeModelCommand`, parses
   `content[].text` **and** the `usage` object, calls `recordUsage`, returns `{ text, usage }`.
+  Takes an explicit `feature` argument.
+
+**Threading `feature`:** `tenantId`/`studentId` come from `currentTenantId()`, but `feature` is
+not derivable from context — each caller must supply it. Group B's 8 callers pass it directly.
+Group A callers pass it into `converseWithSearch`, whose signature gains a required `feature`
+parameter threaded down to `invokeModelMetered`. Without this, every Group-A record lands under
+one undifferentiated feature and the per-feature breakdown goal is unmet.
 
 ### 2. Metering altitude
 
@@ -109,6 +120,9 @@ attrs:
   occurredAt        # iso8601
 ```
 
+`callId` is a **fresh UUID per `InvokeModel` round** (not per logical operation), guaranteeing SK
+uniqueness so two same-millisecond rounds cannot overwrite each other in the append-only store.
+
 All breakdowns (student / feature / model / month) derive from one `Query` + group-by. No TTL in
 Phase 1 (billing-grade audit trail); a long TTL (e.g. 400 days) may be added later.
 
@@ -126,13 +140,20 @@ and the worker sets `currentTenantId()` before the AI call so `recordUsage` attr
 **Implementation must verify each worker actually does this** — a worker that doesn't would
 mis-attribute spend, which breaks billing-grade.
 
+**Retry idempotency:** an SQS retry that genuinely re-drives Bedrock produces a second billed call
+and correctly writes a second record. But a retry that returns a cached/already-computed result
+must **not** write a second usage record — metering is bound to the actual `InvokeModel` send
+(inside `invokeModelMetered`), not to message processing, so a no-op retry records nothing.
+
 ### 6. Reporting API
 
 Authz off the JWT (`getRequester` → `platformAdmin` / `tenantId`); never trust the client.
 
 - `GET /admin/usage?tenantId=&from=&to=&groupBy=feature|student|model|day` — one family's spend
   with a breakdown dimension. Tenant admin may query **only their own** tenant; platform admin
-  (grahem) may query any.
+  (grahem) may query any. The handler **paginates** the underlying `Query` (follows
+  `LastEvaluatedKey`) before grouping, so a wide date range for an active family is not silently
+  truncated at DynamoDB's 1 MB page limit.
 - `GET /admin/usage/families?month=` — **platform-admin only**: cost per family for a month, read
   from derived rollup rows (§7) so it does not scan every raw record across all tenants.
 
@@ -145,7 +166,9 @@ Scheduled daily Lambda:
 2. **Reconcile** app-computed Bedrock cost for the period against AWS actuals — via Bedrock model
    invocation logging (token counts) and/or Cost Explorer `GetCostAndUsage`. Drift beyond a
    threshold (~2%) alerts through the existing `ObservabilityStack`. Catches a bypassed call site
-   or a stale rate.
+   or a stale rate. **Caveat:** Cost Explorer cannot attribute per-tenant, so it validates only the
+   account-wide Bedrock total; **per-family drift validation depends on the Bedrock
+   invocation-log path**, not Cost Explorer.
 
 Enabling Bedrock model invocation logging (small infra add) doubles as the backstop source of
 truth if an app-side record is ever dropped.
