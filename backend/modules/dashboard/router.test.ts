@@ -16,7 +16,7 @@ beforeEach(() => {
   dispatch = createRouter(buildRoutes(makeHandlers({ getData: () => data, now })));
 });
 
-const claimsFor = (r: Requester) => ({ 'cognito:username': r.username, 'custom:role': r.role, 'custom:tenantId': r.tenantId ?? 'test-tenant' });
+const claimsFor = (r: Requester) => ({ 'cognito:username': r.username, 'custom:role': r.role, 'custom:tenantId': r.tenantId ?? 'test-tenant', ...(r.role === 'student' ? { 'custom:studentId': r.studentId ?? 's1' } : {}) });
 function event(method: string, path: string, as?: Requester): ApiEvent {
   return { rawPath: path, requestContext: { http: { method, path }, authorizer: as ? { jwt: { claims: claimsFor(as) } } : undefined } };
 }

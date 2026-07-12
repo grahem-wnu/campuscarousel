@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { runWithStudent, runWithTenant } from '../tenant/index.js';
 import { InMemoryTableClient, makeData } from './index.js';
+import { ConditionFailedError } from './table-client.js';
 import { studentScoped, tenantScoped } from './tenant-client.js';
 
 // The student registry is FAMILY-LEVEL (tenant-scoped, not per-child) — it lists a family's kids.
@@ -16,6 +17,19 @@ describe('student registry', () => {
 
     await data.students.delete(sib.studentId);
     expect((await data.students.list()).map((s) => s.name)).toEqual(['Keira']);
+  });
+
+  it('linkLogin binds a login only when the child has none — a second link loses (ConditionFailed)', async () => {
+    const data = makeData(new InMemoryTableClient());
+    const keira = await data.students.create({ name: 'Keira', status: 'active' });
+
+    const linked = await data.students.linkLogin(keira.studentId, 'keira-login');
+    expect(linked.loginUserId).toBe('keira-login');
+    expect((await data.students.get(keira.studentId))!.loginUserId).toBe('keira-login');
+
+    // A concurrent/duplicate link attempt must lose — one login per child.
+    await expect(data.students.linkLogin(keira.studentId, 'other-login')).rejects.toBeInstanceOf(ConditionFailedError);
+    expect((await data.students.get(keira.studentId))!.loginUserId).toBe('keira-login');
   });
 });
 

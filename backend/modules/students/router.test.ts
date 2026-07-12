@@ -16,7 +16,7 @@ function event(method: string, path: string, claims?: Record<string, unknown>, b
 }
 const parse = (res: { body: string }) => JSON.parse(res.body) as Record<string, unknown>;
 const parent = { 'cognito:username': 'kate', 'custom:role': 'parent', 'custom:tenantId': 'fam1' };
-const student = { 'cognito:username': 'keira', 'custom:role': 'student', 'custom:tenantId': 'fam1' };
+const student = { 'cognito:username': 'keira', 'custom:role': 'student', 'custom:tenantId': 'fam1', 'custom:studentId': 's1' };
 
 function harness() {
   const data: Data = makeData(new InMemoryTableClient());
@@ -46,10 +46,31 @@ describe('students router integration', () => {
     expect((parse(after).students as unknown[]).length).toBe(0);
   });
 
-  it('a student may read the roster but not mutate it (403)', async () => {
+  it('a student may not mutate the roster (403)', async () => {
     const { dispatch } = harness();
-    expect((await dispatch(event('GET', '/students', student))).statusCode).toBe(200);
     expect((await dispatch(event('POST', '/students', student, { name: 'Nope' }))).statusCode).toBe(403);
+  });
+
+  it('a student sees ONLY their own roster row (no sibling enumeration)', async () => {
+    const { dispatch } = harness();
+    // Two siblings on the family roster.
+    const a = await dispatch(event('POST', '/students', parent, { name: 'Keira' }));
+    const b = await dispatch(event('POST', '/students', parent, { name: 'Sibling' }));
+    const keiraId = parse(a).studentId as string;
+    void b;
+
+    // A parent sees the whole roster...
+    const asParent = await dispatch(event('GET', '/students', parent));
+    expect((parse(asParent).students as unknown[]).length).toBe(2);
+
+    // ...but a student pinned to `keiraId` sees exactly their own row and no sibling.
+    const pinned = { ...student, 'custom:studentId': keiraId };
+    const asStudent = await dispatch(event('GET', '/students', pinned));
+    expect(asStudent.statusCode).toBe(200);
+    const rows = parse(asStudent).students as Array<{ studentId: string; name: string }>;
+    expect(rows.length).toBe(1);
+    expect(rows[0]?.studentId).toBe(keiraId);
+    expect(rows.map((r) => r.name)).not.toContain('Sibling');
   });
 
   it('404s when patching a student that does not exist', async () => {

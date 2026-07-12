@@ -16,7 +16,7 @@ function event(method: string, path: string, claims?: Record<string, unknown>, b
 }
 const parse = (res: { body: string }) => JSON.parse(res.body) as Record<string, unknown>;
 const parent = { 'cognito:username': 'kate', 'custom:role': 'parent', 'custom:tenantId': 'fam1' };
-const student = { 'cognito:username': 'keira', 'custom:role': 'student', 'custom:tenantId': 'fam1' };
+const student = { 'cognito:username': 'keira', 'custom:role': 'student', 'custom:tenantId': 'fam1', 'custom:studentId': 's1' };
 
 function harness() {
   const data: Data = makeData(new InMemoryTableClient());

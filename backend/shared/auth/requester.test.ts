@@ -38,6 +38,23 @@ describe('getRequester', () => {
     expect(req.platformAdmin).toBeUndefined();
   });
 
+  it('resolves custom:studentId for a student login pinned to a roster entry', () => {
+    const req = getRequester(
+      eventWithClaims({
+        'cognito:username': 'keira',
+        'custom:role': 'student',
+        'custom:tenantId': 'fam1',
+        'custom:studentId': 's1',
+      }),
+    );
+    expect(req).toEqual<Requester>({ username: 'keira', role: 'student', tenantId: 'fam1', studentId: 's1' });
+  });
+
+  it('omits studentId when the custom:studentId claim is absent', () => {
+    const req = getRequester(eventWithClaims({ 'cognito:username': 'keira', 'custom:role': 'student' }));
+    expect(req.studentId).toBeUndefined();
+  });
+
   it('throws Unauthorized when there is no authorizer/claims at all', () => {
     expect(() => getRequester({})).toThrow(UnauthorizedError);
   });

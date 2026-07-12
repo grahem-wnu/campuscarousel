@@ -54,9 +54,16 @@ export function getRequester(event: JwtAuthorizedEvent): Requester {
   // Tenant enforcement happens in the router (401 if absent on a tenant route) + the fail-closed data
   // layer; resolved here so it flows through HandlerContext.
   const tenantId = asString(claims['custom:tenantId']);
+  const studentId = asString(claims['custom:studentId']);
   const platformAdmin = claims['custom:platformAdmin'] === 'true' || claims['custom:platformAdmin'] === true;
 
-  return { username, role, ...(tenantId ? { tenantId } : {}), ...(platformAdmin ? { platformAdmin } : {}) };
+  return {
+    username,
+    role,
+    ...(tenantId ? { tenantId } : {}),
+    ...(studentId ? { studentId } : {}),
+    ...(platformAdmin ? { platformAdmin } : {}),
+  };
 }
 
 /**

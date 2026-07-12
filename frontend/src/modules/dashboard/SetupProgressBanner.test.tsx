@@ -15,6 +15,7 @@ vi.mock('../college-hub/api', () => ({ listColleges: h.listColleges }));
 vi.mock('./api', () => ({ getDashboard: vi.fn() }));
 vi.mock('../focus/api', () => ({ getFocus: vi.fn(() => Promise.resolve(null)) }));
 vi.mock('../onboarding/api', () => ({ getProfile: vi.fn(() => Promise.resolve(null)) }));
+vi.mock('../../shared/shell', () => ({ useActiveStudent: () => ({ activeStudent: null }) }));
 vi.mock('react-router-dom', () => ({
   Link: ({ children }: { children: React.ReactNode }) => <a>{children}</a>,
 }));

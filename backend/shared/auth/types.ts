@@ -18,6 +18,10 @@ export interface Requester {
    *  test ergonomics; the router REQUIRES it at runtime (401 if absent) for all non-platform-admin
    *  routes, and the data layer fails closed without it — so production is always tenant-scoped. */
   tenantId?: string;
+  /** For a `student`-role login: the roster entry (child) this login is pinned to (from JWT
+   *  `custom:studentId`). The router uses it to scope a student caller to their OWN data,
+   *  ignoring any client-supplied `X-Student-Id` header. Absent for parents/managers/members. */
+  studentId?: string;
   /** Platform super-admin (Grahem) — from JWT `custom:platformAdmin`. NOT a family membership. */
   platformAdmin?: boolean;
 }

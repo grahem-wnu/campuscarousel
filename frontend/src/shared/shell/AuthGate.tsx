@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Spinner } from "../ui/Spinner";
 import { useAuth } from "./AuthContext";
+import { JoinFamilyPage } from "./JoinFamilyPage";
 import { JoinPage } from "./JoinPage";
 import { LandingPage } from "./LandingPage";
 import { LoginPage } from "./LoginPage";
@@ -14,8 +15,12 @@ import { SignupPage } from "./SignupPage";
 export function AuthGate({ children }: { children: ReactNode }) {
   const { status } = useAuth();
 
-  // PUBLIC pages: /join (invite redemption) and /signup (open signup) must work WITHOUT auth —
-  // the arriving family has no account yet.
+  // PUBLIC pages: /join-family (accept a family invite), /join (front-door redemption), and /signup
+  // (open signup) must work WITHOUT auth — the arriving person has no account yet. NOTE the order:
+  // /join-family MUST be checked before /join, since startsWith("/join") also matches "/join-family".
+  if (typeof window !== "undefined" && window.location.pathname.startsWith("/join-family")) {
+    return <JoinFamilyPage />;
+  }
   if (typeof window !== "undefined" && window.location.pathname.startsWith("/join")) {
     return <JoinPage />;
   }

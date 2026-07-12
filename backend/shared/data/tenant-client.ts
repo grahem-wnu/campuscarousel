@@ -5,7 +5,7 @@
 // Fail-closed: currentTenantId() throws if no tenant context is set.
 
 import { currentStudentId, currentTenantId } from '../tenant/index.js';
-import type { QueryOptions, StoredItem, TableClient } from './table-client.js';
+import type { PutCondition, QueryOptions, StoredItem, TableClient } from './table-client.js';
 
 const GSI_PK_ATTRS = ['GSI1PK', 'GSI2PK', 'GSI3PK', 'GSI4PK'] as const;
 
@@ -29,6 +29,8 @@ function prefixedClient(inner: TableClient, prefix: () => string): TableClient {
     get: async (pk: string, sk: string) => inner.get(scope(pk), sk),
     delete: async (pk: string, sk: string) => inner.delete(scope(pk), sk),
     put: async (item: StoredItem) => inner.put(scopeItem(item)),
+    // condition.attr is a plain attribute (e.g. `status`), never a key, so it needs no prefixing.
+    putIf: async (item: StoredItem, condition: PutCondition) => inner.putIf(scopeItem(item), condition),
     query: async (pk: string, opts?: QueryOptions) => inner.query(scope(pk), opts),
     queryIndex: async (index, pk: string, opts?: QueryOptions) => inner.queryIndex(index, scope(pk), opts),
     scanByPkPrefix: async (pkPrefix: string) => inner.scanByPkPrefix(scope(pkPrefix)),
