@@ -15,6 +15,7 @@
 // matching (not substrings).
 
 import { majorPhrase } from '../../shared/ai/major.js';
+import { invokeMessages, type BedrockSend } from '../../shared/metering/index.js';
 import { packCertifications } from '../../shared/packs/index.js';
 
 export interface CertSuggestion {
@@ -183,13 +184,9 @@ function toValidatedSuggestion(raw: unknown, index: number): CertSuggestion | nu
   };
 }
 
-/** Extract the assistant text from a Bedrock Anthropic Messages response and parse the JSON array
- *  of suggestions out of it (tolerating ```json fences / surrounding prose). Throws on no array. */
-function parseModelSuggestions(decoded: unknown): CertSuggestion[] {
-  const content = (decoded as { content?: Array<{ type?: string; text?: string }> })?.content;
-  const text = Array.isArray(content)
-    ? content.map((c) => (typeof c?.text === 'string' ? c.text : '')).join('\n')
-    : '';
+/** Parse the JSON array of suggestions out of the assistant's completion text (tolerating ```json
+ *  fences / surrounding prose). Throws on no array. */
+function parseModelSuggestions(text: string): CertSuggestion[] {
   const start = text.indexOf('[');
   const end = text.lastIndexOf(']');
   if (start === -1 || end <= start) throw new Error('no JSON array in model output');
@@ -223,28 +220,17 @@ export function makeBedrockSuggester(options: BedrockSuggesterOptions = {}): Sug
     const modelId = options.modelId ?? process.env.BEDROCK_MODEL_ID;
     if (!modelId) return fallback({ careerGoal, existingNames, majors });
     try {
-      // Lazy-require so importing this module (e.g. the route manifest at cold start) never forces
-      // the SDK to load until a suggestion is actually requested.
-      const { BedrockRuntimeClient, InvokeModelCommand } = await import('@aws-sdk/client-bedrock-runtime');
-      const client: BedrockInvoker =
-        options.client ?? (new BedrockRuntimeClient({}) as unknown as BedrockInvoker);
-      const command = new InvokeModelCommand({
+      // Funnels through the metered `invokeMessages` seam so token usage is attributed to the
+      // family + `cert-suggest`.
+      const text = await invokeMessages({
+        feature: 'cert-suggest',
+        prompt: buildPrompt(careerGoal, existingNames, majors),
+        maxTokens: 1024,
         modelId,
-        contentType: 'application/json',
-        accept: 'application/json',
-        body: new TextEncoder().encode(
-          JSON.stringify({
-            anthropic_version: 'bedrock-2023-05-31',
-            max_tokens: 1024,
-            messages: [{ role: 'user', content: buildPrompt(careerGoal, existingNames, majors) }],
-          }),
-        ),
+        client: options.client as BedrockSend | undefined,
       });
-      const res = await client.send(command);
-      if (!res.body) return fallback({ careerGoal, existingNames, majors });
-      const decoded = JSON.parse(new TextDecoder().decode(res.body)) as unknown;
       const heldTokenSets = existingNames.map(tokenSet);
-      const suggestions = parseModelSuggestions(decoded)
+      const suggestions = parseModelSuggestions(text)
         .filter((s) => notAlreadyHeld(s.name, heldTokenSets))
         .sort((a, b) => a.priority - b.priority);
       return suggestions.length > 0 ? suggestions : fallback({ careerGoal, existingNames, majors });
