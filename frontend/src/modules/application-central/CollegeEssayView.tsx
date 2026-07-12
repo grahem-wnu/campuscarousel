@@ -150,7 +150,7 @@ export function CollegeEssayView({ college, startMode, onBack }: Props) {
   if (sub === 'questions' && set) {
     return (
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <Button size="sm" variant="ghost" onClick={onBack}>← back to colleges</Button>
           <Button size="sm" variant="ghost" onClick={() => setSub('attempts')}>Your attempts</Button>
         </div>
@@ -200,7 +200,7 @@ export function CollegeEssayView({ college, startMode, onBack }: Props) {
   // Attempts — this college's practice essays plus a way to search for a fresh question.
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <Button size="sm" variant="ghost" onClick={onBack}>← back to colleges</Button>
         <Button size="sm" icon="plus" onClick={() => void search()}>Search for a new question</Button>
       </div>
