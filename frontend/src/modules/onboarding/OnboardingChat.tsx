@@ -98,8 +98,8 @@ export default function OnboardingChat({
             <div
               className={
                 m.role === 'user'
-                  ? 'max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-sm bg-primary-600 px-3 py-2 text-sm text-white'
-                  : 'max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-bl-sm bg-surface-sunken px-3 py-2 text-sm text-ink-800'
+                  ? 'max-w-[85%] whitespace-pre-wrap break-words rounded-2xl rounded-br-sm bg-primary-600 px-3 py-2 text-sm text-white'
+                  : 'max-w-[85%] whitespace-pre-wrap break-words rounded-2xl rounded-bl-sm bg-surface-sunken px-3 py-2 text-sm text-ink-800'
               }
             >
               {m.content}
@@ -118,9 +118,11 @@ export default function OnboardingChat({
       {error ? <p className="px-1 py-1 text-xs text-error-600">{error}</p> : null}
 
       <div className="border-t border-surface-border pt-3">
+        {/* min-w-0 lets the flex input shrink below its intrinsic width (iOS Safari respects an input's
+            default min-width, which otherwise overflows the row → sideways scroll); Send stays fixed. */}
         <div className="flex items-end gap-2">
           <input
-            className="flex-1 rounded-lg border border-surface-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"
+            className="min-w-0 flex-1 rounded-lg border border-surface-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
@@ -133,7 +135,7 @@ export default function OnboardingChat({
             disabled={sending}
             autoFocus
           />
-          <Button onClick={() => void send()} disabled={sending || !input.trim()} icon="chat">
+          <Button className="shrink-0" onClick={() => void send()} disabled={sending || !input.trim()} icon="chat">
             Send
           </Button>
         </div>

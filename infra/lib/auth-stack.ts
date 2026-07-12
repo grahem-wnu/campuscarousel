@@ -63,8 +63,15 @@ export class AuthStack extends Stack {
       // No auto-verified attributes; pool is email-less.
       autoVerify: {},
       standardAttributes: {},
+      // custom:role carries admin|parent|student|member. custom:tenantId scopes the user to their
+      // family (SaaS multi-tenancy); custom:platformAdmin marks a super-admin. NOTE: tenantId +
+      // platformAdmin were originally added out-of-band via `add-custom-attributes` on the existing
+      // staging + prod pools (CloudFormation can't add custom attributes to a pool it already created).
+      // Declared here so the IaC matches reality and any freshly-created pool gets them.
       customAttributes: {
         role: new StringAttribute({ minLen: 1, maxLen: 16, mutable: true }),
+        tenantId: new StringAttribute({ mutable: true }),
+        platformAdmin: new StringAttribute({ mutable: true }),
       },
       // Private 3-person family app — minimal password policy (Grahem's call). Cognito's floor
       // is 6 chars and length can't be disabled; all character-class requirements are off.
