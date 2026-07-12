@@ -4,18 +4,23 @@ import { useActiveStudent, useAuth, type Student } from "../../shared/shell";
 import { resetStudent } from "../onboarding/api";
 import {
   RELATIONSHIP_LABELS,
+  createInvite,
   createStudent,
   deleteMember,
   deleteStudent,
   getStudentProfile,
-  inviteMember,
+  listInvites,
   listMembers,
   putStudentProfile,
+  revokeInvite,
   updateMember,
   updateStudent,
+  type FamilyInviteKind,
   type FamilyMember,
+  type InviteResult,
   type MemberAccessLevel,
   type MemberRelationship,
+  type PendingInvite,
 } from "./api";
 
 /**
@@ -32,6 +37,7 @@ export default function FamilyPage() {
   const [gradYear, setGradYear] = useState("");
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState<Student | null>(null);
+  const [invitingStudent, setInvitingStudent] = useState<Student | null>(null);
 
   async function add() {
     const trimmed = name.trim();
@@ -96,6 +102,7 @@ export default function FamilyPage() {
                 isActive={s.studentId === activeStudentId}
                 onView={() => setActiveStudentId(s.studentId)}
                 onEdit={() => setEditing(s)}
+                onInvite={() => setInvitingStudent(s)}
               />
             ))}
             {archived.map((s) => (
@@ -143,6 +150,10 @@ export default function FamilyPage() {
           }}
         />
       )}
+
+      {invitingStudent && (
+        <StudentInviteModal student={invitingStudent} onClose={() => setInvitingStudent(null)} />
+      )}
     </div>
   );
 }
@@ -152,12 +163,15 @@ function StudentRow({
   isActive,
   onView,
   onEdit,
+  onInvite,
 }: {
   student: Student;
   isActive: boolean;
   onView?: () => void;
   onEdit: () => void;
+  onInvite?: () => void;
 }) {
+  const hasLogin = Boolean(student.loginUserId);
   return (
     <li className="flex items-center gap-3 px-4 py-3">
       <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary-100 text-primary-700">
@@ -177,19 +191,116 @@ function StudentRow({
             </Badge>
           )}
         </p>
-        {student.graduationYear && (
+        {hasLogin ? (
+          <p className="truncate text-xs text-ink-500">Signed in as {student.loginUserId}</p>
+        ) : student.graduationYear ? (
           <p className="text-xs text-ink-500">Class of {student.graduationYear}</p>
-        )}
+        ) : null}
       </div>
       {onView && !isActive && student.status === "active" && (
         <Button variant="ghost" size="sm" onClick={onView}>
           View
         </Button>
       )}
+      {/* Give the child their own login. Once linked, we show who they signed up as instead. */}
+      {onInvite && !hasLogin && student.status === "active" && (
+        <Button variant="ghost" size="sm" onClick={onInvite}>
+          Invite {student.name} to sign in
+        </Button>
+      )}
       <Button variant="ghost" size="sm" onClick={onEdit} aria-label={`Edit ${student.name}`}>
         Edit
       </Button>
     </li>
+  );
+}
+
+/**
+ * A reusable panel that shows a freshly-minted invite: the shareable join link + the raw code, each
+ * with a Copy button. The manager sends this to the invitee (there is no email — codes are shared
+ * directly). Copy degrades gracefully where the clipboard API is unavailable.
+ */
+function InviteCodePanel({ invite }: { invite: InviteResult }) {
+  const toast = useToast();
+  async function copy(value: string, label: string) {
+    try {
+      await navigator.clipboard.writeText(value);
+      toast.success(`${label} copied.`);
+    } catch {
+      toast.error("Couldn't copy — select and copy it manually.");
+    }
+  }
+  return (
+    <div className="space-y-3">
+      <Field label="Shareable link" hint="Send this to the person joining — they set their own login name and password.">
+        <div className="flex items-center gap-2">
+          <Input readOnly value={invite.url} onFocus={(e) => e.currentTarget.select()} />
+          <Button variant="outline" size="sm" onClick={() => void copy(invite.url, "Link")}>
+            Copy
+          </Button>
+        </div>
+      </Field>
+      <Field label="Or share the code">
+        <div className="flex items-center gap-2">
+          <Input readOnly value={invite.code} className="font-mono tracking-widest" onFocus={(e) => e.currentTarget.select()} />
+          <Button variant="outline" size="sm" onClick={() => void copy(invite.code, "Code")}>
+            Copy
+          </Button>
+        </div>
+      </Field>
+    </div>
+  );
+}
+
+/** Mint a "sign-in" login invite for a specific child, then show the shareable link/code. */
+function StudentInviteModal({ student, onClose }: { student: Student; onClose: () => void }) {
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  const [invite, setInvite] = useState<InviteResult | null>(null);
+
+  async function generate() {
+    setBusy(true);
+    try {
+      setInvite(await createInvite({ kind: "student", studentId: student.studentId }));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not create the invite.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal open onClose={onClose} title={`Invite ${student.name} to sign in`}>
+      <div className="space-y-4">
+        {invite ? (
+          <>
+            <p className="text-sm text-ink-600">
+              Share this with {student.name}. They&rsquo;ll pick their own login name and password and get their
+              own private view of their journey.
+            </p>
+            <InviteCodePanel invite={invite} />
+            <div className="flex justify-end pt-1">
+              <Button onClick={onClose}>Done</Button>
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="text-sm text-ink-600">
+              Give {student.name} their own login so they can sign in and keep private journal entries. Their
+              login is pinned to their journey only.
+            </p>
+            <div className="flex justify-end gap-2 pt-1">
+              <Button variant="ghost" onClick={onClose} disabled={busy}>
+                Cancel
+              </Button>
+              <Button onClick={() => void generate()} loading={busy} disabled={busy}>
+                Create invite link
+              </Button>
+            </div>
+          </>
+        )}
+      </div>
+    </Modal>
   );
 }
 
@@ -438,10 +549,15 @@ const RELATIONSHIPS: MemberRelationship[] = [
   "other",
 ];
 
+/** Relationships offered for an adult (co-parent / viewer) invite — the "child" relationship is
+ *  reserved for the per-child "Invite to sign in" flow, so it's excluded here. */
+const ADULT_RELATIONSHIPS: MemberRelationship[] = RELATIONSHIPS.filter((r) => r !== "child");
+
 /** Parents & access: everyone with a login to the family — guardians + the wider support circle. */
 function MembersCard() {
   const toast = useToast();
   const [members, setMembers] = useState<FamilyMember[]>([]);
+  const [invites, setInvites] = useState<PendingInvite[]>([]);
   const [loading, setLoading] = useState(true);
   const [inviting, setInviting] = useState(false);
   const [editing, setEditing] = useState<FamilyMember | null>(null);
@@ -449,7 +565,10 @@ function MembersCard() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      setMembers((await listMembers()).members);
+      const [m, i] = await Promise.all([listMembers(), listInvites()]);
+      setMembers(m.members);
+      // Adult (co-parent/viewer) invites live here; per-child "sign in" invites are shown on the child row.
+      setInvites(i.invites.filter((inv) => inv.kind !== "student"));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not load members.");
     } finally {
@@ -462,7 +581,7 @@ function MembersCard() {
   }, [load]);
 
   async function remove(m: FamilyMember) {
-    if (!window.confirm(`Remove ${m.displayName || m.email}'s access? They'll no longer be able to sign in.`)) return;
+    if (!window.confirm(`Remove ${m.displayName || m.userId}'s access? They'll no longer be able to sign in.`)) return;
     try {
       await deleteMember(m.userId);
       toast.success("Access removed.");
@@ -485,7 +604,7 @@ function MembersCard() {
         <div className="p-4">
           <Spinner size={20} />
         </div>
-      ) : members.length === 0 ? (
+      ) : members.length === 0 && invites.length === 0 ? (
         <div className="p-4">
           <EmptyState
             icon="contacts"
@@ -501,9 +620,10 @@ function MembersCard() {
                 <Icon name="user" size={18} />
               </span>
               <div className="min-w-0 flex-1">
-                <p className="truncate font-medium text-ink-800">{m.displayName || m.email}</p>
+                <p className="truncate font-medium text-ink-800">{m.displayName || m.userId}</p>
                 <p className="truncate text-xs text-ink-500">
-                  {RELATIONSHIP_LABELS[m.relationship]} · {m.email}
+                  {RELATIONSHIP_LABELS[m.relationship]}
+                  {m.email ? ` · ${m.email}` : ""}
                 </p>
               </div>
               <Badge tone={m.accessLevel === "manager" ? "primary" : "neutral"}>
@@ -512,7 +632,7 @@ function MembersCard() {
               <Button variant="ghost" size="sm" onClick={() => setEditing(m)}>
                 Edit
               </Button>
-              <Button variant="ghost" size="sm" onClick={() => void remove(m)} aria-label={`Remove ${m.email}`}>
+              <Button variant="ghost" size="sm" onClick={() => void remove(m)} aria-label={`Remove ${m.displayName || m.userId}`}>
                 <Icon name="close" size={16} />
               </Button>
             </li>
@@ -520,17 +640,25 @@ function MembersCard() {
         </ul>
       )}
 
+      {invites.length > 0 && (
+        <div className="border-t border-surface-border">
+          <p className="px-4 pt-3 text-xs font-semibold uppercase tracking-wide text-ink-400">Pending invites</p>
+          <ul className="divide-y divide-surface-border">
+            {invites.map((inv) => (
+              <PendingInviteRow key={inv.code} invite={inv} onChanged={load} />
+            ))}
+          </ul>
+        </div>
+      )}
+
       {inviting && (
-        <MemberFormModal
+        <MemberInviteModal
           onClose={() => setInviting(false)}
-          onSaved={async () => {
-            setInviting(false);
-            await load();
-          }}
+          onCreated={load}
         />
       )}
       {editing && (
-        <MemberFormModal
+        <MemberEditModal
           member={editing}
           onClose={() => setEditing(null)}
           onSaved={async () => {
@@ -543,42 +671,149 @@ function MembersCard() {
   );
 }
 
-/** Invite a new member (no `member`) or edit an existing one's relationship + access level. */
-function MemberFormModal({
+/** A pending co-parent/viewer invite with Copy (the join link) and Revoke. */
+function PendingInviteRow({ invite, onChanged }: { invite: PendingInvite; onChanged: () => Promise<void> }) {
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  const joinUrl = `${window.location.origin}/join-family?code=${invite.code}`;
+  const label = invite.displayName || (invite.relationship ? RELATIONSHIP_LABELS[invite.relationship] : "Invitee");
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(joinUrl);
+      toast.success("Invite link copied.");
+    } catch {
+      toast.error("Couldn't copy — share the code manually.");
+    }
+  }
+  async function revoke() {
+    if (!window.confirm("Revoke this invite? The code will stop working.")) return;
+    setBusy(true);
+    try {
+      await revokeInvite(invite.code);
+      toast.success("Invite revoked.");
+      await onChanged();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not revoke.");
+      setBusy(false);
+    }
+  }
+
+  return (
+    <li className="flex items-center gap-3 px-4 py-3">
+      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-ink-100 text-ink-500">
+        <Icon name="contacts" size={16} />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium text-ink-800">{label}</p>
+        <p className="truncate font-mono text-xs tracking-widest text-ink-500">{invite.code}</p>
+      </div>
+      <Badge tone="neutral">{invite.kind === "coparent" ? "Manager" : "View-only"}</Badge>
+      <Button variant="ghost" size="sm" onClick={() => void copy()}>
+        Copy link
+      </Button>
+      <Button variant="ghost" size="sm" onClick={() => void revoke()} disabled={busy} aria-label={`Revoke invite ${invite.code}`}>
+        Revoke
+      </Button>
+    </li>
+  );
+}
+
+/** Invite a co-parent (manager) or viewer via a shareable code — no email. */
+function MemberInviteModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => Promise<void> }) {
+  const toast = useToast();
+  const [kind, setKind] = useState<Exclude<FamilyInviteKind, "student">>("viewer");
+  const [displayName, setDisplayName] = useState("");
+  const [relationship, setRelationship] = useState<MemberRelationship>("grandparent");
+  const [busy, setBusy] = useState(false);
+  const [invite, setInvite] = useState<InviteResult | null>(null);
+
+  async function generate() {
+    setBusy(true);
+    try {
+      const created = await createInvite({
+        kind,
+        relationship,
+        ...(displayName.trim() ? { displayName: displayName.trim() } : {}),
+      });
+      setInvite(created);
+      await onCreated();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not create the invite.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal open onClose={onClose} title={invite ? "Invite created" : "Invite someone"}>
+      <div className="space-y-4">
+        {invite ? (
+          <>
+            <p className="text-sm text-ink-600">
+              Share this link. They&rsquo;ll choose their own login name and password — no email needed.
+            </p>
+            <InviteCodePanel invite={invite} />
+            <div className="flex justify-end pt-1">
+              <Button onClick={onClose}>Done</Button>
+            </div>
+          </>
+        ) : (
+          <>
+            <Field label="Access" hint="Co-parents can edit and invite. Viewers can follow along but not change anything or see private journal entries.">
+              <Select value={kind} onChange={(e) => setKind(e.target.value as Exclude<FamilyInviteKind, "student">)}>
+                <option value="viewer">View-only</option>
+                <option value="coparent">Co-parent (manager)</option>
+              </Select>
+            </Field>
+            <Field label="Relationship">
+              <Select value={relationship} onChange={(e) => setRelationship(e.target.value as MemberRelationship)}>
+                {ADULT_RELATIONSHIPS.map((r) => (
+                  <option key={r} value={r}>
+                    {RELATIONSHIP_LABELS[r]}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Name (optional)">
+              <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="e.g. Grandma Jo" />
+            </Field>
+            <div className="flex justify-end gap-2 pt-1">
+              <Button variant="ghost" onClick={onClose} disabled={busy}>
+                Cancel
+              </Button>
+              <Button onClick={() => void generate()} loading={busy} disabled={busy}>
+                Create invite link
+              </Button>
+            </div>
+          </>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
+/** Edit an existing member's relationship + access level. */
+function MemberEditModal({
   member,
   onClose,
   onSaved,
 }: {
-  member?: FamilyMember;
+  member: FamilyMember;
   onClose: () => void;
   onSaved: () => Promise<void>;
 }) {
   const toast = useToast();
-  const editingExisting = Boolean(member);
-  const [email, setEmail] = useState(member?.email ?? "");
-  const [displayName, setDisplayName] = useState(member?.displayName ?? "");
-  const [relationship, setRelationship] = useState<MemberRelationship>(member?.relationship ?? "grandparent");
-  const [accessLevel, setAccessLevel] = useState<MemberAccessLevel>(member?.accessLevel ?? "viewer");
+  const [displayName, setDisplayName] = useState(member.displayName ?? "");
+  const [relationship, setRelationship] = useState<MemberRelationship>(member.relationship);
+  const [accessLevel, setAccessLevel] = useState<MemberAccessLevel>(member.accessLevel);
   const [busy, setBusy] = useState(false);
 
   async function save() {
-    if (!editingExisting && !/^\S+@\S+\.\S+$/.test(email.trim())) {
-      toast.error("Enter a valid email.");
-      return;
-    }
     setBusy(true);
     try {
-      if (editingExisting && member) {
-        await updateMember(member.userId, { displayName: displayName.trim() || undefined, relationship, accessLevel });
-        toast.success("Updated.");
-      } else {
-        const created = await inviteMember({ email: email.trim(), displayName: displayName.trim() || undefined, relationship, accessLevel });
-        toast.success(
-          created.emailed === false
-            ? `Added ${email.trim()}, but the email couldn't be sent — share their sign-in details manually.`
-            : `Invited ${email.trim()} — we emailed them a sign-in link.`,
-        );
-      }
+      await updateMember(member.userId, { displayName: displayName.trim() || undefined, relationship, accessLevel });
+      toast.success("Updated.");
       await onSaved();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not save.");
@@ -587,13 +822,8 @@ function MemberFormModal({
   }
 
   return (
-    <Modal open onClose={onClose} title={editingExisting ? "Edit access" : "Invite someone"}>
+    <Modal open onClose={onClose} title="Edit access">
       <div className="space-y-4">
-        {!editingExisting && (
-          <Field label="Email" hint="We'll email them a temporary password to sign in with.">
-            <Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@example.com" />
-          </Field>
-        )}
         <Field label="Name (optional)">
           <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="e.g. Grandma Jo" />
         </Field>
@@ -617,7 +847,7 @@ function MemberFormModal({
             Cancel
           </Button>
           <Button onClick={save} disabled={busy}>
-            {editingExisting ? "Save" : "Send invite"}
+            Save
           </Button>
         </div>
       </div>

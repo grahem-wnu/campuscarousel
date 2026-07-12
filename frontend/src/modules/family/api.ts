@@ -38,7 +38,8 @@ export type MemberAccessLevel = "manager" | "viewer";
 
 export interface FamilyMember {
   userId: string;
-  email: string;
+  /** The invitee's email. Optional — code-invited members (esp. students) have no email. */
+  email?: string;
   displayName?: string;
   relationship: MemberRelationship;
   accessLevel: MemberAccessLevel;
@@ -46,24 +47,56 @@ export interface FamilyMember {
   invitedBy?: string;
   createdAt: string;
   updatedAt: string;
-  /** Only on the invite response: whether the credential email was sent (false in SES sandbox / on
-   *  mail failure — the account is still created). */
-  emailed?: boolean;
-}
-
-export interface InviteMemberInput {
-  email: string;
-  displayName?: string;
-  relationship: MemberRelationship;
-  accessLevel: MemberAccessLevel;
 }
 
 export function listMembers(): Promise<{ members: FamilyMember[] }> {
   return api.get<{ members: FamilyMember[] }>("/family/members");
 }
 
-export function inviteMember(input: InviteMemberInput): Promise<FamilyMember> {
-  return api.post<FamilyMember>("/family/members", input);
+// --- Shareable-code invites (co-parent / viewer / student login) ---------------------------------
+// A manager mints a single-use code; the invitee redeems it on the public /join-family page, choosing
+// their own login name + password. No email is sent — the manager shares the link/code directly.
+
+export type FamilyInviteKind = "coparent" | "viewer" | "student";
+
+export interface CreateInviteInput {
+  kind: FamilyInviteKind;
+  /** Descriptive relationship (co-parent/viewer invites). */
+  relationship?: MemberRelationship;
+  /** The roster child this login is for (kind === "student"). */
+  studentId?: string;
+  displayName?: string;
+}
+
+/** What the create endpoint returns: the raw code plus a ready-to-share join link. */
+export interface InviteResult {
+  code: string;
+  url: string;
+}
+
+/** A still-pending invite, as listed for the family. */
+export interface PendingInvite {
+  code: string;
+  kind: FamilyInviteKind;
+  relationship?: MemberRelationship;
+  studentId?: string;
+  displayName?: string;
+  status: "pending" | "accepted" | "revoked";
+  expiresAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export function createInvite(input: CreateInviteInput): Promise<InviteResult> {
+  return api.post<InviteResult>("/family/invites", input);
+}
+
+export function listInvites(): Promise<{ invites: PendingInvite[] }> {
+  return api.get<{ invites: PendingInvite[] }>("/family/invites");
+}
+
+export function revokeInvite(code: string): Promise<void> {
+  return api.post<void>(`/family/invites/${encodeURIComponent(code)}/revoke`, {});
 }
 
 export function updateMember(
