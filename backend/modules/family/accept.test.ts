@@ -64,7 +64,9 @@ describe('acceptFamilyInvite — student', () => {
     expect(await getMember('keira')).toMatchObject({
       userId: 'keira',
       relationship: 'child',
-      accessLevel: 'manager',
+      // A student's real permission is custom:role='student'; the member row stays 'viewer' so a re-role
+      // can never map it into a manager/parent.
+      accessLevel: 'viewer',
       studentId: stu.studentId,
       status: 'active',
       invitedBy: 'kate',

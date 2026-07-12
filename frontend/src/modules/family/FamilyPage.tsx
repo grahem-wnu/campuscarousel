@@ -626,9 +626,14 @@ function MembersCard() {
                   {m.email ? ` · ${m.email}` : ""}
                 </p>
               </div>
-              <Badge tone={m.accessLevel === "manager" ? "primary" : "neutral"}>
-                {m.accessLevel === "manager" ? "Manager" : "View-only"}
-              </Badge>
+              {m.relationship === "child" ? (
+                // A student login: their permission is their own pinned scope, not a manager/viewer level.
+                <Badge tone="info">Student</Badge>
+              ) : (
+                <Badge tone={m.accessLevel === "manager" ? "primary" : "neutral"}>
+                  {m.accessLevel === "manager" ? "Manager" : "View-only"}
+                </Badge>
+              )}
               <Button variant="ghost" size="sm" onClick={() => setEditing(m)}>
                 Edit
               </Button>

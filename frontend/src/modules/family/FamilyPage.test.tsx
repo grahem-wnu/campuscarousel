@@ -135,6 +135,16 @@ describe('co-parent / viewer members invite', () => {
     expect(await within(dialog).findByDisplayValue('https://app/join-family?code=WXYZ9876')).toBeInTheDocument();
   });
 
+  it('badges a student login (relationship=child) as "Student", not Manager/View-only', async () => {
+    h.listMembers.mockResolvedValue({
+      members: [{ userId: 'keira', relationship: 'child', accessLevel: 'viewer', studentId: 's1', status: 'active', createdAt: '', updatedAt: '' }],
+    });
+    render(<FamilyPage />);
+    expect(await screen.findByText('Student')).toBeInTheDocument();
+    expect(screen.queryByText('Manager')).not.toBeInTheDocument();
+    expect(screen.queryByText('View-only')).not.toBeInTheDocument();
+  });
+
   it('lists a pending invite with Copy and Revoke', async () => {
     h.listInvites.mockResolvedValue({
       invites: [{ code: 'PEND1234', kind: 'viewer', relationship: 'grandparent', status: 'pending', expiresAt: '', createdAt: '', updatedAt: '' }],

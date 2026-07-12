@@ -80,6 +80,14 @@ export function makeHandlers(deps: FamilyDeps): FamilyHandlers {
       const patch = validateBody(updateMemberSchema, ctx);
       const existing = await getData().members.get(userId);
       if (!existing) throw Errors.notFound('Member not found');
+      // SECURITY: a student login is confined to its own scope (custom:role='student', pinned by the
+      // router). Re-roling maps only to parent/member — never student — so changing a student's access
+      // would flip them into an UNPINNED parent with switcher access to every sibling's data. Refuse it.
+      // (Relationship / displayName edits on the child row are still fine.)
+      const isStudentLogin = existing.relationship === 'child' || Boolean(existing.studentId);
+      if (isStudentLogin && patch.accessLevel && patch.accessLevel !== existing.accessLevel) {
+        throw Errors.validation("A student's access can't be changed here.");
+      }
       // If access level changes, update their login role so the router's enforcement follows. Address
       // Cognito by `userId` (the Cognito username) — code-invited members (esp. students) have no email.
       if (patch.accessLevel && patch.accessLevel !== existing.accessLevel) {

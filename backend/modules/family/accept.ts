@@ -124,14 +124,17 @@ export async function acceptFamilyInvite(deps: AcceptDeps, input: AcceptInput): 
         }
       }
 
-      // 5b. Record the family membership (no email — a code-invited member may not have one).
+      // 5b. Record the family membership (no email — a code-invited member may not have one). A student's
+      //     real permission comes from custom:role='student' (provisionFromInvite), NOT from accessLevel —
+      //     so their row is 'viewer' (the harmless default that never maps to a manager). Only a co-parent
+      //     is a 'manager'. This also stops a re-role from ever flipping a student into a parent.
       const relationship: MemberRelationship =
         invite.relationship ?? (invite.kind === 'student' ? 'child' : 'other');
       await data.members.put({
         userId: input.loginName,
         ...(input.displayName ? { displayName: input.displayName } : {}),
         relationship,
-        accessLevel: invite.kind === 'viewer' ? 'viewer' : 'manager',
+        accessLevel: invite.kind === 'coparent' ? 'manager' : 'viewer',
         ...(invite.kind === 'student' ? { studentId: invite.studentId } : {}),
         status: 'active',
         invitedBy: invite.invitedBy,

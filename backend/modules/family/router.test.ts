@@ -82,6 +82,26 @@ describe('family members router integration', () => {
     expect(calls).toContain('remove:keira');
   });
 
+  it('refuses to re-role a student login (relationship=child) out of confinement — setRole NOT called', async () => {
+    const { dispatch, calls, seedMember } = harness();
+    await seedMember({ userId: 'keira', relationship: 'child', accessLevel: 'viewer', studentId: 'stu-1' });
+    const res = await dispatch(event('PATCH', '/family/members/keira', parent, { accessLevel: 'manager' }));
+    expect(res.statusCode).toBe(422);
+    expect(calls).not.toContain('role:keira:parent'); // never re-roled the student login
+    // A normal member's re-role still works.
+    await seedMember({ userId: 'g', relationship: 'grandparent', accessLevel: 'viewer' });
+    expect((await dispatch(event('PATCH', '/family/members/g', parent, { accessLevel: 'manager' }))).statusCode).toBe(200);
+    expect(calls).toContain('role:g:parent');
+  });
+
+  it('still allows editing a student login’s relationship/displayName (just not access level)', async () => {
+    const { dispatch, calls, seedMember } = harness();
+    await seedMember({ userId: 'keira', relationship: 'child', accessLevel: 'viewer', studentId: 'stu-1' });
+    const res = await dispatch(event('PATCH', '/family/members/keira', parent, { displayName: 'Keira C.' }));
+    expect(res.statusCode).toBe(200);
+    expect(calls).not.toContain('role:keira:parent');
+  });
+
   it('a view-only member cannot update or remove (router blocks the mutation, 403)', async () => {
     const { dispatch, seedMember } = harness();
     await seedMember({ userId: 'g', relationship: 'grandparent', accessLevel: 'viewer' });
