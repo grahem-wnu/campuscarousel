@@ -7,6 +7,7 @@
 import { SK_DETAILS, dateSortKey, stripInternal } from './keys.js';
 import { NotFoundError, isoNow, newId } from './repo.js';
 import type { ListRange } from './repo.js';
+import { ConditionFailedError } from './table-client.js';
 import type { StoredItem, TableClient } from './table-client.js';
 import type {
   Budget,
@@ -602,6 +603,10 @@ export interface StudentRepo {
    *  second student-invite accept attaching a second login to the same child: the loser gets a
    *  `ConditionFailedError`. Throws `NotFoundError` if the roster row is gone. */
   linkLogin(studentId: string, loginUserId: string): Promise<Student>;
+  /** Best-effort inverse of `linkLogin`: clear `loginUserId` ONLY if it still equals `loginUserId`
+   *  (so a concurrent winner's link is never clobbered). Used to undo a link when a later accept step
+   *  fails, so a partial failure can't permanently brick the child. No-op if already cleared/changed. */
+  unlinkLogin(studentId: string, loginUserId: string): Promise<void>;
   delete(studentId: string): Promise<void>;
   list(): Promise<Student[]>;
 }
@@ -641,6 +646,21 @@ export function makeStudents(client: TableClient): StudentRepo {
       // Conditional on `loginUserId` being absent → single login per child even under concurrent accepts.
       await client.putIf(storeItem(next), { attr: 'loginUserId', notExists: true });
       return next;
+    },
+    async unlinkLogin(studentId, loginUserId) {
+      const existing = await client.get(`STUDENT#${studentId}`, SK_DETAILS);
+      if (!existing) return; // roster row gone — nothing to unlink (best-effort)
+      const current = toDomain<Student>(existing);
+      const next = { ...current };
+      delete next.loginUserId;
+      next.updatedAt = isoNow();
+      try {
+        // Only clear if THIS login still owns the link — never clobber a concurrent winner's link.
+        await client.putIf(storeItem(next), { attr: 'loginUserId', equals: loginUserId });
+      } catch (err) {
+        if (err instanceof ConditionFailedError) return; // someone else owns/changed it — leave it
+        throw err;
+      }
     },
     async delete(studentId) {
       await client.delete(`STUDENT#${studentId}`, SK_DETAILS);
