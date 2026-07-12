@@ -11,10 +11,17 @@ import { makeResearcher, unavailableResearcher, type BenchmarkResearcher, type M
 /** Build a web-grounded ModelInvoker. Injectable (invoker + searcher + flag) for tests; in prod it
  *  uses the real SDK client + Tavily, gated by the AI_WEB_SEARCH env flag. */
 export function makeWebGroundedInvoker(
-  options: { invoker?: BedrockInvoker; searcher?: WebSearcher; webSearch?: boolean; maxTokens?: number } = {},
+  options: {
+    invoker?: BedrockInvoker;
+    searcher?: WebSearcher;
+    webSearch?: boolean;
+    maxTokens?: number;
+    feature?: string;
+  } = {},
 ): ModelInvoker {
   return async (prompt) => {
     const { text } = await converseWithSearch(prompt, {
+      feature: options.feature ?? 'benchmark',
       maxTokens: options.maxTokens ?? 1500,
       temperature: 0.4,
       invoker: options.invoker,

@@ -34,6 +34,7 @@ export interface AiOptions {
  *  Throws on a missing model id / invoker error — callers catch and degrade. */
 async function invokeText(prompt: string, options: AiOptions): Promise<string> {
   const { text } = await converseWithSearch(prompt, {
+    feature: 'scholarship',
     modelId: options.modelId,
     invoker: options.invoker,
     searcher: options.searcher,

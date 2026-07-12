@@ -184,6 +184,7 @@ export function makeBedrockCollegeSeeder(options: AiOptions = {}): CollegeSeeder
       .join('\n');
     try {
       const { text } = await converseWithSearch(prompt, {
+        feature: 'onboarding',
         system: 'You name real, currently-operating US colleges. Never invent schools.',
         webSearch: false,
         maxTokens: 500,
@@ -214,6 +215,7 @@ export function makeBedrockOnboardingChatter(options: AiOptions = {}): Onboardin
   const now = options.now ?? (() => new Date());
   return async (messages) => {
     const { text } = await converseWithSearch(renderTranscript(messages), {
+      feature: 'onboarding',
       system: buildSystem(now()),
       webSearch: false,
       maxTokens: 900,
