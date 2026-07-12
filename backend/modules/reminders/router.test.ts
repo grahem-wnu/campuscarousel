@@ -25,6 +25,7 @@ function event(
   };
 }
 const keira: Requester = { username: 'keira', role: 'student' };
+const kate: Requester = { username: 'kate', role: 'parent' };
 const parse = (res: { body: string }) => JSON.parse(res.body) as Record<string, unknown>;
 
 function harness() {
@@ -52,16 +53,18 @@ describe('reminders router integration', () => {
     expect((await dispatch(event('GET', '/reminders/nope', { as: keira }))).statusCode).toBe(404);
   });
 
-  it('GET settings returns defaults; PUT persists; send-test emails via the sender', async () => {
+  it('GET settings returns defaults (any family role); a guardian PUTs; send-test emails via the sender', async () => {
     const { dispatch, sent } = harness();
 
+    // A student may READ the settings (the digest gate runs for them too)...
     const get = await dispatch(event('GET', '/reminders/settings', { as: keira }));
     expect(get.statusCode).toBe(200);
     expect(parse(get).cadence).toBe('weekly');
 
+    // ...but only a guardian (admin/parent) may change them or fire a test send.
     const put = await dispatch(
       event('PUT', '/reminders/settings', {
-        as: keira,
+        as: kate,
         body: { cadence: 'daily', recipients: [{ label: 'Mom', email: 'mom@x.com' }] },
       }),
     );
@@ -69,16 +72,30 @@ describe('reminders router integration', () => {
     expect(parse(put).cadence).toBe('daily');
 
     const test = await dispatch(
-      event('POST', '/reminders/send-test', { as: keira, body: { to: 'kate.cuthbertson@gmail.com' } }),
+      event('POST', '/reminders/send-test', { as: kate, body: { to: 'kate.cuthbertson@gmail.com' } }),
     );
     expect(test.statusCode).toBe(200);
     expect(sent).toHaveLength(1);
     expect(sent[0]?.to).toBe('kate.cuthbertson@gmail.com');
   });
 
-  it('422s an unknown settings field', async () => {
+  it('a student is confined to their own scope — 403 on the family-level reminder mutations', async () => {
+    const { dispatch, sent } = harness();
+    const put = await dispatch(
+      event('PUT', '/reminders/settings', { as: keira, body: { cadence: 'daily' } }),
+    );
+    expect(put.statusCode).toBe(403);
+    const test = await dispatch(
+      event('POST', '/reminders/send-test', { as: keira, body: { to: 'x@y.com' } }),
+    );
+    expect(test.statusCode).toBe(403);
+    // The route guard fires before the body is parsed, so nothing is sent.
+    expect(sent).toHaveLength(0);
+  });
+
+  it('422s an unknown settings field (for a guardian)', async () => {
     const { dispatch } = harness();
-    const res = await dispatch(event('PUT', '/reminders/settings', { as: keira, body: { bogus: true } }));
+    const res = await dispatch(event('PUT', '/reminders/settings', { as: kate, body: { bogus: true } }));
     expect(res.statusCode).toBe(422);
   });
 });

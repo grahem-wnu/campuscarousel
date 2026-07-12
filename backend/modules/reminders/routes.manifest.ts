@@ -10,8 +10,12 @@ import { makeHandlers } from './handlers.js';
 let cached: Data | undefined;
 const h = makeHandlers({ getData: (): Data => (cached ??= dataFromEnv()) });
 
+// Reminder settings are FAMILY-LEVEL (tenant-scoped, not per-child), so a `student` login must not
+// reconfigure the family digest or fire test emails to family addresses. GET stays open to any family
+// role (the digest gate reads it); the mutations are guarded to guardians. The router enforces `roles`
+// before the body is parsed, and its member auto-block does NOT cover `student` — hence the explicit list.
 export const routes: RouteDef[] = [
   { method: 'GET', path: '/reminders/settings', handler: h.getSettings },
-  { method: 'PUT', path: '/reminders/settings', handler: h.putSettings },
-  { method: 'POST', path: '/reminders/send-test', handler: h.sendTest },
+  { method: 'PUT', path: '/reminders/settings', handler: h.putSettings, roles: ['admin', 'parent'] },
+  { method: 'POST', path: '/reminders/send-test', handler: h.sendTest, roles: ['admin', 'parent'] },
 ];

@@ -3,7 +3,7 @@
 // (backend/lambda/digest.ts) — these endpoints only configure and verify it. Built from injectable
 // deps (in-memory data + fake sender + pinned clock in tests).
 
-import { Errors, validate, validateBody, type Handler } from '../../shared/api/index.js';
+import { Errors, validate, validateBody, type Handler, type Role } from '../../shared/api/index.js';
 import type { Data, ReminderRecipient } from '../../shared/data/index.js';
 import { sesSenderFromEnv, type EmailSender } from '../../shared/email/index.js';
 import { digestForRecipient } from './digest.js';
@@ -97,7 +97,8 @@ export function makeHandlers(deps: ReminderDeps): ReminderHandlers {
 export function buildRoutes(h: ReminderHandlers) {
   return [
     { method: 'GET' as const, path: '/reminders/settings', handler: h.getSettings },
-    { method: 'PUT' as const, path: '/reminders/settings', handler: h.putSettings },
-    { method: 'POST' as const, path: '/reminders/send-test', handler: h.sendTest },
+    // Family-level mutations — guardians only (the router's member auto-block doesn't cover students).
+    { method: 'PUT' as const, path: '/reminders/settings', handler: h.putSettings, roles: ['admin', 'parent'] as Role[] },
+    { method: 'POST' as const, path: '/reminders/send-test', handler: h.sendTest, roles: ['admin', 'parent'] as Role[] },
   ];
 }
