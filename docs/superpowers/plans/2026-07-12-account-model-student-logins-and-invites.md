@@ -41,7 +41,7 @@ if (requester.role === 'student' && !requester.studentId) {
 
 ### Task B1: Data-model links
 **Files:** `backend/shared/data/types.ts`
-- [ ] Add `loginUserId?: string` to `Student` (the linked login's username). Add `studentId?: string` to `FamilyMember` and the value `'child'` to `MemberRelationship`. Add the `FamilyInvite` interface:
+- [ ] Add `loginUserId?: string` to `Student` (the linked login's username). Add `studentId?: string` to `FamilyMember`, the value `'child'` to `MemberRelationship`, and **make `FamilyMember.email` OPTIONAL** (`email?: string`) — code-invited members (esp. students) have no email; `members.put`'s `Omit<...>` input would otherwise require it. Add the `FamilyInvite` interface:
 ```typescript
 export interface FamilyInvite extends Timestamped {
   code: string;
@@ -59,12 +59,12 @@ export interface FamilyInvite extends Timestamped {
 
 ### Task B2: `roleForAccess` total switch + relationship sync
 **Files:** `backend/modules/family/handlers.ts`, `frontend/src/modules/family/{api.ts,FamilyPage.tsx}`
-- [ ] Make `roleForAccess` a total switch over `MemberAccessLevel` (currently `manager|viewer` — do NOT add `student`). Add `'child'` to the FE `RELATIONSHIP_LABELS` map (`api.ts:96`) and the `RELATIONSHIPS` array (`FamilyPage.tsx:429`) so the unions stay in sync. `tsc` clean both. Commit B1+B2 together: `feat(account): data links (Student.loginUserId, FamilyMember.studentId, 'child'); FamilyInvite type`
+- [ ] Make `roleForAccess` a total switch over `MemberAccessLevel` (currently `manager|viewer` — do NOT add `student`). Add `'child'` in THREE FE places (all needed or it's a type error): the FE `MemberRelationship` union (`frontend/src/modules/family/api.ts:26`), the `RELATIONSHIP_LABELS` map (`api.ts:96`), and the `RELATIONSHIPS` array (`FamilyPage.tsx:429`). `tsc` clean both packages. Commit B1+B2 together: `feat(account): data links (Student.loginUserId, FamilyMember.studentId?, email?, 'child'); FamilyInvite type`
 
 ### Task B3: Conditional single-use write on the table client
 **Files:** `backend/shared/data/table-client.ts` (+ its dynamo impl), the in-memory test client, `table-client.test.ts`
 - [ ] **Step 1: Failing test:** a `putIfStatusPending(item)` (or `putConditional`) succeeds when the stored item's `status==='pending'` (or item absent), and REJECTS (throws a typed `ConditionFailed`) when `status!=='pending'`. Cover both the dynamo-command shape (ConditionExpression) and the in-memory client.
-- [ ] **Step 2:** Add a minimal conditional primitive to `TableClient`: `putIf(item: StoredItem, condition: { attr: string; equals?: unknown; notExists?: boolean }): Promise<void>` throwing `ConditionFailedError` on failure. Dynamo impl → `PutItemCommand` with `ConditionExpression` (`attribute_not_exists(#a) OR #a = :v`); in-memory impl → check the current item and throw if the condition fails. (Keep it tiny — only the FamilyInvite claim uses it.)
+- [ ] **Step 2:** Add a minimal conditional primitive to `TableClient`: `putIf(item: StoredItem, condition: { attr: string; equals?: unknown; notExists?: boolean }): Promise<void>` throwing `ConditionFailedError` on failure. Add it to **ALL THREE** implementers (the interface has three): the Dynamo impl (`PutItemCommand` with `ConditionExpression` `attribute_not_exists(#a) OR #a = :v`), the in-memory test client (check current item, throw if condition fails), AND the scoping decorator `prefixedClient` in `backend/shared/data/tenant-client.ts:18-36` (the object literal typed `: TableClient` used by `tenantScoped`/`studentScoped`) — forward as `putIf(scopeItem(item), condition)` (the `condition.attr` is a plain attribute like `status`, not a key, so no prefixing). Missing the third implementer is a `TS2739`. (The FamilyInvite claim runs on the un-scoped `base` client; the decorator forward just keeps the interface total.)
 - [ ] **Step 3:** Run → pass; commit: `feat(data): conditional putIf primitive (for single-use invite claim)`
 
 ### Task B4: `FamilyInvite` repo — GLOBAL client, per-tenant listing GSI, atomic claim
@@ -90,7 +90,27 @@ export interface FamilyInvite extends Timestamped {
 ### Task C3: PUBLIC accept + remove the email member invite
 **Files:** new `backend/modules/family/accept.ts` (pure, like `redeem.ts`), `backend/lambda/redeem.ts` (add the public route), `backend/modules/family/handlers.ts` (remove old `invite`), `infra` public route, tests
 - [ ] **Step 1: Failing tests** (`accept.test.ts`, pure with an injected provisioner + in-memory data): accept a `student` code → provisions role `student` + `custom:studentId`, writes a `FamilyMember{relationship,studentId,userId:loginName}`, sets `Student.loginUserId`, marks invite accepted; body cannot override role/studentId/tenant; a second accept of the same code REJECTS (atomic claim); expired/revoked/unknown → error. `coparent`→role parent, `viewer`→role member (no studentId).
-- [ ] **Step 2:** `acceptFamilyInvite(deps, { code, loginName, password, displayName? })`: `familyInvites.get(code)` → validate pending + not expired → `claim(code)` (atomic; on ConditionFailed → 409/validation) → derive `role` from `kind` (`coparent→parent, viewer→member, student→student`) → `runWithTenant(invite.tenantId, ...)`: for student re-check `students.get(invite.studentId).loginUserId` empty; `provisionFromInvite({loginName,password,tenantId:invite.tenantId,role,studentId:invite.studentId})`; `members.put({userId:loginName, relationship:invite.relationship ?? (kind==='student'?'child':'other'), accessLevel: kind==='viewer'?'viewer':'manager', studentId: kind==='student'?invite.studentId:undefined, status:'active', invitedBy: invite.invitedBy})`; if student `students.update(invite.studentId,{loginUserId:loginName})`. Wire the PUBLIC route on `backend/lambda/redeem.ts` (dispatch on `event.rawPath` like `/auth/signup`): `POST /family/invites/accept` body `{code, loginName, password, displayName?}`. **Remove** the old `POST /family/members` email invite handler + `cognitoFamilyInviter` email path + its email code; migrate/replace its tests (the member CRUD update/remove/list stay). Add the public route to the infra api-stack routes (unauthenticated, like `/redeem`).
+- [ ] **Step 2:** `acceptFamilyInvite(deps, { code, loginName, password, displayName? })`:
+  1. `familyInvites.get(code)` → validate pending + not expired (else error).
+  2. `claim(code)` (atomic pending→accepted; on ConditionFailed → 409 "already used").
+  3. derive `role` from `kind` (`coparent→parent, viewer→member, student→student`).
+  4. `runWithTenant(invite.tenantId, ...)`: for student re-check `students.get(invite.studentId).loginUserId` is empty.
+  5. **provision — with rollback-on-failure so a routine "login name taken" doesn't burn the code:**
+```typescript
+try {
+  await provisionFromInvite({ loginName, password, tenantId: invite.tenantId, role, studentId: invite.studentId });
+} catch (err) {
+  // Un-claim so the invitee can retry with a different name (single-provision is still guaranteed:
+  // only one caller holds the claim at a time; on failure we release it).
+  await familyInvites.update(code, { status: 'pending' }).catch(() => {});
+  throw err; // e.g. LoginNameTakenError → surfaced to the JoinFamilyPage for retry
+}
+```
+  6. `members.put({ userId: loginName, ...(displayName?{displayName}:{}) , relationship: invite.relationship ?? (kind==='student'?'child':'other'), accessLevel: kind==='viewer'?'viewer':'manager', ...(kind==='student'?{studentId: invite.studentId}:{}), status:'active', invitedBy: invite.invitedBy })` (NOTE: no `email` — it's optional now).
+  7. if student: `students.update(invite.studentId, { loginUserId: loginName })`.
+- **Member update/remove must address Cognito by `userId`, not `email`** (code-invited members have no email; `userId` has always been the Cognito username). In `family/handlers.ts` change `inviter.setRole({email: existing.email,…})` → `{ username: existing.userId, … }` and `inviter.removeMember({email: existing.email})` → `{ username: existing.userId }` (rename the seam param `email`→`username`). Fold into this task.
+- Wire the PUBLIC route on `backend/lambda/redeem.ts` (dispatch on `event.rawPath` like `/auth/signup`): `POST /family/invites/accept` body `{code, loginName, password, displayName?}`. Add it to the infra unauthenticated route list exactly like `/auth/redeem`+`/auth/signup` (`api-stack.ts:228-237`, no authorizer).
+- **Remove ONLY the old email `inviteMember` path**: delete the `POST /family/members` `invite` handler, and in `cognito-provisioner.ts` delete `cognitoFamilyInviter.inviteMember` + the temp-password + the SES email in the handler. **KEEP `setRole` + `removeMember`** (the retained member update/remove handlers use them). Migrate/replace the invite tests; member list/update/remove stay.
 - [ ] **Step 3:** Green (backend `tsc` + module tests + `check:routes`). Commit: `feat(family): public accept-invite (provision role from code) + drop email member-invite`
 
 ---
@@ -118,7 +138,7 @@ export interface FamilyInvite extends Timestamped {
 
 ### Task E2: Public JoinFamilyPage
 **Files:** new `frontend/src/shared/shell/JoinFamilyPage.tsx` + AuthGate route `/join-family`, test
-- [ ] Mirror `JoinPage.tsx`: read `?code=`, form `{loginName, password, displayName?}` → `POST /family/invites/accept` → on success auto sign-in (`startSignIn(loginName, password)`) and reload into the app (student → their dashboard; adult → family). Handle "login name taken" (retry) + invalid/expired code. Route it in `AuthGate` like `/join`. Commit: `feat(shell): public JoinFamilyPage (/join-family) to accept an invite`
+- [ ] Mirror `JoinPage.tsx`: read `?code=`, form `{loginName, password, displayName?}` → `POST /family/invites/accept` → on success auto sign-in (`startSignIn(loginName, password)`) and reload into the app (student → their dashboard; adult → family). Handle "login name taken" (retry — the accept rolls the code back to pending on that error, so retry works) + invalid/expired/used code. **AuthGate routing gotcha:** `AuthGate.tsx:20` gates `/join` with `startsWith("/join")`, which ALSO matches `/join-family`. Add the `/join-family` branch **BEFORE** the `/join` branch (or make `/join` an exact/`?`-anchored match), or `/join-family` renders the self-signup `JoinPage`. Commit: `feat(shell): public JoinFamilyPage (/join-family) to accept an invite`
 
 ### Task E3: Active-student framing + skip roster fetch for students
 **Files:** `frontend/src/shared/shell/ActiveStudentContext.tsx`, a shared header/badge, tests
