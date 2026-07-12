@@ -13,7 +13,6 @@ const inviter = (): FamilyInviter => (cachedInviter ??= cognitoFamilyInviterFrom
 
 // Lazy facade: the real Cognito inviter (and its USER_POOL_ID read) is built only on first mutation.
 const lazyInviter: FamilyInviter = {
-  inviteMember: (i) => inviter().inviteMember(i),
   setRole: (i) => inviter().setRole(i),
   removeMember: (i) => inviter().removeMember(i),
 };

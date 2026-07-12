@@ -105,47 +105,28 @@ export function cognitoProvisionerFromEnv(
 }
 
 /**
- * Cognito-backed FamilyInviter: add / re-role / remove a member's login within an EXISTING tenant
- * (the family-member management flow). Unlike self-signup, invited members don't choose a password —
- * we create them with a temporary one (the app emails it) and Cognito forces a reset on first sign-in
- * (the NEW_PASSWORD_REQUIRED challenge the SPA already handles). Re-roling updates `custom:role` so the
- * router's manager/viewer enforcement follows the change; removal deletes the account.
+ * Cognito-backed FamilyInviter: re-role / remove an EXISTING member's login within a tenant (the
+ * family-member management flow). New logins are minted by the accept-invite flow (provisionFromInvite),
+ * not here. Members are addressed by `username` (the Cognito username), NOT email — code-invited members
+ * (esp. students) have no email. Re-roling updates `custom:role` so the router's manager/viewer
+ * enforcement follows the change; removal deletes the account.
  */
 export function cognitoFamilyInviter(userPoolId: string, region?: string): FamilyInviter {
   let client: CognitoIdentityProviderClient | undefined;
   const get = (): CognitoIdentityProviderClient =>
     (client ??= new CognitoIdentityProviderClient(region ? { region } : {}));
   return {
-    async inviteMember({ email, tenantId, role, temporaryPassword }) {
-      try {
-        await get().send(
-          new AdminCreateUserCommand({
-            UserPoolId: userPoolId,
-            Username: email,
-            MessageAction: 'SUPPRESS', // the app emails the credentials itself
-            TemporaryPassword: temporaryPassword,
-            UserAttributes: [
-              { Name: 'custom:role', Value: role },
-              { Name: 'custom:tenantId', Value: tenantId },
-            ],
-          }),
-        );
-      } catch (err) {
-        if (err instanceof UsernameExistsException) throw new EmailTakenError();
-        throw err;
-      }
-    },
-    async setRole({ email, role }) {
+    async setRole({ username, role }) {
       await get().send(
         new AdminUpdateUserAttributesCommand({
           UserPoolId: userPoolId,
-          Username: email,
+          Username: username,
           UserAttributes: [{ Name: 'custom:role', Value: role }],
         }),
       );
     },
-    async removeMember({ email }) {
-      await get().send(new AdminDeleteUserCommand({ UserPoolId: userPoolId, Username: email }));
+    async removeMember({ username }) {
+      await get().send(new AdminDeleteUserCommand({ UserPoolId: userPoolId, Username: username }));
     },
   };
 }

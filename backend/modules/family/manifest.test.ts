@@ -4,7 +4,7 @@ import { buildRoutes, makeHandlers, type FamilyInviter } from './handlers.js';
 import { routes as manifestRoutes } from './routes.manifest.js';
 
 const sig = (r: { method: string; path: string }): string => `${r.method} ${r.path}`;
-const noopInviter: FamilyInviter = { inviteMember: async () => {}, setRole: async () => {}, removeMember: async () => {} };
+const noopInviter: FamilyInviter = { setRole: async () => {}, removeMember: async () => {} };
 const built = () => buildRoutes(makeHandlers({ getData: () => ({}) as Data, inviter: noopInviter }));
 
 describe('family routes.manifest ↔ buildRoutes', () => {

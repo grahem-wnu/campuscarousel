@@ -15,15 +15,6 @@ const relationship = z.enum([
 
 const accessLevel = z.enum(['manager', 'viewer']);
 
-export const inviteMemberSchema = z
-  .object({
-    email: z.string().email().max(320),
-    displayName: z.string().max(120).optional(),
-    relationship,
-    accessLevel,
-  })
-  .strict();
-
 export const updateMemberSchema = z
   .object({
     displayName: z.string().max(120).optional(),
@@ -54,3 +45,14 @@ export const createFamilyInviteSchema = z
   });
 
 export const familyInviteParamSchema = z.object({ code: z.string().min(1).max(64) }).strict();
+
+// PUBLIC accept-invite body. ONLY these four fields — role, studentId, and tenant are derived server-side
+// from the stored invite, never from the request (see modules/family/accept.ts).
+export const acceptFamilyInviteSchema = z
+  .object({
+    code: z.string().min(1).max(64),
+    loginName: z.string().min(1).max(128),
+    password: z.string().min(8).max(256),
+    displayName: z.string().max(120).optional(),
+  })
+  .strict();

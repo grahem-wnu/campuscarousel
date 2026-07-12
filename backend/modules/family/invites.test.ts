@@ -21,7 +21,7 @@ const parent = { 'cognito:username': 'kate', 'custom:role': 'parent', 'custom:te
 const viewer = { 'cognito:username': 'grandma', 'custom:role': 'member', 'custom:tenantId': 'fam1' };
 const student = { 'cognito:username': 'keira', 'custom:role': 'student', 'custom:tenantId': 'fam1', 'custom:studentId': 'stu-1' };
 
-const noopInviter: FamilyInviter = { inviteMember: async () => {}, setRole: async () => {}, removeMember: async () => {} };
+const noopInviter: FamilyInviter = { setRole: async () => {}, removeMember: async () => {} };
 
 function harness() {
   const data: Data = makeData(new InMemoryTableClient());
