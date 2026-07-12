@@ -110,6 +110,12 @@ export function makeHandlers(deps: FamilyDeps): FamilyHandlers {
         const child = await getData().students.get(input.studentId!);
         if (!child) throw Errors.notFound('Student not found');
         if (child.loginUserId) throw Errors.conflict('That child already has a login.');
+        // Dedupe: one live student invite per child — narrows the concurrent-accept race window (accept
+        // still enforces one-login-per-child atomically via students.linkLogin).
+        const invites = await getData().familyInvites.listForTenant(tenantId);
+        if (invites.some((i) => i.status === 'pending' && i.kind === 'student' && i.studentId === input.studentId)) {
+          throw Errors.conflict('There is already a pending login invite for this child.');
+        }
       }
       const code = genCode();
       const invite = await getData().familyInvites.create({

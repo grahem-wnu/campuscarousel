@@ -11,18 +11,24 @@ import { acceptFamilyInvite } from './accept.js';
 
 let data: Data;
 let provisioned: Array<{ loginName: string; password: string; tenantId: string; role: string; studentId?: string }>;
+let removed: string[];
 let failNext: boolean;
 let provisioner: InviteProvisioner;
+
+/** The set of logins that currently "exist" in the fake Cognito (created minus deleted). */
+const liveLogins = () => provisioned.map((p) => p.loginName).filter((n) => !removed.includes(n));
 
 beforeEach(() => {
   data = makeData(new InMemoryTableClient());
   provisioned = [];
+  removed = [];
   failNext = false;
   provisioner = {
     provisionFromInvite: async (i) => {
       if (failNext) throw new Error('login name taken');
       provisioned.push(i);
     },
+    removeLogin: async ({ username }) => void removed.push(username),
   };
 });
 
@@ -103,6 +109,47 @@ describe('acceptFamilyInvite — provision failure rollback', () => {
     expect(res).toMatchObject({ role: 'parent', loginName: 'dad' });
     expect((await data.familyInvites.get('JOIN1'))!.status).toBe('accepted');
     expect(await getMember('dad')).toMatchObject({ relationship: 'parent', accessLevel: 'manager' });
+  });
+});
+
+describe('acceptFamilyInvite — one login per child + orphan cleanup', () => {
+  it('two concurrent accepts for the same child yield exactly ONE login (loser 409s, no orphan)', async () => {
+    const stu = await runWithTenant('fam1', () => data.students.create({ name: 'Keira', status: 'active' } as never));
+    await seedInvite({ code: 'CODE_A', studentId: stu.studentId });
+    await seedInvite({ code: 'CODE_B', studentId: stu.studentId });
+
+    const results = await Promise.allSettled([
+      acceptFamilyInvite({ data, provisioner }, { code: 'CODE_A', loginName: 'keira-a', password: 'Password123!' }),
+      acceptFamilyInvite({ data, provisioner }, { code: 'CODE_B', loginName: 'keira-b', password: 'Password123!' }),
+    ]);
+    const fulfilled = results.filter((r) => r.status === 'fulfilled') as PromiseFulfilledResult<{ loginName: string }>[];
+    const rejected = results.filter((r) => r.status === 'rejected') as PromiseRejectedResult[];
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+    expect(rejected[0]!.reason).toMatchObject({ status: 409 });
+
+    // Exactly one Cognito login survives (a loser that provisioned then lost the link race was deleted).
+    const winner = fulfilled[0]!.value.loginName;
+    expect(liveLogins()).toEqual([winner]);
+    expect((await getStudent(stu.studentId))!.loginUserId).toBe(winner);
+    expect(await getMember(winner)).toBeTruthy();
+  });
+
+  it('deletes the Cognito login + rolls the code back to pending if a post-provision write fails', async () => {
+    await seedInvite({ kind: 'coparent', relationship: 'parent', studentId: undefined });
+    const origPut = data.members.put;
+    data.members.put = (async () => {
+      throw new Error('member write failed');
+    }) as typeof data.members.put;
+
+    await expect(
+      acceptFamilyInvite({ data, provisioner }, { code: 'JOIN1', loginName: 'dad', password: 'Password123!' }),
+    ).rejects.toThrow('member write failed');
+
+    data.members.put = origPut;
+    expect(removed).toContain('dad'); // orphan login cleaned up
+    expect(liveLogins()).toHaveLength(0);
+    expect((await data.familyInvites.get('JOIN1'))!.status).toBe('pending'); // code retryable
   });
 });
 

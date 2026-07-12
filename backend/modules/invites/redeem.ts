@@ -29,6 +29,9 @@ export interface InviteProvisioner {
     role: Role;
     studentId?: string;
   }): Promise<void>;
+  /** Delete a login created by `provisionFromInvite`. Used to clean up when a post-provision step of the
+   *  accept flow fails, so no orphan (unmanageable) Cognito login is ever left behind. */
+  removeLogin(input: { username: string }): Promise<void>;
 }
 
 export interface RedeemDeps {

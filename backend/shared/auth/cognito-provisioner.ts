@@ -93,6 +93,11 @@ export function cognitoProvisioner(
         }),
       );
     },
+    // Delete a login provisioned above — cleanup when a post-provision accept step fails, so no orphan
+    // login is left behind.
+    async removeLogin({ username }) {
+      await get().send(new AdminDeleteUserCommand({ UserPoolId: userPoolId, Username: username }));
+    },
   };
 }
 

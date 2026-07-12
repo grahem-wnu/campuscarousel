@@ -598,19 +598,24 @@ export interface StudentRepo {
     studentId: string,
     patch: Partial<Omit<Student, 'studentId' | 'createdAt' | 'updatedAt'>>,
   ): Promise<Student>;
+  /** Atomically bind a login to this child — ONLY if it has none yet. Guards against a concurrent
+   *  second student-invite accept attaching a second login to the same child: the loser gets a
+   *  `ConditionFailedError`. Throws `NotFoundError` if the roster row is gone. */
+  linkLogin(studentId: string, loginUserId: string): Promise<Student>;
   delete(studentId: string): Promise<void>;
   list(): Promise<Student[]>;
 }
 
 export function makeStudents(client: TableClient): StudentRepo {
+  const storeItem = (domain: Student): StoredItem => ({
+    ...(domain as unknown as Record<string, unknown>),
+    PK: `STUDENT#${domain.studentId}`,
+    SK: SK_DETAILS,
+    GSI1PK: 'STUDENTS',
+    GSI1SK: dateSortKey(domain.createdAt, domain.studentId),
+  });
   const write = async (domain: Student): Promise<Student> => {
-    await client.put({
-      ...(domain as unknown as Record<string, unknown>),
-      PK: `STUDENT#${domain.studentId}`,
-      SK: SK_DETAILS,
-      GSI1PK: 'STUDENTS',
-      GSI1SK: dateSortKey(domain.createdAt, domain.studentId),
-    });
+    await client.put(storeItem(domain));
     return domain;
   };
   return {
@@ -627,6 +632,15 @@ export function makeStudents(client: TableClient): StudentRepo {
       if (!existing) throw new NotFoundError('STUDENT', studentId);
       const current = toDomain<Student>(existing);
       return write({ ...current, ...patch, studentId, createdAt: current.createdAt, updatedAt: isoNow() });
+    },
+    async linkLogin(studentId, loginUserId) {
+      const existing = await client.get(`STUDENT#${studentId}`, SK_DETAILS);
+      if (!existing) throw new NotFoundError('STUDENT', studentId);
+      const current = toDomain<Student>(existing);
+      const next: Student = { ...current, loginUserId, updatedAt: isoNow() };
+      // Conditional on `loginUserId` being absent → single login per child even under concurrent accepts.
+      await client.putIf(storeItem(next), { attr: 'loginUserId', notExists: true });
+      return next;
     },
     async delete(studentId) {
       await client.delete(`STUDENT#${studentId}`, SK_DETAILS);

@@ -55,6 +55,13 @@ describe('POST /family/invites', () => {
     expect((await dispatch(event('POST', '/family/invites', parent, { kind: 'student', studentId: stu.studentId }))).statusCode).toBe(409);
   });
 
+  it('rejects a second PENDING student invite for the same child (dedupe, 409)', async () => {
+    const { dispatch, seedStudent } = harness();
+    const stu = await seedStudent();
+    expect((await dispatch(event('POST', '/family/invites', parent, { kind: 'student', studentId: stu.studentId }))).statusCode).toBe(201);
+    expect((await dispatch(event('POST', '/family/invites', parent, { kind: 'student', studentId: stu.studentId }))).statusCode).toBe(409);
+  });
+
   it('creates a co-parent invite (needs a relationship)', async () => {
     const { dispatch } = harness();
     const res = await dispatch(event('POST', '/family/invites', parent, { kind: 'coparent', relationship: 'parent' }));

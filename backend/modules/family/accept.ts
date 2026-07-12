@@ -8,6 +8,9 @@
 //   • on a provision failure (e.g. the chosen login name is taken) we roll the claim back to `pending`
 //     (best-effort) and rethrow, so a routine, recoverable failure lets the invitee retry without burning
 //     the code. Single-provision still holds: only one caller ever holds the claim at a time.
+//   • one login per child: the student link is a CONDITIONAL put (guarded on loginUserId absent), so two
+//     live student codes for the same child, redeemed concurrently, yield exactly one login (the loser
+//     409s). Any post-provision failure DELETES the just-created login so no orphan is ever left behind.
 
 import { Errors } from '../../shared/api/index.js';
 import type { Data, FamilyInvite, MemberRelationship } from '../../shared/data/index.js';
@@ -89,7 +92,7 @@ export async function acceptFamilyInvite(deps: AcceptDeps, input: AcceptInput): 
       }
     }
 
-    // 4. Provision the login. On failure, un-claim so the code can be retried, then rethrow.
+    // 4. Provision the login. Nothing exists yet, so on failure just un-claim (code retryable), rethrow.
     try {
       await provisioner.provisionFromInvite({
         loginName: input.loginName,
@@ -103,22 +106,41 @@ export async function acceptFamilyInvite(deps: AcceptDeps, input: AcceptInput): 
       throw err; // e.g. LoginNameTakenError → surfaced to the JoinFamilyPage for retry
     }
 
-    // 5. Record the family membership (no email — a code-invited member may not have one).
-    const relationship: MemberRelationship =
-      invite.relationship ?? (invite.kind === 'student' ? 'child' : 'other');
-    await data.members.put({
-      userId: input.loginName,
-      ...(input.displayName ? { displayName: input.displayName } : {}),
-      relationship,
-      accessLevel: invite.kind === 'viewer' ? 'viewer' : 'manager',
-      ...(invite.kind === 'student' ? { studentId: invite.studentId } : {}),
-      status: 'active',
-      invitedBy: invite.invitedBy,
-    });
+    // 5. A REAL Cognito login now exists. Every step below is orphan-proofed: on ANY failure we DELETE
+    //    that login and un-claim the code, so we never leave an unmanageable login and the code stays
+    //    retryable. This also covers the concurrent-student lost race in 5a.
+    try {
+      // 5a. Student: atomically LINK the child BEFORE writing the member — the conditional put (guarded
+      //     on loginUserId absent) is what makes "one login per child" hold under concurrent accepts.
+      //     A lost race throws ConditionFailedError → 409 (and the catch below deletes this login).
+      if (invite.kind === 'student') {
+        try {
+          await data.students.linkLogin(invite.studentId!, input.loginName);
+        } catch (err) {
+          if (err instanceof ConditionFailedError) {
+            throw Errors.conflict('This child has already been set up with a login.');
+          }
+          throw err;
+        }
+      }
 
-    // 6. Link the login to the roster child.
-    if (invite.kind === 'student') {
-      await data.students.update(invite.studentId!, { loginUserId: input.loginName });
+      // 5b. Record the family membership (no email — a code-invited member may not have one).
+      const relationship: MemberRelationship =
+        invite.relationship ?? (invite.kind === 'student' ? 'child' : 'other');
+      await data.members.put({
+        userId: input.loginName,
+        ...(input.displayName ? { displayName: input.displayName } : {}),
+        relationship,
+        accessLevel: invite.kind === 'viewer' ? 'viewer' : 'manager',
+        ...(invite.kind === 'student' ? { studentId: invite.studentId } : {}),
+        status: 'active',
+        invitedBy: invite.invitedBy,
+      });
+    } catch (err) {
+      // Orphan cleanup: remove the just-created login + release the code, then surface the error.
+      await provisioner.removeLogin({ username: input.loginName }).catch(() => {});
+      await unclaim();
+      throw err;
     }
 
     return { tenantId, role, loginName: input.loginName };
