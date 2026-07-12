@@ -69,7 +69,8 @@ export function makeHandlers(deps: FamilyDeps): FamilyHandlers {
   const now = deps.now ?? (() => new Date());
 
   return {
-    // GET /family/members — anyone in the family can see who has access.
+    // GET /family/members — any ADULT family role can see who has access. A `student` login is blocked
+    // (route-level roles guard) so a pinned student can't enumerate siblings or read adult emails.
     list: async () => ({ status: 200, body: { members: await getData().members.list() } }),
 
     // PATCH /family/members/:userId — change relationship / access level (admin/parent only).
@@ -152,7 +153,7 @@ export function makeHandlers(deps: FamilyDeps): FamilyHandlers {
 /** Single source of truth for the route table. */
 export function buildRoutes(h: FamilyHandlers) {
   return [
-    { method: 'GET' as const, path: '/family/members', handler: h.list },
+    { method: 'GET' as const, path: '/family/members', handler: h.list, roles: ['admin', 'parent', 'member'] as Role[] },
     { method: 'PATCH' as const, path: '/family/members/:userId', handler: h.update },
     { method: 'DELETE' as const, path: '/family/members/:userId', handler: h.remove },
     { method: 'POST' as const, path: '/family/invites', handler: h.createInvite, roles: ['admin', 'parent'] as Role[] },

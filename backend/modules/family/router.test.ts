@@ -20,6 +20,7 @@ function event(method: string, path: string, claims?: Record<string, unknown>, b
 const parse = (res: { body: string }) => JSON.parse(res.body) as Record<string, unknown>;
 const parent = { 'cognito:username': 'kate', 'custom:role': 'parent', 'custom:tenantId': 'fam1' };
 const member = { 'cognito:username': 'grandma', 'custom:role': 'member', 'custom:tenantId': 'fam1' };
+const student = { 'cognito:username': 'keira', 'custom:role': 'student', 'custom:tenantId': 'fam1', 'custom:studentId': 's1' };
 
 function harness() {
   const data: Data = makeData(new InMemoryTableClient());
@@ -45,11 +46,17 @@ describe('roleForAccess', () => {
 });
 
 describe('family members router integration', () => {
-  it('lists members for any family role, including a view-only member', async () => {
+  it('lists members for any ADULT family role, including a view-only member', async () => {
     const { dispatch, seedMember } = harness();
     await seedMember({ userId: 'unc', relationship: 'aunt-uncle', accessLevel: 'manager' });
     const asMember = await dispatch(event('GET', '/family/members', member));
     expect((parse(asMember).members as unknown[]).length).toBe(1);
+  });
+
+  it('a student cannot enumerate the family roster / adult emails (403)', async () => {
+    const { dispatch, seedMember } = harness();
+    await seedMember({ userId: 'unc', relationship: 'aunt-uncle', accessLevel: 'manager' });
+    expect((await dispatch(event('GET', '/family/members', student))).statusCode).toBe(403);
   });
 
   it('re-roling a viewer to manager updates their login role by username', async () => {
