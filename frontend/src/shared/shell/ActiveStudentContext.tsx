@@ -95,6 +95,12 @@ export function ActiveStudentProvider({ children }: { children: ReactNode }) {
       setReady(status === "unauthenticated"); // don't block the login screen
       return;
     }
+    // Wait until the user (and its role) is resolved before deciding — otherwise a student login
+    // briefly reads as non-student and fires the /students fetch we mean to skip for them.
+    if (!user) {
+      setReady(false);
+      return;
+    }
     // Student login: skip the roster fetch entirely. Present a single synthetic "self" entry (labeled
     // with their own login name) so child-scoped UI renders and the switcher stays hidden. The actual
     // data scoping is enforced by the backend off the JWT, so the sentinel id is only a UI handle.
