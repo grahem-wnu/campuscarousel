@@ -72,6 +72,11 @@ export class AuthStack extends Stack {
         role: new StringAttribute({ minLen: 1, maxLen: 16, mutable: true }),
         tenantId: new StringAttribute({ mutable: true }),
         platformAdmin: new StringAttribute({ mutable: true }),
+        // Binds a student login to its own roster entry (the router pins the student to this id).
+        // Added out-of-band via add-custom-attributes on the existing pools (CFN can't add to an
+        // existing pool); declared here so IaC matches + a fresh pool gets it. Deploys as a no-op
+        // on existing pools (same as tenantId/platformAdmin).
+        studentId: new StringAttribute({ mutable: true }),
       },
       // Private 3-person family app — minimal password policy (Grahem's call). Cognito's floor
       // is 6 chars and length can't be disabled; all character-class requirements are off.
