@@ -5,6 +5,7 @@
 // the entry. If you add a module, run the build (or `gen:manifests`) to refresh this list.
 import type { RouteManifest } from '../../shared/api/index.js';
 import { routes as activityJournalRoutes } from '../../modules/activity-journal/routes.manifest.js';
+import { routes as adminUsageRoutes } from '../../modules/admin-usage/routes.manifest.js';
 import { routes as aiAssistantRoutes } from '../../modules/ai-assistant/routes.manifest.js';
 import { routes as applicationCentralRoutes } from '../../modules/application-central/routes.manifest.js';
 import { routes as campusVisitPlannerRoutes } from '../../modules/campus-visit-planner/routes.manifest.js';
@@ -35,6 +36,7 @@ import { routes as studentsRoutes } from '../../modules/students/routes.manifest
 
 export const manifests: RouteManifest[] = [
   { routes: activityJournalRoutes },
+  { routes: adminUsageRoutes },
   { routes: aiAssistantRoutes },
   { routes: applicationCentralRoutes },
   { routes: campusVisitPlannerRoutes },
