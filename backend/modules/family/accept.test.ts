@@ -153,6 +153,36 @@ describe('acceptFamilyInvite — one login per child + orphan cleanup', () => {
     expect(liveLogins()).toHaveLength(0);
     expect((await data.familyInvites.get('JOIN1'))!.status).toBe('pending'); // code retryable
   });
+
+  it('unlinks the child if a post-LINK write fails — the child is NOT bricked (a fresh code succeeds)', async () => {
+    const stu = await runWithTenant('fam1', () => data.students.create({ name: 'Keira', status: 'active' } as never));
+    await seedInvite({ code: 'CODE_1', studentId: stu.studentId });
+
+    // members.put throws AFTER the student was linked (5a) — the partial-failure that bricked staging.
+    const origPut = data.members.put;
+    data.members.put = (async () => {
+      throw new Error('member write failed');
+    }) as typeof data.members.put;
+
+    await expect(
+      acceptFamilyInvite({ data, provisioner }, { code: 'CODE_1', loginName: 'keira-1', password: 'Password123!' }),
+    ).rejects.toThrow('member write failed');
+    data.members.put = origPut;
+
+    // (a) the Cognito login was removed, (b) Student.loginUserId cleared, (c) invite back to pending.
+    expect(removed).toContain('keira-1');
+    expect(liveLogins()).toHaveLength(0);
+    expect((await getStudent(stu.studentId))!.loginUserId).toBeUndefined();
+    expect((await data.familyInvites.get('CODE_1'))!.status).toBe('pending');
+
+    // The child is NOT bricked: a subsequent accept with a fresh code links a real login.
+    await seedInvite({ code: 'CODE_2', studentId: stu.studentId });
+    const res = await acceptFamilyInvite({ data, provisioner }, { code: 'CODE_2', loginName: 'keira-2', password: 'Password123!' });
+    expect(res).toMatchObject({ role: 'student', loginName: 'keira-2' });
+    expect((await getStudent(stu.studentId))!.loginUserId).toBe('keira-2');
+    expect(liveLogins()).toEqual(['keira-2']);
+    expect(await getMember('keira-2')).toBeTruthy();
+  });
 });
 
 describe('acceptFamilyInvite — kinds + validation', () => {

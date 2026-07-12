@@ -109,6 +109,7 @@ export async function acceptFamilyInvite(deps: AcceptDeps, input: AcceptInput): 
     // 5. A REAL Cognito login now exists. Every step below is orphan-proofed: on ANY failure we DELETE
     //    that login and un-claim the code, so we never leave an unmanageable login and the code stays
     //    retryable. This also covers the concurrent-student lost race in 5a.
+    let linked = false;
     try {
       // 5a. Student: atomically LINK the child BEFORE writing the member — the conditional put (guarded
       //     on loginUserId absent) is what makes "one login per child" hold under concurrent accepts.
@@ -116,6 +117,7 @@ export async function acceptFamilyInvite(deps: AcceptDeps, input: AcceptInput): 
       if (invite.kind === 'student') {
         try {
           await data.students.linkLogin(invite.studentId!, input.loginName);
+          linked = true;
         } catch (err) {
           if (err instanceof ConditionFailedError) {
             throw Errors.conflict('This child has already been set up with a login.');
@@ -140,8 +142,14 @@ export async function acceptFamilyInvite(deps: AcceptDeps, input: AcceptInput): 
         invitedBy: invite.invitedBy,
       });
     } catch (err) {
-      // Orphan cleanup: remove the just-created login + release the code, then surface the error.
+      // Orphan cleanup (all best-effort): remove the just-created login, UNLINK the child if we linked it
+      // in 5a — otherwise Student.loginUserId would point at a now-deleted login and every future accept
+      // would 409 ("already has a login"), permanently bricking the child — then release the code, and
+      // surface the error. Unlink is guarded on loginUserId===this login so a concurrent winner is safe.
       await provisioner.removeLogin({ username: input.loginName }).catch(() => {});
+      if (linked) {
+        await data.students.unlinkLogin(invite.studentId!, input.loginName).catch(() => {});
+      }
       await unclaim();
       throw err;
     }
