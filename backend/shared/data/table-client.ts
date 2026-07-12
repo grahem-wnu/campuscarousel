@@ -23,6 +23,22 @@ export interface StoredItem {
   [attr: string]: unknown;
 }
 
+/** A single guard for a conditional write: require `attr` to be absent, or equal `equals`. */
+export interface PutCondition {
+  attr: string;
+  equals?: unknown;
+  notExists?: boolean;
+}
+
+/** Thrown by `putIf` when the guard fails (e.g. a second single-use claim). Typed so callers can
+ *  distinguish "someone beat me to it" from a genuine I/O error. */
+export class ConditionFailedError extends Error {
+  constructor(message = 'Conditional write failed') {
+    super(message);
+    this.name = 'ConditionFailedError';
+  }
+}
+
 export interface QueryOptions {
   /** begins_with on the (base-table or index) sort key. */
   skBeginsWith?: string;
@@ -36,6 +52,9 @@ export interface QueryOptions {
 
 export interface TableClient {
   put(item: StoredItem): Promise<void>;
+  /** Conditional single-use write: put `item` only if `condition` holds (attribute absent, or
+   *  equal to `condition.equals`). Throws `ConditionFailedError` if the guard fails. */
+  putIf(item: StoredItem, condition: PutCondition): Promise<void>;
   get(pk: string, sk: string): Promise<StoredItem | null>;
   delete(pk: string, sk: string): Promise<void>;
   /** Query the base table partition `pk`. */
@@ -80,6 +99,32 @@ export class DynamoTableClient implements TableClient {
 
   async put(item: StoredItem): Promise<void> {
     await this.doc.send(new PutCommand({ TableName: this.tableName, Item: item }));
+  }
+
+  async putIf(item: StoredItem, condition: PutCondition): Promise<void> {
+    const names: Record<string, string> = { '#a': condition.attr };
+    const values: Record<string, unknown> = {};
+    let expr = 'attribute_not_exists(#a)';
+    if (!condition.notExists) {
+      expr = 'attribute_not_exists(#a) OR #a = :v';
+      values[':v'] = condition.equals;
+    }
+    try {
+      await this.doc.send(
+        new PutCommand({
+          TableName: this.tableName,
+          Item: item,
+          ConditionExpression: expr,
+          ExpressionAttributeNames: names,
+          ExpressionAttributeValues: Object.keys(values).length ? values : undefined,
+        }),
+      );
+    } catch (err) {
+      if ((err as { name?: string }).name === 'ConditionalCheckFailedException') {
+        throw new ConditionFailedError();
+      }
+      throw err;
+    }
   }
 
   async get(pk: string, sk: string): Promise<StoredItem | null> {
