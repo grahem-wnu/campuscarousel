@@ -6,12 +6,29 @@
 
 import { Errors } from '../../shared/api/index.js';
 import { newId, type Data } from '../../shared/data/index.js';
+import type { Role } from '../../shared/auth/index.js';
 import { inviteRedeemError } from './logic.js';
 
 export interface TenantProvisioner {
   /** Create the parent's auth account bound to the tenant (production: Cognito adminCreateUser +
    *  adminSetUserPassword with custom:tenantId + custom:role=parent). */
   createParentUser(input: { email: string; password: string; tenantId: string }): Promise<void>;
+}
+
+/**
+ * Seam for provisioning a login when someone accepts a shareable FAMILY invite (co-parent, viewer, or
+ * student) into an EXISTING tenant. Production: Cognito adminCreateUser + adminSetUserPassword stamping
+ * custom:role + custom:tenantId (+ custom:studentId for a student). A duplicate login name surfaces as
+ * `LoginNameTakenError` so the invitee can retry with a different name (the invite is un-claimed).
+ */
+export interface InviteProvisioner {
+  provisionFromInvite(input: {
+    loginName: string;
+    password: string;
+    tenantId: string;
+    role: Role;
+    studentId?: string;
+  }): Promise<void>;
 }
 
 export interface RedeemDeps {
