@@ -9,9 +9,17 @@ export interface BedrockSend {
   send(command: unknown): Promise<{ body?: Uint8Array }>;
 }
 
+export interface ChatTurn {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
 export interface InvokeMessagesParams {
   feature: string;
-  prompt: string;
+  /** Single-turn user prompt. Ignored when `messages` is provided. */
+  prompt?: string;
+  /** Full multi-turn conversation. Takes precedence over `prompt` when set. */
+  messages?: ChatTurn[];
   system?: string;
   maxTokens?: number;
   temperature?: number;
@@ -39,10 +47,11 @@ export async function invokeMessages(params: InvokeMessagesParams): Promise<stri
     client = cachedClient ??= new BedrockRuntimeClient({}) as unknown as BedrockSend;
   }
 
+  const messages = params.messages ?? [{ role: 'user', content: params.prompt ?? '' }];
   const body: Record<string, unknown> = {
     anthropic_version: 'bedrock-2023-05-31',
     max_tokens: params.maxTokens ?? 1500,
-    messages: [{ role: 'user', content: params.prompt }],
+    messages,
   };
   if (params.temperature !== undefined) body.temperature = params.temperature;
   if (params.system) body.system = params.system;
