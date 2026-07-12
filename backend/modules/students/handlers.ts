@@ -24,9 +24,16 @@ const requireGuardian = requireRole('admin', 'parent');
 export function makeHandlers(deps: StudentDeps): StudentHandlers {
   const { getData } = deps;
   return {
-    // GET /students — the family roster, oldest first (stable switcher order).
-    list: async () => {
-      return { status: 200, body: { students: await getData().students.list() } };
+    // GET /students — the family roster, oldest first (stable switcher order). Adults (admin/parent/
+    // member) get the whole roster for the student switcher; a `student` login is CONFINED to their
+    // own row (filtered by their pinned JWT studentId) so it can't enumerate siblings.
+    list: async (ctx) => {
+      const all = await getData().students.list();
+      const students =
+        ctx.requester.role === 'student'
+          ? all.filter((s) => s.studentId === ctx.requester.studentId)
+          : all;
+      return { status: 200, body: { students } };
     },
 
     // POST /students — add a child to the family.

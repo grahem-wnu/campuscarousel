@@ -10,6 +10,7 @@ vi.mock('./AuthContext', () => ({
   useAuth: () => ({ status: h.status, refresh: vi.fn(), user: null }),
 }));
 vi.mock('./JoinPage', () => ({ JoinPage: () => <p>join page</p> }));
+vi.mock('./JoinFamilyPage', () => ({ JoinFamilyPage: () => <p>join family page</p> }));
 vi.mock('./SignupPage', () => ({ SignupPage: () => <p>signup page</p> }));
 vi.mock('./LoginPage', () => ({ LoginPage: () => <p>login page</p> }));
 
@@ -55,6 +56,13 @@ describe('AuthGate public routing', () => {
     visit('/join/abc123');
     render(<AuthGate>app</AuthGate>);
     expect(screen.getByText('join page')).toBeInTheDocument();
+  });
+
+  it('routes /join-family to the accept-invite page (NOT shadowed by /join)', () => {
+    visit('/join-family?code=abc123');
+    render(<AuthGate>app</AuthGate>);
+    expect(screen.getByText('join family page')).toBeInTheDocument();
+    expect(screen.queryByText('join page')).not.toBeInTheDocument();
   });
 
   it('renders the app (never the landing page) once signed in', () => {

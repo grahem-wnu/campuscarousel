@@ -354,9 +354,26 @@ function FocusBadge() {
 }
 
 function StudentSwitcher() {
+  const { user } = useAuth();
   const { students, activeStudent, setActiveStudentId } = useActiveStudent();
   const [open, setOpen] = useState(false);
   const selectable = students.filter((s) => s.status === "active");
+
+  // A student login sees only themselves — a fixed, non-interactive identity indicator (no switcher),
+  // so it's always clear whose journey they're in and that they can't switch to a sibling.
+  if (user?.role === "student") {
+    return (
+      <div
+        className="flex items-center gap-1.5 rounded-full border border-surface-border bg-surface-raised py-1 pl-1 pr-3 text-sm font-medium text-ink-700"
+        aria-label={`Signed in as ${activeStudent?.name ?? user?.username ?? "student"}`}
+      >
+        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary-100 text-primary-700">
+          <Icon name="user" size={14} />
+        </span>
+        <span className="max-w-[9rem] truncate">{activeStudent?.name ?? user?.username}</span>
+      </div>
+    );
+  }
 
   // Nothing to switch between → keep the bar clean. The Family page is where you add the first child.
   if (selectable.length < 2) return null;

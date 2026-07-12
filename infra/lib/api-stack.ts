@@ -235,6 +235,14 @@ export class ApiStack extends Stack {
       methods: [HttpMethod.POST],
       integration: publicAuthIntegration,
     });
+    // PUBLIC accept-a-family-invite: the invitee has no account yet (they're creating one via a
+    // shareable code), so like redeem/signup this is unauthenticated. role/studentId/tenant are
+    // derived server-side from the stored invite, never from the request body.
+    api.addRoutes({
+      path: "/family/invites/accept",
+      methods: [HttpMethod.POST],
+      integration: publicAuthIntegration,
+    });
 
     this.httpApiName = `${config.namePrefix}-api`;
     this.apiUrl = api.apiEndpoint;

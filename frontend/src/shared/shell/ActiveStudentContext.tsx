@@ -17,6 +17,8 @@ export interface Student {
   name: string;
   graduationYear?: number;
   status: "active" | "archived";
+  /** Username of the linked student login (set once this child has their own login). */
+  loginUserId?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -66,10 +68,15 @@ function resolveActive(students: Student[], stored: string | null): string | nul
  * AppShell) so each module re-fetches for the newly-selected child without any module-level changes.
  */
 export function ActiveStudentProvider({ children }: { children: ReactNode }) {
-  const { status } = useAuth();
+  const { status, user } = useAuth();
   const [students, setStudents] = useState<Student[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
+
+  // A student login is PINNED to their own journey server-side (the router ignores X-Student-Id for a
+  // student and scopes to their bound studentId). So a student never fetches the family roster — that
+  // would surface siblings — and never gets a switcher; they only ever see themselves.
+  const isStudent = user?.role === "student";
 
   const apply = useCallback((id: string | null) => {
     setActiveId(id);
@@ -88,6 +95,28 @@ export function ActiveStudentProvider({ children }: { children: ReactNode }) {
       setReady(status === "unauthenticated"); // don't block the login screen
       return;
     }
+    // Wait until the user (and its role) is resolved before deciding — otherwise a student login
+    // briefly reads as non-student and fires the /students fetch we mean to skip for them.
+    if (!user) {
+      setReady(false);
+      return;
+    }
+    // Student login: skip the roster fetch entirely. Present a single synthetic "self" entry (labeled
+    // with their own login name) so child-scoped UI renders and the switcher stays hidden. The actual
+    // data scoping is enforced by the backend off the JWT, so the sentinel id is only a UI handle.
+    if (isStudent) {
+      const self: Student = {
+        studentId: "self",
+        name: user?.username ?? "You",
+        status: "active",
+        createdAt: "",
+        updatedAt: "",
+      };
+      setStudents([self]);
+      apply("self");
+      setReady(true);
+      return;
+    }
     let cancelled = false;
     setReady(false);
     void load()
@@ -101,7 +130,7 @@ export function ActiveStudentProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [status, load, apply]);
+  }, [status, isStudent, user?.username, load, apply]);
 
   const setActiveStudentId = useCallback(
     (studentId: string) => {

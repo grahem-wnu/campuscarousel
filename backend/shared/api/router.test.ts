@@ -4,8 +4,18 @@ import { maybeStudentId } from '../tenant/index.js';
 import type { ApiEvent, ApiResponse } from './event.js';
 import type { RouteDef } from './types.js';
 
-const KEIRA = { 'cognito:username': 'keira', 'custom:role': 'student', 'custom:tenantId': 'fam1' };
+// Default caller: a student login pinned to her own roster entry (custom:studentId). The router
+// scopes a student to THIS id and ignores any client-supplied X-Student-Id header (see the
+// student-pinning tests below).
+const KEIRA = {
+  'cognito:username': 'keira',
+  'custom:role': 'student',
+  'custom:tenantId': 'fam1',
+  'custom:studentId': 's-keira',
+};
 const ADMIN = { 'cognito:username': 'grahem', 'custom:role': 'admin', 'custom:tenantId': 'fam1' };
+// An adult caller (parent/manager) — adults may switch the active student via X-Student-Id.
+const PARENT = { 'cognito:username': 'kate', 'custom:role': 'parent', 'custom:tenantId': 'fam1' };
 
 function event(opts: {
   method?: string;
@@ -170,31 +180,55 @@ describe('createRouter', () => {
     spy.mockRestore();
   });
 
-  it('sets the active student from the X-Student-Id header (multi-student)', async () => {
-    const res = parse(await dispatch(event({ path: '/whoami', headers: { 'X-Student-Id': 's-keira' } })));
+  it('lets an adult (parent) set the active student from the X-Student-Id header (multi-student)', async () => {
+    const res = parse(await dispatch(event({ path: '/whoami', claims: PARENT, headers: { 'X-Student-Id': 's-keira' } })));
     expect(res.body).toEqual({ student: 's-keira' });
   });
 
-  it('reads the X-Student-Id header case-insensitively', async () => {
-    const res = parse(await dispatch(event({ path: '/whoami', headers: { 'x-student-id': 's-milo' } })));
+  it('reads the X-Student-Id header case-insensitively (adult caller)', async () => {
+    const res = parse(await dispatch(event({ path: '/whoami', claims: PARENT, headers: { 'x-student-id': 's-milo' } })));
     expect(res.body).toEqual({ student: 's-milo' });
   });
 
-  it('leaves the active student unset when no header and no DEFAULT_STUDENT_ID', async () => {
+  it('leaves the active student unset when an adult sends no header and no DEFAULT_STUDENT_ID', async () => {
     const prev = process.env.DEFAULT_STUDENT_ID;
     delete process.env.DEFAULT_STUDENT_ID;
-    const res = parse(await dispatch(event({ path: '/whoami' })));
+    const res = parse(await dispatch(event({ path: '/whoami', claims: PARENT })));
     expect(res.body).toEqual({ student: null });
     if (prev !== undefined) process.env.DEFAULT_STUDENT_ID = prev;
   });
 
-  it('falls back to DEFAULT_STUDENT_ID when the header is absent (transition compatibility)', async () => {
+  it('falls back to DEFAULT_STUDENT_ID for an adult when the header is absent (transition compatibility)', async () => {
     const prev = process.env.DEFAULT_STUDENT_ID;
     process.env.DEFAULT_STUDENT_ID = 's-default';
-    const res = parse(await dispatch(event({ path: '/whoami' })));
+    const res = parse(await dispatch(event({ path: '/whoami', claims: PARENT })));
     expect(res.body).toEqual({ student: 's-default' });
     if (prev === undefined) delete process.env.DEFAULT_STUDENT_ID;
     else process.env.DEFAULT_STUDENT_ID = prev;
+  });
+
+  // SECURITY: a student login is confined to her OWN roster entry. The router pins the active
+  // student to the requester's custom:studentId and IGNORES the client-supplied X-Student-Id —
+  // this is what stops a student from reading a sibling's data.
+  it('pins a student to their own studentId and ignores a spoofed X-Student-Id header (SECURITY)', async () => {
+    const STUDENT_S1 = {
+      'cognito:username': 'keira',
+      'custom:role': 'student',
+      'custom:tenantId': 'fam1',
+      'custom:studentId': 's1',
+    };
+    const res = parse(
+      await dispatch(event({ path: '/whoami', claims: STUDENT_S1, headers: { 'x-student-id': 's2' } })),
+    );
+    // Runs under s1 (the student's own pinned scope), NOT s2 from the header.
+    expect(res.body).toEqual({ student: 's1' });
+  });
+
+  it('401s a student login that is not bound to a roster entry (no studentId)', async () => {
+    const UNBOUND = { 'cognito:username': 'keira', 'custom:role': 'student', 'custom:tenantId': 'fam1' };
+    const res = parse(await dispatch(event({ path: '/whoami', claims: UNBOUND })));
+    expect(res.status).toBe(401);
+    expect(res.body).toMatchObject({ error: { code: 'unauthorized' } });
   });
 
   it('lets a view-only member read (GET) but refuses any mutation (403)', async () => {

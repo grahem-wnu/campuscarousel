@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Badge, Button, Card, Icon, Spinner, cn } from '../../shared/ui';
+import { useActiveStudent } from '../../shared/shell';
 import { deadlineLabel, deadlineTone, gpaText, money, readinessLabel, READINESS_TONE, SOURCE_ICON, SOURCE_TONE, totalColleges } from './logic';
 import { getDashboard } from './api';
 import type { Dashboard } from './types';
@@ -298,6 +299,7 @@ function Stat({ to, label, value, sub, icon }: { to: string; label: string; valu
 /** Whole-journey dashboard — role-specific, visibility-filtered (a parent never sees keira's private
  *  entries in any widget). */
 export default function DashboardPage() {
+  const { activeStudent } = useActiveStudent();
   const [d, setD] = useState<Dashboard | null>(null);
   const [profile, setProfile] = useState<StudentProfile | null>(null);
   const [colleges, setColleges] = useState<College[] | null>(null);
@@ -393,8 +395,15 @@ export default function DashboardPage() {
   return (
     <div className="mx-auto max-w-5xl space-y-5 p-4 sm:p-6">
       <header>
+        {activeStudent ? (
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-secondary-600">
+            {activeStudent.name}&rsquo;s journey
+          </p>
+        ) : null}
         <h1 className="text-2xl font-bold text-ink-900">Dashboard</h1>
-        <p className="mt-0.5 text-sm text-ink-500">Your whole journey, at a glance.</p>
+        <p className="mt-0.5 text-sm text-ink-500">
+          {activeStudent ? `${activeStudent.name}'s whole journey, at a glance.` : 'Your whole journey, at a glance.'}
+        </p>
       </header>
 
       <SetupProgressBanner />

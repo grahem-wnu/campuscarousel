@@ -7,6 +7,7 @@
 import { SK_DETAILS, dateSortKey, stripInternal } from './keys.js';
 import { NotFoundError, isoNow, newId } from './repo.js';
 import type { ListRange } from './repo.js';
+import { ConditionFailedError } from './table-client.js';
 import type { StoredItem, TableClient } from './table-client.js';
 import type {
   Budget,
@@ -19,6 +20,7 @@ import type {
   BenchmarkSnapshot,
   FocusOverview,
   Invite,
+  FamilyInvite,
   FamilyMember,
   Profile,
   ReminderSettings,
@@ -597,19 +599,28 @@ export interface StudentRepo {
     studentId: string,
     patch: Partial<Omit<Student, 'studentId' | 'createdAt' | 'updatedAt'>>,
   ): Promise<Student>;
+  /** Atomically bind a login to this child — ONLY if it has none yet. Guards against a concurrent
+   *  second student-invite accept attaching a second login to the same child: the loser gets a
+   *  `ConditionFailedError`. Throws `NotFoundError` if the roster row is gone. */
+  linkLogin(studentId: string, loginUserId: string): Promise<Student>;
+  /** Best-effort inverse of `linkLogin`: clear `loginUserId` ONLY if it still equals `loginUserId`
+   *  (so a concurrent winner's link is never clobbered). Used to undo a link when a later accept step
+   *  fails, so a partial failure can't permanently brick the child. No-op if already cleared/changed. */
+  unlinkLogin(studentId: string, loginUserId: string): Promise<void>;
   delete(studentId: string): Promise<void>;
   list(): Promise<Student[]>;
 }
 
 export function makeStudents(client: TableClient): StudentRepo {
+  const storeItem = (domain: Student): StoredItem => ({
+    ...(domain as unknown as Record<string, unknown>),
+    PK: `STUDENT#${domain.studentId}`,
+    SK: SK_DETAILS,
+    GSI1PK: 'STUDENTS',
+    GSI1SK: dateSortKey(domain.createdAt, domain.studentId),
+  });
   const write = async (domain: Student): Promise<Student> => {
-    await client.put({
-      ...(domain as unknown as Record<string, unknown>),
-      PK: `STUDENT#${domain.studentId}`,
-      SK: SK_DETAILS,
-      GSI1PK: 'STUDENTS',
-      GSI1SK: dateSortKey(domain.createdAt, domain.studentId),
-    });
+    await client.put(storeItem(domain));
     return domain;
   };
   return {
@@ -626,6 +637,30 @@ export function makeStudents(client: TableClient): StudentRepo {
       if (!existing) throw new NotFoundError('STUDENT', studentId);
       const current = toDomain<Student>(existing);
       return write({ ...current, ...patch, studentId, createdAt: current.createdAt, updatedAt: isoNow() });
+    },
+    async linkLogin(studentId, loginUserId) {
+      const existing = await client.get(`STUDENT#${studentId}`, SK_DETAILS);
+      if (!existing) throw new NotFoundError('STUDENT', studentId);
+      const current = toDomain<Student>(existing);
+      const next: Student = { ...current, loginUserId, updatedAt: isoNow() };
+      // Conditional on `loginUserId` being absent → single login per child even under concurrent accepts.
+      await client.putIf(storeItem(next), { attr: 'loginUserId', notExists: true });
+      return next;
+    },
+    async unlinkLogin(studentId, loginUserId) {
+      const existing = await client.get(`STUDENT#${studentId}`, SK_DETAILS);
+      if (!existing) return; // roster row gone — nothing to unlink (best-effort)
+      const current = toDomain<Student>(existing);
+      const next = { ...current };
+      delete next.loginUserId;
+      next.updatedAt = isoNow();
+      try {
+        // Only clear if THIS login still owns the link — never clobber a concurrent winner's link.
+        await client.putIf(storeItem(next), { attr: 'loginUserId', equals: loginUserId });
+      } catch (err) {
+        if (err instanceof ConditionFailedError) return; // someone else owns/changed it — leave it
+        throw err;
+      }
     },
     async delete(studentId) {
       await client.delete(`STUDENT#${studentId}`, SK_DETAILS);
@@ -780,6 +815,70 @@ export function makeInvites(client: TableClient): InviteRepo {
     async list() {
       const items = await client.queryIndex('GSI1', 'INVITES', { ascending: false });
       return items.map((i) => toDomain<Invite>(i));
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// FamilyInvite registry (PK: INVITE_FAMILY#<code>) — GLOBAL (base client, never tenant-prefixed), so a
+// join-by-code lookup is O(1) with no tenant context. Enumerable PER-TENANT via GSI1PK='FAMILY_INVITES#'
+// + tenantId (the listing GSI). Unlike the front-door `Invite` (which mints a whole new tenant), a
+// FamilyInvite is a shareable single-use code that joins an EXISTING family. `claim` is atomic:
+// conditional on status==='pending', so a second claim on the same code loses (single-use).
+// ---------------------------------------------------------------------------
+export interface FamilyInviteRepo {
+  get(code: string): Promise<FamilyInvite | null>;
+  create(input: Omit<FamilyInvite, 'createdAt' | 'updatedAt'>): Promise<FamilyInvite>;
+  update(
+    code: string,
+    patch: Partial<Omit<FamilyInvite, 'code' | 'createdAt' | 'updatedAt'>>,
+  ): Promise<FamilyInvite>;
+  listForTenant(tenantId: string): Promise<FamilyInvite[]>;
+  /** Atomically flip pending→accepted; throws ConditionFailedError if not pending (already claimed). */
+  claim(code: string): Promise<FamilyInvite>;
+}
+
+const familyInviteKey = (code: string) => `INVITE_FAMILY#${code}`;
+
+export function makeFamilyInvites(client: TableClient): FamilyInviteRepo {
+  const store = (domain: FamilyInvite): StoredItem => ({
+    ...(domain as unknown as Record<string, unknown>),
+    PK: familyInviteKey(domain.code),
+    SK: SK_DETAILS,
+    GSI1PK: `FAMILY_INVITES#${domain.tenantId}`,
+    GSI1SK: dateSortKey(domain.createdAt, domain.code),
+  });
+  const write = async (domain: FamilyInvite): Promise<FamilyInvite> => {
+    await client.put(store(domain));
+    return domain;
+  };
+  return {
+    async get(code) {
+      const item = await client.get(familyInviteKey(code), SK_DETAILS);
+      return item ? toDomain<FamilyInvite>(item) : null;
+    },
+    async create(input) {
+      const now = isoNow();
+      return write({ ...input, createdAt: now, updatedAt: now });
+    },
+    async update(code, patch) {
+      const existing = await client.get(familyInviteKey(code), SK_DETAILS);
+      if (!existing) throw new NotFoundError('FAMILY_INVITE', code);
+      const current = toDomain<FamilyInvite>(existing);
+      return write({ ...current, ...patch, code, createdAt: current.createdAt, updatedAt: isoNow() });
+    },
+    async listForTenant(tenantId) {
+      const items = await client.queryIndex('GSI1', `FAMILY_INVITES#${tenantId}`, { ascending: false });
+      return items.map((i) => toDomain<FamilyInvite>(i));
+    },
+    async claim(code) {
+      const existing = await client.get(familyInviteKey(code), SK_DETAILS);
+      if (!existing) throw new NotFoundError('FAMILY_INVITE', code);
+      const current = toDomain<FamilyInvite>(existing);
+      const claimed: FamilyInvite = { ...current, status: 'accepted', updatedAt: isoNow() };
+      // Single-use: the conditional write rejects if some concurrent claim already left status!=='pending'.
+      await client.putIf(store(claimed), { attr: 'status', equals: 'pending' });
+      return claimed;
     },
   };
 }
