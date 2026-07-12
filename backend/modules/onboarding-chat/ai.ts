@@ -134,26 +134,36 @@ export interface SeedCollege {
  *  depend on the AI). Returns [] on error only when there's nothing named. */
 export type CollegeSeeder = (majors: string[], location?: string, mustInclude?: string[]) => Promise<SeedCollege[]>;
 
-/** The family's named colleges first (their order, deduped), then the model's list minus duplicates. */
-export function mergeMustInclude(named: string[], suggested: SeedCollege[]): SeedCollege[] {
+/** Dedupe a list of seed colleges by normalized name (trim + lowercase), preserving order. */
+function dedupeByName(colleges: SeedCollege[]): SeedCollege[] {
   const result: SeedCollege[] = [];
   const seen = new Set<string>();
-  for (const raw of named) {
-    const name = raw.trim();
+  for (const c of colleges) {
+    const name = c.name.trim();
     const key = name.toLowerCase();
     if (!name || seen.has(key)) continue;
     seen.add(key);
-    // Prefer the model's entry for a named school (it carries the state); fall back to the bare name.
-    const match = suggested.find((s) => s.name.trim().toLowerCase() === key);
-    result.push(match ?? { name });
-  }
-  for (const s of suggested) {
-    const key = s.name.trim().toLowerCase();
-    if (!key || seen.has(key)) continue;
-    seen.add(key);
-    result.push(s);
+    result.push(c.state ? { name, state: c.state } : { name });
   }
   return result;
+}
+
+/**
+ * Reconcile the family's named colleges with the model's suggestions into one seed list.
+ *
+ * When the model returns suggestions (the normal path) they are AUTHORITATIVE: the seeder prompt
+ * requires the model to include every family-named school by its full official name, so its list
+ * already covers the family's picks — canonicalized. We deliberately do NOT also re-add the family's
+ * raw input, because conversational shorthand ("USC", "UC", "Cal State", "U of Hawaii") never string-
+ * matches the model's canonical name ("University of Southern California", ...) and would be persisted
+ * as a duplicate/fragment college alongside it. Trusting the model's list is the single source of truth.
+ *
+ * Only when the model returns nothing (an error/empty response) do we fall back to the family's raw
+ * names, so a family's own picks are never lost to an AI outage.
+ */
+export function mergeMustInclude(named: string[], suggested: SeedCollege[]): SeedCollege[] {
+  if (suggested.length > 0) return dedupeByName(suggested);
+  return dedupeByName(named.map((name) => ({ name: name.trim() })));
 }
 
 export function makeBedrockCollegeSeeder(options: AiOptions = {}): CollegeSeeder {
@@ -163,7 +173,7 @@ export function makeBedrockCollegeSeeder(options: AiOptions = {}): CollegeSeeder
     const prompt = [
       `List 12 real, currently-operating US colleges or universities with strong ${focus} programs.`,
       named.length
-        ? `The family already named these — include EVERY one (exact names): ${named.join('; ')}. Fill the rest of the 12 with your own picks.`
+        ? `The family already named these — include EVERY one, using each school's FULL official name (expand abbreviations/shorthand, e.g. "USC" → "University of Southern California", "U of Hawaii" → "University of Hawaii at Manoa"). If a name is ambiguous (e.g. "UC", "Cal State"), pick the single most likely campus. Family shorthand: ${named.join('; ')}. Fill the rest of the 12 with your own picks.`
         : '',
       'Give a balanced starter list: ~3 reaches, ~6 solid targets, and ~3 accessible/safety options. No duplicates.',
       location ? `The student is in ${location}; include a few strong in-state public options if they fit.` : '',
