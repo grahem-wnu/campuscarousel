@@ -12,7 +12,17 @@ import { requireRole, type Role } from '../../shared/auth/index.js';
 import { currentTenantId } from '../../shared/tenant/index.js';
 import type { Data, MemberAccessLevel } from '../../shared/data/index.js';
 import { sesSenderFromEnv, type EmailSender } from '../../shared/email/index.js';
-import { inviteMemberSchema, memberParamSchema, updateMemberSchema } from './schema.js';
+import { expiresAt, newInviteCode } from '../invites/logic.js';
+import {
+  createFamilyInviteSchema,
+  familyInviteParamSchema,
+  inviteMemberSchema,
+  memberParamSchema,
+  updateMemberSchema,
+} from './schema.js';
+
+/** Family invites live for 7 days by default (shorter than the front-door tenant invite's 30). */
+const FAMILY_INVITE_TTL_DAYS = 7;
 
 /** Seam for creating / re-roling / removing a member's login (Cognito in production). */
 export interface FamilyInviter {
@@ -26,6 +36,9 @@ export interface FamilyHandlers {
   invite: Handler;
   update: Handler;
   remove: Handler;
+  createInvite: Handler;
+  listInvites: Handler;
+  revokeInvite: Handler;
 }
 
 export interface FamilyDeps {
@@ -36,6 +49,9 @@ export interface FamilyDeps {
   appUrl?: string;
   /** Generate a temporary password (injected for tests). */
   genPassword?: () => string;
+  /** Generate an invite code (injected for tests). */
+  genCode?: () => string;
+  now?: () => Date;
 }
 
 /** Access level → enforced JWT permission role. Manager = a guardian; viewer = read-only supporter. */
@@ -66,6 +82,8 @@ export function makeHandlers(deps: FamilyDeps): FamilyHandlers {
   const from = deps.from ?? process.env.REMINDER_SENDER_EMAIL ?? '';
   const appUrl = deps.appUrl ?? process.env.APP_URL ?? 'https://app';
   const genPassword = deps.genPassword ?? defaultTempPassword;
+  const genCode = deps.genCode ?? newInviteCode;
+  const now = deps.now ?? (() => new Date());
 
   return {
     // GET /family/members — anyone in the family can see who has access.
@@ -142,6 +160,48 @@ export function makeHandlers(deps: FamilyDeps): FamilyHandlers {
       await getData().members.delete(userId);
       return { status: 204, body: undefined };
     },
+
+    // POST /family/invites — mint a shareable single-use join code (admin/parent only). No Cognito user
+    // and no email are created here: the invitee redeems the code on the PUBLIC accept endpoint, choosing
+    // their own login name + password. A student invite must target an existing, not-yet-linked roster id.
+    createInvite: async (ctx) => {
+      requireManager(ctx.requester);
+      const input = validateBody(createFamilyInviteSchema, ctx);
+      const tenantId = currentTenantId();
+      if (input.kind === 'student') {
+        const child = await getData().students.get(input.studentId!);
+        if (!child) throw Errors.notFound('Student not found');
+        if (child.loginUserId) throw Errors.conflict('That child already has a login.');
+      }
+      const code = genCode();
+      const invite = await getData().familyInvites.create({
+        code,
+        tenantId,
+        kind: input.kind,
+        ...(input.relationship ? { relationship: input.relationship } : {}),
+        ...(input.studentId ? { studentId: input.studentId } : {}),
+        ...(input.displayName ? { displayName: input.displayName } : {}),
+        invitedBy: ctx.requester.username,
+        status: 'pending',
+        expiresAt: expiresAt(now(), FAMILY_INVITE_TTL_DAYS),
+      });
+      return { status: 201, body: { code: invite.code, url: `${appUrl}/join-family?code=${invite.code}` } };
+    },
+
+    // GET /family/invites — the tenant's still-pending invites (admin/parent only).
+    listInvites: async () => {
+      const all = await getData().familyInvites.listForTenant(currentTenantId());
+      return { status: 200, body: { invites: all.filter((i) => i.status === 'pending') } };
+    },
+
+    // POST /family/invites/:code/revoke — cancel a pending invite (admin/parent only). Cross-tenant codes
+    // are invisible (404), so a manager can only revoke their own family's invites.
+    revokeInvite: async (ctx) => {
+      const { code } = validateParams(familyInviteParamSchema, ctx);
+      const existing = await getData().familyInvites.get(code);
+      if (!existing || existing.tenantId !== currentTenantId()) throw Errors.notFound('Invite not found');
+      return { status: 200, body: await getData().familyInvites.update(code, { status: 'revoked' }) };
+    },
   };
 }
 
@@ -152,5 +212,8 @@ export function buildRoutes(h: FamilyHandlers) {
     { method: 'POST' as const, path: '/family/members', handler: h.invite },
     { method: 'PATCH' as const, path: '/family/members/:userId', handler: h.update },
     { method: 'DELETE' as const, path: '/family/members/:userId', handler: h.remove },
+    { method: 'POST' as const, path: '/family/invites', handler: h.createInvite, roles: ['admin', 'parent'] as Role[] },
+    { method: 'GET' as const, path: '/family/invites', handler: h.listInvites, roles: ['admin', 'parent'] as Role[] },
+    { method: 'POST' as const, path: '/family/invites/:code/revoke', handler: h.revokeInvite, roles: ['admin', 'parent'] as Role[] },
   ];
 }
