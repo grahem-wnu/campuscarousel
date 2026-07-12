@@ -44,7 +44,9 @@ export interface AuthUser {
 }
 
 function parseRole(claim: unknown): Role {
-  return claim === "admin" || claim === "parent" || claim === "student" ? claim : "student";
+  return claim === "admin" || claim === "parent" || claim === "student" || claim === "member"
+    ? claim
+    : "student";
 }
 
 /**
