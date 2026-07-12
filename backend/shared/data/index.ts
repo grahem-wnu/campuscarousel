@@ -20,6 +20,7 @@ import {
   makeConversations,
   makeFocusOverview,
   makeInvites,
+  makeFamilyInvites,
   makeMembers,
   makeProfiles,
   makeReminderSettings,
@@ -308,6 +309,7 @@ export function makeData(
     // GLOBAL registries — built on the un-scoped base client (never tenant-prefixed).
     tenants: makeTenants(base),
     invites: makeInvites(base),
+    familyInvites: makeFamilyInvites(base),
 
     /** Hard-delete EVERY per-child item for `studentId` in the current tenant (keys
      *  `T#<tenant>#S#<studentId>#…`). Used when a student is removed so no orphaned partition is left
