@@ -13,15 +13,24 @@ export function normalizeModelId(modelId: string): string {
 }
 
 /**
- * Current Bedrock per-token rates in micro-dollars.
+ * Current Bedrock per-token rates in micro-dollars per token.
  *
- * TODO(build): fill these with the CURRENT us.anthropic.claude-sonnet-4 Bedrock rates.
- * Do NOT guess from memory — load the `claude-api` skill / its pricing reference at build
- * time, convert $/million-tokens to micros/token (e.g. $3.00 / 1M input = 3 micros/token),
- * and date-stamp this table. Cache-read and cache-write have distinct rates.
+ * Numerically, micros-per-token == dollars-per-million-tokens (both are price * 1e-6 per token),
+ * so a $3.00 / 1M-token input rate is `3`. Cache rates are fractional (e.g. $0.30 / 1M = 0.3);
+ * priceUsage() rounds the summed cost so the stored costMicros stays an integer.
+ *
+ * Rates below are for Amazon Bedrock Claude Sonnet 4 (us.anthropic.claude-sonnet-4-20250514-v1:0),
+ * which is the current BEDROCK_MODEL_ID default. Source: Anthropic/Bedrock Sonnet-4 pricing —
+ * input $3.00, output $15.00, 5-min cache write $3.75 (1.25x input), cache read $0.30 (0.1x input)
+ * per 1M tokens. Verified 2026-07-12. Re-check when BEDROCK_MODEL_ID changes.
  */
 export const RATES: Record<string, ModelRates> = {
-  // 'anthropic.claude-sonnet-4': { inputMicros: ?, outputMicros: ?, cacheReadMicros: ?, cacheWriteMicros: ? },
+  'anthropic.claude-sonnet-4': {
+    inputMicros: 3,
+    outputMicros: 15,
+    cacheReadMicros: 0.3,
+    cacheWriteMicros: 3.75,
+  },
 };
 
 export function priceUsage(
@@ -31,10 +40,12 @@ export function priceUsage(
 ): PricedUsage {
   const rate = rates[normalizeModelId(modelId)];
   if (!rate) return { costMicros: 0, unpriced: true };
-  const costMicros =
+  // Rates can be fractional micros/token (cache rates), so round to keep costMicros integer.
+  const costMicros = Math.round(
     usage.inputTokens * rate.inputMicros +
-    usage.outputTokens * rate.outputMicros +
-    usage.cacheReadTokens * rate.cacheReadMicros +
-    usage.cacheWriteTokens * rate.cacheWriteMicros;
+      usage.outputTokens * rate.outputMicros +
+      usage.cacheReadTokens * rate.cacheReadMicros +
+      usage.cacheWriteTokens * rate.cacheWriteMicros,
+  );
   return { costMicros, unpriced: false };
 }
