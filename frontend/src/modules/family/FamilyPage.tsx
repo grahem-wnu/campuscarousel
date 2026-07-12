@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Badge, Button, Card, EmptyState, Field, Icon, Input, Modal, Select, Spinner, useToast } from "../../shared/ui";
 import { useActiveStudent, useAuth, type Student } from "../../shared/shell";
-import { resetStudent, hardReset } from "../onboarding/api";
+import { resetStudent } from "../onboarding/api";
 import {
   RELATIONSHIP_LABELS,
   createStudent,
@@ -325,36 +325,6 @@ function AcademicFocusCard() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [resetting, setResetting] = useState(false);
-  // ⚠️ TEMPORARY TESTING AID — see hardResetAll(). Remove with the dev-reset module.
-  const [hardResetting, setHardResetting] = useState(false);
-
-  // ⚠️ TEMPORARY TESTING AID — blow out ALL students + clear /setup, then clear the client-side FTUE
-  // flags (tour + active student) and reload so the onboarding loop runs from scratch. Remove when
-  // FTUE testing is done (drop this fn, its button, the hardReset() api, and the dev-reset module).
-  async function hardResetAll() {
-    if (
-      !window.confirm(
-        "HARD RESET (testing only): permanently remove ALL students in this family and restart onboarding from scratch. Continue?",
-      )
-    ) {
-      return;
-    }
-    setHardResetting(true);
-    try {
-      const { studentsRemoved } = await hardReset();
-      try {
-        window.localStorage.removeItem("campus-carousel:tourComplete");
-        window.localStorage.removeItem("keiras:activeStudentId");
-      } catch {
-        /* private mode — ignore */
-      }
-      toast.success(`Removed ${studentsRemoved} student(s) — restarting onboarding…`);
-      window.location.reload();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not hard reset.");
-      setHardResetting(false);
-    }
-  }
 
   async function reset() {
     const who = activeStudent?.name ?? "this student";
@@ -418,17 +388,6 @@ function AcademicFocusCard() {
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={reset} loading={resetting} disabled={resetting}>
               Reset setup
-            </Button>
-            {/* ⚠️ TEMPORARY TESTING AID — remove with the dev-reset module. */}
-            <Button
-              variant="outline"
-              size="sm"
-              className="border-error-300 text-error-600 hover:bg-error-50"
-              onClick={hardResetAll}
-              loading={hardResetting}
-              disabled={hardResetting}
-            >
-              Hard reset (testing)
             </Button>
           </div>
         ) : null}

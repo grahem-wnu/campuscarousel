@@ -13,7 +13,6 @@ import { routes as collegeHubRoutes } from '../../modules/college-hub/routes.man
 import { routes as coursePlannerRoutes } from '../../modules/course-planner/routes.manifest.js';
 import { routes as dashboardRoutes } from '../../modules/dashboard/routes.manifest.js';
 import { routes as demonstratedInterestContactsRoutes } from '../../modules/demonstrated-interest-contacts/routes.manifest.js';
-import { routes as devResetRoutes } from '../../modules/dev-reset/routes.manifest.js';
 import { routes as documentsRoutes } from '../../modules/documents/routes.manifest.js';
 import { routes as examPrepRoutes } from '../../modules/exam-prep/routes.manifest.js';
 import { routes as experienceRoutes } from '../../modules/experience/routes.manifest.js';
@@ -44,7 +43,6 @@ export const manifests: RouteManifest[] = [
   { routes: coursePlannerRoutes },
   { routes: dashboardRoutes },
   { routes: demonstratedInterestContactsRoutes },
-  { routes: devResetRoutes },
   { routes: documentsRoutes },
   { routes: examPrepRoutes },
   { routes: experienceRoutes },
