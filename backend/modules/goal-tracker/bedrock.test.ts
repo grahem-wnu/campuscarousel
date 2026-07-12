@@ -27,9 +27,11 @@ describe('makeBedrockInvoker', () => {
     const { client, send } = fakeClient('[{"title":"X"}]');
     const out = await makeBedrockInvoker(() => client)('my prompt');
     expect(out).toBe('[{"title":"X"}]');
-    const command = send.mock.calls[0]![0] as unknown as { input: { modelId: string; body: string } };
+    const command = send.mock.calls[0]![0] as unknown as { input: { modelId: string; body: Uint8Array } };
     expect(command.input.modelId).toBe('us.anthropic.test-profile');
-    const body = JSON.parse(command.input.body) as { messages: { role: string; content: string }[] };
+    const body = JSON.parse(new TextDecoder().decode(command.input.body)) as {
+      messages: { role: string; content: string }[];
+    };
     expect(body.messages[0]).toMatchObject({ role: 'user', content: 'my prompt' });
   });
 });
