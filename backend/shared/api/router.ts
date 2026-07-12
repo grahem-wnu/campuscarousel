@@ -163,8 +163,18 @@ export function createRouter(routes: RouteDef[]): LambdaHandler {
       // repos resolve `S#<studentId>#`. Family-level handlers (the roster, reminders) ignore it. A
       // request with no header falls back to DEFAULT_STUDENT_ID (the legacy single-child migration id)
       // for transition compatibility; with the env unset, per-child repos fail closed if none is set.
+      // SECURITY: a `student`-role login is CONFINED to its own roster entry. Pin the active
+      // student to the requester's own `studentId` (from the JWT `custom:studentId` claim) and
+      // IGNORE any client-supplied `X-Student-Id` header — this is what stops a student from
+      // reading a sibling's data. A student with no bound roster entry is rejected (fail closed).
+      // Adults (admin/parent/member) still honor the header to switch the active child.
       const studentId =
-        readHeader(event.headers, 'x-student-id') ?? process.env.DEFAULT_STUDENT_ID ?? undefined;
+        requester.role === 'student'
+          ? requester.studentId
+          : (readHeader(event.headers, 'x-student-id') ?? process.env.DEFAULT_STUDENT_ID ?? undefined);
+      if (requester.role === 'student' && !requester.studentId) {
+        throw Errors.unauthorized('Student is not bound to a roster');
+      }
       const ctx: HandlerContext = {
         requester,
         params: matched.params,
