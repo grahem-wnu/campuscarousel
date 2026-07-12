@@ -157,6 +157,26 @@ Authz off the JWT (`getRequester` → `platformAdmin` / `tenantId`); never trust
 - `GET /admin/usage/families?month=` — **platform-admin only**: cost per family for a month, read
   from derived rollup rows (§7) so it does not scan every raw record across all tenants.
 
+### 6a. Admin frontend page
+
+An admin-only **Usage** page, reachable from the nav menu (the nav entry renders **only** for
+admin / platform-admin roles — gate on the same JWT role the API enforces, never render it for
+parent/student). New route (e.g. `/admin/usage`).
+
+Contents:
+- A **time-range** selector (default: current month) and a **breakdown** toggle
+  (feature / student / model / day), driving `GET /admin/usage`.
+- Headline total cost for the range, plus the selected breakdown as a simple table/bar list
+  (cost + token counts per bucket).
+- For **platform admin** (grahem): a families overview (cost per family for the month, via
+  `GET /admin/usage/families`) with drill-down into a single family. For a **tenant admin**
+  (kate): the page scopes to her own family only — no families overview.
+
+Follows the existing **Field Notes** design system (Fraunces + paper/ink/evergreen/amber); no
+icon-circle / card-grid slop. Reuse existing dataviz/table patterns already in the frontend rather
+than introducing a charting dependency — keep dependencies light per project conventions. Cost is
+displayed in dollars (format `costMicros / 1_000_000`).
+
 ### 7. Rollup + reconciliation job (Phase 2)
 
 Scheduled daily Lambda:
@@ -193,8 +213,9 @@ reconciliation job make any dropped record **visible**, not silent. Unknown mode
 ## Phasing
 
 - **Phase 1** (delivers real per-family numbers): metering module + `pricing.ts` + choke-point
-  refactor of all 16 sites + raw records + `GET /admin/usage`. Deploy to staging, verify
-  attribution end-to-end (per-family, per-feature, per-student).
+  refactor of the 9 edit points + raw records + `GET /admin/usage` + the admin **Usage** page in
+  the nav (§6a). Deploy to staging, verify attribution end-to-end (per-family, per-feature,
+  per-student) and that the page renders only for admin roles.
 - **Phase 2:** monthly rollup rows + `GET /admin/usage/families` + reconciliation job + Bedrock
   invocation-logging infra + drift alerting.
 
