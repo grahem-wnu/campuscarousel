@@ -39,7 +39,14 @@ export interface FamilyDeps {
 }
 
 /** Access level → enforced JWT permission role. Manager = a guardian; viewer = read-only supporter. */
-export const roleForAccess = (level: MemberAccessLevel): Role => (level === 'manager' ? 'parent' : 'member');
+export const roleForAccess = (level: MemberAccessLevel): Role => {
+  switch (level) {
+    case 'manager':
+      return 'parent';
+    case 'viewer':
+      return 'member';
+  }
+};
 
 const requireManager = requireRole('admin', 'parent');
 
@@ -117,7 +124,8 @@ export function makeHandlers(deps: FamilyDeps): FamilyHandlers {
       const existing = await getData().members.get(userId);
       if (!existing) throw Errors.notFound('Member not found');
       // If access level changes, update their login role so the router's enforcement follows.
-      if (patch.accessLevel && patch.accessLevel !== existing.accessLevel) {
+      // Only applies to email-based logins; code-invited members (no email) are keyed differently.
+      if (patch.accessLevel && patch.accessLevel !== existing.accessLevel && existing.email) {
         await inviter.setRole({ email: existing.email, role: roleForAccess(patch.accessLevel) });
       }
       return { status: 200, body: await getData().members.update(userId, patch) };
@@ -129,7 +137,8 @@ export function makeHandlers(deps: FamilyDeps): FamilyHandlers {
       const { userId } = validateParams(memberParamSchema, ctx);
       const existing = await getData().members.get(userId);
       if (!existing) throw Errors.notFound('Member not found');
-      await inviter.removeMember({ email: existing.email });
+      // Only email-based logins are provisioned in Cognito by email; skip for code-invited members.
+      if (existing.email) await inviter.removeMember({ email: existing.email });
       await getData().members.delete(userId);
       return { status: 204, body: undefined };
     },

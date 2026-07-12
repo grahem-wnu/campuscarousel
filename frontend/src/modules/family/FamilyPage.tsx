@@ -434,6 +434,7 @@ const RELATIONSHIPS: MemberRelationship[] = [
   "family-friend",
   "counselor",
   "mentor",
+  "child",
   "other",
 ];
 

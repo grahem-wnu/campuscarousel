@@ -31,6 +31,7 @@ export type MemberRelationship =
   | "family-friend"
   | "counselor"
   | "mentor"
+  | "child"
   | "other";
 
 export type MemberAccessLevel = "manager" | "viewer";
@@ -101,5 +102,6 @@ export const RELATIONSHIP_LABELS: Record<MemberRelationship, string> = {
   "family-friend": "Family friend",
   counselor: "Counselor",
   mentor: "Mentor",
+  child: "Child / Student",
   other: "Other",
 };

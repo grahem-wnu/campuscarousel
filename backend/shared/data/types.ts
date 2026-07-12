@@ -66,6 +66,8 @@ export interface Student extends Timestamped {
   name: string;
   graduationYear?: number;
   status: 'active' | 'archived';
+  /** Username of the linked student login (if this child has their own login). */
+  loginUserId?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -84,6 +86,7 @@ export type MemberRelationship =
   | 'family-friend'
   | 'counselor'
   | 'mentor'
+  | 'child'
   | 'other';
 
 export type MemberAccessLevel = 'manager' | 'viewer';
@@ -91,13 +94,34 @@ export type MemberAccessLevel = 'manager' | 'viewer';
 export interface FamilyMember extends Timestamped {
   /** Cognito username (the invitee's email). Stable id for the member record. */
   userId: string;
-  email: string;
+  /** The invitee's email. Optional — code-invited members (esp. students) have no email. */
+  email?: string;
   displayName?: string;
   relationship: MemberRelationship;
   accessLevel: MemberAccessLevel;
   status: 'invited' | 'active';
   /** Username of the guardian/admin who invited them. */
   invitedBy?: string;
+  /** The child (Student) this member is linked to (set for student logins). */
+  studentId?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Family invite (PK: INVITE_FAMILY#<code>, SK: DETAILS) — GLOBAL (base client, never tenant-prefixed),
+// enumerable per-tenant via GSI1PK='FAMILY_INVITES#<tenantId>'. Shareable single-use codes that let a
+// co-parent, viewer, or student join an existing family. Distinct from the front-door `Invite` (which
+// creates a whole new tenant); a FamilyInvite joins an existing one.
+// ---------------------------------------------------------------------------
+export interface FamilyInvite extends Timestamped {
+  code: string;
+  tenantId: string;
+  kind: 'coparent' | 'viewer' | 'student';
+  relationship?: MemberRelationship;
+  studentId?: string;      // required when kind==='student'
+  displayName?: string;
+  invitedBy: string;
+  status: 'pending' | 'accepted' | 'revoked';
+  expiresAt: string;       // ISO; default now + 7 days
 }
 
 // ---------------------------------------------------------------------------
