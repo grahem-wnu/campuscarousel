@@ -17,22 +17,30 @@
     "project": "keiras-journey",
     "githubOrg": "grahem-wnu",
     "githubRepo": "keiras-journey",
-    "domainName": "keirasjourney.com",
+    "domainName": "campuscarousel.com",
     "bedrockSonnetProfile": "us.anthropic.claude-sonnet-4-6",
     "monthlyBudgetUsd": 75,
-    "_hostedZoneIdNote": "keirasjourney.com was registered via Route53 Domains (2026-06-06); this is its pre-existing authoritative public zone. DnsStack imports it (dnsMode import) rather than creating a new zone, so NS delegation stays intact.",
-    "hostedZoneId": "Z03683613MXDVX9D5VIUV",
+    "_alertEmailNote": "Subscribed to the per-env CloudWatch alarm SNS topic AND the account budget alarm. SNS sends a one-time confirmation email that must be clicked. Change/remove to reroute ops alerts.",
+    "alertEmail": "grahem@weneedushealth.com",
+    "_domainNote": "Everything runs on campuscarousel.com (zone Z026658226B9KAOVTOAIH): staging → staging.campuscarousel.com, prod → campuscarousel.com (apex). keirasjourney.com (zone Z03683613MXDVX9D5VIUV) is PARKED — no longer used by the app. The legacy single-tenant prod stack still serves keirasjourney.com until it's retired after the data migration; do not point new infra at it. Zones imported (dnsMode import) so NS delegation stays intact.",
+    "hostedZoneId": "Z026658226B9KAOVTOAIH",
     "envs": {
       "staging": {
         "stage": "staging",
         "dnsMode": "import",
+        "domainName": "campuscarousel.com",
+        "hostedZoneId": "Z026658226B9KAOVTOAIH",
         "subdomain": "staging",
+        "reminderSenderEmail": "noreply@campuscarousel.com",
         "removalPolicy": "destroy"
       },
       "prod": {
         "stage": "prod",
         "dnsMode": "import",
+        "domainName": "campuscarousel.com",
+        "hostedZoneId": "Z026658226B9KAOVTOAIH",
         "subdomain": "",
+        "reminderSenderEmail": "noreply@campuscarousel.com",
         "removalPolicy": "retain"
       }
     },

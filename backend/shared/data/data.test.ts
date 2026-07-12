@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { InMemoryTableClient, makeData, NotFoundError, type Data } from './index.js';
 import { tableClientFromEnv } from './table-client.js';
-import { buildActivity, buildClinical, seed } from './fixtures.js';
+import { buildActivity, buildExperience, seed } from './fixtures.js';
 
 let client: InMemoryTableClient;
 let data: Data;
@@ -171,21 +171,21 @@ describe('secondary index access patterns', () => {
     expect(clinical.map((a) => a.date)).toEqual(['2026-01-01', '2026-01-02']); // ordered by date
   });
 
-  it('clinical.listByFacility uses GSI3', async () => {
-    await data.clinical.create(buildClinical({ facility: 'CHOC', date: '2026-01-01' }));
-    await data.clinical.create(buildClinical({ facility: 'Mission', date: '2026-01-02' }));
-    await data.clinical.create(buildClinical({ facility: 'CHOC', date: '2026-01-03' }));
-    const choc = await data.clinical.listByFacility('CHOC');
+  it('experiences.listByFacility uses GSI3', async () => {
+    await data.experiences.create(buildExperience({ facility: 'CHOC', date: '2026-01-01' }));
+    await data.experiences.create(buildExperience({ facility: 'Mission', date: '2026-01-02' }));
+    await data.experiences.create(buildExperience({ facility: 'CHOC', date: '2026-01-03' }));
+    const choc = await data.experiences.listByFacility('CHOC');
     expect(choc).toHaveLength(2);
     expect(choc.every((c) => c.facility === 'CHOC')).toBe(true);
   });
 
-  it('teas lists via GSI4 by date', async () => {
-    await data.teas.create({ type: 'practice-test', date: '2026-02-01', overallScore: 70 });
-    await data.teas.create({ type: 'practice-test', date: '2026-01-01', overallScore: 65 });
-    const all = await data.teas.list();
+  it('exams list via GSI4 by date', async () => {
+    await data.exams.create({ type: 'practice-test', date: '2026-02-01', overallScore: 70 });
+    await data.exams.create({ type: 'practice-test', date: '2026-01-01', overallScore: 65 });
+    const all = await data.exams.list();
     expect(all.map((t) => t.date)).toEqual(['2026-01-01', '2026-02-01']);
-    expect(await data.teas.listByDateRange('2026-01-15', '2026-12-31')).toHaveLength(1);
+    expect(await data.exams.listByDateRange('2026-01-15', '2026-12-31')).toHaveLength(1);
   });
 });
 
@@ -204,6 +204,36 @@ describe('hydration: mergePreservingUserEdits', () => {
     expect(merged.name).toBe('University of Iowa'); // preserved
     expect(merged.ranking).toBe('US News #15 BSN'); // applied
     expect(merged.lastDataRefresh).toBeDefined();
+  });
+
+  it('never marks hydration system fields as user-edited, and self-heals a poisoned record', async () => {
+    const c = await data.colleges.create({ name: 'Ohio State', addedBy: 'ai-discovered' });
+
+    // The /hydrate handler sets the in-progress badge via update(); this must NOT make
+    // hydrationStatus user-owned (else the worker could never set it back to complete).
+    const inProgress = await data.colleges.update(c.collegeId, { hydrationStatus: 'in-progress' });
+    expect(inProgress.userEdited ?? []).not.toContain('hydrationStatus');
+
+    // The worker can then complete it.
+    const done = await data.colleges.mergePreservingUserEdits(c.collegeId, {
+      ranking: '#1 public',
+      hydrationStatus: 'complete',
+    });
+    expect(done.hydrationStatus).toBe('complete');
+    expect(done.ranking).toBe('#1 public');
+
+    // Self-heal: a record a prior bug poisoned (hydrationStatus already in userEdited) is cleaned
+    // on the next update() that touches it, so the badge can clear again — while genuine user
+    // edits in the same list are kept.
+    const poisoned = await data.colleges.create({
+      name: 'Indiana',
+      addedBy: 'ai-discovered',
+      userEdited: ['hydrationStatus', 'name'],
+    });
+    expect(poisoned.userEdited).toContain('hydrationStatus');
+    const healed = await data.colleges.update(poisoned.collegeId, { hydrationStatus: 'in-progress' });
+    expect(healed.userEdited ?? []).not.toContain('hydrationStatus');
+    expect(healed.userEdited ?? []).toContain('name'); // genuine user edits are kept
   });
 
   it('hydrates a never-edited entity fully', async () => {
@@ -272,6 +302,17 @@ describe('singletons', () => {
     expect(u.totalBudget).toBe(200000);
   });
 
+  it('setupState put/get + update upserts when absent', async () => {
+    expect(await data.setupState.get()).toBeNull();
+    // update before any put must NOT throw (unlike budget/reminderSettings) — it upserts.
+    const created = await data.setupState.update({ setupComplete: true });
+    expect(created.setupComplete).toBe(true);
+    const saved = await data.setupState.put({ declaredStudentCount: 2 });
+    expect(saved.declaredStudentCount).toBe(2);
+    const merged = await data.setupState.update({ setupComplete: true });
+    expect(merged).toMatchObject({ declaredStudentCount: 2, setupComplete: true });
+  });
+
   it('profiles are per-user', async () => {
     await data.profiles.put({ userId: 'keira', name: 'Keira', role: 'student' });
     await data.profiles.put({ userId: 'kate', name: 'Kate', role: 'parent' });
@@ -291,7 +332,7 @@ describe('fixtures.seed', () => {
     expect(all).toHaveLength(2);
     expect(await data.colleges.get(ids.collegeId)).not.toBeNull();
     expect(await data.scholarships.get(ids.scholarshipId)).not.toBeNull();
-    expect(await data.clinical.get(ids.clinicalId)).not.toBeNull();
+    expect(await data.experiences.get(ids.experienceId)).not.toBeNull();
   });
 });
 

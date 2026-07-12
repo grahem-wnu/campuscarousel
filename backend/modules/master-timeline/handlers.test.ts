@@ -25,28 +25,44 @@ beforeEach(async () => {
   await data.activities.create({ userId: 'keira', date: '2026-06-10', category: 'volunteer', title: 'Family volunteering', visibility: 'family' } as Parameters<Data['activities']['create']>[0]);
   await data.activities.create({ userId: 'keira', date: '2026-06-12', category: 'personal', title: 'Private reflection', visibility: 'private' } as Parameters<Data['activities']['create']>[0]);
   await data.goals.create({ title: 'Submit OSU app', status: 'in-progress', targetDate: '2026-07-01' } as Parameters<Data['goals']['create']>[0]);
-  const c = await data.colleges.create({ name: 'OSU', status: 'applying', applicationDeadlines: { regularDecision: '2026-12-01' } } as Parameters<Data['colleges']['create']>[0]);
+  const c = await data.colleges.create({ name: 'OSU', status: 'applying', isTopPick: true, applicationDeadlines: { regularDecision: '2026-12-01' } } as Parameters<Data['colleges']['create']>[0]);
   await data.visits.add(c.collegeId, { date: '2026-09-01', visitType: 'campus-tour' } as Parameters<Data['visits']['add']>[1]);
 });
 
 const ctx = (over: Partial<HandlerContext> = {}): HandlerContext => ({ requester: keira, params: {}, query: {}, body: undefined, ...over });
 
 describe('GET /timeline', () => {
-  it('aggregates events across sources for keira (incl. her private activity)', async () => {
+  it('aggregates deadline/milestone sources and excludes journal entries (activities)', async () => {
     const b = (await h.timeline(ctx())).body as { events: { source: string; title: string }[] };
-    expect(new Set(b.events.map((e) => e.source))).toEqual(new Set(['activity', 'goal', 'college', 'visit']));
-    expect(b.events.some((e) => e.title === 'Private reflection')).toBe(true);
+    expect(new Set(b.events.map((e) => e.source))).toEqual(new Set(['goal', 'college', 'visit']));
+    expect(b.events.some((e) => e.source === 'activity')).toBe(false);
+    expect(b.events.some((e) => e.title === 'Family volunteering')).toBe(false);
+    expect(b.events.some((e) => e.title === 'Private reflection')).toBe(false);
   });
 
-  it('PRIVACY: a parent does NOT see keira’s private-activity event', async () => {
-    const b = (await h.timeline(ctx({ requester: kate }))).body as { events: { title: string }[] };
-    expect(b.events.some((e) => e.title === 'Private reflection')).toBe(false);
-    expect(b.events.some((e) => e.title === 'Family volunteering')).toBe(true);
+  it('shows the same timeline to a parent and the student (no visibility-bearing source remains)', async () => {
+    const forKeira = (await h.timeline(ctx())).body as { events: { source: string }[] };
+    const forParent = (await h.timeline(ctx({ requester: kate }))).body as { events: { source: string }[] };
+    expect(forParent.events.map((e) => e.source).sort()).toEqual(forKeira.events.map((e) => e.source).sort());
   });
 
   it('filters by source', async () => {
     const b = (await h.timeline(ctx({ query: { source: 'college' } }))).body as { events: { source: string }[] };
     expect(b.events.every((e) => e.source === 'college')).toBe(true);
+  });
+
+  it('only TOP-PICK colleges put their deadlines on the timeline (opt-in)', async () => {
+    // A discovered-but-not-picked college with a deadline (OSU from the beforeEach IS a top pick).
+    await data.colleges.create({
+      name: 'Backup U',
+      status: 'researching',
+      applicationDeadlines: { regularDecision: '2026-11-15' },
+    } as Parameters<Data['colleges']['create']>[0]);
+    const titles = ((await h.timeline(ctx())).body as { events: { title: string; source: string }[] }).events
+      .filter((e) => e.source === 'college')
+      .map((e) => e.title);
+    expect(titles.some((t) => t.includes('OSU'))).toBe(true); // top pick → on the timeline
+    expect(titles.some((t) => t.includes('Backup U'))).toBe(false); // not a pick → excluded
   });
 });
 
@@ -60,10 +76,30 @@ describe('GET /timeline/upcoming', () => {
 });
 
 describe('POST /timeline/analyze', () => {
-  it('passes the visibility-filtered window to the analyzer', async () => {
+  it('passes the deadline window to the analyzer, excluding journal entries', async () => {
     const b = (await h.analyze(ctx({ body: {} }))).body as { analysis: { priorities: string[] } };
-    expect(b.analysis.priorities).toContain('Private reflection'); // keira's window includes private
-    const bk = (await h.analyze(ctx({ requester: kate, body: {} }))).body as { analysis: { priorities: string[] } };
-    expect(bk.analysis.priorities).not.toContain('Private reflection');
+    expect(b.analysis.priorities).toContain('Submit OSU app'); // a real deadline is in the window
+    expect(b.analysis.priorities).not.toContain('Private reflection'); // journal entries are excluded
+    expect(b.analysis.priorities).not.toContain('Family volunteering');
+  });
+});
+
+describe('POST /timeline/dismiss', () => {
+  it('removes a dismissed event from every read path (timeline, upcoming, analyze)', async () => {
+    const before = (await h.timeline(ctx())).body as { events: { id: string; title: string }[] };
+    const target = before.events.find((e) => e.title === 'Submit OSU app');
+    expect(target).toBeTruthy();
+
+    const res = await h.dismiss(ctx({ body: { eventId: target!.id } }));
+    expect(res.status).toBe(204);
+
+    const t = (await h.timeline(ctx())).body as { events: { id: string }[] };
+    expect(t.events.some((e) => e.id === target!.id)).toBe(false);
+
+    const u = (await h.upcoming(ctx({ query: { horizon: '120' } }))).body as { events: { title: string }[] };
+    expect(u.events.some((e) => e.title === 'Submit OSU app')).toBe(false);
+
+    const a = (await h.analyze(ctx({ body: {} }))).body as { analysis: { priorities: string[] } };
+    expect(a.analysis.priorities).not.toContain('Submit OSU app');
   });
 });

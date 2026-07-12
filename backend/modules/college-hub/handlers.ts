@@ -18,6 +18,7 @@ import {
   createSchema,
   discoverSchema,
   idParamSchema,
+  jobIdParamSchema,
   listQuerySchema,
   noteSchema,
   topPickSchema,
@@ -25,8 +26,12 @@ import {
 } from './schema.js';
 import { queryColleges } from './query.js';
 import { findActiveByName, normalizeCollegeName } from './dedupe.js';
-import { makeBedrockDiscoverer, type Discoverer } from './ai.js';
+import type { Discoverer } from './ai.js';
+import { makeBedrockChecklistSuggester, type ChecklistSuggester } from './checklist-ai.js';
+import { runPrepJob, type PrepDispatcher, type PrepSuggester } from './prep-ai.js';
 import { makeInlineDispatcher, type HydrationDispatcher } from './hydration.js';
+import { runDiscoveryJob, type DiscoverDispatcher } from './discover.js';
+import { makeAssetsEnqueuer, type AssetsDispatcher } from './assets-enqueue.js';
 
 export interface CollegeHandlers {
   list: Handler;
@@ -37,12 +42,16 @@ export interface CollegeHandlers {
   topPick: Handler;
   hydrate: Handler;
   hydrateAll: Handler;
+  assetsBackfill: Handler;
   discover: Handler;
+  discoverStatus: Handler;
   bulkAdd: Handler;
   listNotes: Handler;
   addNote: Handler;
   getChecklist: Handler;
   putChecklist: Handler;
+  suggestChecklist: Handler;
+  generatePrep: Handler;
 }
 
 export interface CollegeDeps {
@@ -51,12 +60,37 @@ export interface CollegeDeps {
   discoverer?: Discoverer;
   /** Hydration trigger; defaults to the inline dispatcher (SQS enqueue once the worker is wired). */
   dispatch?: HydrationDispatcher;
+  /** Discovery-job trigger; defaults to running the job inline with the handler's discoverer. */
+  discoverDispatch?: DiscoverDispatcher;
+  /** Campus-imagery / logo fetch trigger; defaults to the SQS assets enqueuer (no-op if unconfigured). */
+  assetsDispatch?: AssetsDispatcher;
+  /** AI source for /checklist/suggest; defaults to the model-only Bedrock suggester (→ [] on failure). */
+  checklistSuggester?: ChecklistSuggester;
+  /** AI source for /prep; defaults to the model-only Bedrock HS-prep generator (→ null on failure). */
+  prepSuggester?: PrepSuggester;
+  /** Prep-plan trigger; defaults to running the job inline with the handler's prepSuggester.
+   *  Production injects the SQS enqueuer (routes.manifest) so the ~20s generation runs on the worker. */
+  prepDispatch?: PrepDispatcher;
 }
 
 export function makeHandlers(deps: CollegeDeps): CollegeHandlers {
   const { getData } = deps;
-  const discoverer = deps.discoverer ?? makeBedrockDiscoverer();
   const dispatch = deps.dispatch ?? makeInlineDispatcher(getData);
+  // Default: run the discovery job inline using THIS handler's discoverer (so tests use the stub).
+  // Production injects the SQS enqueuer (routes.manifest) so the slow web-grounded search runs on the
+  // 300s worker instead of the 30s API request.
+  // Pass deps.discoverer (the test stub, or undefined) so the default inline run resolves the
+  // student's majors and builds a major-aware Bedrock discoverer when none is injected.
+  const discoverDispatch =
+    deps.discoverDispatch ?? ((jobId: string) => runDiscoveryJob(getData, deps.discoverer, jobId));
+  const assetsDispatch = deps.assetsDispatch ?? makeAssetsEnqueuer(getData);
+  // Model-only checklist generator (no web search → fits the request budget). Real Bedrock by
+  // default; tests inject a stub. Returns [] on any failure so the endpoint never 500s.
+  const checklistSuggester = deps.checklistSuggester ?? makeBedrockChecklistSuggester();
+  // Prep-plan generation runs async on the worker in production; default to inline generation for
+  // tests/local, using THIS handler's suggester stub when injected (runPrepJob builds the model-only
+  // Bedrock generator when none is given). Production injects the SQS enqueuer via routes.manifest.
+  const prepDispatch = deps.prepDispatch ?? ((collegeId: string) => runPrepJob(getData, deps.prepSuggester, collegeId));
 
   /** Fetch a college or throw 404. */
   async function requireCollege(id: string): Promise<College> {
@@ -96,8 +130,11 @@ export function makeHandlers(deps: CollegeDeps): CollegeHandlers {
         addedBy: 'manual',
         userEdited,
         hydrationStatus: 'in-progress',
+        assetsStatus: 'in-progress',
       } as Parameters<Data['colleges']['create']>[0]);
+      // Text hydration and imagery fetch run on separate queues/workers — kicked off together.
       await dispatch(created.collegeId);
+      await assetsDispatch(created.collegeId);
       const after = await data.colleges.get(created.collegeId);
       return { status: 201, body: after ?? created };
     },
@@ -134,28 +171,61 @@ export function makeHandlers(deps: CollegeDeps): CollegeHandlers {
       const data = getData();
       await requireCollege(id);
       await data.colleges.update(id, { hydrationStatus: 'in-progress' });
+      // assetsStatus is system-owned — set it via merge (not update) so it's never marked userEdited.
+      await data.colleges.mergePreservingUserEdits(id, { assetsStatus: 'in-progress' });
       await dispatch(id);
+      await assetsDispatch(id);
       const after = await data.colleges.get(id);
       return { status: 202, body: after };
     },
 
-    // POST /colleges/hydrate-all — refresh every non-removed college. 202 with a count.
+    // POST /colleges/hydrate-all — refresh every non-removed college (text + imagery). 202 with a count.
     hydrateAll: async (ctx) => {
       void ctx;
       const data = getData();
       const targets = (await data.colleges.list()).filter((c) => c.status !== 'removed');
       for (const c of targets) {
         await data.colleges.update(c.collegeId, { hydrationStatus: 'in-progress' });
+        await data.colleges.mergePreservingUserEdits(c.collegeId, { assetsStatus: 'in-progress' });
         await dispatch(c.collegeId);
+        await assetsDispatch(c.collegeId);
       }
       return { status: 202, body: { requested: targets.length } };
     },
 
-    // POST /colleges/discover — AI candidates for the filters; adds nothing.
+    // POST /colleges/assets-backfill — one-time: fetch imagery for every non-removed college that
+    // doesn't have a campus photo yet. 202 with the count enqueued.
+    assetsBackfill: async (ctx) => {
+      void ctx;
+      const data = getData();
+      const targets = (await data.colleges.list()).filter(
+        (c) => c.status !== 'removed' && !c.campusImageUrl,
+      );
+      for (const c of targets) {
+        await data.colleges.mergePreservingUserEdits(c.collegeId, { assetsStatus: 'in-progress' });
+        await assetsDispatch(c.collegeId);
+      }
+      return { status: 202, body: { requested: targets.length } };
+    },
+
+    // POST /colleges/discover — start an ASYNC discovery job and return its id. Web-grounded
+    // discovery can exceed the 30s API budget, so the job runs on the SQS worker; the frontend polls
+    // GET /colleges/discover/:jobId. (In tests/local with no queue, the job runs inline.)
     discover: async (ctx) => {
       const input = validateBody(discoverSchema, ctx);
-      const candidates = await discoverer(input);
-      return { status: 200, body: { candidates } };
+      const job = await getData().discoveryJobs.create({ status: 'pending', filters: input });
+      await discoverDispatch(job.jobId);
+      // Re-read so an inline run (tests) returns the finished result; async returns the pending job.
+      const after = await getData().discoveryJobs.get(job.jobId);
+      return { status: 202, body: after ?? job };
+    },
+
+    // GET /colleges/discover/:jobId — poll a discovery job's status + candidates.
+    discoverStatus: async (ctx) => {
+      const { jobId } = validateParams(jobIdParamSchema, ctx);
+      const job = await getData().discoveryJobs.get(jobId);
+      if (!job) throw Errors.notFound('Discovery job not found');
+      return { status: 200, body: job };
     },
 
     // POST /colleges/bulk-add — add several discovered colleges at once (no auto-hydrate; they carry
@@ -194,14 +264,14 @@ export function makeHandlers(deps: CollegeDeps): CollegeHandlers {
       return { status: 200, body: { notes } };
     },
 
-    // POST /colleges/:id/notes — author defaults to the JWT username.
+    // POST /colleges/:id/notes — author is always the JWT identity, never client-supplied.
     addNote: async (ctx) => {
       const { id } = validateParams(idParamSchema, ctx);
       const input = validateBody(noteSchema, ctx);
       const data = getData();
       await requireCollege(id);
       const note = await data.collegeNotes.add(id, {
-        author: input.author ?? ctx.requester.username,
+        author: ctx.requester.username,
         content: input.content,
         noteType: input.noteType,
       });
@@ -224,6 +294,36 @@ export function makeHandlers(deps: CollegeDeps): CollegeHandlers {
       const checklist = await getData().collegeChecklist.put(id, items);
       return { status: 200, body: checklist };
     },
+
+    // POST /colleges/:id/checklist/suggest — AI-generated, college + major-specific application
+    // steps for the "Generate steps" button. Model-only (no web search) so it stays in the request
+    // budget; returns an editable list and persists NOTHING — the client de-dupes against existing
+    // items and PUTs the merged checklist (so manual + already-checked items are never clobbered).
+    suggestChecklist: async (ctx) => {
+      const { id } = validateParams(idParamSchema, ctx);
+      const college = await requireCollege(id);
+      const majors = (await getData().studentProfile.get())?.intendedMajors ?? [];
+      const suggestions = await checklistSuggester(college, majors);
+      return { status: 200, body: { suggestions } };
+    },
+
+    // POST /colleges/:id/prep — kick off the AI "how to prepare in high school" plan for this college
+    // (recommended HS classes + GPA/test targets + activities), grounded in its admission data + the
+    // student's major. Generation is a ~20s model call, so it runs ASYNC on the SQS worker (like
+    // hydration): mark the college 'in-progress', enqueue, and return 202. The worker fills `hsPrepPlan`
+    // and flips `hsPrepStatus`; the frontend polls GET /colleges/:id until it settles. (When no queue is
+    // configured — tests/local — the dispatcher runs inline, so the returned college is already done.)
+    generatePrep: async (ctx) => {
+      const { id } = validateParams(idParamSchema, ctx);
+      await requireCollege(id); // 404 if it's gone
+      await getData().colleges.mergePreservingUserEdits(id, { hsPrepStatus: 'in-progress' });
+      await prepDispatch(id);
+      const college = await getData().colleges.get(id);
+      return {
+        status: 202,
+        body: { status: college?.hsPrepStatus ?? 'in-progress', plan: college?.hsPrepPlan ?? null, college },
+      };
+    },
   };
 }
 
@@ -234,7 +334,9 @@ export function buildRoutes(h: CollegeHandlers) {
     { method: 'GET' as const, path: '/colleges', handler: h.list },
     { method: 'POST' as const, path: '/colleges', handler: h.create },
     { method: 'POST' as const, path: '/colleges/discover', handler: h.discover },
+    { method: 'GET' as const, path: '/colleges/discover/:jobId', handler: h.discoverStatus },
     { method: 'POST' as const, path: '/colleges/hydrate-all', handler: h.hydrateAll },
+    { method: 'POST' as const, path: '/colleges/assets-backfill', handler: h.assetsBackfill },
     { method: 'POST' as const, path: '/colleges/bulk-add', handler: h.bulkAdd },
     { method: 'GET' as const, path: '/colleges/:id', handler: h.detail },
     { method: 'PUT' as const, path: '/colleges/:id', handler: h.update },
@@ -245,5 +347,7 @@ export function buildRoutes(h: CollegeHandlers) {
     { method: 'POST' as const, path: '/colleges/:id/notes', handler: h.addNote },
     { method: 'GET' as const, path: '/colleges/:id/checklist', handler: h.getChecklist },
     { method: 'PUT' as const, path: '/colleges/:id/checklist', handler: h.putChecklist },
+    { method: 'POST' as const, path: '/colleges/:id/checklist/suggest', handler: h.suggestChecklist },
+    { method: 'POST' as const, path: '/colleges/:id/prep', handler: h.generatePrep },
   ];
 }

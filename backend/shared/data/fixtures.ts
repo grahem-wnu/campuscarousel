@@ -3,11 +3,11 @@
 // don't hand-roll entity shapes. Pure helpers — no AWS, safe to use with InMemoryTableClient.
 
 import type { Data } from './index.js';
-import type { Activity, Clinical, College, Scholarship, WhyNursing } from './types.js';
+import type { Activity, ExperienceEntry, College, Scholarship, Motivation } from './types.js';
 
 type NewActivity = Omit<Activity, 'activityId' | 'createdAt' | 'updatedAt'>;
-type NewClinical = Omit<Clinical, 'entryId' | 'createdAt' | 'updatedAt'>;
-type NewWhyNursing = Omit<WhyNursing, 'entryId' | 'createdAt' | 'updatedAt'>;
+type NewExperience = Omit<ExperienceEntry, 'entryId' | 'createdAt' | 'updatedAt'>;
+type NewMotivation = Omit<Motivation, 'entryId' | 'createdAt' | 'updatedAt'>;
 type NewCollege = Omit<College, 'collegeId' | 'createdAt' | 'updatedAt'>;
 type NewScholarship = Omit<Scholarship, 'scholarshipId' | 'createdAt' | 'updatedAt'>;
 
@@ -21,7 +21,7 @@ export const buildActivity = (over: Partial<NewActivity> = {}): NewActivity => (
   ...over,
 });
 
-export const buildClinical = (over: Partial<NewClinical> = {}): NewClinical => ({
+export const buildExperience = (over: Partial<NewExperience> = {}): NewExperience => ({
   date: '2026-02-01',
   facility: 'CHOC Children’s Hospital',
   department: 'Pediatric ICU',
@@ -30,10 +30,10 @@ export const buildClinical = (over: Partial<NewClinical> = {}): NewClinical => (
   ...over,
 });
 
-export const buildWhyNursing = (over: Partial<NewWhyNursing> = {}): NewWhyNursing => ({
+export const buildMotivation = (over: Partial<NewMotivation> = {}): NewMotivation => ({
   date: '2026-03-01',
   title: 'The conversation at the soup kitchen',
-  content: 'A moment that crystallised why nursing.',
+  content: 'A moment that crystallised why this path.',
   visibility: 'family',
   ...over,
 });
@@ -50,7 +50,7 @@ export const buildCollege = (over: Partial<NewCollege> = {}): NewCollege => ({
 export const buildScholarship = (over: Partial<NewScholarship> = {}): NewScholarship => ({
   name: 'Future Nurses of America Scholarship',
   amount: 5000,
-  type: 'nursing-specific',
+  type: 'major-specific',
   status: 'discovered',
   addedBy: 'ai-discovered',
   ...over,
@@ -61,7 +61,7 @@ export interface SeededIds {
   privateActivityId: string;
   collegeId: string;
   scholarshipId: string;
-  clinicalId: string;
+  experienceId: string;
 }
 
 /**
@@ -77,12 +77,12 @@ export async function seed(data: Data): Promise<SeededIds> {
   );
   const college = await data.colleges.create(buildCollege());
   const scholarship = await data.scholarships.create(buildScholarship());
-  const clinical = await data.clinical.create(buildClinical());
+  const experience = await data.experiences.create(buildExperience());
   return {
     familyActivityId: familyActivity.activityId,
     privateActivityId: privateActivity.activityId,
     collegeId: college.collegeId,
     scholarshipId: scholarship.scholarshipId,
-    clinicalId: clinical.entryId,
+    experienceId: experience.entryId,
   };
 }

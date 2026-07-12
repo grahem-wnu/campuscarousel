@@ -4,6 +4,7 @@
 // so nothing here decides what the model may see — privacy is enforced before the bundle is built.
 
 import { ApiError } from '../../shared/api/index.js';
+import { focusLine, majorPhrase } from '../../shared/ai/major.js';
 import { MODES, type ChatContext } from './schema.js';
 
 export type Mode = (typeof MODES)[number];
@@ -31,6 +32,8 @@ export interface ContextBundle {
   page: { module?: string; collegeId?: string; essayId?: string };
   summary: DataSummary;
   records: GroundingRecord[];
+  /** The student's intended college major(s), from their profile; drives major-aware prompt copy. */
+  majors?: string[];
 }
 
 export interface ChatMessage {
@@ -56,7 +59,7 @@ export interface Assistant {
 /** Resolve the active mode: an explicit `context.mode` wins, else derive from the page module. */
 export function resolveMode(context: ChatContext | undefined): Mode {
   if (context?.mode) return context.mode;
-  if (context?.essayId || context?.module === 'why-nursing' || context?.module === 'application-central') {
+  if (context?.essayId || context?.module === 'motivations' || context?.module === 'application-central') {
     return 'essay-partner';
   }
   if (context?.module === 'college-hub') return 'college-discovery';
@@ -64,34 +67,40 @@ export function resolveMode(context: ChatContext | undefined): Mode {
   return 'ask';
 }
 
-const MODE_GUIDANCE: Record<Mode, string> = {
-  ask: 'Answer questions about Keira’s nursing-school journey. You may use the data summary and records below to answer factual questions (e.g. "how many volunteer hours?").',
-  'college-discovery':
-    'Help discover BSN/nursing programs that fit Keira. When you propose schools, give a short structured list (name, location, why it fits) she can add to her college list.',
-  'essay-partner':
-    'Be an essay partner. Use Keira’s real experiences below to help her brainstorm, structure, and strengthen her writing. SUGGEST and ask questions — never write the essay for her.',
-  'scholarship-discovery':
-    'Help discover scholarships Keira may qualify for. Offer a short structured list (name, amount/eligibility, why it fits) she can add to her tracker.',
-};
+/** Mode-specific guidance, parameterised by the student's major(s) so nothing hardcodes nursing. */
+function modeGuidance(mode: Mode, majors?: string[]): string {
+  const program = majorPhrase(majors);
+  switch (mode) {
+    case 'ask':
+      return 'Answer questions about the student’s college-prep journey. You may use the data summary and records below to answer factual questions (e.g. "how many volunteer hours?").';
+    case 'college-discovery':
+      return `Help discover ${program} programs that fit the student. When you propose schools, give a short structured list (name, location, why it fits) they can add to their college list.`;
+    case 'essay-partner':
+      return 'Be an essay partner. Use the student’s real experiences below to help them brainstorm, structure, and strengthen their writing. SUGGEST and ask questions — never write the essay for them.';
+    case 'scholarship-discovery':
+      return 'Help discover scholarships the student may qualify for. Offer a short structured list (name, amount/eligibility, why it fits) they can add to their tracker.';
+  }
+}
 
 const fmt = (n: number | undefined): string => (typeof n === 'number' ? String(n) : 'n/a');
 
 /** Build the system prompt from the (already visibility-filtered) bundle. Deterministic + pure. */
 export function buildSystemPrompt(bundle: ContextBundle): string {
   const lines: string[] = [
-    'You are the AI assistant inside "Keira’s Journey", a private app tracking Keira’s path to a BSN (nursing) program.',
+    'You are the AI assistant inside this private college-prep app, which tracks a student’s journey toward college.',
+    focusLine(bundle.majors),
     `The current user’s role is "${bundle.role}".`,
-    MODE_GUIDANCE[bundle.mode],
+    modeGuidance(bundle.mode, bundle.majors),
   ];
   if (bundle.page.module) lines.push(`The user is on the "${bundle.page.module}" page.`);
   if (bundle.page.collegeId) lines.push(`Current college context id: ${bundle.page.collegeId}.`);
 
   lines.push(
     '',
-    'Keira’s progress snapshot:',
+    'The student’s progress snapshot:',
     `- GPA: ${fmt(bundle.summary.gpa)}`,
-    `- Best TEAS: ${fmt(bundle.summary.bestTeas)}`,
-    `- Clinical hours: ${bundle.summary.clinicalHours}`,
+    `- Best exam score: ${fmt(bundle.summary.bestTeas)}`,
+    `- Experience hours: ${bundle.summary.clinicalHours}`,
     `- Volunteer hours: ${bundle.summary.volunteerHours}`,
     `- Colleges tracked: ${bundle.summary.collegeCount}`,
     `- Goals: ${bundle.summary.goalCount}`,
@@ -105,6 +114,8 @@ export function buildSystemPrompt(bundle: ContextBundle): string {
   lines.push(
     '',
     'Be warm, specific, and concise. Ground answers in the data above; if you lack data, say so rather than inventing it. Never reveal another user’s private information.',
+    // The chat UI renders plain text, NOT markdown — so tables/headings/bold show as raw symbols.
+    'Write for a plain-text chat that does NOT render markdown. Never use markdown tables (pipes/dashes), "#" headings, or "**bold**" — they appear as raw symbols. Use short paragraphs and simple "- " bullets; present figures or comparisons as compact labeled lines, e.g. "Tuition: ~$63,000/yr".',
   );
   return lines.join('\n');
 }

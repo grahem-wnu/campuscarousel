@@ -13,10 +13,13 @@ import {
   type Handler,
   type RouteDef,
 } from '../../shared/api/index.js';
-import { filterForRequester, type Requester } from '../../shared/auth/index.js';
-import type { Benchmark, Data } from '../../shared/data/index.js';
+import type { Benchmark, BenchmarkSnapshot, College, Data } from '../../shared/data/index.js';
+import { benchmarkMetricLabels } from '../../shared/packs/index.js';
 import { buildAggregate, compareToBenchmark } from './compare.js';
-import { computeKeiraStats, type KeiraStats } from './stats.js';
+import { gatherFamilyVisibleStats, gatherStats } from './gather.js';
+import { makeSqsEnqueuer } from './enqueue.js';
+import type { BenchmarkDispatcher } from './research.js';
+import { buildSnapshot, mergeSnapshot, monthOf } from './snapshots.js';
 import type { BenchmarkResearcher } from './researcher.js';
 import { collegeParamSchema, refreshSchema } from './schema.js';
 
@@ -27,24 +30,27 @@ export interface BenchmarkHandlers {
   gaps: Handler;
 }
 
-/** Aggregate Keira's comparable stats, with clinical/volunteer hours visibility-filtered for the
- *  caller so a parent never sees private-entry hours folded in. Courses/TEAS/certs aren't
- *  visibility-bearing. */
-async function gatherStats(data: Data, requester: Requester): Promise<KeiraStats> {
-  const [courses, teas, clinical, activities, certifications] = await Promise.all([
-    data.courses.list(),
-    data.teas.list(),
-    data.clinical.list(),
-    data.activities.list(),
-    data.certifications.list(),
-  ]);
-  return computeKeiraStats({
-    courses,
-    teas,
-    certifications,
-    clinical: filterForRequester(clinical, requester),
-    activities: filterForRequester(activities, requester),
-  });
+/** Record at most one snapshot for the current calendar month and return the rolling trend. Uses
+ *  family-visible stats (never private). Best-effort: a history write must never break the read, and
+ *  an all-empty matrix (no benchmark data yet) isn't worth a point. */
+async function recordMonthlySnapshot(
+  data: Data,
+  colleges: readonly College[],
+  benchmarkOf: (collegeId: string) => Benchmark | null,
+): Promise<BenchmarkSnapshot[]> {
+  let snapshots: BenchmarkSnapshot[] = [];
+  try {
+    snapshots = (await data.benchmarkHistory.get())?.snapshots ?? [];
+    const familyStats = await gatherFamilyVisibleStats(data);
+    const rows = buildAggregate(familyStats, colleges, benchmarkOf).rows;
+    if (!rows.some((r) => r.benchmark.hasData)) return snapshots;
+    const nowIso = new Date().toISOString();
+    const snap = buildSnapshot(monthOf(nowIso), nowIso, familyStats, rows);
+    const saved = await data.benchmarkHistory.put(mergeSnapshot(snapshots, snap));
+    return saved.snapshots;
+  } catch {
+    return snapshots;
+  }
 }
 
 /** Read every college's benchmark once and index by collegeId. */
@@ -56,7 +62,14 @@ async function benchmarksByCollege(
   return new Map(collegeIds.map((id, i) => [id, found[i] ?? null]));
 }
 
-export function makeHandlers(getData: () => Data, getResearcher: () => BenchmarkResearcher): BenchmarkHandlers {
+export function makeHandlers(
+  getData: () => Data,
+  getResearcher: () => BenchmarkResearcher,
+  dispatcher?: BenchmarkDispatcher,
+): BenchmarkHandlers {
+  // Production: enqueue a `benchmark-research` job for the 300s SQS worker. Tests / no queue: the
+  // enqueuer falls back to running the research inline, so the same handler stays synchronous there.
+  const dispatch = dispatcher ?? makeSqsEnqueuer(getData, getResearcher);
   return {
     // GET /colleges/:id/benchmark — the stored benchmark (may be null) + Keira's freshly-computed
     // comparison against it. A null benchmark surfaces as the "insufficient data" empty state.
@@ -65,7 +78,11 @@ export function makeHandlers(getData: () => Data, getResearcher: () => Benchmark
       const data = getData();
       const college = await data.colleges.get(id);
       if (!college) throw Errors.notFound('College not found');
-      const [benchmark, keira] = await Promise.all([data.benchmarks.get(id), gatherStats(data, ctx.requester)]);
+      const [benchmark, keira, profile] = await Promise.all([
+        data.benchmarks.get(id),
+        gatherStats(data, ctx.requester),
+        data.studentProfile.get(),
+      ]);
       return {
         status: 200,
         body: {
@@ -73,13 +90,16 @@ export function makeHandlers(getData: () => Data, getResearcher: () => Benchmark
           benchmark,
           keira,
           comparison: compareToBenchmark(keira, benchmark),
+          labels: benchmarkMetricLabels(profile?.intendedMajors ?? []),
         },
       };
     },
 
-    // POST /colleges/:id/benchmark/refresh — AI researches the competitive profile, merged into the
-    // stored benchmark (preserving any human-edited fields), then Keira's comparison is recomputed
-    // against the persisted numbers.
+    // POST /colleges/:id/benchmark/refresh — kick off the AI research. Web-grounded research blows
+    // past API Gateway's ~30s ceiling, so we mark the benchmark `in-progress` and hand off to the
+    // 300s async worker; the frontend polls hydrationStatus. Returns the current (now researching)
+    // benchmark plus the caller's live comparison. (In tests / no queue the dispatcher runs the
+    // research inline, so the benchmark is already `complete` by the time we re-read it.)
     refresh: async (ctx) => {
       const { id } = validateParams(collegeParamSchema, ctx);
       const input = validate(refreshSchema, ctx.body ?? {});
@@ -87,34 +107,37 @@ export function makeHandlers(getData: () => Data, getResearcher: () => Benchmark
       const college = await data.colleges.get(id);
       if (!college) throw Errors.notFound('College not found');
 
-      const [existing, profile, keira] = await Promise.all([
-        data.benchmarks.get(id),
-        getResearcher().research(college, input.focus),
-        gatherStats(data, ctx.requester),
-      ]);
-      // Compute the comparison against what will actually be persisted (existing values with the AI
-      // profile applied), then write once so lastDataRefresh is stamped a single time.
-      const preview = { ...(existing ?? { collegeId: id }), ...profile } as Benchmark;
-      const comparison = compareToBenchmark(keira, preview);
-      const saved = await data.benchmarks.mergePreservingUserEdits(id, { ...profile, keirasComparison: comparison });
+      await data.benchmarks.mergePreservingUserEdits(id, { hydrationStatus: 'in-progress' });
+      await dispatch(id, input.focus);
 
+      const [benchmark, keira, profile] = await Promise.all([
+        data.benchmarks.get(id),
+        gatherStats(data, ctx.requester),
+        data.studentProfile.get(),
+      ]);
       return {
         status: 200,
         body: {
           college: { collegeId: college.collegeId, name: college.name },
-          benchmark: saved,
+          benchmark,
           keira,
-          comparison,
+          comparison: compareToBenchmark(keira, benchmark),
+          labels: benchmarkMetricLabels(profile?.intendedMajors ?? []),
         },
       };
     },
 
     // GET /benchmarks/aggregate — the matrix: every college × metrics, with Keira's stats compared.
+    // Also lazily records one snapshot per month and returns the progress-over-time `trend`.
     aggregate: async (ctx) => {
       const data = getData();
       const [colleges, keira] = await Promise.all([data.colleges.list(), gatherStats(data, ctx.requester)]);
       const byId = await benchmarksByCollege(data, colleges.map((c) => c.collegeId));
-      return { status: 200, body: buildAggregate(keira, colleges, (cid) => byId.get(cid) ?? null) };
+      const benchmarkOf = (cid: string): Benchmark | null => byId.get(cid) ?? null;
+      const matrix = buildAggregate(keira, colleges, benchmarkOf);
+      const trend = await recordMonthlySnapshot(data, colleges, benchmarkOf);
+      const labels = benchmarkMetricLabels((await data.studentProfile.get())?.intendedMajors ?? []);
+      return { status: 200, body: { ...matrix, trend, labels } };
     },
 
     // GET /benchmarks/gaps — AI biggest-gaps analysis with specific recommendations.
@@ -123,7 +146,8 @@ export function makeHandlers(getData: () => Data, getResearcher: () => Benchmark
       const [colleges, keira] = await Promise.all([data.colleges.list(), gatherStats(data, ctx.requester)]);
       const byId = await benchmarksByCollege(data, colleges.map((c) => c.collegeId));
       const matrix = buildAggregate(keira, colleges, (cid) => byId.get(cid) ?? null);
-      const analysis = await getResearcher().analyzeGaps(keira, matrix.rows);
+      const majors = (await data.studentProfile.get())?.intendedMajors ?? [];
+      const analysis = await getResearcher().analyzeGaps(keira, matrix.rows, majors);
       return { status: 200, body: { keira, ...analysis } };
     },
   };

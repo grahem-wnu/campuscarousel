@@ -18,7 +18,11 @@ export interface TabsProps {
 /** Controlled, underline-style tab bar. */
 export function Tabs({ items, value, onChange, className }: TabsProps) {
   return (
-    <div role="tablist" className={cn("flex gap-1 border-b border-surface-border", className)}>
+    // overflow-x-auto: when the tabs don't fit (mobile, or many slotted-in tabs) the strip scrolls
+    // horizontally on its own instead of wrapping or being clipped by the page's overflow-x guard.
+    // overflow-y-hidden: an x-axis `auto` makes the y-axis compute to `auto` too, and the active
+    // tab's `border-b-2 -mb-px` overflows by 1px → a phantom vertical scrollbar. Pin y to hidden.
+    <div role="tablist" className={cn("scrollbar-x-always flex gap-1 overflow-x-auto overflow-y-hidden border-b border-surface-border", className)}>
       {items.map((item) => {
         const active = item.id === value;
         return (
@@ -29,7 +33,7 @@ export function Tabs({ items, value, onChange, className }: TabsProps) {
             aria-selected={active}
             onClick={() => onChange(item.id)}
             className={cn(
-              "-mb-px flex items-center gap-2 border-b-2 px-3 py-2 text-sm font-medium transition-colors",
+              "-mb-px flex shrink-0 items-center gap-2 whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium transition-colors",
               active
                 ? "border-primary-600 text-primary-700"
                 : "border-transparent text-ink-500 hover:border-ink-300 hover:text-ink-700",

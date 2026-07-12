@@ -20,6 +20,18 @@ describe('buildSuggestPrompt', () => {
     expect(p).toContain('Current activities: hospital volunteer, HOSA.');
     expect(p).toContain('Target colleges: Ohio State.');
   });
+
+  it('is major-aware: names the major and folds in pack guidance', () => {
+    const p = buildSuggestPrompt({ count: 4 }, ['Nursing']);
+    expect(p).toContain('Nursing');
+    expect(p).toContain('Major-specific guidance:');
+  });
+
+  it('stays neutral with no majors', () => {
+    const p = buildSuggestPrompt({ count: 4 });
+    expect(p).toContain('their intended college program(s)');
+    expect(p).not.toContain('Major-specific guidance:');
+  });
 });
 
 describe('parseSuggestions', () => {

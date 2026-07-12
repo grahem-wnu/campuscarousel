@@ -1,16 +1,18 @@
 // Visit prep for POST /colleges/:id/visits/:vid/prep.
 //
-// The spec calls for Bedrock + web search (best time, nursing-specific questions, logistics, contact
+// The spec calls for Bedrock + web search (best time, program-specific questions, logistics, contact
 // info). The generation sits behind an injectable `PrepGenerator` seam with two implementations:
 //   • makeBedrockPrep — calls Bedrock (model/inference-profile from BEDROCK_MODEL_ID, never
 //     hardcoded; lazy SDK import; injectable client) for the "best time" guidance + any extra
 //     questions, layering them on top of the curated baseline. Falls back to curated on any error.
-//   • curatedPrep     — deterministic: the spec's nursing-specific question checklist + logistics
+//   • curatedPrep     — deterministic: the spec's program question checklist + logistics
 //     pulled from the college's own contact info. No network/clock — safe in tests and as the
 //     graceful fallback (and the default the handlers use when nothing is injected).
 //
 // Mirrors backend/modules/certifications/suggester.ts (the house pattern for an AI feature).
 
+import { majorPhrase } from '../../shared/ai/major.js';
+import { packFocusBriefs } from '../../shared/packs/index.js';
 import type { College, Visit } from '../../shared/data/index.js';
 
 export interface VisitLogistics {
@@ -23,7 +25,7 @@ export interface VisitLogistics {
 export interface VisitPrep {
   /** Guidance on the best time to visit (open-house windows, term timing). */
   bestTime: string;
-  /** Nursing-specific questions to ask, pre-populated from the spec's checklist. */
+  /** Program-specific questions to ask, pre-populated from the spec's checklist. */
   questions: string[];
   logistics: VisitLogistics;
   source: 'ai' | 'curated';
@@ -32,23 +34,25 @@ export interface VisitPrep {
 export interface PrepInput {
   college: College;
   visit: Visit;
+  /** The active student's intended major(s) — names the academic focus + folds in pack guidance. */
+  majors?: string[];
 }
 
 export type PrepGenerator = (input: PrepInput) => Promise<VisitPrep>;
 
 /**
- * The nursing-specific question checklist from the spec. These are the questions schools notice an
+ * The program question checklist from the spec. These are the questions schools notice an
  * informed applicant asking. Deterministic — the backbone of every prep, AI or curated.
  */
-export const NURSING_QUESTIONS: readonly string[] = [
-  'Which hospitals and clinical sites do nursing students rotate through?',
-  'What is the ICU / critical-care clinical placement rate for students?',
-  'What is the most recent NCLEX-RN first-time pass rate?',
-  'How many clinical hours does the program require, and when do they start?',
-  'Is admission a direct-admit (guaranteed) BSN, or a secondary/competitive nursing application?',
-  'What academic and wellness support services are available to nursing students?',
-  'What are the faculty-to-student and clinical instructor-to-student ratios?',
-  'Are there undergraduate research, simulation-lab, or study-abroad opportunities in nursing?',
+export const PROGRAM_QUESTIONS: readonly string[] = [
+  'What support services (academic, wellness, advising) are available to students?',
+  'What are typical class sizes, and what is the faculty-to-student ratio?',
+  'What hands-on, experiential, or research opportunities exist in this program?',
+  'Is admission direct (guaranteed) or competitive/secondary for this program?',
+  'What internships, co-ops, or placement partnerships does the program offer?',
+  'What does a typical first-year schedule look like in this program?',
+  'Are there study-abroad or honors options tied to this program?',
+  'What outcomes (graduation, employment, further study) do students typically see?',
 ];
 
 const has = (s?: string): s is string => typeof s === 'string' && s.trim().length > 0;
@@ -56,8 +60,8 @@ const has = (s?: string): s is string => typeof s === 'string' && s.trim().lengt
 /** Build the logistics block from the college's own stored contact info / location. */
 export function logisticsFor(college: College): VisitLogistics {
   const contact =
-    college.contactInfo?.nursingAdmissionsEmail ??
-    college.contactInfo?.nursingAdmissionsPhone ??
+    college.contactInfo?.programAdmissionsEmail ??
+    college.contactInfo?.programAdmissionsPhone ??
     college.contactInfo?.financialAidPhone;
   return {
     address: has(college.location) ? college.location : undefined,
@@ -71,23 +75,23 @@ export function logisticsFor(college: College): VisitLogistics {
 function curatedBestTime(visit: Visit): string {
   switch (visit.visitType) {
     case 'open-house':
-      return 'Aim for an official nursing open-house or admitted-student day — check the campus-visit page for fall/spring dates.';
+      return 'Aim for an official open-house or admitted-student day — check the campus-visit page for fall/spring dates.';
     case 'overnight':
       return 'Schedule an overnight while classes are in session (avoid breaks) so you see real campus and dorm life.';
     case 'virtual':
-      return 'Book a virtual nursing info session; ask for a recording if the live time does not work.';
+      return 'Book a virtual info session; ask for a recording if the live time does not work.';
     default:
-      return 'Visit while classes are in session (not during breaks or finals) so the nursing department and clinical facilities are active.';
+      return 'Visit while classes are in session (not during breaks or finals) so the department and its facilities are active.';
   }
 }
 
 /**
- * Deterministic curated prep: the full nursing-question checklist + logistics from the college's
+ * Deterministic curated prep: the full program-question checklist + logistics from the college's
  * contact info. Safe in tests and as the production fallback.
  */
 export const curatedPrep: PrepGenerator = async ({ college, visit }) => ({
   bestTime: curatedBestTime(visit),
-  questions: [...NURSING_QUESTIONS],
+  questions: [...PROGRAM_QUESTIONS],
   logistics: logisticsFor(college),
   source: 'curated',
 });
@@ -108,15 +112,19 @@ export interface BedrockPrepOptions {
   fallback?: PrepGenerator;
 }
 
-/** Prompt asking the model for best-time guidance + a few college-specific questions as JSON. */
-function buildPrompt(college: College, visit: Visit): string {
+/** Prompt asking the model for best-time guidance + a few college-specific questions as JSON. With
+ *  `majors` set, the prep targets that academic focus and folds in any major-pack guidance. */
+function buildPrompt(college: College, visit: Visit, majors: string[] = []): string {
+  const guidance = packFocusBriefs(majors);
+  const focusLine = guidance.length ? ` Major-specific guidance: ${guidance.join(' ')}` : '';
   return [
-    `A prospective BSN nursing applicant is planning a ${visit.visitType ?? 'campus'} visit to ${college.name}`,
+    `A prospective college applicant pursuing ${majorPhrase(majors, 'their intended college program')} is planning a ${visit.visitType ?? 'campus'} visit to ${college.name}`,
     college.location ? ` (${college.location})` : '',
     ` on ${visit.date}.`,
-    'Give concise, nursing-focused visit prep. Respond with ONLY a JSON object (no prose, no code fences):',
+    focusLine,
+    ' Give concise, program-focused visit prep. Respond with ONLY a JSON object (no prose, no code fences):',
     '{"bestTime": string (one or two sentences on the best time/season to visit this school),',
-    '"extraQuestions": string[] (up to 5 school-specific nursing questions beyond the standard checklist)}.',
+    '"extraQuestions": string[] (up to 5 school-specific program questions beyond the standard checklist)}.',
   ].join('');
 }
 
@@ -139,9 +147,9 @@ function parsePrep(decoded: unknown): { bestTime?: string; extraQuestions: strin
  */
 export function makeBedrockPrep(options: BedrockPrepOptions = {}): PrepGenerator {
   const fallback = options.fallback ?? curatedPrep;
-  return async ({ college, visit }) => {
+  return async ({ college, visit, majors }) => {
     const modelId = options.modelId ?? process.env.BEDROCK_MODEL_ID;
-    if (!modelId) return fallback({ college, visit });
+    if (!modelId) return fallback({ college, visit, majors });
     try {
       const { BedrockRuntimeClient, InvokeModelCommand } = await import('@aws-sdk/client-bedrock-runtime');
       const client: BedrockInvoker = options.client ?? (new BedrockRuntimeClient({}) as unknown as BedrockInvoker);
@@ -153,12 +161,12 @@ export function makeBedrockPrep(options: BedrockPrepOptions = {}): PrepGenerator
           JSON.stringify({
             anthropic_version: 'bedrock-2023-05-31',
             max_tokens: 800,
-            messages: [{ role: 'user', content: buildPrompt(college, visit) }],
+            messages: [{ role: 'user', content: buildPrompt(college, visit, majors) }],
           }),
         ),
       });
       const res = await client.send(command);
-      if (!res.body) return fallback({ college, visit });
+      if (!res.body) return fallback({ college, visit, majors });
       const decoded = JSON.parse(new TextDecoder().decode(res.body)) as unknown;
       const { bestTime, extraQuestions } = parsePrep(decoded);
       const base = await curatedPrep({ college, visit });
@@ -169,7 +177,7 @@ export function makeBedrockPrep(options: BedrockPrepOptions = {}): PrepGenerator
         source: 'ai',
       };
     } catch {
-      return fallback({ college, visit });
+      return fallback({ college, visit, majors });
     }
   };
 }

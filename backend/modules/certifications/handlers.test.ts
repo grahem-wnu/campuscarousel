@@ -180,10 +180,48 @@ describe('suggest (POST /certifications/suggest)', () => {
 
   it('falls back to the default goal when neither body nor profile supplies one', async () => {
     const res = await h.suggest(ctx({ body: {} }));
-    expect((res.body as { careerGoal: string }).careerGoal).toMatch(/nursing/i);
+    expect((res.body as { careerGoal: string }).careerGoal).toMatch(/college-bound/i);
   });
 
   it('422s on an unknown body field', async () => {
     await expectStatus(h.suggest(ctx({ body: { bogus: 1 } })), 422);
+  });
+});
+
+describe('guidance (POST /certifications/guidance) — async job', () => {
+  it('accepts (202), echoes the profile location, and the inline worker completes the job', async () => {
+    await data.studentProfile.put({ name: 'Keira', location: 'Aliso Viejo, CA' });
+    const res = await h.guidance(ctx({ body: { certName: 'BLS/CPR' } }));
+    expect(res.status).toBe(202);
+    const job = res.body as { jobId: string; certName: string; location?: string; status: string };
+    expect(job.certName).toBe('BLS/CPR');
+    expect(job.location).toBe('Aliso Viejo, CA');
+    // Default dispatch researches inline; with no BEDROCK_MODEL_ID the researcher returns {}, so the
+    // job still settles to 'complete'.
+    expect(job.status).toBe('complete');
+  });
+
+  it('works with no stored location (omits it)', async () => {
+    const res = await h.guidance(ctx({ body: { certName: 'CNA' } }));
+    expect(res.status).toBe(202);
+    expect((res.body as { location?: string }).location).toBeUndefined();
+  });
+
+  it('422s on a missing/blank cert name', async () => {
+    await expectStatus(h.guidance(ctx({ body: {} })), 422);
+    await expectStatus(h.guidance(ctx({ body: { certName: '' } })), 422);
+  });
+});
+
+describe('guidanceStatus (GET /certifications/guidance/:jobId)', () => {
+  it('returns the job by id', async () => {
+    const started = (await h.guidance(ctx({ body: { certName: 'BLS/CPR' } }))).body as { jobId: string };
+    const res = await h.guidanceStatus(ctx({ params: { jobId: started.jobId } }));
+    expect(res.status).toBe(200);
+    expect((res.body as { jobId: string }).jobId).toBe(started.jobId);
+  });
+
+  it('404s for an unknown job', async () => {
+    await expectStatus(h.guidanceStatus(ctx({ params: { jobId: 'nope' } })), 404);
   });
 });

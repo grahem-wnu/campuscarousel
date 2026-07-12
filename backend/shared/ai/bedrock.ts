@@ -62,6 +62,8 @@ export interface ConverseOptions {
   /** Optional system prompt. */
   system?: string;
   maxTokens?: number;
+  /** Sampling temperature passed through to the model (omit for the model default). */
+  temperature?: number;
   /** Tool-use round cap (final round runs without tools to force a text answer). Default 4. */
   maxRounds?: number;
   /** Enable the web_search tool. Defaults to env `AI_WEB_SEARCH === 'true'`. */
@@ -153,11 +155,31 @@ export async function converseWithSearch(
   for (let round = 1; round <= maxRounds; round++) {
     // Offer tools every round except the last, so the loop is guaranteed to terminate with prose.
     const offerTools = webSearch && round < maxRounds;
+
+    // On the final round we cut off tools — but a model mid-research will otherwise keep narrating
+    // "let me do one more search" and never synthesize. Tell it explicitly that search is closed and
+    // it must answer now. Appended as a trailing text block so any prior tool_result stays first.
+    if (webSearch && round === maxRounds && maxRounds > 1) {
+      const nudge: TextBlock = {
+        type: 'text',
+        text:
+          'Web search is now closed for this task. Do NOT ask to search again. Using everything you ' +
+          'have already gathered, produce your final answer now, in full, exactly as instructed above.',
+      };
+      const last = messages[messages.length - 1];
+      if (last && last.role === 'user' && Array.isArray(last.content)) {
+        last.content.push(nudge);
+      } else {
+        messages.push({ role: 'user', content: [nudge] });
+      }
+    }
+
     const body: Record<string, unknown> = {
       anthropic_version: 'bedrock-2023-05-31',
       max_tokens: options.maxTokens ?? 2048,
       messages,
     };
+    if (options.temperature !== undefined) body.temperature = options.temperature;
     if (options.system) body.system = options.system;
     if (offerTools) body.tools = [WEB_SEARCH_TOOL];
 
@@ -186,7 +208,11 @@ export async function converseWithSearch(
           }
           resultText = formatResults(results);
         } catch (err) {
-          resultText = `Search unavailable: ${(err as Error).message}`;
+          // Web-search failures were silent (the model just gets a "search unavailable" tool result and
+          // writes a disclaimer). Log them so a degraded result is observable — the key is never logged.
+          const message = err instanceof Error ? err.message : String(err);
+          console.warn(`[web_search] unavailable (query="${query.slice(0, 80)}"): ${message}`);
+          resultText = `Search unavailable: ${message}`;
         }
         toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: resultText });
       } else {

@@ -29,6 +29,18 @@ describe('buildBriefPrompt', () => {
     expect(p).toContain('Reach 100 clinical hours');
     expect(p).toContain('Do not invent facts');
   });
+
+  it('is major-aware: names the major and folds in pack guidance', () => {
+    const p = buildBriefPrompt(contact, sources, undefined, ['Nursing']);
+    expect(p).toContain('Nursing');
+    expect(p).toContain('Major-specific guidance:');
+  });
+
+  it('stays neutral with no majors', () => {
+    const p = buildBriefPrompt(contact, sources);
+    expect(p).toContain('their intended college programs');
+    expect(p).not.toContain('Major-specific guidance:');
+  });
 });
 
 describe('makeBriefer', () => {

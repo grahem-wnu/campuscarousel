@@ -1,5 +1,5 @@
 // Dashboard handler — one read-only endpoint that rolls up the whole journey, role-specific and
-// visibility-filtered. PRIVACY: activities + clinical hours are run through the shared
+// visibility-filtered. PRIVACY: activities + experience hours are run through the shared
 // filterForRequester before any aggregation, so a parent/admin never sees a stat or feed item derived
 // from keira's `private` entries; keira sees everything. Built from injectable deps (in-memory data +
 // pinned clock in tests).
@@ -16,7 +16,7 @@ import {
   computeGpa,
   goalSummary,
   interviewReadiness,
-  latestTeas,
+  latestExam,
   recentFeed,
   upcomingDeadlines,
 } from './summary.js';
@@ -37,34 +37,35 @@ export function makeHandlers(deps: DashboardDeps): DashboardHandlers {
     // GET /dashboard — the authenticated user's role-appropriate, visibility-filtered overview.
     get: async (ctx) => {
       const data = getData();
-      const [courses, activitiesRaw, clinicalRaw, teas, certs, colleges, goals, scholarships, budget, interviews] =
+      const [courses, activitiesRaw, experiencesRaw, exams, certs, colleges, goals, scholarships, budget, interviews, profile] =
         await Promise.all([
           data.courses.list(),
           data.activities.list(),
-          data.clinical.list(),
-          data.teas.list(),
+          data.experiences.list(),
+          data.exams.list(),
           data.certifications.list(),
           data.colleges.list(),
           data.goals.list(),
           data.scholarships.list(),
           data.budget.get(),
           data.interviews.list(),
+          data.studentProfile.get(),
         ]);
 
       // PRIVACY: drop entries the caller may not see BEFORE aggregating.
       const activities = filterForRequester(activitiesRaw, ctx.requester);
-      const clinical = filterForRequester(clinicalRaw, ctx.requester);
+      const experiences = filterForRequester(experiencesRaw, ctx.requester);
       const todayIso = now().toISOString().slice(0, 10);
 
-      const deadlines = upcomingDeadlines({ colleges, goals, scholarships, certifications: certs }, todayIso);
-      const teasLatest = latestTeas(teas);
+      const deadlines = upcomingDeadlines({ colleges, goals, scholarships, certifications: certs }, todayIso, 8, profile?.graduationYear);
+      const examLatest = latestExam(exams);
 
       // Shown to everyone.
       const common = {
         gpa: computeGpa(courses),
         activity: activitySummary(activities, todayIso),
-        clinicalHours: clinicalTotalHours(clinical),
-        latestTeas: teasLatest,
+        clinicalHours: clinicalTotalHours(experiences),
+        latestExam: examLatest,
         certifications: certSummary(certs, todayIso),
         upcomingDeadlines: deadlines,
         collegeCounts: collegeCounts(colleges),
@@ -98,7 +99,7 @@ export function makeHandlers(deps: DashboardDeps): DashboardHandlers {
           family: {
             budget: budgetSummary(budget, scholarships, colleges),
             goals: goalSummary(goals),
-            benchmarkReadiness: benchmarkReadiness(common.gpa.weighted, teasLatest?.overallScore ?? null, common.clinicalHours),
+            benchmarkReadiness: benchmarkReadiness(common.gpa.weighted, examLatest?.overallScore ?? null, common.clinicalHours),
           },
         },
       };
@@ -114,22 +115,22 @@ export function buildRoutes(h: DashboardHandlers) {
 /** A short, computed (not AI-generated) motivational line for the student view. */
 function motivational(activityHours: number, clinicalHours: number, streak: number): string {
   if (streak >= 4) return `🔥 ${streak}-week streak — consistency is your superpower.`;
-  if (clinicalHours >= 50) return `${clinicalHours} clinical hours logged — real patient time admissions love.`;
-  if (activityHours + clinicalHours > 0) return `${Math.round(activityHours + clinicalHours)} hours invested in your nursing journey so far.`;
+  if (clinicalHours >= 50) return `${clinicalHours} experience hours logged — real-world time admissions love.`;
+  if (activityHours + clinicalHours > 0) return `${Math.round(activityHours + clinicalHours)} hours invested in your journey so far.`;
   return 'Log your first activity to start building your story.';
 }
 
 /** Coarse self-readiness from the student's own stats (per-college benchmarks live in peer-benchmark). */
 function benchmarkReadiness(
   gpa: number | null,
-  teas: number | null,
+  exam: number | null,
   clinicalHours: number,
-): { level: 'strong' | 'competitive' | 'needs-work' | 'insufficient-data'; gpa: number | null; teas: number | null; clinicalHours: number } {
-  if (gpa === null && teas === null && clinicalHours === 0) return { level: 'insufficient-data', gpa, teas, clinicalHours };
+): { level: 'strong' | 'competitive' | 'needs-work' | 'insufficient-data'; gpa: number | null; exam: number | null; clinicalHours: number } {
+  if (gpa === null && exam === null && clinicalHours === 0) return { level: 'insufficient-data', gpa, exam, clinicalHours };
   let score = 0;
   if (gpa !== null) score += gpa >= 3.7 ? 2 : gpa >= 3.3 ? 1 : 0;
-  if (teas !== null) score += teas >= 78 ? 2 : teas >= 65 ? 1 : 0;
+  if (exam !== null) score += exam >= 78 ? 2 : exam >= 65 ? 1 : 0;
   score += clinicalHours >= 75 ? 2 : clinicalHours >= 30 ? 1 : 0;
   const level = score >= 5 ? 'strong' : score >= 3 ? 'competitive' : 'needs-work';
-  return { level, gpa, teas, clinicalHours };
+  return { level, gpa, exam, clinicalHours };
 }

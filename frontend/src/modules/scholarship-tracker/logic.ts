@@ -8,7 +8,7 @@ import type { Scholarship, ScholarshipType, Status } from './types';
 export const TYPE_META: Record<ScholarshipType, string> = {
   merit: 'Merit',
   'need-based': 'Need-based',
-  'nursing-specific': 'Nursing',
+  'major-specific': 'Major-specific',
   'community-service': 'Community Service',
   diversity: 'Diversity',
   'state-specific': 'State-specific',

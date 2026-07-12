@@ -5,7 +5,7 @@ export const SK_DETAILS = 'DETAILS';
 
 /** Secondary index names. GSI1 is the generalised "list a collection by date" index
  *  (GSI1PK = collection name e.g. ACTIVITIES/COLLEGES/GOALS, GSI1SK = `<date>#<id>`).
- *  GSI2 = activities by category, GSI3 = clinical by facility, GSI4 = TEAS by date. */
+ *  GSI2 = activities by category, GSI3 = experiences by facility, GSI4 = exams by date. */
 export const INDEX = {
   GSI1: 'GSI1',
   GSI2: 'GSI2',

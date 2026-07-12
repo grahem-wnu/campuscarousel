@@ -62,7 +62,7 @@ export function CertForm({ initial, busy, error, onSubmit, onCancel, onDelete }:
   return (
     <form onSubmit={submit} className="space-y-4">
       <Field label="Name" required>
-        <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. BLS/CPR Certification" required />
+        <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. the certification name" required />
       </Field>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

@@ -1,6 +1,6 @@
 // Frontend types for the Dashboard — mirror the GET /dashboard payload (role-specific).
 
-export type Role = 'admin' | 'parent' | 'student';
+export type Role = 'admin' | 'parent' | 'student' | 'member';
 
 export interface Gpa {
   weighted: number | null;
@@ -48,7 +48,7 @@ export interface FamilySection {
   benchmarkReadiness: {
     level: 'strong' | 'competitive' | 'needs-work' | 'insufficient-data';
     gpa: number | null;
-    teas: number | null;
+    exam: number | null;
     clinicalHours: number;
   };
 }
@@ -58,7 +58,7 @@ export interface Dashboard {
   gpa: Gpa;
   activity: ActivitySummary;
   clinicalHours: number;
-  latestTeas: { date: string; overallScore: number } | null;
+  latestExam: { date: string; overallScore: number } | null;
   certifications: CertSummary;
   upcomingDeadlines: Deadline[];
   collegeCounts: Record<string, number>;

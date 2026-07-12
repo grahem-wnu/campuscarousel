@@ -1,14 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Button, Card, EmptyState, Field, Input, Modal, Select, Spinner, Tabs, type TabItem } from '../../shared/ui';
+import { Button, Card, EmptyState, Modal, Spinner } from '../../shared/ui';
 import { createGoal, listGoals, updateGoal } from './api';
 import { GoalCard } from './GoalCard';
 import { GoalDetail } from './GoalDetail';
 import { GoalForm, emptyForm, type GoalFormValues } from './GoalForm';
 import { SuggestGoals } from './SuggestGoals';
-import { BOARD_COLUMNS, CATEGORY_META, filterBySearch, groupByPeriod, groupByStatus } from './logic';
-import { CATEGORIES, type Category, type Goal, type GoalInput } from './types';
-
-type ViewId = 'board' | 'timeline';
+import { groupByPeriod } from './logic';
+import { type Goal, type GoalInput } from './types';
 
 /** Map a Goal back to editable form values. */
 function toFormValues(g: Goal): GoalFormValues {
@@ -24,15 +22,12 @@ function toFormValues(g: Goal): GoalFormValues {
   });
 }
 
-/** Goal Tracker — board (kanban) + timeline views, AI suggestions, and goal detail/edit. */
+/** Goal Tracker — a single year-by-year plan (goals grouped by period, status shown per card), plus
+ *  AI suggestions and goal detail/edit. */
 export default function GoalsPage() {
   const [goals, setGoals] = useState<Goal[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  const [view, setView] = useState<ViewId>('board');
-  const [search, setSearch] = useState('');
-  const [category, setCategory] = useState<Category | ''>('');
 
   const [showCreate, setShowCreate] = useState(false);
   const [showSuggest, setShowSuggest] = useState(false);
@@ -43,21 +38,19 @@ export default function GoalsPage() {
     setLoading(true);
     setError(null);
     try {
-      setGoals(await listGoals({ category: category || undefined }));
+      setGoals(await listGoals());
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load your goals.');
     } finally {
       setLoading(false);
     }
-  }, [category]);
+  }, []);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  const visible = useMemo(() => filterBySearch(goals, search), [goals, search]);
-  const byStatus = useMemo(() => groupByStatus(visible), [visible]);
-  const byPeriod = useMemo(() => groupByPeriod(visible), [visible]);
+  const byPeriod = useMemo(() => groupByPeriod(goals), [goals]);
 
   // Keep the open detail in sync after an inline update, and reflect changes into the list.
   function applyUpdate(updated: Goal) {
@@ -84,19 +77,13 @@ export default function GoalsPage() {
     setSelected((prev) => (prev?.goalId === updated.goalId ? updated : prev));
   }
 
-  const hasFilters = Boolean(search || category);
-  const views: TabItem[] = [
-    { id: 'board', label: 'Board' },
-    { id: 'timeline', label: 'Timeline' },
-  ];
-
   return (
     <div className="mx-auto max-w-5xl space-y-5 p-4 sm:p-6">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-ink-900">Goals</h1>
           <p className="mt-0.5 text-sm text-ink-500">
-            Map your path to a BSN — year by year, milestone by milestone.
+            Map your path to college — year by year, milestone by milestone.
           </p>
         </div>
         <div className="flex gap-2">
@@ -108,41 +95,6 @@ export default function GoalsPage() {
           </Button>
         </div>
       </header>
-
-      <Card flush className="p-3">
-        <div className="flex flex-wrap items-end gap-3">
-          <Field label="Search" className="min-w-[12rem] flex-1">
-            <Input
-              placeholder="Search goals…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </Field>
-          <Field label="Category">
-            <Select value={category} onChange={(e) => setCategory(e.target.value as Category | '')}>
-              <option value="">All</option>
-              {CATEGORIES.map((c) => (
-                <option key={c} value={c}>
-                  {CATEGORY_META[c].label}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          {hasFilters ? (
-            <Button
-              variant="ghost"
-              onClick={() => {
-                setSearch('');
-                setCategory('');
-              }}
-            >
-              Clear
-            </Button>
-          ) : null}
-        </div>
-      </Card>
-
-      <Tabs items={views} value={view} onChange={(id) => setView(id as ViewId)} />
 
       {error ? (
         <Card className="border border-error-200 bg-error-50 text-error-700">
@@ -171,36 +123,16 @@ export default function GoalsPage() {
             </div>
           }
         />
-      ) : visible.length === 0 ? (
-        <p className="py-8 text-center text-sm text-ink-500">No goals match your filters.</p>
-      ) : view === 'board' ? (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          {BOARD_COLUMNS.map((col) => (
-            <div key={col.status} className="space-y-2">
-              <h2 className="flex items-center justify-between text-sm font-semibold text-ink-700">
-                {col.label}
-                <span className="rounded-full bg-ink-100 px-2 py-0.5 text-xs text-ink-500">
-                  {byStatus[col.status].length}
-                </span>
-              </h2>
-              <div className="space-y-2">
-                {byStatus[col.status].map((g) => (
-                  <GoalCard key={g.goalId} goal={g} onOpen={setSelected} />
-                ))}
-                {byStatus[col.status].length === 0 ? (
-                  <p className="rounded-lg border border-dashed border-ink-200 py-6 text-center text-xs text-ink-400">
-                    Nothing here
-                  </p>
-                ) : null}
-              </div>
-            </div>
-          ))}
-        </div>
       ) : (
         <div className="space-y-6">
           {byPeriod.map((group) => (
             <section key={group.period} className="space-y-2">
-              <h2 className="text-sm font-semibold text-ink-700">{group.period}</h2>
+              <h2 className="flex items-center gap-2 text-sm font-semibold text-ink-700">
+                {group.period}
+                <span className="rounded-full bg-ink-100 px-2 py-0.5 text-xs font-normal text-ink-500">
+                  {group.goals.length}
+                </span>
+              </h2>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {group.goals.map((g) => (
                   <GoalCard key={g.goalId} goal={g} onOpen={setSelected} />
@@ -218,10 +150,9 @@ export default function GoalsPage() {
       <Modal open={showSuggest} onClose={() => setShowSuggest(false)} title="Suggest goals" size="lg">
         <SuggestGoals
           onCancel={() => setShowSuggest(false)}
-          onSaved={(n) => {
+          onSaved={() => {
             setShowSuggest(false);
             void load();
-            if (n) setView('board');
           }}
         />
       </Modal>

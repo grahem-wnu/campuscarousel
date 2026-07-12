@@ -16,12 +16,13 @@ describe('routes.manifest ↔ buildRoutes', () => {
     expect(manifest).toEqual(built);
   });
 
-  it('expose all six Course Planner endpoints', () => {
+  it('expose all seven Course Planner endpoints', () => {
     expect(manifestRoutes.map(sig).sort()).toEqual(
       [
         'DELETE /courses/:id',
         'GET /courses',
         'GET /courses/gpa',
+        'GET /courses/prerequisites',
         'GET /courses/prerequisites/:collegeId',
         'POST /courses',
         'PUT /courses/:id',

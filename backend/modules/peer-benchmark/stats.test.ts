@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import type { Activity, Certification, Clinical, Course, Teas } from '../../shared/data/index.js';
+import type { Activity, Certification, ExperienceEntry, Course, ExamScore } from '../../shared/data/index.js';
 import { bestTeasScore, computeGpa, computeKeiraStats, isEarnedCert } from './stats.js';
 
 const course = (over: Partial<Course>): Course =>
   ({ courseId: 'c', name: 'Course', createdAt: '', updatedAt: '', ...over }) as Course;
-const teas = (over: Partial<Teas>): Teas =>
-  ({ recordId: 'r', type: 'practice-test', date: '2026-01-01', createdAt: '', updatedAt: '', ...over }) as Teas;
-const clinical = (over: Partial<Clinical>): Clinical =>
-  ({ entryId: 'e', date: '2026-01-01', facility: 'F', hours: 0, visibility: 'family', createdAt: '', updatedAt: '', ...over }) as Clinical;
+const exam = (over: Partial<ExamScore>): ExamScore =>
+  ({ recordId: 'r', type: 'practice-test', date: '2026-01-01', createdAt: '', updatedAt: '', ...over }) as ExamScore;
+const experience = (over: Partial<ExperienceEntry>): ExperienceEntry =>
+  ({ entryId: 'e', date: '2026-01-01', facility: 'F', hours: 0, visibility: 'family', createdAt: '', updatedAt: '', ...over }) as ExperienceEntry;
 const activity = (over: Partial<Activity>): Activity =>
   ({ activityId: 'a', userId: 'keira', date: '2026-01-01', category: 'volunteer', title: 'T', visibility: 'family', createdAt: '', updatedAt: '', ...over }) as Activity;
 const cert = (over: Partial<Certification>): Certification =>
@@ -28,14 +28,22 @@ describe('computeGpa', () => {
   it('treats a missing/zero unit count as 1', () => {
     expect(computeGpa([course({ gradePoints: 4.0 }), course({ gradePoints: 3.0 })])).toBe(3.5);
   });
+  it('derives points from a letter grade when gradePoints is absent', () => {
+    // Real courses are entered with just a letter grade; the old gradePoints-only logic showed "no GPA".
+    expect(computeGpa([course({ grade: 'A' })])).toBe(4.0);
+    expect(computeGpa([course({ grade: 'A', units: 3 }), course({ grade: 'B', units: 1 })])).toBe(3.75);
+  });
+  it('still ignores ungraded (planned/in-progress) courses', () => {
+    expect(computeGpa([course({ grade: 'A' }), course({ name: 'Planned' })])).toBe(4.0);
+  });
 });
 
 describe('bestTeasScore', () => {
   it('returns the highest overall score', () => {
-    expect(bestTeasScore([teas({ overallScore: 78 }), teas({ overallScore: 85 }), teas({})])).toBe(85);
+    expect(bestTeasScore([exam({ overallScore: 78 }), exam({ overallScore: 85 }), exam({})])).toBe(85);
   });
   it('is undefined when no record has a score', () => {
-    expect(bestTeasScore([teas({}), teas({})])).toBeUndefined();
+    expect(bestTeasScore([exam({}), exam({})])).toBeUndefined();
   });
 });
 
@@ -61,8 +69,8 @@ describe('computeKeiraStats', () => {
   it('aggregates GPA, best TEAS, hours, and earned cert names', () => {
     const stats = computeKeiraStats({
       courses: [course({ gradePoints: 4.0, units: 1 })],
-      teas: [teas({ overallScore: 80 }), teas({ overallScore: 88 })],
-      clinical: [clinical({ hours: 10 }), clinical({ hours: 5.5 })],
+      exams: [exam({ overallScore: 80 }), exam({ overallScore: 88 })],
+      experiences: [experience({ hours: 10 }), experience({ hours: 5.5 })],
       activities: [
         activity({ category: 'volunteer', hours: 12 }),
         activity({ category: 'academic', hours: 99 }), // not volunteer → excluded
@@ -80,7 +88,7 @@ describe('computeKeiraStats', () => {
   });
 
   it('leaves GPA/TEAS undefined and hours at 0 with no data', () => {
-    expect(computeKeiraStats({ courses: [], teas: [], clinical: [], activities: [], certifications: [] })).toEqual({
+    expect(computeKeiraStats({ courses: [], exams: [], experiences: [], activities: [], certifications: [] })).toEqual({
       gpa: undefined,
       teasScore: undefined,
       clinicalHours: 0,

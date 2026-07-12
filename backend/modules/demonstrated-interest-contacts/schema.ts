@@ -17,7 +17,7 @@ export const TOUCHPOINT_TYPES = [
 ] as const;
 
 /** Contact relationship types — mirrors `Contact['relationship']`. */
-export const RELATIONSHIPS = ['mentor', 'supervisor', 'teacher', 'admissions', 'nurse', 'recommender', 'other'] as const;
+export const RELATIONSHIPS = ['mentor', 'supervisor', 'teacher', 'admissions', 'professional', 'recommender', 'other'] as const;
 
 /** The four recommendation slots (specs/modules/application-central recommendation board). */
 export const RECOMMENDER_SLOTS = ['stem-teacher', 'humanities-teacher', 'clinical-supervisor', 'community-leader'] as const;

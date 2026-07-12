@@ -2,7 +2,7 @@
   "name": "@keiras-journey/infra",
   "version": "0.1.0",
   "private": true,
-  "description": "Keira's Journey \u2014 AWS infrastructure (AWS CDK, TypeScript)",
+  "description": "Campus Carousel \u2014 AWS infrastructure (AWS CDK, TypeScript)",
   "bin": {
     "infra": "bin/infra.js"
   },

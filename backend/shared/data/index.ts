@@ -12,11 +12,22 @@
 
 import {
   makeBenchmarks,
+  makeBenchmarkHistory,
   makeBudget,
   makeCollegeChecklist,
   makeCollegeNotes,
+  makeCareerPath,
   makeConversations,
+  makeFocusOverview,
+  makeInvites,
+  makeMembers,
   makeProfiles,
+  makeReminderSettings,
+  makeSetupState,
+  makeStudentProfile,
+  makeTimelineDismissals,
+  makeStudents,
+  makeTenants,
   makeTouchpoints,
   makeVisits,
 } from './collections.js';
@@ -27,26 +38,50 @@ import {
   tableClientFromEnv,
   type TableClient,
 } from './table-client.js';
+import { studentScoped, tenantScoped } from './tenant-client.js';
 import { InMemoryTableClient } from './memory-client.js';
+import { currentTenantId } from '../tenant/index.js';
 import type {
   Activity,
   Application,
   Certification,
-  Clinical,
+  CertGuidanceJob,
+  ExperienceEntry,
   College,
   Contact,
   Course,
+  DiscoveryJob,
+  Document,
   Essay,
+  EssayReviewJob,
+  ExamScore,
+  FinAidItem,
   Goal,
+  Opportunity,
+  OpportunityDiscoveryJob,
   Interview,
+  PracticeQuestionJob,
   Recommendation,
   Scholarship,
-  Teas,
   TestScore,
-  WhyNursing,
+  Motivation,
 } from './types.js';
 
-export function makeData(client: TableClient) {
+/**
+ * Build the data accessor. Three storage tiers (SaaS multi-student platform):
+ *   - `client` — the PER-CHILD client (`studentScoped(tenantScoped(base))` in prod): every per-child
+ *     repo (activities, colleges, …) is keyed `T#<tenant>#S#<student>#…`.
+ *   - `familyClient` — the FAMILY-LEVEL client (`tenantScoped(base)` in prod): the student roster,
+ *     user profiles, and reminder settings are keyed `T#<tenant>#…` (shared across the family's kids).
+ *   - `base` — the UN-scoped client for the GLOBAL registries (tenants, invites).
+ * Defaults collapse all three to `client` so tests can call `makeData(new InMemoryTableClient())`, and
+ * the existing 2-arg `makeData(scoped, raw)` form keeps `base` as the global client.
+ */
+export function makeData(
+  client: TableClient,
+  base: TableClient = client,
+  familyClient: TableClient = client,
+) {
   // Activities — collection by date (GSI1) + by category (GSI2).
   const activitiesBase = makeDetailsRepo<Activity, 'activityId'>(client, {
     prefix: 'ACTIVITY',
@@ -64,38 +99,38 @@ export function makeData(client: TableClient) {
       activitiesBase.listByIndex('GSI2', `CATEGORY#${category}`, range),
   };
 
-  // Clinical hours — collection by date (GSI1) + by facility (GSI3).
-  const clinicalBase = makeDetailsRepo<Clinical, 'entryId'>(client, {
-    prefix: 'CLINICAL',
+  // Experience hours — collection by date (GSI1) + by facility (GSI3).
+  const experiencesBase = makeDetailsRepo<ExperienceEntry, 'entryId'>(client, {
+    prefix: 'EXPERIENCE',
     idField: 'entryId',
-    collection: 'CLINICAL',
+    collection: 'EXPERIENCES',
     sortField: 'date',
     indexProjections: (c) => ({
       GSI3PK: `FACILITY#${c.facility}`,
       GSI3SK: dateSortKey(c.date, c.entryId),
     }),
   });
-  const clinical = {
-    ...clinicalBase,
-    listByFacility: (facility: string, range?: ListRange): Promise<Clinical[]> =>
-      clinicalBase.listByIndex('GSI3', `FACILITY#${facility}`, range),
+  const experiences = {
+    ...experiencesBase,
+    listByFacility: (facility: string, range?: ListRange): Promise<ExperienceEntry[]> =>
+      experiencesBase.listByIndex('GSI3', `FACILITY#${facility}`, range),
   };
 
-  // TEAS — dedicated date index (GSI4) per the spec.
-  const teasBase = makeDetailsRepo<Teas, 'recordId'>(client, {
-    prefix: 'TEAS',
+  // Exams — dedicated date index (GSI4) per the spec.
+  const examsBase = makeDetailsRepo<ExamScore, 'recordId'>(client, {
+    prefix: 'EXAM',
     idField: 'recordId',
     sortField: 'date',
     indexProjections: (t) => ({
-      GSI4PK: 'TEAS_SCORES',
+      GSI4PK: 'EXAM_SCORES',
       GSI4SK: dateSortKey(t.date, t.recordId),
     }),
   });
-  const teas = {
-    ...teasBase,
-    list: (range?: ListRange): Promise<Teas[]> => teasBase.listByIndex('GSI4', 'TEAS_SCORES', range),
-    listByDateRange: (from: string, to: string, range?: Omit<ListRange, 'from' | 'to'>): Promise<Teas[]> =>
-      teasBase.listByIndex('GSI4', 'TEAS_SCORES', { ...range, from, to }),
+  const exams = {
+    ...examsBase,
+    list: (range?: ListRange): Promise<ExamScore[]> => examsBase.listByIndex('GSI4', 'EXAM_SCORES', range),
+    listByDateRange: (from: string, to: string, range?: Omit<ListRange, 'from' | 'to'>): Promise<ExamScore[]> =>
+      examsBase.listByIndex('GSI4', 'EXAM_SCORES', { ...range, from, to }),
   };
 
   const colleges = makeDetailsRepo<College, 'collegeId'>(client, {
@@ -103,6 +138,12 @@ export function makeData(client: TableClient) {
     idField: 'collegeId',
     collection: 'COLLEGES',
     hydratable: true,
+  });
+
+  // Transient async discovery jobs (no collection — fetched only by id while polling).
+  const discoveryJobs = makeDetailsRepo<DiscoveryJob, 'jobId'>(client, {
+    prefix: 'DISCOVERY',
+    idField: 'jobId',
   });
 
   const scholarships = makeDetailsRepo<Scholarship, 'scholarshipId'>(client, {
@@ -116,6 +157,32 @@ export function makeData(client: TableClient) {
     prefix: 'GOAL',
     idField: 'goalId',
     collection: 'GOALS',
+  });
+
+  // Document metadata (v2.1 F2). Bytes live in the private S3 bucket; this is the index + links.
+  const documents = makeDetailsRepo<Document, 'documentId'>(client, {
+    prefix: 'DOCUMENT',
+    idField: 'documentId',
+    collection: 'DOCUMENTS',
+  });
+
+  // Opportunity Finder (v2.1 Module 18): tracked volunteer/shadowing/CNA opportunities + async jobs.
+  const opportunities = makeDetailsRepo<Opportunity, 'opportunityId'>(client, {
+    prefix: 'OPPORTUNITY',
+    idField: 'opportunityId',
+    collection: 'OPPORTUNITIES',
+  });
+  const opportunityDiscoveryJobs = makeDetailsRepo<OpportunityDiscoveryJob, 'jobId'>(client, {
+    prefix: 'OPPORTUNITY_DISCOVERY',
+    idField: 'jobId',
+  });
+
+  // Financial Aid Center (v2.1 Module 19): FAFSA/CSS + per-school aid deadlines, sorted by deadline.
+  const finaid = makeDetailsRepo<FinAidItem, 'itemId'>(client, {
+    prefix: 'FINAID',
+    idField: 'itemId',
+    collection: 'FINAID',
+    sortField: 'deadline', // falls back to createdAt when no deadline set
   });
 
   const courses = makeDetailsRepo<Course, 'courseId'>(client, {
@@ -136,6 +203,24 @@ export function makeData(client: TableClient) {
     collection: 'CERTIFICATIONS',
   });
 
+  // Transient async "how to get this cert" research jobs (no collection — fetched by id while polling).
+  const certGuidanceJobs = makeDetailsRepo<CertGuidanceJob, 'jobId'>(client, {
+    prefix: 'CERTGUIDANCE',
+    idField: 'jobId',
+  });
+
+  // Transient async practice-question generation jobs (no collection — fetched by id while polling).
+  const practiceQuestionJobs = makeDetailsRepo<PracticeQuestionJob, 'jobId'>(client, {
+    prefix: 'PRACTICEQUESTIONS',
+    idField: 'jobId',
+  });
+
+  // Transient async essay-evaluation jobs (no collection — fetched by id while polling).
+  const essayReviewJobs = makeDetailsRepo<EssayReviewJob, 'jobId'>(client, {
+    prefix: 'ESSAYREVIEW',
+    idField: 'jobId',
+  });
+
   const interviews = makeDetailsRepo<Interview, 'sessionId'>(client, {
     prefix: 'INTERVIEW',
     idField: 'sessionId',
@@ -143,10 +228,10 @@ export function makeData(client: TableClient) {
     sortField: 'date',
   });
 
-  const whyNursing = makeDetailsRepo<WhyNursing, 'entryId'>(client, {
-    prefix: 'WHYNURSING',
+  const motivations = makeDetailsRepo<Motivation, 'entryId'>(client, {
+    prefix: 'MOTIVATION',
     idField: 'entryId',
-    collection: 'WHYNURSING',
+    collection: 'MOTIVATIONS',
     sortField: 'date',
   });
 
@@ -179,16 +264,20 @@ export function makeData(client: TableClient) {
 
   return {
     activities,
-    clinical,
-    teas,
+    experiences,
+    exams,
     colleges,
+    discoveryJobs,
     scholarships,
     goals,
     courses,
     essays,
     certifications,
+    certGuidanceJobs,
+    practiceQuestionJobs,
+    essayReviewJobs,
     interviews,
-    whyNursing,
+    motivations,
     contacts,
     applications,
     recommendations,
@@ -199,9 +288,37 @@ export function makeData(client: TableClient) {
     visits: makeVisits(client),
     collegeChecklist: makeCollegeChecklist(client),
     benchmarks: makeBenchmarks(client),
+    benchmarkHistory: makeBenchmarkHistory(client),
     conversations: makeConversations(client),
     budget: makeBudget(client),
-    profiles: makeProfiles(client),
+    documents,
+    opportunities,
+    opportunityDiscoveryJobs,
+    studentProfile: makeStudentProfile(client),
+    timelineDismissals: makeTimelineDismissals(client),
+    focusOverview: makeFocusOverview(client),
+    careerPath: makeCareerPath(client),
+    finaid,
+    // FAMILY-LEVEL repos — tenant-scoped but NOT per-child (shared across the family's kids).
+    profiles: makeProfiles(familyClient),
+    reminderSettings: makeReminderSettings(familyClient),
+    setupState: makeSetupState(familyClient),
+    students: makeStudents(familyClient),
+    members: makeMembers(familyClient),
+    // GLOBAL registries — built on the un-scoped base client (never tenant-prefixed).
+    tenants: makeTenants(base),
+    invites: makeInvites(base),
+
+    /** Hard-delete EVERY per-child item for `studentId` in the current tenant (keys
+     *  `T#<tenant>#S#<studentId>#…`). Used when a student is removed so no orphaned partition is left
+     *  behind. Goes through the raw `base` client (partition-wide), so it must run inside a tenant
+     *  context. Returns the number of items deleted. */
+    purgeStudent: async (studentId: string): Promise<number> => {
+      const prefix = `T#${currentTenantId()}#S#${studentId}#`;
+      const items = await base.scanByPkPrefix(prefix);
+      for (const it of items) await base.delete(it.PK, it.SK);
+      return items.length;
+    },
   };
 }
 
@@ -209,7 +326,12 @@ export type Data = ReturnType<typeof makeData>;
 
 /** Build the data client from the environment (CDK injects TABLE_NAME). Use in Lambdas. */
 export function dataFromEnv(env: NodeJS.ProcessEnv = process.env): Data {
-  return makeData(tableClientFromEnv(env));
+  // Production three-tier wiring: per-child repos go through studentScoped(tenantScoped(base))
+  // (keys `T#<tenant>#S#<student>#…`); family-level repos through tenantScoped(base) (`T#<tenant>#…`);
+  // the global registries through the raw base client. All resolved from AsyncLocalStorage, fail-closed.
+  const base = tableClientFromEnv(env);
+  const family = tenantScoped(base);
+  return makeData(studentScoped(family), base, family);
 }
 
 export { NotFoundError, isoNow, newId } from './repo.js';

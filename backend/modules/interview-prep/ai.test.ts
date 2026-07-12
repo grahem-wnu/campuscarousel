@@ -17,10 +17,10 @@ const throwing: BedrockInvoker = { send: async () => { throw new Error('Throttle
 
 const grounding: GroundingContext = {
   experiences: [
-    { kind: 'clinical', date: '2026-02-01', title: 'County Hospital', detail: 'shadowed an ICU nurse' },
+    { kind: 'experience', date: '2026-02-01', title: 'County Hospital', detail: 'shadowed an ICU professional' },
     { kind: 'activity', date: '2026-01-01', title: 'Hospice volunteering', detail: 'comforted families' },
   ],
-  counts: { activities: 1, clinical: 1, whyNursing: 0 },
+  counts: { activities: 1, experiences: 1, motivations: 0 },
   includesPrivate: false,
 };
 
@@ -37,6 +37,19 @@ describe('curatedQuestionGenerator', () => {
     expect(qs).toHaveLength(4);
     expect(qs[0]?.category).toBe('school-specific');
     expect(qs[0]?.question).toMatch(/Ohio State/);
+  });
+
+  it('seeds the active major pack questions into the curated fallback', async () => {
+    const qs = await curatedQuestionGenerator({ count: 8, grounding, majors: ['Nursing'] });
+    const text = qs.map((q) => q.question);
+    // A nursing-pack interview question should appear in the fallback set.
+    expect(text).toContain('Why our nursing program specifically?');
+  });
+
+  it('names the school opener for the active major, not hardcoded nursing', async () => {
+    const qs = await curatedQuestionGenerator({ count: 4, grounding, school: 'MIT', majors: ['Computer Science'] });
+    expect(qs[0]?.question).toMatch(/computer science/i);
+    expect(qs[0]?.question).not.toMatch(/nursing/i);
   });
 });
 
@@ -62,6 +75,20 @@ describe('makeBedrockQuestionGenerator', () => {
     const qs = await gen({ count: 3, grounding });
     expect(qs[0]).toEqual({ question: 'Tell me about a team conflict.', category: 'behavioral' });
     expect((await makeBedrockQuestionGenerator({ modelId: MODEL, client: throwing })({ count: 3, grounding })).length).toBeGreaterThan(0); // curated
+  });
+
+  it('builds a major-aware mock-question prompt naming the major + pack guidance', { timeout: 30000 }, async () => {
+    let sentPrompt = '';
+    const capturing: BedrockInvoker = {
+      send: async (command: unknown) => {
+        const body = JSON.parse(new TextDecoder().decode((command as { input: { body: Uint8Array } }).input.body));
+        sentPrompt = body.messages[0].content as string;
+        return { body: new TextEncoder().encode(JSON.stringify({ content: [{ text: '[{"question":"Q","category":"general"}]' }] })) };
+      },
+    };
+    await makeBedrockQuestionGenerator({ modelId: MODEL, client: capturing })({ count: 2, grounding, majors: ['Nursing'] });
+    expect(sentPrompt).toContain('Nursing');
+    expect(sentPrompt).toContain('Major-specific guidance:');
   });
 });
 

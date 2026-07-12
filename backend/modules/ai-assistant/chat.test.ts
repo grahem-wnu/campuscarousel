@@ -21,9 +21,9 @@ describe('resolveMode', () => {
   it('honors an explicit mode', () => {
     expect(resolveMode({ mode: 'essay-partner' })).toBe('essay-partner');
   });
-  it('derives essay-partner from an essay context or the why-nursing/application pages', () => {
+  it('derives essay-partner from an essay context or the motivation/application pages', () => {
     expect(resolveMode({ essayId: 'e1' })).toBe('essay-partner');
-    expect(resolveMode({ module: 'why-nursing' })).toBe('essay-partner');
+    expect(resolveMode({ module: 'motivations' })).toBe('essay-partner');
     expect(resolveMode({ module: 'application-central' })).toBe('essay-partner');
   });
   it('derives discovery modes from the page module', () => {
@@ -39,10 +39,10 @@ describe('resolveMode', () => {
 describe('buildSystemPrompt', () => {
   it('includes role, the data snapshot, and grounding records', () => {
     const p = buildSystemPrompt(
-      bundle({ records: [{ kind: 'why-nursing', text: 'The night shift: it changed me.' }] }),
+      bundle({ records: [{ kind: 'motivation', text: 'The night shift: it changed me.' }] }),
     );
     expect(p).toContain('role is "student"');
-    expect(p).toContain('Clinical hours: 40');
+    expect(p).toContain('Experience hours: 40');
     expect(p).toContain('Colleges tracked: 3');
     expect(p).toContain('The night shift: it changed me.');
   });
@@ -74,7 +74,7 @@ describe('makeAssistant', () => {
     });
     await a.reply(bundle(), [{ role: 'user', content: 'earlier' }, { role: 'assistant', content: 'reply' }], 'now');
     expect(captured!.messages.map((m) => m.content)).toEqual(['earlier', 'reply', 'now']);
-    expect(captured!.system).toContain('Keira’s Journey');
+    expect(captured!.system).toContain('college-prep app');
   });
 
   it('surfaces an invoker failure as a 502', async () => {

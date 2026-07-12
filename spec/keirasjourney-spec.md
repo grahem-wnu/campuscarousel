@@ -160,10 +160,25 @@ Attributes:
   - hasAcceleratedBSN: boolean
   - isTopPick: boolean (default false — user-toggled flag for prioritized schools)
   - ranking: string (e.g., "US News #8 BSN 2026")
+  - overview: string (AI-generated narrative, 2-3 paragraphs — what makes this school and its
+    nursing program distinctive: reputation, teaching hospital/clinical network, culture,
+    outcomes, and who it's a good fit for. This is the lead content of the Overview tab.)
+  - admissionsDeepDive: string (AI-generated narrative, 1-2 paragraphs — exactly how a student
+    gets in: every pathway (direct-admit vs. secondary application), what each requires, the real
+    timeline, selectivity, and the most important things an applicant must nail.)
+  - nclexPassRate: string (e.g., "94% first-time (2024)")
+  - employmentRate: string (e.g., "98% employed within 6 months")
   - tuitionInState: number (annual)
   - tuitionOutOfState: number (annual)
+  - costOfAttendanceOutOfState: number (annual full cost of attendance — tuition + fees + housing
+    + food + books; the sticker price before aid)
+  - estimatedNetPriceAfterAid: number (annual cost AFTER grants & scholarships — this is the real
+    out-of-pocket figure and is DISTINCT from tuition; never copy tuition into this field)
+  - percentReceivingAid: string (e.g., "62% receive grants/scholarships")
+  - avgAidAmount: number (annual average grant/scholarship per student)
+  - applicationFee: number (e.g., 60)
   - estimatedTotalCost: number (4-year with room/board)
-  - estimatedCostAfterAid: number (estimated with merit aid)
+  - estimatedCostAfterAid: number (estimated 4-year cost with merit aid)
   - acceptanceRateNursing: string (e.g., "~10%" or "70 of 700 applicants")
   - acceptanceRateUniversity: string
   - avgGPAAdmitted: string
@@ -172,8 +187,14 @@ Attributes:
   - essayPrompts: list of strings
   - requiredTests: list of strings (e.g., "TEAS", "SAT", "Casper SJT")
   - clinicalPartners: list of strings (hospitals/health systems)
+  - testimonials: list of maps { quote: string, attribution: string (e.g., "BSN student"),
+    source: string (URL) } — authentic student voices pulled from Niche/Cappex/Reddit/the school
+  - campusImageUrls: list of strings (URLs to campus/program photos for the branded header gallery)
   - specialNotes: string (e.g., "Attached to UPMC — excellent ICU rotations")
   - website: string
+  - dataSources: list of strings (URLs the AI relied on during the most recent hydration — shown
+    as "Sources" so the family can verify and dig deeper)
+  - dataAsOf: string (academic year the hydrated figures reflect, e.g., "2025-2026")
   - branding: map
     - logoUrl: string (URL to college logo — AI fetches from school website or public source during hydration)
     - primaryColor: string (hex — school's primary brand color, e.g., "#002855" for Michigan)
@@ -191,6 +212,22 @@ Attributes:
   - addedBy: "ai-discovered" | "manual"
   - hydrationStatus: "pending" | "in-progress" | "complete" | "partial" | "failed"
   - lastDataRefresh: ISO timestamp
+  - createdAt: ISO timestamp
+  - updatedAt: ISO timestamp
+```
+
+#### Discovery Job
+Transient record backing async college discovery (web-grounded discovery exceeds the 30s API budget,
+so the API creates a job and the SQS worker fills it; the frontend polls).
+```
+PK: DISCOVERY#<jobId>
+SK: DETAILS
+Attributes:
+  - status: "pending" | "complete" | "failed"
+  - filters: map (the discovery input echoed back: query, state, programType, maxTuition, directAdmitOnly, limit)
+  - candidates: list of maps (discovered colleges: name, location, state, programType, isDirectAdmit, hasBSN, ranking, tuition, website, summary)
+  - count: number (candidates found)
+  - error: string (set when status = "failed")
   - createdAt: ISO timestamp
   - updatedAt: ISO timestamp
 ```
@@ -537,6 +574,14 @@ Attributes:
 ```
 
 #### Peer Benchmark (per college)
+> **Metrics are MAJOR-AWARE in the UI.** The stored fields keep their (nursing-legacy) names, but
+> their meaning is generic — `avgTEASScore` = typical entrance-exam score, `typicalClinicalHours` =
+> typical hands-on experience hours. The fit/benchmark card + Peer Benchmark page label them from the
+> active major's pack: the entrance-exam row shows the major's exam name (nursing → "TEAS") and is
+> **hidden entirely for majors with no standardized entrance exam** (e.g. Construction Management);
+> the experience-hours row is labeled per major ("Clinical hours" / "Internship / jobsite hours" /
+> default "Experience hours"). The researcher likewise omits the entrance-exam figure when the major
+> has none.
 ```
 PK: COLLEGE#<collegeId>
 SK: BENCHMARK
@@ -638,24 +683,44 @@ When the College Hub has zero colleges, the user sees:
 - Triggered by the "Discover BSN Programs" button (available anytime, not just first run)
 - User can optionally narrow the search with filters: region/state, direct-admit only, cost ceiling, minimum ranking, public/private
 - Or just click "Find All" to cast the widest net
-- Backend: Lambda sends a structured prompt to Bedrock with web search enabled:
-  - "Search the web and find all accredited universities in the United States that offer a Bachelor of Science in Nursing (BSN) program. For each school, determine: school name, city, state, whether the BSN program is direct-admit from high school or requires a secondary/separate nursing application after enrollment, the nursing program website URL, and any available ranking. Return results as structured JSON."
-  - This may require multiple Bedrock calls (chunked by region or by source) since a single call can't reliably enumerate 200+ programs
-  - Strategy: search by state/region in parallel, deduplicate results
+- Backend: discovery is **async** (mirrors hydration), because web-grounded discovery routinely
+  exceeds the API Gateway/Lambda 30s synchronous budget:
+  - `POST /colleges/discover` validates the filters, creates a transient **DiscoveryJob**
+    (`status: "pending"`, PK `DISCOVERY#<jobId>`), enqueues it on the shared SQS hydration queue
+    (message routed by `jobId`), and returns `202` with the job id immediately.
+  - The SQS worker (300s budget) runs the web-grounded discovery prompt: "Search the web and find
+    accredited U.S. universities offering a BSN program; for each, determine name, city, state,
+    whether it's direct-admit from high school or requires a secondary nursing application, the
+    nursing program URL, and any ranking. Return structured JSON." It writes the candidates back
+    onto the job (`status: "complete"`, or `"failed"` with an error).
+  - The frontend polls `GET /colleges/discover/:jobId` until the job settles, then renders the
+    candidates. (With no queue configured — tests/local — the job runs inline.)
 - Results displayed as a scrollable list with checkboxes — user selects which colleges to add
 - "Add All" and "Add Selected" buttons
 - Each added college is saved to DynamoDB with `hydrationStatus: "pending"`
 
 **College Hydration (AI-powered data enrichment):**
 - When a college is added (via discovery OR manual add), a hydration job runs:
-  - Lambda calls Bedrock with web search to research the specific school
-  - Prompt: "Search the web for [School Name]'s BSN nursing program. Find and return as structured JSON: in-state and out-of-state tuition, room and board costs, nursing program acceptance rate, overall university acceptance rate, average admitted GPA, application deadlines (early action, regular decision, nursing-specific), required tests (SAT, ACT, TEAS, Casper SJT, etc.), prerequisite courses, clinical hospital partners, US News ranking if available, whether the program is direct-admit or requires secondary application, NCLEX pass rate, the nursing admissions office phone and email, financial aid office phone and URL, campus visit URL, the school mascot, primary and secondary brand colors (hex), and a URL to the school's official logo. Also note anything distinctive about the program (special certifications, unique curriculum, notable clinical partnerships)."
+  - Lambda calls Bedrock **through the shared web-search tool path** (`converseWithSearch`, Tavily-backed) — NOT plain general-knowledge inference. Numbers like tuition, net price, average admitted GPA, acceptance rate, deadlines, and rankings change yearly and MUST be verified against current-year web sources, not recalled from training data.
+  - The prompt instructs the model to run **multiple searches across different source types**, because no single site has everything:
+    - The college's own nursing site (.edu) — program structure, prerequisites, deadlines, application steps, clinical partners
+    - U.S. News / Niche — rankings and reputation
+    - College Navigator / NCES, collegetuitioncompare, the school's financial-aid office — cost of attendance, **net price after aid**, % receiving aid
+    - Common Data Set / admissions-stats sites — **average admitted GPA and acceptance rate**, which are rarely on the school's own marketing pages and must be searched for specifically
+    - Niche / Cappex / Reddit — authentic student testimonials about the nursing program
+  - The prompt requires genuine **narrative** output (not just fields): an `overview` (2-3 paragraphs on what makes the school/program distinctive and who it fits) and an `admissionsDeepDive` (how a student actually gets in — every pathway, timeline, selectivity, what to nail).
+  - **Critical accuracy rules baked into the prompt:**
+    - Separate NURSING-specific stats (BSN/direct-admit acceptance rate, nursing GPA) from UNIVERSITY-WIDE stats, and label which is which.
+    - `estimatedNetPriceAfterAid` is the cost AFTER grants/scholarships and is DISTINCT from tuition — never copy tuition into it. If only tuition is found, leave net price null.
+    - **Prefer partial data over blanks:** include any value found for even one of tuition/net price/GPA/acceptance rate. Only omit a field if genuinely unavailable after searching. NEVER fabricate a number — an omitted field is acceptable, a wrong one is not.
+    - Cite every source URL in `dataSources`, and stamp `dataAsOf` with the academic year the figures reflect.
   - Results parsed and stored in DynamoDB
   - `hydrationStatus` updated to "complete" or "partial" (if some fields couldn't be found)
   - `lastDataRefresh` set to current timestamp
 - Fields the AI couldn't find are left null and visually flagged in the UI as "Not found — edit manually or refresh"
 - Hydration can be re-triggered per college ("Refresh Data" button) or in bulk ("Refresh All" button)
 - Hydration is async — college appears in list immediately with a loading indicator, data populates as it arrives
+- **Fallback:** if `AI_WEB_SEARCH` is disabled or the search tool is unavailable, hydration degrades to general-knowledge inference (today's behavior) and the college is marked `partial` rather than failing outright.
 
 **Manual College Add:**
 - Simple form: just the school name (required), optionally city/state/website
@@ -685,23 +750,43 @@ When the College Hub has zero colleges, the user sees:
 **College Detail View:**
 Each college has a full detail page with a branded header and tabs:
 
-- **Header:** College logo (large), school name, mascot, location, and school colors used as accent/background stripe. Contact info (nursing admissions phone/email, financial aid, campus visit link) displayed as quick-action buttons/links.
+- **Header:** College logo (large), school name, mascot, location, and school colors used as accent/background stripe. A campus photo gallery (from `campusImageUrls`) banners the page. Contact info (nursing admissions phone/email, financial aid, campus visit link) displayed as quick-action buttons/links.
 
-- **Overview tab:** All structured data (tuition, deadlines, requirements, rankings, clinical partners, etc.)
+- **Overview tab (story-first):** Reads top-to-bottom like a viewbook so a first-time visitor can answer "should I even look into this school?" before scanning numbers.
+  1. **Narrative** — the `overview` paragraphs lead the page, followed by the `admissionsDeepDive`.
+  2. **Student voices** — `testimonials` rendered as quote cards with attribution.
+  3. **Key stats** — the structured data grid (ranking, NCLEX pass rate, net price after aid, out-of-state tuition, full cost of attendance, % receiving aid, nursing vs. university acceptance rate, average admitted GPA, deadlines, required tests, prerequisites, clinical partners).
+  4. **Sources** — `dataSources` listed as links, with the `dataAsOf` academic year, so the family can verify and dig deeper.
   - "Refresh Data" button — triggers AI to re-research this school via web search and update any changed information
   - "Last refreshed: [date]" timestamp shown prominently
   - Every field is manually editable — user edits override AI-fetched values
-  - Fields the AI couldn't find are highlighted with "Data not found" placeholder and edit button
+  - Fields the AI couldn't find are highlighted with "Data not found" placeholder and edit button; the narrative blocks are hidden (not shown empty) until hydrated.
   
 - **Notes tab:** Chronological notes from any family member
   - Note types: general, visit notes, research finding, contact info, financial aid info, application update
   - Rich text or markdown support
   
 - **Checklist tab:** Application preparation checklist
-  - Pre-populated with common items (transcripts, test scores, essays, recommendations, financial aid apps)
-  - Customizable — add/remove/reorder items
-  - Due dates and completion tracking
+  - **AI-generated on demand** — a "Generate application steps" button builds a checklist tailored to
+    *this* college and the student's intended major, grounded in the college's hydrated data
+    (deadlines, application fee, prerequisites, required tests, essay prompts, application service).
+    Model-only (no web search) so it stays within the request budget. New steps are merged
+    (de-duplicated) into the existing list — it never clobbers manual or already-checked items.
+  - Customizable — add/remove items manually; generated steps are editable like any other
+  - Due dates (carried from known deadlines) and completion tracking
   - Visual progress bar
+
+- **Prepare tab:** AI "how to prepare in high school" plan for getting into THIS college's program
+  - On-demand AI (`POST /colleges/:id/prep`, model-only, persisted on the college) generates, tailored
+    to the college + the student's intended major + grad year: **academic targets** (GPA / SAT / ACT,
+    grounded in the college's hydrated admission bar), **recommended high-school classes** (e.g. AP
+    Physics, AP Calculus, Anatomy & Physiology), and **activities/certifications** that strengthen the
+    application. Regenerate after changing the major or refreshing the college.
+  - The college's own program-level requirements (admission criteria + in-major *college* courses from
+    `prerequisites`) are shown below for **reference** — explicitly NOT framed as high-school to-dos
+    (a high schooler can't take "CON 223 Strength of Materials"; that confusion is what this replaced).
+  - Distinct from the Course Planner's coverage matrix (which maps entered courses to college
+    prerequisites for transfer/dual-enrollment planning).
   
 - **Fit Analysis tab:** AI-generated analysis of how Keira's current profile matches this school
   - GPA comparison
@@ -797,7 +882,9 @@ All suggestions are presented as a checklist — user can accept, modify, or del
 
 **Prerequisite Mapper:**
 - For each target college, shows which prerequisites are satisfied by current/planned courses
-- Matrix view: courses (rows) × colleges (columns) with checkmarks
+- Coverage matrix: colleges (rows) × prerequisites (columns) with covered/gap markers and a met count
+- **Tap a college row to expand it** — shows that college's full breakdown (courses still needed
+  first, then covered), so the wide matrix is usable on mobile without reading across columns
 - Highlights gaps: "UCI requires Microbiology — not currently in your plan"
 
 **Course Entry:**
@@ -814,17 +901,41 @@ All suggestions are presented as a checklist — user can accept, modify, or del
 - Deadline countdown (days remaining, color-coded)
 
 **Essay Workspace:**
-This is the killer feature. For each essay:
+This is the killer feature — the app's end goal is helping the student write authentic application
+essays, and this is where it happens. The AI is a **coach, not a ghostwriter**: it suggests,
+questions, and critiques; it never writes, rewrites, or supplies sentences/paragraphs for the essay.
 
-- **Prompt display** at top
-- **AI Context Panel** (sidebar):
-  - "Find relevant experiences" button → AI searches all journal entries (including Keira's private ones when she is the authenticated user) and surfaces the most relevant activities, reflections, and achievements
-  - Shows suggested narrative angles with brief explanations
-  - "What makes me unique for this school?" button → AI generates a brief analysis based on Keira's full profile vs. the specific school's values
-- **Writing area**: Rich text editor for drafting
+For each essay:
+
+- **College-linked prompts**: an essay can be linked to a college from the roster. Creating an essay
+  offers that college's real, hydrated `essayPrompts` as one-tap starting points (promptSource:
+  "college"), or a free-text prompt for Common App / practice work.
+- **Prompt display** at top, with the linked college shown as a chip
+- **AI Context Panel** (sidebar) — every AI action is grounded in a cross-section of the collected
+  data (activities, clinical/experience hours, Why-Nursing motivations — including Keira's private
+  entries when she is the authenticated caller) **and** in what the target college is looking for
+  (overview, admissions deep-dive, essay prompts, benchmark competitive edges) when a college is linked:
+  - "Find relevant experiences" button → AI surfaces the most relevant activities, reflections, and
+    achievements, plus suggested narrative angles with brief explanations
+  - "Practice questions" button → AI generates sample application/supplemental questions in the
+    style of the target college (grounded in its real prompts + admissions data) for practice runs
+- **Writing area**: editor for drafting
 - **Version history**: Save drafts, compare versions
-- **Word count**: With target range (e.g., Common App: 250-650 words)
-- **AI Review** (optional): "Check my essay" → AI provides feedback on clarity, authenticity, and alignment with the prompt (does NOT rewrite — gives specific, actionable suggestions)
+- **Copy to portal**: one-tap "Copy essay" puts the current text on the clipboard, ready to paste
+  into the Common App or a college's own application portal (essays are always submitted there —
+  the workspace is where they're written, not where they're sent). After a copy, a dismissible
+  nudge offers "Mark final" so the application tracker reflects reality
+- **Word count**: live counter against a **per-essay word target** — a coaching target, never a
+  hard limit. Defaults to the count stated in the prompt text when present ("in 500 words or
+  fewer" → 500, ranges use the upper bound), else the Common App 650; editable inline in the
+  workspace. The AI review judges "on target" against the essay's own target.
+- **AI Review with rating**: "Check my essay" → AI returns structured feedback (strengths,
+  improvements, authenticity note — does NOT rewrite) **plus a rubric rating**: 1-10 scores for
+  prompt fit, voice/authenticity, structure, specificity, and (when a college is linked) college
+  alignment; an overall 1-10 score; and a readiness verdict (`ready` / `close` / `keep-working`).
+  A compact `lastReview` summary (overall, verdict, when, which draft) is persisted on the essay so
+  progress shows in the essay list; the full review is returned live and never persisted. Ratings
+  come only from the real AI path — the deterministic fallback gives basic feedback without scores.
 
 **Recommendation Tracker:**
 - Who's been asked
@@ -941,9 +1052,16 @@ This is the killer feature. For each essay:
 - Track which schools the score has been sent to
 - If retaking: comparison with previous attempts
 
-### 10. Clinical Hours Log
+### 10. Clinical Hours Log (Experience Hours)
 
-**Purpose:** Structured clinical hours tracking in the format nursing programs want to see. Separate from the general Activity Journal — this is the formal, detailed record.
+**Purpose:** Structured experience-hours tracking in the format programs want to see. Separate from the general Activity Journal — this is the formal, detailed record.
+
+> **MAJOR-AWARE vocabulary.** Surfaced as "Experience Hours" and relabeled per the active major's pack
+> (`experienceVocab`, on `GET /experience/summary`): the hours noun ("Clinical hours" / "Internship /
+> jobsite hours" / "Experience hours"), the place field ("Facility" / "Site / company"), its
+> placeholders, and a highlight flag that exists ONLY for majors that track it (nursing → "Patient
+> care") — for other majors the highlight checkbox/badge/stat are hidden. Stored field names are
+> unchanged; this is a labeling/visibility layer so the module doesn't read as nursing-only.
 
 **Log Entry Form:**
 - Date
@@ -1328,7 +1446,12 @@ Attributes:
 - `PUT /essays/:id` — Update essay (add draft, change status)
 - `DELETE /essays/:id` — Delete essay
 - `POST /essays/:id/find-experiences` — AI finds relevant journal entries for this essay prompt
-- `POST /essays/:id/review` — AI reviews current draft and provides feedback
+  (grounded in the linked college's admissions data when the essay has a collegeId)
+- `POST /essays/:id/review` — AI reviews a draft: feedback + 1-10 rubric ratings (prompt fit, voice,
+  structure, specificity, college alignment), overall score, readiness verdict. Persists a compact
+  `lastReview` summary on the essay; full review returned live only. Never rewrites.
+- `POST /essays/:id/practice-questions` — AI generates sample application questions in the target
+  college's style (from its real essayPrompts + admissions deep-dive) for practice
 
 ### AI Assistant
 - `POST /ai/chat` — Send message to AI assistant
@@ -1448,8 +1571,10 @@ Attributes:
 
 ### Navigation
 - Top nav bar: Logo ("Keira's Journey") + primary module tabs
-- Primary tabs: Dashboard, Journal, Colleges, Scholarships, Timeline
-- Secondary nav (dropdown or sidebar): Goals, Courses, TEAS Prep, Clinical Log, Certifications, Why Nursing, Contacts, Interview Prep, Applications
+- Primary tabs (mobile bottom bar, first 5): Dashboard, Focus, Journal, Colleges, Applications
+  (Applications is primary — essay writing is the app's end goal, so managing essays/applications
+  must be one tap away on mobile; Scholarships and Timeline overflow to the More menu / drawer)
+- Secondary nav (dropdown or sidebar): Scholarships, Timeline, Goals, Courses, TEAS Prep, Clinical Log, Certifications, Why Nursing, Contacts, Interview Prep
 - Organize by usage frequency — Dashboard/Journal/Colleges are daily, others are weekly or seasonal
 - User avatar + name in top right (switch not needed — each user logs in separately)
 - AI chat button: floating bottom-right, opens slide-over panel
@@ -1582,6 +1707,350 @@ All features ship in v1. Future phases are net-new ideas, not deferred core func
 
 ---
 
+## v2.1 Feature Wave — Post-Launch Additions
+
+**Status: Approved 2026-06-10 (Grahem). Implemented — all five features built and merged to `dev`.**
+
+> As-built notes: Documents (F2), Opportunities (Module 18), and FinAid (Module 19) reuse the existing
+> shared GSI1 collection pattern — **no new GSI / table migration** was needed (the GSI5 mention below
+> is superseded). F4 **added** the `GET/PUT /profile` routes (a `StudentProfile` singleton); they did
+> not previously exist. FinAid deadlines flow into the Master Timeline and the reminder digest.
+
+Five gaps surfaced from a post-launch review of the deployed app. The app fully implements the
+v2.0 spec; these are net-new capabilities that make the difference between *tracking* the journey
+and *driving* it. Ship as **phased PRs to `dev`**, in the priority order below — each is independently
+reviewable and deployable. Each subsection extends (does not replace) the v2.0 spec.
+
+**Priority / ship order:**
+1. **F1 — Deadline Reminders** (email digest) — highest leverage, smallest surface
+2. **F2 — Document Storage** (S3 uploads)
+3. **Module 18 — Opportunity Finder** (AI discovery of volunteer/shadowing/CNA opportunities)
+4. **F4 — Guided First-Run Onboarding** (completes the v2.0 First-Run Experience)
+5. **Module 19 — Financial Aid Center** (FAFSA/CSS timeline, net-price tooling, NursingCAS awareness)
+
+Privacy, single-table DynamoDB, server-side auth off the JWT, no hardcoded config, and AI-on-Bedrock
+all carry over unchanged. New AI features degrade gracefully to curated fallbacks like the existing ones.
+
+---
+
+### F1 — Deadline Reminders (Email Digest)
+
+**Purpose:** The app is currently pull-only — a missed scholarship/cert/application deadline is silent.
+A scheduled email digest pushes upcoming and overdue items to the family so nothing slips.
+
+**Channel:** Amazon SES (v2) email digest (chosen over calendar sync / SMS for reliability + simplicity).
+Because Cognito accounts are username-only (no email on file), recipient addresses are stored in
+reminder settings, not derived from the user record.
+
+**Cadence + "never repeat" (Grahem, 2026-06-10):** the digest defaults to **weekly** (Monday), and a
+deadline is emailed **exactly once** — never repeated in later digests. A per-settings ledger
+(`notifiedEventIds`) records every event id already sent; subsequent digests exclude them, so the
+email is a nudge, not a weekly nag. (Tradeoff: an item is surfaced once even if it later goes overdue.)
+
+**Data Model:**
+```
+PK: REMINDER_SETTINGS
+SK: DETAILS
+Attributes:
+  - enabled: boolean (default true)
+  - cadence: "daily" | "weekly" (default "weekly")
+  - sendHourUTC: number (0-23, when the digest fires; default 13 = ~6-9am US)
+  - weeklyDayOfWeek: number (0-6, used when cadence = "weekly"; default 1 = Monday)
+  - horizonDays: number (look-ahead window for "upcoming"; default 30)
+  - recipients: list of maps { label: string (e.g., "Keira", "Mom", "Dad"), email: string, includePrivate: boolean }
+      - includePrivate is false for everyone except Keira's own address (private items never email a parent)
+  - notifiedEventIds: list of strings (server-internal "never repeat" ledger; not user-editable)
+  - lastSentAt: ISO timestamp
+  - updatedBy: string (userId)
+  - updatedAt: ISO timestamp
+```
+
+**Aggregation:** Reuses the master-timeline aggregation (`buildEvents`/`upcoming`, the same logic
+behind `GET /timeline/upcoming`). The digest Lambda assembles overdue + next-`horizonDays` items
+across colleges, scholarships, certifications (expirations/renewals), goals, application deadlines,
+and campus visits — grouped "Overdue / This week / Next week / This month / Later", each linking back
+into the app. Per-recipient content respects `includePrivate` (private-sourced items only appear in
+Keira's own email) and excludes anything already in `notifiedEventIds` (never repeat).
+
+**Infrastructure:**
+- EventBridge rule (cron, **hourly** at minute 0) → **digest Lambda** (separate handler, 60s timeout).
+- The hourly tick lets the Lambda honor the configured `sendHourUTC` (and, for weekly, `weeklyDayOfWeek`);
+  it sends at most once/day, and records `lastSentAt` (same-UTC-day guard) + appends sent ids to the ledger.
+- SES: verify the family sender identity + (in SES sandbox) the recipient addresses, OR request
+  production access. Sender from config/env (`REMINDER_SENDER_EMAIL`), never hardcoded. Send via
+  `@aws-sdk/client-sesv2`; least-privilege `ses:SendEmail` scoped to the account's SES identities.
+- All new config (sender address, app URL, schedule) via env/CDK config. Added to the async stack.
+
+**API:**
+- `GET /reminders/settings` — get reminder settings (any user; returns defaults if none saved)
+- `PUT /reminders/settings` — update cadence, recipients, horizon, enabled (ledger preserved server-side)
+- `POST /reminders/send-test` — send the digest now (bypasses cadence + the ledger). With `{ to }`, sends a
+  single test to that address using the caller's visibility; otherwise emails all configured recipients.
+
+**Edge cases:** no recipients / disabled → Lambda no-ops; SES send failure → throws so the CloudWatch
+error alarm fires (retried next tick); empty/already-notified digest → skip that recipient's send;
+sender email unset → send-test returns 409 (config error) rather than failing silently.
+
+**Acceptance criteria:**
+- [x] Weekly digest emails configured recipients with correctly grouped overdue/upcoming items
+- [x] Keira's email includes her private-deadline items; parents' emails never do
+- [x] Each deadline is emailed once and never repeated (notifiedEventIds ledger)
+- [x] Disabling reminders or clearing recipients stops all sends
+- [x] "Send test" delivers a digest on demand; failures are visible (409/toast), not silent
+- [x] Schedule + sender are config-driven (no hardcoded values), deployed via the async stack
+
+**Test plan:** unit (digest assembly grouping + per-recipient private filtering; cadence/day/hour gating
+logic); integration (settings CRUD; send-test path with a stubbed SES client); manual (deploy to
+staging, set recipients to verified addresses, confirm a real digest arrives and links resolve).
+
+---
+
+### F2 — Document Storage (S3 Uploads)
+
+**Purpose:** Over 4 years the family accumulates real artifacts — scanned certs, final essay PDFs,
+transcripts, signed recommendation letters, financial-aid letters. Schema fields like `documentUrl`
+exist but there is no upload pipeline. Add private file storage with presigned S3 upload/download.
+
+**Scope (per approval):** attach to **Certifications**, **Application Central (essays & app docs)**,
+**Recommendation letters (contacts/recommender slots)**, plus a **general document vault** catch-all.
+
+**Data Model:**
+```
+PK: DOCUMENT#<documentId>
+SK: DETAILS
+Attributes:
+  - fileName: string (original name)
+  - contentType: string (MIME)
+  - sizeBytes: number
+  - s3Key: string (server-generated; never client-supplied)
+  - category: "certificate" | "essay" | "application-doc" | "recommendation" | "transcript" | "financial-aid" | "visit-photo" | "other"
+  - linkedEntity: map { type: "certification" | "essay" | "application" | "contact" | "college" | "scholarship" | null, id: string | null }
+      - null/null = lives only in the general vault
+  - visibility: "family" | "private"   (same model as journal/clinical; private = Keira only, AI sees all when Keira authed)
+  - uploadedBy: string (userId)
+  - notes: string
+  - createdAt: ISO timestamp
+  - updatedAt: ISO timestamp
+
+GSI (vault + per-entity listing):
+  GSI5PK: DOCUMENTS
+  GSI5SK: <createdAt>#<documentId>
+```
+
+**Infrastructure:** new **private** S3 documents bucket (block all public access, SSE, lifecycle/versioning
+optional), in the existing stack. No public read — all access via short-lived presigned URLs minted by
+Lambda. Bucket name via env/SSM. Lambda role gets scoped `s3:PutObject/GetObject/DeleteObject` on that bucket only.
+
+**Upload flow (presigned, two-step):**
+1. `POST /documents/upload-url` → validates category/contentType/size, generates `s3Key` +
+   presigned **PUT** URL; client uploads bytes directly to S3.
+2. `POST /documents` → records the metadata after a successful upload (status confirmed via HEAD).
+
+**API:**
+- `GET /documents` — list (filters: category, linkedEntity, visibility-by-auth)
+- `GET /documents/:id` — metadata + presigned **GET** download URL (visibility-enforced)
+- `POST /documents/upload-url` — mint presigned PUT URL
+- `POST /documents` — create metadata record
+- `PUT /documents/:id` — update notes/category/visibility/links
+- `DELETE /documents/:id` — delete metadata + S3 object
+
+**UI:** an "Attachments" panel on Certification / essay / recommender / college detail views (list +
+upload + download/delete), and a standalone **Documents** vault page (grid by category, filter, upload).
+Private docs follow the lock affordance Keira already sees on journal entries.
+
+**Edge cases:** size cap (e.g., 25MB) + content-type allowlist enforced server-side before minting URL;
+orphaned S3 object if step 2 never runs → swept by a lifecycle rule on an `incoming/` prefix; presigned
+URLs expire (≤5 min upload, ≤60s download); deleting a record deletes the object; non-student cannot
+list/fetch/download a `private` document (enforced via the existing `assertCanRead`/`filterForRequester`).
+
+**Acceptance criteria:**
+- [ ] Family can upload a cert/essay/rec/transcript and download it later via presigned URL
+- [ ] Documents attach to the right entity or live in the vault; vault lists everything visible to the caller
+- [ ] Private documents are invisible/inaccessible to parent + admin; visible to Keira and the AI when Keira is authed
+- [ ] Bucket blocks public access; no object is ever world-readable; size/type validated server-side
+- [ ] Deleting a document removes both metadata and the S3 object
+
+**Test plan:** unit (key generation, size/type validation, visibility filtering reuse); integration
+(upload-url → put → create → get → delete round-trip with an in-memory/stubbed S3; private-doc 403 for
+parent); manual (staging upload of a real PDF, download, privacy check).
+
+---
+
+### Module 18 — Opportunity Finder
+
+**Purpose:** Hands-on experience hours are a key admission signal, yet the app only records them after
+the fact. This module helps the family **find** opportunities — internships/apprenticeships, volunteering,
+job shadowing, training/certification programs, summer programs, clubs, and relevant part-time roles near
+them — mirroring the existing College/Scholarship AI discovery pattern. Found opportunities flow into
+Experience Hours / Activity Journal.
+
+> **MAJOR-AWARE, not nursing-only.** Types are generic (`volunteer`, `shadowing`, `internship`,
+> `training-program`, `summer-program`, `job`, `club`, `other`) and the AI discovery is anchored to the
+> active student's intended major (+ pack guidance) — e.g. construction internships/jobsite programs for a
+> construction-management student, hospital volunteering/CNA for nursing. With no major set it stays
+> field-generic (never nursing-default).
+
+**Data Model:**
+```
+PK: OPPORTUNITY#<opportunityId>
+SK: DETAILS
+Attributes:
+  - name: string
+  - organization: string (e.g., "CHOC Children's", "Saddleback College")
+  - type: "hospital-volunteer" | "shadowing" | "cna-program" | "summer-program" | "job" | "club" | "other"
+  - location: string (city, state)
+  - distanceNote: string (e.g., "~12 mi from Aliso Viejo")
+  - description: string
+  - eligibility: list of strings (e.g., "16+", "background check", "TB test")
+  - timeCommitment: string (e.g., "4 hrs/week, 6-month min")
+  - cost: number (0 if free)
+  - applicationUrl: string
+  - contact: map { name, email, phone }
+  - applicationDeadline: ISO date (optional)
+  - status: "discovered" | "interested" | "applied" | "active" | "completed" | "dismissed"
+  - linkedActivityId: string (optional — once she starts logging hours)
+  - linkedClinicalId: string (optional)
+  - dataSources: list of strings (URLs)
+  - addedBy: "ai-discovered" | "manual"
+  - createdAt / updatedAt: ISO timestamp
+```
+Discovery is async (like college discovery), backed by a transient `OPPORTUNITY_DISCOVERY#<jobId>` job
+on the shared SQS hydration queue; the web-grounded prompt (`converseWithSearch`, Tavily) is seeded with
+the student's location/grade from the profile and the requested type. Frontend polls the job.
+
+**API:**
+- `GET /opportunities` — list (filters: type, status, search)
+- `GET /opportunities/:id` / `POST` / `PUT` / `DELETE` — CRUD
+- `POST /opportunities/discover` — async AI discovery (filters: type, radius, keyword); returns `202` + jobId
+- `GET /opportunities/discover/:jobId` — poll discovery job
+- `POST /opportunities/bulk-add` — add selected discovered opportunities
+
+**UI:** new secondary-nav module. Empty state → "Find ways to get clinical & volunteer hours."
+Discovery panel (type + location filters) → results with checkboxes → add. List view grouped by type
+with status pills; "Log hours" action deep-links into Clinical Hours / Activity Journal pre-filled.
+
+**Edge cases:** no results after search → friendly empty state, never fabricate; web search disabled →
+falls back to model-only suggestions flagged `partial`; dismissed opportunities hidden from default list.
+
+**Acceptance criteria:**
+- [ ] AI discovers real, location-relevant opportunities with source URLs (async + polling, like colleges)
+- [ ] Opportunities can be saved, status-tracked, and deep-link into hours logging
+- [ ] Never fabricates a program/contact; degrades to `partial` when search is unavailable
+
+**Test plan:** unit (prompt assembly with profile location; JSON parse + fallback); integration (discover
+job lifecycle inline + via queue; CRUD); manual (staging discovery for "hospital volunteer near
+<city>", confirm plausible cited results).
+
+---
+
+### F4 — Guided First-Run Onboarding
+
+**Purpose:** The v2.0 "First-Run Experience" is only partially built — the backend profile/suggest
+endpoints exist, but there's no guided wizard. New users land in an empty app with no path. Complete it.
+
+**Behavior:** On login, if `STUDENT_PROFILE` is absent or `onboardingComplete` is false, show a 3-step
+wizard (skippable at any step):
+1. **Profile** — name, high school, graduation year, current GPA + type, career goal, location, budget
+   → `PUT /profile` (reuses existing endpoint).
+2. **Discover colleges** — prompt + button into the existing College Hub discovery flow (can skip).
+3. **Suggest goals** — calls `POST /goals/suggest`, shows editable suggestions to accept/modify (can skip).
+On finish/skip-all, set `onboardingComplete: true` on the profile so it doesn't reappear; re-runnable
+later from Settings.
+
+**Data Model:** extend `STUDENT_PROFILE` with `onboardingComplete: boolean` (default false). No new entities.
+
+**API:** none new — reuses `GET/PUT /profile`, `POST /colleges/discover`, `POST /goals/suggest`.
+
+**UI:** full-screen stepper shown above the app shell when triggered; progress dots; "Skip for now" on
+every step; admin/parent can complete the profile on Keira's behalf.
+
+**Edge cases:** partially-filled profile → resume where left off; skip-all still marks complete; empty DB
+detection must not flash the wizard for an already-onboarded user mid-load.
+
+**Acceptance criteria:**
+- [ ] First login on an empty DB walks profile → discovery → goals, each skippable
+- [ ] Completing or skipping all sets `onboardingComplete`; wizard doesn't reappear
+- [ ] Re-runnable from Settings; works for a parent setting it up on Keira's behalf
+
+**Test plan:** unit (trigger logic from profile state); integration (profile create flips the flag);
+manual (fresh staging user sees the wizard once, not again).
+
+---
+
+### Module 19 — Financial Aid Center
+
+**Purpose:** A $200K budget is central to the spec, but FAFSA/CSS appear only as goal-checklist text.
+Add a home for the money mechanics: federal/institutional aid deadlines, net-price tooling, and
+awareness that many nursing programs apply through **NursingCAS** (a centralized application service).
+
+**Data Model:**
+```
+PK: FINAID#<itemId>
+SK: DETAILS
+Attributes:
+  - kind: "fafsa" | "css-profile" | "state-aid" | "institutional-aid" | "loan" | "award-letter" | "other"
+  - title: string
+  - relatedCollegeId: string (optional — institutional aid forms are per-school)
+  - openDate: ISO date (when the form opens — FAFSA typically Oct 1 / Dec)
+  - deadline: ISO date
+  - priorityDeadline: ISO date (optional — many schools have a priority FAFSA date)
+  - status: "not-started" | "in-progress" | "submitted" | "received" | "n/a"
+  - amountOffered: number (for award-letter items)
+  - amountAccepted: number
+  - documentId: string (optional — link to an uploaded award letter via F2)
+  - notes: string
+  - createdAt / updatedAt: ISO timestamp
+```
+Seedable defaults: when first opened, offer to create the standard FAFSA + CSS items for the student's
+class year (editable, opt-in — consistent with goals/certs). Net-price calculator links are pulled per
+college during existing hydration (store `contactInfo.netPriceCalculatorUrl` on the College entity).
+
+**College entity additions (NursingCAS awareness):**
+- `appServices: list of strings` (e.g., `["NursingCAS", "Common App", "Coalition", "Direct"]`)
+- `usesNursingCAS: boolean`
+These are populated by the existing college hydration prompt (add to its instructions/schema) and shown
+on the college Overview + Application Central.
+
+**API:**
+- `GET /finaid` — list items (filters: kind, status, relatedCollege)
+- `GET /finaid/:id` / `POST` / `PUT` / `DELETE` — CRUD
+- `POST /finaid/seed` — create standard FAFSA/CSS items for the class year (returns editable set, opt-in)
+- `GET /finaid/summary` — counts by status + nearest deadline (feeds Dashboard + reminders)
+
+**Integration:** FinAid deadlines flow into the **Master Timeline** and the **F1 reminder digest**
+(orange "financial aid" source). Award-letter amounts can attach an uploaded PDF via F2 and inform the
+Budget view alongside scholarships.
+
+**UI:** new secondary-nav module — deadline-sorted list with countdowns + status, "Seed FAFSA/CSS"
+action, per-college net-price-calculator links, award-letter tracking. NursingCAS badge on colleges that use it.
+
+**Edge cases:** FAFSA open/deadline dates shift yearly → dates are editable, seed uses current cycle;
+`n/a` status hides an item from countdowns; net-price URL absent → graceful omission.
+
+**Acceptance criteria:**
+- [ ] FAFSA/CSS + per-school aid deadlines tracked with countdowns and status
+- [ ] FinAid deadlines appear in the Master Timeline and the email digest
+- [ ] College records surface NursingCAS/Common App usage and a net-price-calculator link when hydrated
+- [ ] Award letters can be recorded (and optionally attached as a document)
+
+**Test plan:** unit (seed generation for a class year; summary/nearest-deadline calc); integration
+(CRUD; timeline + digest pick up finaid items; hydration populates appServices); manual (staging: seed,
+confirm timeline/digest inclusion, check a hydrated college shows NursingCAS where applicable).
+
+---
+
+### v2.1 Infrastructure Summary
+
+- **SES** (F1): sender identity verified; recipients verified or production access requested; send via SDK.
+- **EventBridge Scheduler** (F1): daily trigger → digest Lambda (in the async stack).
+- **S3 documents bucket** (F2): private, public-access-blocked, SSE, scoped IAM, presigned URLs only.
+- **SQS reuse** (Module 18): opportunity discovery rides the existing shared hydration queue + DLQ.
+- **DynamoDB**: all new entities on the single table; one new GSI (`GSI5` for documents/vault).
+- **Config**: sender address, bucket name, schedule, NursingCAS flag — all env/SSM, none hardcoded.
+- **No prod cutover** without Grahem's explicit go (Gate 3 rule unchanged); ship to `dev` → staging first.
+
+---
+
 ## Budget Summary
 
 **Infrastructure cost estimate (monthly):**
@@ -1592,10 +2061,14 @@ All features ship in v1. Future phases are net-new ideas, not deferred core func
 - Cognito: $0 (free for <50K users)
 - Bedrock (Claude Sonnet): ~$10-30 depending on AI usage (more features now — mock interviews, study plans, scholarship discovery, benchmark research, recommender briefs all hit Bedrock)
 - Route 53: ~$0.50/month for hosted zone
+- SES (v2.1 digest): ~$0 (well under the free tier at family volume)
+- S3 documents bucket (v2.1): ~$0 (a few hundred MB of PDFs is negligible)
+- EventBridge Scheduler (v2.1): ~$0
 - **Total: ~$12-35/month**
 
 ---
 
-*Last updated: June 5, 2026*
+*Last updated: June 10, 2026*
+*Version: 2.1 (Draft) — Post-launch feature wave. Added: Deadline Reminders (email digest), Document Storage (S3), Opportunity Finder (Module 18), Guided First-Run Onboarding, Financial Aid Center (Module 19). Awaiting Grahem approval before implementation.*
 *Version: 2.0 — Full 17-module spec. Added: Scholarship Tracker, TEAS Prep, Clinical Hours Log, Certifications, Interview Prep, Why Nursing, Demonstrated Interest + Contacts, Campus Visits, Peer Benchmarks, Master Timeline*
 *Authors: Grahem + Claude*

@@ -4,7 +4,7 @@
 
 export const VISIT_TYPES = [
   'campus-tour',
-  'nursing-dept-visit',
+  'department-visit',
   'open-house',
   'admitted-student-day',
   'overnight',
@@ -35,6 +35,8 @@ export interface Visit {
   wouldAttend?: WouldAttend;
   travelCost?: number;
   createdBy?: string;
+  /** Cached visit prep, generated when the visit is saved (show/hide in the UI; regenerate on demand). */
+  prep?: VisitPrep;
   createdAt: string;
   updatedAt: string;
 }
@@ -57,17 +59,6 @@ export interface VisitPrep {
   bestTime: string;
   questions: string[];
   logistics: { address?: string; parking?: string; contact?: string; campusVisitUrl?: string };
-  source: 'ai' | 'curated';
-}
-
-export interface TripCluster {
-  region: string;
-  colleges: { collegeId: string; name: string; location?: string }[];
-  itinerary: string;
-}
-
-export interface TripPlan {
-  clusters: TripCluster[];
   source: 'ai' | 'curated';
 }
 

@@ -1,19 +1,20 @@
 // Pure aggregation for the dashboard — read-only roll-ups over the shared data layer. Framework- and
 // AWS-free so it unit-tests for real. Visibility filtering is the CALLER's job (the handler runs
-// activities/clinical through filterForRequester before calling these), so a private entry never
+// activities/experiences through filterForRequester before calling these), so a private entry never
 // reaches a parent's widgets. Date-relative math takes `todayIso` explicitly for determinism.
 
 import type {
   Activity,
   Certification,
-  Clinical,
+  ExperienceEntry,
   College,
   Course,
   Goal,
   Interview,
   Scholarship,
-  Teas,
+  ExamScore,
 } from '../../shared/data/index.js';
+import { collegeDeadlineDate } from '../../shared/college-deadline.js';
 
 const MS_PER_DAY = 86_400_000;
 const r2 = (n: number): number => Math.round(n * 100) / 100;
@@ -86,14 +87,14 @@ export function activitySummary(activities: readonly Activity[], todayIso: strin
   return { totalCount: activities.length, totalHours: r2(totalHours), hoursByCategory, weeklyStreak };
 }
 
-export function clinicalTotalHours(clinical: readonly Clinical[]): number {
-  return r2(clinical.reduce((s, c) => s + (c.hours ?? 0), 0));
+export function clinicalTotalHours(experiences: readonly ExperienceEntry[]): number {
+  return r2(experiences.reduce((s, c) => s + (c.hours ?? 0), 0));
 }
 
-// ---- Latest TEAS ----------------------------------------------------------
+// ---- Latest exam ----------------------------------------------------------
 
-export function latestTeas(teas: readonly Teas[]): { date: string; overallScore: number } | null {
-  const scored = teas.filter((t) => t.overallScore !== undefined).slice().sort((a, b) => (a.date < b.date ? 1 : -1));
+export function latestExam(exams: readonly ExamScore[]): { date: string; overallScore: number } | null {
+  const scored = exams.filter((t) => t.overallScore !== undefined).slice().sort((a, b) => (a.date < b.date ? 1 : -1));
   const top = scored[0];
   return top ? { date: top.date, overallScore: top.overallScore! } : null;
 }
@@ -138,6 +139,7 @@ export function upcomingDeadlines(
   data: { colleges: readonly College[]; goals: readonly Goal[]; scholarships: readonly Scholarship[]; certifications: readonly Certification[] },
   todayIso: string,
   limit = 8,
+  graduationYear?: number,
 ): Deadline[] {
   const out: Deadline[] = [];
   const push = (source: DeadlineSource, label: string, date?: string | null) => {
@@ -148,9 +150,10 @@ export function upcomingDeadlines(
   };
   for (const c of data.colleges) {
     if (c.status === 'removed') continue;
-    push('college', `${c.name}: early action`, c.applicationDeadlines?.earlyAction);
-    push('college', `${c.name}: regular decision`, c.applicationDeadlines?.regularDecision);
-    push('college', `${c.name}: nursing app`, c.applicationDeadlines?.nursingApp);
+    // College deadlines are stored as prose; project the month/day onto the student's own cycle.
+    push('college', `${c.name}: early action`, collegeDeadlineDate(c.applicationDeadlines?.earlyAction, graduationYear) || null);
+    push('college', `${c.name}: regular decision`, collegeDeadlineDate(c.applicationDeadlines?.regularDecision, graduationYear) || null);
+    push('college', `${c.name}: program app`, collegeDeadlineDate(c.applicationDeadlines?.programApp, graduationYear) || null);
   }
   for (const g of data.goals) if (g.status !== 'completed' && g.status !== 'dropped') push('goal', g.title, g.targetDate);
   for (const s of data.scholarships) if (s.status !== 'awarded' && s.status !== 'denied' && s.status !== 'expired') push('scholarship', s.name, s.applicationDeadline);

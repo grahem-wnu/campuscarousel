@@ -6,7 +6,7 @@ import { z } from '../../shared/api/index.js';
 
 export const VISIT_TYPES = [
   'campus-tour',
-  'nursing-dept-visit',
+  'department-visit',
   'open-house',
   'admitted-student-day',
   'overnight',
@@ -43,18 +43,9 @@ export const createSchema = z
 /** Body for PUT /colleges/:id/visits/:vid — every field optional (e.g. add the post-visit debrief). */
 export const updateSchema = createSchema.partial();
 
-/** Body for POST /visits/trip-plan — optional college subset; empty body plans across all colleges. */
-export const tripPlanSchema = z
-  .object({
-    collegeIds: z.array(z.string().min(1)).max(100).optional(),
-    maxClusters: z.number().int().min(1).max(20).optional(),
-  })
-  .strict();
-
 /** Path params. */
 export const collegeParamSchema = z.object({ id: z.string().min(1) });
 export const visitParamSchema = z.object({ id: z.string().min(1), vid: z.string().min(1) });
 
 export type CreateInput = z.infer<typeof createSchema>;
 export type UpdateInput = z.infer<typeof updateSchema>;
-export type TripPlanInput = z.infer<typeof tripPlanSchema>;

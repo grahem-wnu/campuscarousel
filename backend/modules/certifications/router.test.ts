@@ -19,7 +19,7 @@ beforeEach(() => {
   dispatch = createRouter(buildRoutes(makeHandlers({ getData: () => data, now })));
 });
 
-const claimsFor = (r: Requester) => ({ 'cognito:username': r.username, 'custom:role': r.role });
+const claimsFor = (r: Requester) => ({ 'cognito:username': r.username, 'custom:role': r.role, 'custom:tenantId': r.tenantId ?? 'test-tenant' });
 
 function event(
   method: string,
@@ -75,14 +75,14 @@ describe('router integration', () => {
     expect((parse(res).certifications as unknown[])).toHaveLength(1);
   });
 
-  it('routes /certifications/suggest and returns curated baseline suggestions', async () => {
+  it('routes /certifications/suggest and returns a suggestions array (empty in the generic core)', async () => {
     const res = await dispatch(
-      event('POST', '/certifications/suggest', { as: keira, body: { careerGoal: 'ICU nurse' } }),
+      event('POST', '/certifications/suggest', { as: keira, body: { careerGoal: 'engineering' } }),
     );
     expect(res.statusCode).toBe(200);
     const suggestions = parse(res).suggestions as { name: string }[];
-    expect(suggestions.length).toBeGreaterThan(0);
-    expect(suggestions.some((s) => s.name.includes('BLS/CPR'))).toBe(true);
+    // The core ships with no hardcoded curated certs; the AI path (model id) supplies real ones.
+    expect(Array.isArray(suggestions)).toBe(true);
   });
 
   it('fetches, updates, and deletes by id through the router', async () => {

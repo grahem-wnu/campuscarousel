@@ -2,7 +2,7 @@
   "name": "keiras-journey",
   "version": "0.0.0",
   "private": true,
-  "description": "Keira's Journey — monorepo root (workspaces, base tooling, route guard).",
+  "description": "Campus Carousel — monorepo root (workspaces, base tooling, route guard).",
   "license": "UNLICENSED",
   "engines": {
     "node": ">=20"
@@ -16,6 +16,7 @@
     "lint": "eslint .",
     "test": "vitest run",
     "check:routes": "node scripts/check-routes.mjs",
+    "check:isolation": "node scripts/check-tenant-isolation.mjs",
     "build": "npm run build --workspaces --if-present"
   },
   "devDependencies": {

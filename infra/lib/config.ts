@@ -23,8 +23,11 @@ export interface EnvConfig {
   readonly region: string;
   /** Project slug, e.g. "keiras-journey". */
   readonly project: string;
-  /** Bare apex domain, e.g. "keirasjourney.com". */
+  /** Bare apex domain, e.g. "keirasjourney.com". Per-env so prod and staging can differ
+   *  (prod → campuscarousel.com, staging stays keirasjourney.com during the rename cutover). */
   readonly domainName: string;
+  /** Route53 hosted zone id for `domainName` when `dnsMode === "import"` (per-env). */
+  readonly hostedZoneId?: string;
   /** Optional subdomain prefix for this env, e.g. "staging" -> staging.keirasjourney.com. */
   readonly subdomain: string;
   readonly dnsMode: DnsMode;
@@ -39,6 +42,15 @@ export interface EnvConfig {
   readonly ssmPrefix: string;
   /** Resource name prefix, e.g. "keiras-journey-staging". */
   readonly namePrefix: string;
+  /** Verified SES sender for the reminder digest (v2.1 F1). Context `reminderSenderEmail`;
+   *  defaults to reminders@<domainName>. Must be a verified SES identity before sends succeed. */
+  readonly reminderSenderEmail: string;
+  /**
+   * Email to subscribe to the CloudWatch alarm SNS topic (errors/throttles/5xx). Resolved
+   * from context `alertEmail` (falls back to `budgetNotifyEmail`). When unset, alarms still
+   * fire to the SNS topic but no one is emailed — set it so failures actually page someone.
+   */
+  readonly alertEmail?: string;
 }
 
 /**
@@ -103,13 +115,27 @@ export function getEnvConfig(app: App, stage: Stage): EnvConfig {
   const proj = project(app);
   const { org, repo } = github(app);
 
-  const domainName = (app.node.tryGetContext("domainName") as string) || "keirasjourney.com";
+  const envs = (app.node.tryGetContext("envs") as Record<string, Partial<EnvConfig>>) || {};
+  const envCtx = envs[stage] || {};
+
+  // Domain + zone are PER-ENV (with a top-level fallback) so prod can move to campuscarousel.com
+  // while staging stays on keirasjourney.com until the cutover deploy.
+  const domainName =
+    (envCtx.domainName as string) ||
+    (app.node.tryGetContext("domainName") as string) ||
+    "keirasjourney.com";
+  const hostedZoneId =
+    (envCtx.hostedZoneId as string | undefined) ??
+    (app.node.tryGetContext("hostedZoneId") as string | undefined);
   const bedrockSonnetProfile =
     (app.node.tryGetContext("bedrockSonnetProfile") as string) ||
     "us.anthropic.claude-sonnet-4-20250514-v1:0";
-
-  const envs = (app.node.tryGetContext("envs") as Record<string, Partial<EnvConfig>>) || {};
-  const envCtx = envs[stage] || {};
+  // Sender for all transactional mail (invites, family-member adds, reminder digest). Per-env so
+  // prod sends from noreply@campuscarousel.com while staging keeps its keirasjourney.com sender.
+  const reminderSenderEmail =
+    (envCtx.reminderSenderEmail as string) ||
+    (app.node.tryGetContext("reminderSenderEmail") as string) ||
+    `noreply@${domainName}`;
 
   const dnsMode = (envCtx.dnsMode as DnsMode) || "defer";
   const subdomain =
@@ -117,12 +143,18 @@ export function getEnvConfig(app: App, stage: Stage): EnvConfig {
   const removalPolicy =
     (envCtx.removalPolicy as "retain" | "destroy") || (stage === "prod" ? "retain" : "destroy");
 
+  const alertEmail =
+    (app.node.tryGetContext("alertEmail") as string) ||
+    (app.node.tryGetContext("budgetNotifyEmail") as string) ||
+    undefined;
+
   return {
     stage,
     account,
     region,
     project: proj,
     domainName,
+    hostedZoneId,
     subdomain,
     dnsMode,
     removalPolicy,
@@ -131,6 +163,8 @@ export function getEnvConfig(app: App, stage: Stage): EnvConfig {
     bedrockSonnetProfile,
     ssmPrefix: `/${proj}/${stage}`,
     namePrefix: `${proj}-${stage}`,
+    reminderSenderEmail,
+    alertEmail,
   };
 }
 

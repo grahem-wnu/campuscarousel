@@ -10,7 +10,9 @@ describe('routes.manifest ↔ buildRoutes', () => {
     const built = buildRoutes(makeHandlers({ getData: () => ({}) as Data })).map(sig).sort();
     expect(manifestRoutes.map(sig).sort()).toEqual(built);
   });
-  it('expose the three timeline endpoints', () => {
-    expect(manifestRoutes.map(sig).sort()).toEqual(['GET /timeline', 'GET /timeline/upcoming', 'POST /timeline/analyze'].sort());
+  it('expose the timeline endpoints', () => {
+    expect(manifestRoutes.map(sig).sort()).toEqual(
+      ['GET /timeline', 'GET /timeline/upcoming', 'POST /timeline/analyze', 'POST /timeline/dismiss'].sort(),
+    );
   });
 });

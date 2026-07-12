@@ -15,14 +15,15 @@ export const COLLEGE_STATUSES = [
 export type CollegeStatus = (typeof COLLEGE_STATUSES)[number];
 
 export const PROGRAM_TYPES = [
-  'direct-admit-BSN',
-  'pre-nursing-secondary-app',
-  'ABSN-only',
-  'RN-to-BSN-only',
+  'direct-admit',
+  'secondary-application',
+  'accelerated',
+  'transfer-pathway',
 ] as const;
 export type ProgramType = (typeof PROGRAM_TYPES)[number];
 
 export type HydrationStatus = 'pending' | 'in-progress' | 'complete' | 'partial' | 'failed';
+export type AssetsStatus = 'pending' | 'in-progress' | 'complete' | 'failed';
 
 export interface College {
   collegeId: string;
@@ -31,29 +32,41 @@ export interface College {
   state?: string;
   programType?: ProgramType;
   isDirectAdmit?: boolean;
-  hasBSN?: boolean;
-  hasAcceleratedBSN?: boolean;
   isTopPick?: boolean;
   ranking?: string;
+  overview?: string;
+  admissionsDeepDive?: string;
+  employmentRate?: string;
   tuitionInState?: number;
   tuitionOutOfState?: number;
+  costOfAttendanceOutOfState?: number;
+  estimatedNetPriceAfterAid?: number;
+  percentReceivingAid?: string;
+  avgAidAmount?: number;
+  applicationFee?: number;
   estimatedTotalCost?: number;
   estimatedCostAfterAid?: number;
-  acceptanceRateNursing?: string;
+  acceptanceRateProgram?: string;
   acceptanceRateUniversity?: string;
   avgGPAAdmitted?: string;
   prerequisites?: string[];
-  applicationDeadlines?: { earlyAction?: string; regularDecision?: string; nursingApp?: string };
+  programDetails?: { label: string; value: string }[];
+  applicationDeadlines?: { earlyAction?: string; regularDecision?: string; programApp?: string };
   essayPrompts?: string[];
   requiredTests?: string[];
-  clinicalPartners?: string[];
+  testimonials?: { quote: string; attribution?: string; source?: string }[];
+  campusImageUrls?: string[];
   specialNotes?: string;
   website?: string;
+  dataSources?: string[];
+  /** Readable titles for some `dataSources` (resolved during hydration); the rest fall back to URL parsing. */
+  dataSourceTitles?: { url: string; title: string }[];
+  dataAsOf?: string;
   branding?: { logoUrl?: string; primaryColor?: string; secondaryColor?: string; mascot?: string };
   contactInfo?: {
-    nursingAdmissionsPhone?: string;
-    nursingAdmissionsEmail?: string;
-    nursingAdmissionsUrl?: string;
+    programAdmissionsPhone?: string;
+    programAdmissionsEmail?: string;
+    programAdmissionsUrl?: string;
     financialAidPhone?: string;
     financialAidUrl?: string;
     campusVisitUrl?: string;
@@ -64,12 +77,52 @@ export interface College {
   lastDataRefresh?: string;
   userEdited?: string[];
   addedBy?: 'ai-discovered' | 'manual';
+  // Campus imagery + cached logo, set by the async assets worker (never user-editable).
+  campusImageUrl?: string;
+  campusImageCredit?: string;
+  logoImageUrl?: string;
+  assetsStatus?: AssetsStatus;
+  /** AI "how to prepare in high school for this college" plan (see POST /colleges/:id/prep). */
+  hsPrepPlan?: HsPrepPlan;
+  /** Prep-plan generation lifecycle — it runs async on the worker, so the UI polls this until it
+   *  settles to 'complete' (use hsPrepPlan) or 'failed'. */
+  hsPrepStatus?: 'pending' | 'in-progress' | 'complete' | 'failed';
   createdAt: string;
   updatedAt: string;
 }
 
-/** Body for create/update (the lib stamps id + timestamps). */
-export type CollegeInput = Partial<Omit<College, 'collegeId' | 'createdAt' | 'updatedAt' | 'hydrationStatus' | 'lastDataRefresh' | 'userEdited' | 'addedBy'>> & {
+/** One recommendation in a high-school prep plan: a short label + an optional one-line "why/how". */
+export interface HsPrepItem {
+  label: string;
+  detail?: string;
+}
+
+/** AI plan of what to aim for + take in high school to be competitive for a specific college's program. */
+export interface HsPrepPlan {
+  headline?: string;
+  targets: HsPrepItem[];
+  courses: HsPrepItem[];
+  activities: HsPrepItem[];
+}
+
+/** Body for create/update (the lib stamps id + timestamps; imagery is system-owned). */
+export type CollegeInput = Partial<
+  Omit<
+    College,
+    | 'collegeId'
+    | 'createdAt'
+    | 'updatedAt'
+    | 'hydrationStatus'
+    | 'lastDataRefresh'
+    | 'userEdited'
+    | 'addedBy'
+    | 'campusImageUrl'
+    | 'campusImageCredit'
+    | 'logoImageUrl'
+    | 'assetsStatus'
+    | 'hsPrepPlan'
+  >
+> & {
   name?: string;
 };
 
@@ -79,12 +132,22 @@ export interface CollegeCandidate {
   state?: string;
   programType?: ProgramType;
   isDirectAdmit?: boolean;
-  hasBSN?: boolean;
   ranking?: string;
   tuitionInState?: number;
   tuitionOutOfState?: number;
   website?: string;
   summary?: string;
+}
+
+/** An async discovery job — created by POST /colleges/discover, polled via GET /colleges/discover/:jobId. */
+export interface DiscoveryJob {
+  jobId: string;
+  status: 'pending' | 'complete' | 'failed';
+  candidates?: CollegeCandidate[];
+  count?: number;
+  error?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface CollegeNote {

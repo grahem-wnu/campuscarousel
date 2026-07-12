@@ -3,20 +3,32 @@ import { buildDiscoverPrompt, parseDiscoverResults } from './discover.js';
 
 describe('buildDiscoverPrompt', () => {
   it('instructs web search, a real-only constraint, and weaves in context', () => {
-    const p = buildDiscoverPrompt({ query: 'nursing', state: 'Ohio', count: 5, type: 'nursing-specific' });
+    const p = buildDiscoverPrompt({ query: 'nursing', state: 'Ohio', count: 5, type: 'major-specific' });
     expect(p).toContain('web search');
     expect(p).toContain('Do not invent');
     expect(p).toContain('find 5');
     expect(p).toContain('Focus: nursing.');
     expect(p).toContain('Ohio state-specific');
-    expect(p).toContain('Prefer type: nursing-specific.');
+    expect(p).toContain('Prefer type: major-specific.');
+  });
+
+  it('is major-aware: names the major and folds in pack guidance', () => {
+    const p = buildDiscoverPrompt({ count: 5 }, ['Nursing']);
+    expect(p).toContain('Nursing');
+    expect(p).toContain('Major-specific guidance:');
+  });
+
+  it('stays neutral with no majors', () => {
+    const p = buildDiscoverPrompt({ count: 5 });
+    expect(p).toContain('their intended college degree');
+    expect(p).not.toContain('Major-specific guidance:');
   });
 });
 
 describe('parseDiscoverResults', () => {
   it('extracts a JSON array embedded in prose and keeps clean fields', () => {
     const raw =
-      'Here are some:\n[{"name":"Future Nurses Grant","provider":"ANA","amount":5000,"type":"nursing-specific",' +
+      'Here are some:\n[{"name":"Future Nurses Grant","provider":"ANA","amount":5000,"type":"major-specific",' +
       '"applicationDeadline":"2026-12-01","applicationUrl":"https://x.org/apply","eligibility":["GPA 3.0"]}]\nGood luck!';
     const out = parseDiscoverResults(raw);
     expect(out).toHaveLength(1);
@@ -24,7 +36,7 @@ describe('parseDiscoverResults', () => {
       name: 'Future Nurses Grant',
       provider: 'ANA',
       amount: 5000,
-      type: 'nursing-specific',
+      type: 'major-specific',
       applicationDeadline: '2026-12-01',
       applicationUrl: 'https://x.org/apply',
       eligibility: ['GPA 3.0'],

@@ -66,16 +66,16 @@ describe('create (POST /scholarships)', () => {
 
 describe('list (GET /scholarships) — filtering', () => {
   beforeEach(async () => {
-    await seed({ name: 'A', type: 'nursing-specific', status: 'applied', linkedColleges: ['c1'], applicationDeadline: '2026-03-01' });
+    await seed({ name: 'A', type: 'major-specific', status: 'applied', linkedColleges: ['c1'], applicationDeadline: '2026-03-01' });
     await seed({ name: 'B', type: 'merit', status: 'discovered', linkedColleges: ['c2'], applicationDeadline: '2026-09-01' });
-    await seed({ name: 'C', type: 'nursing-specific', status: 'awarded' });
+    await seed({ name: 'C', type: 'major-specific', status: 'awarded' });
   });
 
   const list = async (query: Record<string, string> = {}) =>
     ((await h.list(ctx({ query }))).body as { scholarships: Scholarship[] }).scholarships;
 
   it('returns all with no filter', async () => expect(await list()).toHaveLength(3));
-  it('filters by type', async () => expect(await list({ type: 'nursing-specific' })).toHaveLength(2));
+  it('filters by type', async () => expect(await list({ type: 'major-specific' })).toHaveLength(2));
   it('filters by status', async () => expect(await list({ status: 'awarded' })).toHaveLength(1));
   it('filters by linkedCollege', async () => expect(await list({ linkedCollege: 'c1' })).toHaveLength(1));
   it('filters by deadlineBefore (excludes no-deadline)', async () =>

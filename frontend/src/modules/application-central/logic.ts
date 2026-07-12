@@ -1,7 +1,17 @@
 // Pure, framework-free helpers for the Application Central UI. Unit-tested in the node environment.
 
 import type { BadgeTone } from '../../shared/ui';
-import type { ApplicationRow, Essay, EssayDraft, EssayStatus } from './types';
+import type {
+  ApplicationDecision,
+  ApplicationRow,
+  Essay,
+  EssayDraft,
+  EssayStatus,
+  RecommendationSlot,
+  RecommendationStatus,
+  ReviewRatings,
+  ReviewVerdict,
+} from './types';
 
 export const ESSAY_STATUS_META: Record<EssayStatus, { label: string; tone: BadgeTone }> = {
   brainstorming: { label: 'Brainstorming', tone: 'neutral' },
@@ -9,6 +19,37 @@ export const ESSAY_STATUS_META: Record<EssayStatus, { label: string; tone: Badge
   reviewing: { label: 'Reviewing', tone: 'warn' },
   final: { label: 'Final', tone: 'success' },
 };
+
+export const SLOT_LABELS: Record<RecommendationSlot, string> = {
+  'stem-teacher': 'STEM teacher',
+  'humanities-teacher': 'Humanities teacher',
+  'clinical-supervisor': 'Clinical / volunteer supervisor',
+  'community-leader': 'Community leader',
+  other: 'Other',
+};
+
+export const RECOMMENDATION_STATUS_META: Record<RecommendationStatus, { label: string; tone: BadgeTone }> = {
+  identified: { label: 'Identified', tone: 'neutral' },
+  asked: { label: 'Asked', tone: 'info' },
+  agreed: { label: 'Agreed', tone: 'info' },
+  received: { label: 'Received', tone: 'success' },
+  submitted: { label: 'Submitted', tone: 'success' },
+  declined: { label: 'Declined', tone: 'error' },
+};
+
+export const DECISION_META: Record<ApplicationDecision, { label: string; tone: BadgeTone }> = {
+  none: { label: 'Pending', tone: 'neutral' },
+  accepted: { label: 'Accepted', tone: 'success' },
+  waitlisted: { label: 'Waitlisted', tone: 'warn' },
+  deferred: { label: 'Deferred', tone: 'warn' },
+  rejected: { label: 'Rejected', tone: 'error' },
+};
+
+/** Net cost rendered for the decision matrix, falling back to total then "—". */
+export function netCostLabel(after?: number, total?: number): string {
+  const v = after ?? total;
+  return v === undefined ? '—' : `$${v.toLocaleString('en-US')}`;
+}
 
 export function wordCount(text: string): number {
   return text.trim().split(/\s+/).filter(Boolean).length;
@@ -43,4 +84,52 @@ export function essaySummary(row: ApplicationRow): { text: string; tone: BadgeTo
 export function wordTargetTone(count: number, target?: number): BadgeTone {
   if (!target) return 'neutral';
   return Math.abs(count - target) <= Math.max(25, target * 0.1) ? 'success' : 'warn';
+}
+
+// --- AI review rubric -------------------------------------------------------
+
+export const VERDICT_META: Record<ReviewVerdict, { label: string; tone: BadgeTone }> = {
+  ready: { label: 'Ready to submit', tone: 'success' },
+  close: { label: 'One more pass', tone: 'warn' },
+  'keep-working': { label: 'Keep working', tone: 'error' },
+};
+
+/** Tone for a 1-10 rubric score. */
+export function ratingTone(score: number): BadgeTone {
+  if (score >= 8) return 'success';
+  if (score >= 6) return 'warn';
+  return 'error';
+}
+
+export const RATING_LABELS: Record<keyof ReviewRatings, string> = {
+  promptFit: 'Answers the prompt',
+  voice: 'Voice & authenticity',
+  structure: 'Structure',
+  specificity: 'Specific detail',
+  collegeFit: 'College fit',
+};
+
+/** Ordered rows for rendering a ratings rubric (collegeFit only when present). */
+export function ratingRows(ratings: ReviewRatings): Array<{ key: keyof ReviewRatings; label: string; score: number }> {
+  const keys: Array<keyof ReviewRatings> = ['promptFit', 'voice', 'structure', 'specificity', 'collegeFit'];
+  return keys
+    .map((key) => ({ key, label: RATING_LABELS[key], score: ratings[key] }))
+    .filter((r): r is { key: keyof ReviewRatings; label: string; score: number } => typeof r.score === 'number');
+}
+
+/** Group essays into per-school buckets for the attempts view. `labelFor` resolves each essay's
+ *  display label (roster name by collegeId, else its typed collegeName, else "General practice").
+ *  Insertion-ordered: a school's first attempt fixes its position. */
+export function groupEssaysByCollege(
+  essays: Essay[],
+  labelFor: (essay: Essay) => string,
+): Array<{ label: string; essays: Essay[] }> {
+  const groups = new Map<string, Essay[]>();
+  for (const essay of essays) {
+    const label = labelFor(essay);
+    const bucket = groups.get(label);
+    if (bucket) bucket.push(essay);
+    else groups.set(label, [essay]);
+  }
+  return [...groups.entries()].map(([label, list]) => ({ label, essays: list }));
 }

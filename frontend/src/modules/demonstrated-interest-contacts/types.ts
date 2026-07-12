@@ -14,7 +14,7 @@ export const TOUCHPOINT_TYPES = [
 ] as const;
 export type TouchpointType = (typeof TOUCHPOINT_TYPES)[number];
 
-export const RELATIONSHIPS = ['mentor', 'supervisor', 'teacher', 'admissions', 'nurse', 'recommender', 'other'] as const;
+export const RELATIONSHIPS = ['mentor', 'supervisor', 'teacher', 'admissions', 'professional', 'recommender', 'other'] as const;
 export type Relationship = (typeof RELATIONSHIPS)[number];
 
 export const RECOMMENDER_SLOTS = ['stem-teacher', 'humanities-teacher', 'clinical-supervisor', 'community-leader'] as const;

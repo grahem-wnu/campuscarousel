@@ -1,5 +1,5 @@
 // PRIVACY proof for interview grounding: the AI's grounding context includes a `private` journal /
-// clinical / why-nursing entry ONLY when keira (student) is the authenticated caller. A parent or
+// experience / motivation entry ONLY when keira (student) is the authenticated caller. A parent or
 // admin running a mock gets family-visible entries only. Enforced via the shared aiVisibleSet.
 
 import { beforeEach, describe, expect, it } from 'vitest';
@@ -17,24 +17,24 @@ beforeEach(async () => {
   data = makeData(new InMemoryTableClient());
   await data.activities.create({ userId: 'keira', date: '2026-01-01', category: 'volunteer', title: 'Family activity', visibility: 'family' } as Parameters<Data['activities']['create']>[0]);
   await data.activities.create({ userId: 'keira', date: '2026-01-02', category: 'personal', title: 'Private reflection', visibility: 'private' } as Parameters<Data['activities']['create']>[0]);
-  await data.clinical.create({ date: '2026-02-01', facility: 'County Hospital', hours: 4, visibility: 'family' } as Parameters<Data['clinical']['create']>[0]);
-  await data.clinical.create({ date: '2026-02-02', facility: 'Private clinic', hours: 3, visibility: 'private', reflection: 'secret' } as Parameters<Data['clinical']['create']>[0]);
-  await data.whyNursing.create({ date: '2026-03-01', title: 'A public moment', content: 'x', visibility: 'family' } as Parameters<Data['whyNursing']['create']>[0]);
-  await data.whyNursing.create({ date: '2026-03-02', title: 'A private moment', content: 'y', visibility: 'private' } as Parameters<Data['whyNursing']['create']>[0]);
+  await data.experiences.create({ date: '2026-02-01', facility: 'County Hospital', hours: 4, visibility: 'family' } as Parameters<Data['experiences']['create']>[0]);
+  await data.experiences.create({ date: '2026-02-02', facility: 'Private clinic', hours: 3, visibility: 'private', reflection: 'secret' } as Parameters<Data['experiences']['create']>[0]);
+  await data.motivations.create({ date: '2026-03-01', title: 'A public moment', content: 'x', visibility: 'family' } as Parameters<Data['motivations']['create']>[0]);
+  await data.motivations.create({ date: '2026-03-02', title: 'A private moment', content: 'y', visibility: 'private' } as Parameters<Data['motivations']['create']>[0]);
 });
 
 describe('gatherGrounding — privacy', () => {
   it('keira (student) SEES private entries in the grounding', async () => {
     const g = await gatherGrounding(data, keira);
     expect(g.includesPrivate).toBe(true);
-    expect(g.counts).toEqual({ activities: 2, clinical: 2, whyNursing: 2 });
+    expect(g.counts).toEqual({ activities: 2, experiences: 2, motivations: 2 });
     expect(g.experiences.some((e) => e.title === 'Private reflection')).toBe(true);
   });
 
   it('a parent NEVER sees private entries in the grounding', async () => {
     const g = await gatherGrounding(data, kate);
     expect(g.includesPrivate).toBe(false);
-    expect(g.counts).toEqual({ activities: 1, clinical: 1, whyNursing: 1 });
+    expect(g.counts).toEqual({ activities: 1, experiences: 1, motivations: 1 });
     expect(g.experiences.some((e) => e.title.includes('Private'))).toBe(false);
     expect(g.experiences.some((e) => e.detail === 'secret')).toBe(false);
   });
@@ -50,6 +50,6 @@ describe('groundingToText', () => {
   it('renders experiences and an empty marker', async () => {
     const g = await gatherGrounding(data, keira);
     expect(groundingToText(g)).toMatch(/\[activity 2026-01-02\] Private reflection/);
-    expect(groundingToText({ experiences: [], counts: { activities: 0, clinical: 0, whyNursing: 0 }, includesPrivate: false })).toBe('(no logged experiences yet)');
+    expect(groundingToText({ experiences: [], counts: { activities: 0, experiences: 0, motivations: 0 }, includesPrivate: false })).toBe('(no logged experiences yet)');
   });
 });

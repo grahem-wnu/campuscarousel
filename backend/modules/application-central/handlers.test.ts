@@ -16,7 +16,7 @@ let finderPools: ExperiencePool[];
 
 const stubFinder: ExperienceFinder = async ({ pool }) => {
   finderPools.push(pool);
-  return { suggestedExperiences: [{ title: 'County Hospital', kind: 'clinical', why: 'vivid' }], angles: ['open with a scene'], source: 'curated' };
+  return { suggestedExperiences: [{ title: 'County Hospital', kind: 'experience', why: 'vivid' }], angles: ['open with a scene'], source: 'curated' };
 };
 const stubReviewer: EssayReviewer = async ({ content }) => ({
   strengths: ['clear'], improvements: ['tighten'], authenticity: 'you', wordCount: content.split(/\s+/).length, onTarget: null, rewrote: false, source: 'curated',
@@ -85,17 +85,41 @@ describe('find-experiences — PRIVACY', () => {
   });
 });
 
-describe('review — never rewrites', () => {
-  it('reviews the latest draft and never returns a rewrite', async () => {
+describe('review — async job, never rewrites', () => {
+  it('starts an evaluation job (202) that completes inline and never returns a rewrite', async () => {
     const id = await createEssay();
-    await h.addDraft(ctx({ params: { id }, body: { content: 'My essay draft about nursing.' } }));
-    const res = await h.review(ctx({ params: { id }, body: {} }));
-    expect((res.body as { review: { rewrote: boolean } }).review.rewrote).toBe(false);
+    const res = await h.startReview(ctx({ params: { id }, body: { content: 'My essay draft about nursing.' } }));
+    expect(res.status).toBe(202);
+    const job = res.body as { jobId: string; status: string; result?: { rewrote: boolean } };
+    expect(job.status).toBe('complete');
+    expect(job.result?.rewrote).toBe(false);
+    // status endpoint returns the same job
+    const poll = await h.reviewStatus(ctx({ params: { jobId: job.jobId } }));
+    expect((poll.body as { jobId: string }).jobId).toBe(job.jobId);
   });
 
-  it('422s when there is no content to review', async () => {
+  it('404s startReview for an unknown essay; 404s reviewStatus for an unknown job', async () => {
+    await expectStatus(h.startReview(ctx({ params: { id: 'ghost' }, body: { content: 'x' } })), 404);
+    await expectStatus(h.reviewStatus(ctx({ params: { jobId: 'ghost' } })), 404);
+  });
+
+  it('stamps the reviewer identity (username + role) from ctx.requester onto the job', async () => {
     const id = await createEssay();
-    await expectStatus(h.review(ctx({ params: { id }, body: {} })), 422);
+    const res = await h.startReview(ctx({ params: { id }, body: { content: 'My essay draft.' } }));
+    const job = res.body as { reviewerUsername: string; reviewerRole: string };
+    expect(job.reviewerUsername).toBe('keira');
+    expect(job.reviewerRole).toBe('student');
+  });
+
+  it('reviewStatus returns the job to its creator but 404s a DIFFERENT caller (privacy guard)', async () => {
+    const id = await createEssay();
+    const res = await h.startReview(ctx({ params: { id }, body: { content: 'My essay draft.' } }));
+    const { jobId } = res.body as { jobId: string };
+    // the creator (keira) reads her own evaluation
+    const mine = await h.reviewStatus(ctx({ params: { jobId } }));
+    expect((mine.body as { jobId: string }).jobId).toBe(jobId);
+    // a different family account (kate, a parent) must NOT be able to read it
+    await expectStatus(h.reviewStatus(ctx({ requester: kate, params: { jobId } })), 404);
   });
 });
 
@@ -108,5 +132,136 @@ describe('applications overview (derived)', () => {
     const apps = (res.body as { applications: { name: string; essays: { final: number } }[] }).applications;
     expect(apps[0]?.name).toBe('Ohio State');
     expect(apps[0]?.essays.final).toBe(1);
+  });
+});
+
+describe('essay coach — college grounding, rated review, practice questions', () => {
+  async function seedCollege() {
+    const college = await data.colleges.create({
+      name: 'Ohio State',
+      essayPrompts: ['Why OSU nursing?'],
+      admissionsDeepDive: 'Holistic direct admit.',
+    } as Parameters<Data['colleges']['create']>[0]);
+    return college.collegeId;
+  }
+
+  it('passes the linked college to the finder and practice generator', async () => {
+    const collegeId = await seedCollege();
+    const seen: Array<string | undefined> = [];
+    const localH = makeHandlers({
+      getData: () => data,
+      now,
+      finder: async ({ college, pool }) => { seen.push(college?.name); return stubFinder({ prompt: '', pool }); },
+      practice: async ({ college }) => { seen.push(college?.name); return { questions: [{ question: 'q', why: 'w', tip: 't' }], source: 'curated' as const }; },
+    });
+    const linked = (await localH.createEssay(ctx({ body: { collegeId, prompt: 'p' } }))).body as { essayId: string };
+    await localH.findExperiences(ctx({ params: { id: linked.essayId }, body: {} }));
+    const pq = await localH.practiceQuestionsForCollege(ctx({ body: { collegeId } }));
+    expect(pq.status).toBe(202);
+    expect(seen).toEqual(['Ohio State', 'Ohio State']);
+    expect((pq.body as { result?: { collegeName?: string } }).result?.collegeName).toBe('Ohio State');
+
+    const pq2 = await localH.practiceQuestionsForCollege(ctx({ body: {} }));
+    expect(seen.at(-1)).toBeUndefined();
+    expect((pq2.body as { result?: { collegeName?: string } }).result?.collegeName).toBeUndefined();
+  });
+
+  it('persists a compact lastReview from an AI rubric review (via the async job)', async () => {
+    const localH = makeHandlers({
+      getData: () => data,
+      now,
+      reviewer: async ({ content }) => ({
+        strengths: ['s'], improvements: ['i'], authenticity: 'a',
+        ratings: { promptFit: 8, voice: 9, structure: 7, specificity: 8 },
+        overall: 8, verdict: 'close' as const,
+        wordCount: content.split(/\s+/).length, onTarget: null, rewrote: false as const, source: 'ai' as const,
+      }),
+    });
+    const id = ((await localH.createEssay(ctx({ body: { prompt: 'p' } }))).body as { essayId: string }).essayId;
+    const res = await localH.startReview(ctx({ params: { id }, body: { content: 'my draft words' } }));
+    expect(res.status).toBe(202);
+    const job = res.body as { status: string; result?: { overall?: number } };
+    expect(job.status).toBe('complete');
+    expect(job.result?.overall).toBe(8);
+    const stored = await data.essays.get(id);
+    expect(stored?.lastReview).toMatchObject({ overall: 8, verdict: 'close', reviewedAt: now().toISOString() });
+  });
+
+  it('does NOT persist lastReview from the curated fallback (no fake scores)', async () => {
+    const id = await createEssay();
+    await h.startReview(ctx({ params: { id }, body: { content: 'my draft words' } }));
+    expect((await data.essays.get(id))?.lastReview).toBeUndefined();
+  });
+
+  it('records no draft version on the persisted lastReview', async () => {
+    const localH = makeHandlers({
+      getData: () => data,
+      now,
+      reviewer: async () => ({
+        strengths: ['s'], improvements: [], authenticity: '',
+        overall: 6, verdict: 'keep-working' as const,
+        wordCount: 2, onTarget: null, rewrote: false as const, source: 'ai' as const,
+      }),
+    });
+    const id = ((await localH.createEssay(ctx({ body: { prompt: 'p' } }))).body as { essayId: string }).essayId;
+    await localH.startReview(ctx({ params: { id }, body: { content: 'unsaved text' } }));
+    const lastReview = (await data.essays.get(id))?.lastReview;
+    expect(lastReview).toBeDefined();
+    expect(lastReview?.version).toBeUndefined();
+  });
+});
+
+describe('practice-questions (async job)', () => {
+  it('creates a job, runs it inline (no queue), returns 202 with the complete result', async () => {
+    const localH = makeHandlers({
+      getData: () => data, now,
+      practice: async ({ college }) => ({ questions: [{ question: 'q', why: 'w', tip: 't' }], source: 'curated' as const }),
+    });
+    const college = await data.colleges.create({ name: 'Ohio State', status: 'applying', essayPrompts: ['Why OSU?'] } as Parameters<Data['colleges']['create']>[0]);
+    const res = await localH.practiceQuestionsForCollege(ctx({ body: { collegeId: college.collegeId } }));
+    expect(res.status).toBe(202);
+    const job = res.body as { jobId: string; status: string; result?: { usedRealPrompts: boolean; collegeName?: string } };
+    expect(job.status).toBe('complete');
+    expect(job.result?.usedRealPrompts).toBe(true);
+    expect(job.result?.collegeName).toBe('Ohio State');
+
+    // status endpoint returns the same job
+    const poll = await localH.practiceQuestionsStatus(ctx({ params: { jobId: job.jobId } }));
+    expect((poll.body as { jobId: string }).jobId).toBe(job.jobId);
+  });
+
+  it('typed name → usedRealPrompts false; unknown jobId → 404; strict-schema 422', async () => {
+    const localH = makeHandlers({ getData: () => data, now, practice: async () => ({ questions: [{ question: 'q', why: 'w', tip: 't' }], source: 'ai' as const }) });
+    const typed = await localH.practiceQuestionsForCollege(ctx({ body: { collegeName: 'Imaginary U' } }));
+    expect((typed.body as { result?: { usedRealPrompts: boolean } }).result?.usedRealPrompts).toBe(false);
+    await expectStatus(localH.practiceQuestionsStatus(ctx({ params: { jobId: 'ghost' } })), 404);
+    await expectStatus(localH.practiceQuestionsForCollege(ctx({ body: { bogus: 1 } })), 422);
+  });
+});
+
+describe('per-essay word target', () => {
+  it('parses a stated count from the prompt at creation; silent prompts get none', async () => {
+    const res = await h.createEssay(ctx({ body: { prompt: 'Why us? In 350 words or fewer.' } }));
+    expect((res.body as { targetWords?: number }).targetWords).toBe(350);
+    const silent = await h.createEssay(ctx({ body: { prompt: 'Why nursing?' } }));
+    expect((silent.body as { targetWords?: number }).targetWords).toBeUndefined();
+    const explicit = await h.createEssay(ctx({ body: { prompt: 'In 350 words.', targetWords: 500 } }));
+    expect((explicit.body as { targetWords?: number }).targetWords).toBe(500);
+  });
+
+  it('review falls back to the essay target when the body sends none', async () => {
+    const seen: Array<number | undefined> = [];
+    const localH = makeHandlers({
+      getData: () => data,
+      now,
+      reviewer: async ({ content, targetWords }) => {
+        seen.push(targetWords);
+        return stubReviewer({ prompt: '', content });
+      },
+    });
+    const id = ((await localH.createEssay(ctx({ body: { prompt: 'A 300-word response.' } }))).body as { essayId: string }).essayId;
+    await localH.startReview(ctx({ params: { id }, body: { content: 'my draft' } }));
+    await localH.startReview(ctx({ params: { id }, body: { content: 'my draft', targetWords: 650 } }));
+    expect(seen).toEqual([300, 650]);
   });
 });

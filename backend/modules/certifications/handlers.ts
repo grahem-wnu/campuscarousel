@@ -16,6 +16,8 @@ import type { Data } from '../../shared/data/index.js';
 import {
   createSchema,
   expiringQuerySchema,
+  guidanceJobParamSchema,
+  guidanceSchema,
   idParamSchema,
   listQuerySchema,
   suggestSchema,
@@ -23,6 +25,7 @@ import {
 } from './schema.js';
 import { decorate, EXPIRING_SOON_DAYS, isExpiringWithin } from './status.js';
 import { curatedSuggester, DEFAULT_CAREER_GOAL, type Suggester } from './suggester.js';
+import { makeBedrockGuidanceResearcher, makeInlineDispatcher, type GuidanceDispatcher } from './guidance.js';
 
 export interface CertHandlers {
   list: Handler;
@@ -32,6 +35,8 @@ export interface CertHandlers {
   update: Handler;
   remove: Handler;
   suggest: Handler;
+  guidance: Handler;
+  guidanceStatus: Handler;
 }
 
 export interface CertDeps {
@@ -39,6 +44,9 @@ export interface CertDeps {
   getData: () => Data;
   /** Suggestion source for /suggest; defaults to the deterministic curated suggester. */
   suggester?: Suggester;
+  /** Dispatcher for async cert-guidance research; production injects the SQS enqueuer. Defaults to
+   *  running inline with the Bedrock researcher (returns an empty result when no model is configured). */
+  guidanceDispatch?: GuidanceDispatcher;
   /** Clock seam — pinned in tests, `new Date()` in production. */
   now?: () => Date;
 }
@@ -56,10 +64,33 @@ async function careerGoalFromProfile(data: Data, username: string): Promise<stri
   }
 }
 
+/** Read the active student's intended major(s) so a major pack can supply curated certs. */
+async function majorsFromProfile(data: Data): Promise<string[]> {
+  try {
+    return (await data.studentProfile.get())?.intendedMajors ?? [];
+  } catch {
+    return [];
+  }
+}
+
+/** Read the student's location ("City, ST") so guidance research can localize providers. */
+async function locationFromProfile(data: Data): Promise<string | undefined> {
+  try {
+    const loc = (await data.studentProfile.get())?.location;
+    return typeof loc === 'string' && loc.trim() ? loc.trim() : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function makeHandlers(deps: CertDeps): CertHandlers {
   const { getData } = deps;
   const now = deps.now ?? (() => new Date());
   const suggester = deps.suggester ?? curatedSuggester;
+  // Default dispatch (tests / no queue): research inline with the Bedrock researcher (which returns an
+  // empty result when BEDROCK_MODEL_ID is unset). Production injects the SQS enqueuer.
+  const guidanceDispatch: GuidanceDispatcher =
+    deps.guidanceDispatch ?? makeInlineDispatcher(getData, makeBedrockGuidanceResearcher());
 
   return {
     // GET /certifications — list (optionally filtered by effective status), decorated for the UI.
@@ -128,8 +159,34 @@ export function makeHandlers(deps: CertDeps): CertHandlers {
         (await careerGoalFromProfile(data, ctx.requester.username)) ??
         DEFAULT_CAREER_GOAL;
       const existingNames = (await data.certifications.list()).map((c) => c.name);
-      const suggestions = await suggester({ careerGoal, existingNames });
+      const majors = await majorsFromProfile(data);
+      const suggestions = await suggester({ careerGoal, existingNames, majors });
       return { status: 200, body: { careerGoal, suggestions } };
+    },
+
+    // POST /certifications/guidance — ASYNC. Start a web-grounded "how & where to get this cert near
+    // me" research job (it can exceed the 30s API ceiling) and return the pending job. The student's
+    // location comes from their profile. Frontend polls guidanceStatus, then renders the result.
+    guidance: async (ctx) => {
+      const { certName } = validateBody(guidanceSchema, ctx);
+      const data = getData();
+      const location = await locationFromProfile(data);
+      const job = await data.certGuidanceJobs.create({
+        certName,
+        status: 'pending',
+        ...(location ? { location } : {}),
+      });
+      await guidanceDispatch(job.jobId);
+      const after = await data.certGuidanceJobs.get(job.jobId);
+      return { status: 202, body: after ?? job };
+    },
+
+    // GET /certifications/guidance/:jobId — poll a guidance job's status + result.
+    guidanceStatus: async (ctx) => {
+      const { jobId } = validateParams(guidanceJobParamSchema, ctx);
+      const job = await getData().certGuidanceJobs.get(jobId);
+      if (!job) throw Errors.notFound('Guidance job not found');
+      return { status: 200, body: job };
     },
   };
 }
@@ -144,6 +201,8 @@ export function buildRoutes(handlers: CertHandlers) {
   return [
     { method: 'GET' as const, path: '/certifications/expiring', handler: handlers.expiring },
     { method: 'POST' as const, path: '/certifications/suggest', handler: handlers.suggest },
+    { method: 'POST' as const, path: '/certifications/guidance', handler: handlers.guidance },
+    { method: 'GET' as const, path: '/certifications/guidance/:jobId', handler: handlers.guidanceStatus },
     { method: 'GET' as const, path: '/certifications', handler: handlers.list },
     { method: 'POST' as const, path: '/certifications', handler: handlers.create },
     { method: 'GET' as const, path: '/certifications/:id', handler: handlers.detail },

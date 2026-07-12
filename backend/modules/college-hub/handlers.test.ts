@@ -11,6 +11,7 @@ const kate: Requester = { username: 'kate', role: 'parent' };
 let data: Data;
 let h: CollegeHandlers;
 let dispatched: string[];
+let assetsDispatched: string[];
 
 // Stub dispatcher: records the call and simulates hydration (fills a field, marks complete),
 // honoring userEdited via mergePreservingUserEdits.
@@ -19,14 +20,29 @@ const makeDispatch = () => async (id: string) => {
   await data.colleges.mergePreservingUserEdits(id, { location: 'AI City', hydrationStatus: 'complete' });
 };
 
+// Stub assets dispatcher: records the call and simulates the imagery worker landing a campus url.
+const makeAssetsDispatch = () => async (id: string) => {
+  assetsDispatched.push(id);
+  await data.colleges.mergePreservingUserEdits(id, {
+    campusImageUrl: `https://cdn.test/colleges/${id}/campus.jpg`,
+    assetsStatus: 'complete',
+  });
+};
+
 const stubDiscoverer: Discoverer = async (input) => [
-  { name: 'Discovered U', state: input.state ?? 'Ohio', programType: 'direct-admit-BSN' },
+  { name: 'Discovered U', state: input.state ?? 'Ohio', programType: 'direct-admit' },
 ];
 
 beforeEach(() => {
   data = makeData(new InMemoryTableClient());
   dispatched = [];
-  h = makeHandlers({ getData: () => data, discoverer: stubDiscoverer, dispatch: makeDispatch() });
+  assetsDispatched = [];
+  h = makeHandlers({
+    getData: () => data,
+    discoverer: stubDiscoverer,
+    dispatch: makeDispatch(),
+    assetsDispatch: makeAssetsDispatch(),
+  });
 });
 
 const ctx = (over: Partial<HandlerContext> = {}): HandlerContext => ({
@@ -53,6 +69,9 @@ describe('create (POST /colleges)', () => {
     expect(body.addedBy).toBe('manual');
     expect(body.location).toBe('AI City'); // hydration ran via dispatch
     expect(dispatched).toHaveLength(1);
+    // Imagery fetch is kicked off in parallel and lands a campus url.
+    expect(assetsDispatched).toEqual([body.collegeId]);
+    expect(body.campusImageUrl).toBe(`https://cdn.test/colleges/${body.collegeId}/campus.jpg`);
   });
 
   it('marks caller-supplied fields userEdited so hydration cannot overwrite them', async () => {
@@ -146,24 +165,66 @@ describe('hydrate / hydrate-all', () => {
     await expectStatus(h.hydrate(ctx({ params: { id: 'ghost' } })), 404);
   });
 
-  it('hydrate-all dispatches every non-removed college', async () => {
+  it('hydrate-all dispatches every non-removed college (text + imagery)', async () => {
     await create({ name: 'A' });
     await create({ name: 'B' });
     const gone = await create({ name: 'C' });
     await h.remove(ctx({ params: { id: gone.collegeId } }));
     dispatched = [];
+    assetsDispatched = [];
     const res = await h.hydrateAll(ctx());
     expect(res.status).toBe(202);
     expect((res.body as { requested: number }).requested).toBe(2);
     expect(dispatched).toHaveLength(2);
+    expect(assetsDispatched).toHaveLength(2);
+  });
+
+  it('hydrate also kicks off an imagery refresh', async () => {
+    const c = await create({ name: 'Ohio State' });
+    assetsDispatched = [];
+    await h.hydrate(ctx({ params: { id: c.collegeId } }));
+    expect(assetsDispatched).toEqual([c.collegeId]);
+  });
+});
+
+describe('assets-backfill (POST /colleges/assets-backfill)', () => {
+  it('enqueues imagery only for non-removed colleges that lack a campus photo', async () => {
+    // `create` auto-runs the stub assets dispatch, which lands a campusImageUrl — so seed colleges
+    // WITHOUT imagery directly via the data layer to exercise the backfill filter.
+    const withImg = await create({ name: 'Has Image' }); // gets campusImageUrl from the stub
+    const a = await data.colleges.create({ name: 'Needs A', userEdited: [] } as Parameters<Data['colleges']['create']>[0]);
+    const b = await data.colleges.create({ name: 'Needs B', userEdited: [] } as Parameters<Data['colleges']['create']>[0]);
+    const gone = await data.colleges.create({ name: 'Gone', status: 'removed', userEdited: [] } as Parameters<Data['colleges']['create']>[0]);
+    assetsDispatched = [];
+
+    const res = await h.assetsBackfill(ctx());
+
+    expect(res.status).toBe(202);
+    expect((res.body as { requested: number }).requested).toBe(2);
+    expect(assetsDispatched.sort()).toEqual([a.collegeId, b.collegeId].sort());
+    expect(assetsDispatched).not.toContain(withImg.collegeId);
+    expect(assetsDispatched).not.toContain(gone.collegeId);
   });
 });
 
 describe('discover / bulk-add', () => {
-  it('discover returns candidates without adding anything', async () => {
+  it('discover starts an async job (202) that the stub runs inline, pollable by id, adds nothing', async () => {
     const res = await h.discover(ctx({ body: { state: 'Ohio' } }));
-    expect((res.body as { candidates: { name: string }[] }).candidates[0]?.name).toBe('Discovered U');
-    expect((await data.colleges.list())).toHaveLength(0); // nothing persisted
+    expect(res.status).toBe(202);
+    const job = res.body as { jobId: string; status: string; candidates?: { name: string }[] };
+    expect(job.jobId).toBeTruthy();
+    expect(job.status).toBe('complete'); // inline stub run
+    expect(job.candidates?.[0]?.name).toBe('Discovered U');
+    expect(await data.colleges.list()).toHaveLength(0); // nothing persisted
+
+    // The job is pollable via the status endpoint.
+    const poll = await h.discoverStatus(ctx({ params: { jobId: job.jobId } }));
+    expect(poll.status).toBe(200);
+    expect((poll.body as { candidates: { name: string }[] }).candidates[0]?.name).toBe('Discovered U');
+  });
+
+  it('discoverStatus 404s an unknown job id', async () => {
+    await expect(h.discoverStatus(ctx({ params: { jobId: 'nope' } }))).rejects.toBeTruthy();
   });
 
   it('bulk-add creates several at once', async () => {
@@ -199,6 +260,15 @@ describe('notes / checklist', () => {
     expect((list.body as { notes: { content: string }[] }).notes.map((n) => n.content)).toEqual(['Visited!']);
   });
 
+  it('ignores a client-supplied author (no identity spoofing)', async () => {
+    const c = await create({ name: 'Kent State' });
+    // kate tries to forge a note as keira; the extra key is rejected by .strict() (422).
+    await expectStatus(
+      h.addNote(ctx({ requester: kate, params: { id: c.collegeId }, body: { content: 'x', author: 'keira' } })),
+      422,
+    );
+  });
+
   it('note add 404s for a missing college', async () => {
     await expectStatus(h.addNote(ctx({ params: { id: 'ghost' }, body: { content: 'x' } })), 404);
   });
@@ -213,5 +283,96 @@ describe('notes / checklist', () => {
     );
     const got = await h.getChecklist(ctx({ params: { id: c.collegeId } }));
     expect((got.body as { items: { label: string }[] }).items.map((i) => i.label)).toEqual(['Apply']);
+  });
+
+  it('suggestChecklist returns AI steps (college + majors passed through; nothing persisted)', async () => {
+    let seenCollege = '';
+    let seenMajors: string[] = [];
+    const hh = makeHandlers({
+      getData: () => data,
+      dispatch: makeDispatch(),
+      assetsDispatch: makeAssetsDispatch(),
+      checklistSuggester: async (college, majors) => {
+        seenCollege = college.name;
+        seenMajors = majors;
+        return [{ label: 'Submit the TEAS exam score' }, { label: 'Pay the application fee', dueDate: '2026-11-01' }];
+      },
+    });
+    const c = await create({ name: 'Ohio State' });
+    await data.studentProfile.put({ onboardingComplete: true, intendedMajors: ['Nursing (BSN)'] });
+
+    const res = await hh.suggestChecklist(ctx({ params: { id: c.collegeId } }));
+    const { suggestions } = res.body as { suggestions: { label: string; dueDate?: string }[] };
+    expect(suggestions.map((s) => s.label)).toEqual(['Submit the TEAS exam score', 'Pay the application fee']);
+    expect(suggestions[1]?.dueDate).toBe('2026-11-01');
+    expect(seenCollege).toBe('Ohio State');
+    expect(seenMajors).toEqual(['Nursing (BSN)']);
+
+    // Pure suggestion endpoint — it must not write a checklist.
+    const got = await hh.getChecklist(ctx({ params: { id: c.collegeId } }));
+    expect((got.body as { items: unknown[] }).items).toHaveLength(0);
+  });
+
+  it('suggestChecklist 404s for a missing college', async () => {
+    await expectStatus(h.suggestChecklist(ctx({ params: { id: 'ghost' } })), 404);
+  });
+
+  it('generatePrep returns the plan, passes college+major+gradYear through, and persists it on the college', async () => {
+    let seen: { name: string; majors: string[]; gradYear?: number } = { name: '', majors: [] };
+    const plan = { headline: 'Aim high', targets: [{ label: '3.5 GPA' }], courses: [{ label: 'AP Physics 1' }], activities: [{ label: 'Robotics' }] };
+    const hh = makeHandlers({
+      getData: () => data,
+      dispatch: makeDispatch(),
+      assetsDispatch: makeAssetsDispatch(),
+      prepSuggester: async (college, majors, gradYear) => {
+        seen = { name: college.name, majors, gradYear };
+        return plan;
+      },
+    });
+    const c = await create({ name: 'Ohio State' });
+    await data.studentProfile.put({ onboardingComplete: true, intendedMajors: ['Nursing (BSN)'], graduationYear: 2028 });
+
+    // 202 (async); the default dispatcher runs inline here so the plan is already persisted + complete.
+    const res = await hh.generatePrep(ctx({ params: { id: c.collegeId } }));
+    expect(res.status).toBe(202);
+    expect((res.body as { plan: typeof plan }).plan.courses[0]?.label).toBe('AP Physics 1');
+    expect(seen).toEqual({ name: 'Ohio State', majors: ['Nursing (BSN)'], gradYear: 2028 });
+    // Persisted onto the college (status flipped to complete) so it survives a reload.
+    const after = await data.colleges.get(c.collegeId);
+    expect(after?.hsPrepPlan?.headline).toBe('Aim high');
+    expect(after?.hsPrepStatus).toBe('complete');
+  });
+
+  it('generatePrep marks the college in-progress and enqueues without blocking on generation (async)', async () => {
+    const enqueued: string[] = [];
+    const hh = makeHandlers({
+      getData: () => data,
+      dispatch: makeDispatch(),
+      assetsDispatch: makeAssetsDispatch(),
+      // Simulate the SQS enqueuer: records the id and returns WITHOUT generating (worker does that).
+      prepDispatch: async (id) => { enqueued.push(id); },
+    });
+    const c = await create({ name: 'Boise State' });
+    const res = await hh.generatePrep(ctx({ params: { id: c.collegeId } }));
+    expect(res.status).toBe(202);
+    expect((res.body as { status: string }).status).toBe('in-progress');
+    expect(enqueued).toEqual([c.collegeId]);
+    const after = await data.colleges.get(c.collegeId);
+    expect(after?.hsPrepStatus).toBe('in-progress');
+    expect(after?.hsPrepPlan).toBeUndefined(); // worker fills this later
+  });
+
+  it('generatePrep returns { plan: null } + marks failed when the model produced nothing', async () => {
+    const hh = makeHandlers({ getData: () => data, dispatch: makeDispatch(), assetsDispatch: makeAssetsDispatch(), prepSuggester: async () => null });
+    const c = await create({ name: 'Kent State' });
+    const res = await hh.generatePrep(ctx({ params: { id: c.collegeId } }));
+    expect((res.body as { plan: unknown }).plan).toBeNull();
+    const after = await data.colleges.get(c.collegeId);
+    expect(after?.hsPrepPlan).toBeUndefined();
+    expect(after?.hsPrepStatus).toBe('failed');
+  });
+
+  it('generatePrep 404s for a missing college', async () => {
+    await expectStatus(h.generatePrep(ctx({ params: { id: 'ghost' } })), 404);
   });
 });

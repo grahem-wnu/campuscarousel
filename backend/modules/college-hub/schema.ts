@@ -17,10 +17,10 @@ export const COLLEGE_STATUSES = [
 ] as const;
 
 export const PROGRAM_TYPES = [
-  'direct-admit-BSN',
-  'pre-nursing-secondary-app',
-  'ABSN-only',
-  'RN-to-BSN-only',
+  'direct-admit',
+  'secondary-application',
+  'accelerated',
+  'transfer-pathway',
 ] as const;
 
 export const NOTE_TYPES = [
@@ -39,7 +39,7 @@ const deadlines = z
   .object({
     earlyAction: isoDate.optional(),
     regularDecision: isoDate.optional(),
-    nursingApp: isoDate.optional(),
+    programApp: isoDate.optional(),
   })
   .strict();
 
@@ -54,12 +54,27 @@ const branding = z
 
 const contactInfo = z
   .object({
-    nursingAdmissionsPhone: z.string().max(60).optional(),
-    nursingAdmissionsEmail: z.string().max(200).optional(),
-    nursingAdmissionsUrl: url.optional(),
+    programAdmissionsPhone: z.string().max(60).optional(),
+    programAdmissionsEmail: z.string().max(200).optional(),
+    programAdmissionsUrl: url.optional(),
     financialAidPhone: z.string().max(60).optional(),
     financialAidUrl: url.optional(),
     campusVisitUrl: url.optional(),
+  })
+  .strict();
+
+const testimonial = z
+  .object({
+    quote: z.string().min(1).max(2000),
+    attribution: z.string().max(200).optional(),
+    source: url.optional(),
+  })
+  .strict();
+
+const programDetail = z
+  .object({
+    label: z.string().min(1).max(200),
+    value: z.string().min(1).max(1000),
   })
   .strict();
 
@@ -70,24 +85,34 @@ const editableCollege = {
   state: z.string().max(100).optional(),
   programType: z.enum(PROGRAM_TYPES).optional(),
   isDirectAdmit: z.boolean().optional(),
-  hasBSN: z.boolean().optional(),
-  hasAcceleratedBSN: z.boolean().optional(),
   isTopPick: z.boolean().optional(),
   ranking: z.string().max(120).optional(),
+  overview: z.string().max(8000).optional(),
+  admissionsDeepDive: z.string().max(8000).optional(),
+  employmentRate: z.string().max(120).optional(),
   tuitionInState: z.number().nonnegative().max(1_000_000).optional(),
   tuitionOutOfState: z.number().nonnegative().max(1_000_000).optional(),
+  costOfAttendanceOutOfState: z.number().nonnegative().max(1_000_000).optional(),
+  estimatedNetPriceAfterAid: z.number().nonnegative().max(1_000_000).optional(),
+  percentReceivingAid: z.string().max(120).optional(),
+  avgAidAmount: z.number().nonnegative().max(1_000_000).optional(),
+  applicationFee: z.number().nonnegative().max(10_000).optional(),
   estimatedTotalCost: z.number().nonnegative().max(2_000_000).optional(),
   estimatedCostAfterAid: z.number().nonnegative().max(2_000_000).optional(),
-  acceptanceRateNursing: z.string().max(60).optional(),
+  acceptanceRateProgram: z.string().max(60).optional(),
   acceptanceRateUniversity: z.string().max(60).optional(),
   avgGPAAdmitted: z.string().max(60).optional(),
   prerequisites: z.array(z.string().min(1).max(200)).max(100).optional(),
+  programDetails: z.array(programDetail).max(30).optional(),
   applicationDeadlines: deadlines.optional(),
   essayPrompts: z.array(z.string().min(1).max(2000)).max(50).optional(),
   requiredTests: z.array(z.string().min(1).max(120)).max(50).optional(),
-  clinicalPartners: z.array(z.string().min(1).max(200)).max(100).optional(),
+  testimonials: z.array(testimonial).max(20).optional(),
+  campusImageUrls: z.array(url).max(20).optional(),
   specialNotes: z.string().max(10000).optional(),
   website: url.optional(),
+  dataSources: z.array(url).max(50).optional(),
+  dataAsOf: z.string().max(40).optional(),
   branding: branding.optional(),
   contactInfo: contactInfo.optional(),
   status: z.enum(COLLEGE_STATUSES).optional(),
@@ -134,11 +159,14 @@ export const bulkAddSchema = z
   })
   .strict();
 
-/** POST /colleges/:id/notes. */
+/**
+ * POST /colleges/:id/notes. `author` is NOT accepted from the client — it is always
+ * stamped server-side from the JWT identity (a client-supplied author would let one
+ * family member forge a note as another). `.strict()` rejects any extra keys.
+ */
 export const noteSchema = z
   .object({
     content: z.string().min(1).max(10000),
-    author: z.string().max(120).optional(),
     noteType: z.enum(NOTE_TYPES).optional(),
   })
   .strict();
@@ -160,6 +188,9 @@ export const checklistSchema = z
   .strict();
 
 export const idParamSchema = z.object({ id: z.string().min(1) });
+
+/** GET /colleges/discover/:jobId path param. */
+export const jobIdParamSchema = z.object({ jobId: z.string().min(1) });
 
 export type CreateInput = z.infer<typeof createSchema>;
 export type UpdateInput = z.infer<typeof updateSchema>;

@@ -93,48 +93,33 @@ describe('prep (POST /colleges/:id/visits/:vid/prep)', () => {
     await expectStatus(h.prep(ctx({ params: { id, vid: 'ghost' } })), 404);
   });
 
-  it('returns the curated nursing checklist + logistics for a real visit', async () => {
-    const id = await seedCollege({ contactInfo: { nursingAdmissionsEmail: 'nursing@uci.edu' } });
+  it('regenerates and returns the visit with the curated checklist + logistics cached on it', async () => {
+    const id = await seedCollege({ contactInfo: { programAdmissionsEmail: 'nursing@uci.edu' } });
     const created = await h.create(ctx({ params: { id }, body: { date: '2026-04-01' } }));
     const vid = (created.body as { visitId: string }).visitId;
     const res = await h.prep(ctx({ params: { id, vid } }));
     expect(res.status).toBe(200);
-    const body = res.body as { questions: string[]; logistics: { contact?: string }; source: string };
-    expect(body.source).toBe('curated');
-    expect(body.questions.length).toBeGreaterThanOrEqual(8);
-    expect(body.logistics.contact).toBe('nursing@uci.edu');
-  });
-});
-
-describe('trip-plan (POST /visits/trip-plan)', () => {
-  beforeEach(async () => {
-    await seedCollege({ name: 'Iowa', state: 'IA' });
-    await seedCollege({ name: 'Iowa State', state: 'IA' });
-    await seedCollege({ name: 'Michigan', state: 'MI' });
+    const prep = (res.body as { prep: { questions: string[]; logistics: { contact?: string }; source: string } }).prep;
+    expect(prep.source).toBe('curated');
+    expect(prep.questions.length).toBeGreaterThanOrEqual(8);
+    expect(prep.logistics.contact).toBe('nursing@uci.edu');
+    // It's persisted on the visit (so the UI shows/hides it without re-generating).
+    expect((await data.visits.get(id, vid))?.prep?.questions.length).toBeGreaterThanOrEqual(8);
   });
 
-  it('clusters all colleges by region when no subset given', async () => {
-    const res = await h.tripPlan(ctx({ body: {} }));
-    const plan = res.body as { clusters: { region: string }[]; source: string };
-    expect(plan.source).toBe('curated');
-    expect(plan.clusters.map((c) => c.region).sort()).toEqual(['IA', 'MI']);
+  it("leads with the student's major-pack visit questions (nursing → NCLEX pass rate)", async () => {
+    await data.studentProfile.put({ intendedMajors: ['Nursing'] });
+    const id = await seedCollege();
+    const created = await h.create(ctx({ params: { id }, body: { date: '2026-04-01' } }));
+    const vid = (created.body as { visitId: string }).visitId;
+    const res = await h.prep(ctx({ params: { id, vid } }));
+    const questions = (res.body as { prep: { questions: string[] } }).prep.questions;
+    expect(questions.some((q) => /NCLEX/.test(q))).toBe(true);
   });
 
-  it('restricts to the requested college subset', async () => {
-    const all = await data.colleges.list();
-    const iaIds = all.filter((c) => c.state === 'IA').map((c) => c.collegeId);
-    const res = await h.tripPlan(ctx({ body: { collegeIds: iaIds } }));
-    const plan = res.body as { clusters: { region: string; colleges: unknown[] }[] };
-    expect(plan.clusters).toHaveLength(1);
-    expect(plan.clusters[0]!.region).toBe('IA');
-  });
-
-  it('422s on an unknown trip-plan field', async () => {
-    await expectStatus(h.tripPlan(ctx({ body: { bogus: 1 } })), 422);
-  });
-
-  it('tolerates a missing body', async () => {
-    const res = await h.tripPlan(ctx({ body: undefined }));
-    expect(res.status).toBe(200);
+  it('generates and caches prep when the visit is created', async () => {
+    const id = await seedCollege();
+    const created = await h.create(ctx({ params: { id }, body: { date: '2026-04-01' } }));
+    expect((created.body as { prep?: { questions: string[] } }).prep?.questions.length).toBeGreaterThanOrEqual(8);
   });
 });

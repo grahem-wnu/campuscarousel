@@ -1,14 +1,19 @@
-import { useState, type FormEvent } from 'react';
-import { Badge, Button, Card, EmptyState, Field, Icon, Input } from '../../shared/ui';
+import { useEffect, useState } from 'react';
+import { Badge, Card, EmptyState, Field, Select, Spinner } from '../../shared/ui';
+import { listColleges } from '../college-hub/api';
+import type { College } from '../college-hub/types';
 import { getPrerequisites } from './api';
+import { PrereqReportView } from './PrereqReportView';
 import type { Course, PrereqReport } from './types';
 
 /**
- * Per-college prerequisite satisfaction check. Enumerating colleges into a full matrix needs the
- * College Hub's college list (a sibling module not yet merged), so this checks one college at a
- * time by id and highlights the gaps — exactly the `GET /courses/prerequisites/:collegeId` contract.
+ * Per-college prerequisite drill-down — a focused, course-level breakdown that complements the full
+ * coverage matrix (PrereqMatrix) shown above it. Pick one of the student's tracked colleges and it
+ * hits `GET /courses/prerequisites/:collegeId`, listing each prerequisite with the course that
+ * satisfies it (or flagging it as a gap). Picking from the roster means no hunting for a raw id.
  */
 export function PrereqChecker({ courses }: { courses: Course[] }) {
+  const [colleges, setColleges] = useState<College[] | null>(null);
   const [collegeId, setCollegeId] = useState('');
   const [report, setReport] = useState<PrereqReport | null>(null);
   const [loading, setLoading] = useState(false);
@@ -16,14 +21,22 @@ export function PrereqChecker({ courses }: { courses: Course[] }) {
 
   const courseName = (id: string): string => courses.find((c) => c.courseId === id)?.name ?? id;
 
-  async function handleSubmit(e: FormEvent): Promise<void> {
-    e.preventDefault();
-    if (!collegeId.trim()) return;
-    setLoading(true);
-    setError(null);
+  // Load the student's tracked colleges to populate the picker.
+  useEffect(() => {
+    listColleges()
+      .then((list) => setColleges([...list].sort((a, b) => a.name.localeCompare(b.name))))
+      .catch(() => setColleges([]));
+  }, []);
+
+  // Run the check as soon as a college is picked — no separate submit step.
+  async function check(id: string): Promise<void> {
+    setCollegeId(id);
     setReport(null);
+    setError(null);
+    if (!id) return;
+    setLoading(true);
     try {
-      setReport(await getPrerequisites(collegeId.trim()));
+      setReport(await getPrerequisites(id));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not check prerequisites.');
     } finally {
@@ -34,22 +47,32 @@ export function PrereqChecker({ courses }: { courses: Course[] }) {
   return (
     <div className="space-y-4">
       <Card>
-        <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-3">
+        {colleges !== null && colleges.length === 0 ? (
+          <p className="text-sm text-ink-500">
+            No colleges to check yet — add one in the College Hub (with its program prerequisites) and it
+            will show up here.
+          </p>
+        ) : (
           <Field
-            label="College ID"
-            hint="Find a college's id in the College Hub. Checks how your courses cover its prerequisites."
-            className="min-w-[14rem] flex-1"
+            label="College"
+            hint="Pick a college to see how your courses cover its program prerequisites."
+            className="min-w-[14rem]"
           >
-            <Input
-              placeholder="e.g. the college's id"
-              value={collegeId}
-              onChange={(e) => setCollegeId(e.target.value)}
-            />
+            <Select value={collegeId} disabled={colleges === null} onChange={(e) => void check(e.target.value)}>
+              <option value="">{colleges === null ? 'Loading colleges…' : 'Select a college…'}</option>
+              {(colleges ?? []).map((c) => (
+                <option key={c.collegeId} value={c.collegeId}>
+                  {c.name}
+                </option>
+              ))}
+            </Select>
           </Field>
-          <Button type="submit" icon="search" loading={loading}>
-            Check
-          </Button>
-        </form>
+        )}
+        {loading ? (
+          <div className="flex items-center gap-2 pt-3 text-sm text-ink-500">
+            <Spinner size={16} /> Checking prerequisites…
+          </div>
+        ) : null}
       </Card>
 
       {error ? (
@@ -71,35 +94,14 @@ export function PrereqChecker({ courses }: { courses: Course[] }) {
                 {report.satisfiedCount} / {report.totalCount} met
               </Badge>
             </div>
-            <ul className="space-y-2">
-              {report.prerequisites.map((p) => (
-                <li
-                  key={p.name}
-                  className={`flex items-start gap-2 rounded-md p-2 ${
-                    p.satisfied ? 'bg-success-50' : 'bg-error-50'
-                  }`}
-                >
-                  <span className={p.satisfied ? 'text-success-600' : 'text-error-600'}>
-                    <Icon name={p.satisfied ? 'check' : 'warning'} size={18} />
-                  </span>
-                  <div className="min-w-0">
-                    <div className="text-sm font-medium text-ink-900">{p.name}</div>
-                    <div className="text-xs text-ink-500">
-                      {p.satisfied
-                        ? `Satisfied by ${p.satisfiedByCourseIds.map(courseName).join(', ')}`
-                        : 'No course covers this yet — a gap to fill.'}
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ul>
+            <PrereqReportView report={report} courseName={courseName} />
           </Card>
         )
-      ) : (
+      ) : loading ? null : (
         <EmptyState
           icon="school"
           title="Check prerequisites for a college"
-          description="Enter a college id to see which of its nursing prerequisites your courses already cover, and which are still gaps."
+          description="Pick a college above to see which of its program prerequisites your courses already cover, and which are still gaps."
         />
       )}
     </div>

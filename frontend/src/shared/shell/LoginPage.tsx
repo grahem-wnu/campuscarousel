@@ -21,6 +21,14 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  // The dedicated /login path isn't an app route — once signed in, the router would 404 on it.
+  // Land on the root instead (which redirects to the first tab). Deep links keep their path.
+  function settleLoginPath() {
+    if (window.location.pathname === "/login") {
+      window.history.replaceState(null, "", "/");
+    }
+  }
+
   async function onSubmitCredentials(e: FormEvent) {
     e.preventDefault();
     setError(null);
@@ -28,6 +36,7 @@ export function LoginPage() {
     const result = await startSignIn(username.trim(), password);
     setSubmitting(false);
     if (result.status === "done") {
+      settleLoginPath();
       await refresh();
     } else if (result.status === "new_password_required") {
       setPassword("");
@@ -48,6 +57,7 @@ export function LoginPage() {
     const result = await completeNewPassword(newPassword);
     setSubmitting(false);
     if (result.status === "done") {
+      settleLoginPath();
       await refresh();
     } else if (result.status === "error") {
       setError(result.message);
@@ -58,13 +68,17 @@ export function LoginPage() {
     <div className="flex min-h-full items-center justify-center bg-surface-base px-4 py-12">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
-          <h1 className="text-2xl font-bold text-primary-700">Keira&rsquo;s Journey</h1>
-          <p className="mt-1 text-sm text-ink-500">
-            {phase === "credentials" ? "Sign in to continue" : "Choose a new password"}
+          <h1 className="font-display text-4xl font-bold tracking-tight text-ink-900">
+            <a href="/" className="focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300">
+              Campus <span className="text-primary-700">Carousel</span>
+            </a>
+          </h1>
+          <p className="mt-2 font-display text-base text-ink-600">
+            {phase === "credentials" ? "The story of the journey, kept well." : "Choose a new password"}
           </p>
         </div>
 
-        <div className="rounded-2xl border border-surface-border bg-surface-raised p-6 shadow-sm">
+        <div className="rounded-xl border border-surface-border bg-surface-raised p-6 shadow-md">
           {phase === "credentials" ? (
             <form onSubmit={onSubmitCredentials} className="flex flex-col gap-4">
               <TextField
@@ -118,8 +132,16 @@ export function LoginPage() {
           )}
         </div>
 
+        {phase === "credentials" ? (
+          <p className="mt-6 text-center text-sm text-ink-500">
+            New here?{" "}
+            <a href="/signup" className="font-medium text-primary-700 hover:underline">
+              Create an account
+            </a>
+          </p>
+        ) : null}
         <p className="mt-6 text-center text-xs text-ink-400">
-          Password help? Ask Grahem &mdash; resets are handled by the admin.
+          Forgot your password? Your family&rsquo;s account admin can reset it.
         </p>
       </div>
     </div>

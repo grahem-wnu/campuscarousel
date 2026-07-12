@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SOURCE_DOT, countdownLabel, eventsByDate, groupUpcoming, monthGrid, monthLabel } from './logic';
+import { SOURCE_DOT, collegePlans, countdownLabel, deadlineTypeLabel, decisionEstimate, eventLink, eventsByDate, formatLongDate, groupUpcoming, monthGrid, monthLabel } from './logic';
 import type { TimelineEvent, UpcomingEvent } from './types';
 
 const up = (o: Partial<UpcomingEvent>): UpcomingEvent => ({ id: 'e', date: '2026-06-10', source: 'goal', type: 'deadline', title: 'X', daysUntil: 4, group: 'this-week', ...o });
@@ -23,11 +23,13 @@ describe('groupUpcoming', () => {
 });
 
 describe('countdownLabel', () => {
-  it('phrases overdue/today/tomorrow/days', () => {
+  it('phrases overdue/today/tomorrow/days, and months/years for far-out dates', () => {
     expect(countdownLabel(-3)).toBe('3d overdue');
     expect(countdownLabel(0)).toBe('today');
     expect(countdownLabel(1)).toBe('tomorrow');
     expect(countdownLabel(9)).toBe('in 9d');
+    expect(countdownLabel(90)).toBe('in 3 mo');
+    expect(countdownLabel(880)).toBe('in ~2 yr'); // a sophomore's application deadline
   });
 });
 
@@ -41,5 +43,57 @@ describe('eventsByDate / monthGrid / monthLabel', () => {
     expect(grid).toHaveLength(42);
     expect(grid.some((c) => c.iso === '2026-06-01' && c.inMonth)).toBe(true);
     expect(monthLabel(2026, 5)).toBe('Jun 2026');
+  });
+});
+
+describe('eventLink', () => {
+  it('deep-links a college event to that college, others to their module', () => {
+    expect(eventLink({ source: 'college', collegeId: 'c1' })).toBe('/colleges/c1');
+    expect(eventLink({ source: 'college' })).toBe('/colleges'); // no id → the hub
+    expect(eventLink({ source: 'teas' })).toBe('/exams');
+    expect(eventLink({ source: 'visit' })).toBe('/visits');
+    expect(eventLink({ source: 'scholarship' })).toBe('/scholarships');
+    expect(eventLink({ source: 'certification' })).toBe('/certifications');
+    expect(eventLink({ source: 'goal' })).toBe('/goals');
+    expect(eventLink({ source: 'activity' })).toBe('/journal');
+  });
+});
+
+describe('formatLongDate / deadlineTypeLabel / decisionEstimate', () => {
+  it('formats ISO dates and passes through non-ISO', () => {
+    expect(formatLongDate('2029-09-15')).toBe('Sep 15, 2029');
+    expect(formatLongDate('Rolling')).toBe('Rolling');
+  });
+  it('labels deadline jargon in plain language', () => {
+    expect(deadlineTypeLabel('early-action')).toBe('Early Action');
+    expect(deadlineTypeLabel('regular-decision')).toBe('Regular Decision');
+    expect(deadlineTypeLabel('mystery')).toBe('Application');
+  });
+  it('estimates a hear-back date from the deadline type, undefined when unknown', () => {
+    expect(decisionEstimate('early-action', '2029-09-15')).toBe('2029-10-30'); // +45d
+    expect(decisionEstimate('regular-decision', '2030-01-01')).toBe('2030-03-26'); // +84d
+    expect(decisionEstimate('rolling', '2029-11-01')).toBeUndefined();
+  });
+});
+
+describe('collegePlans', () => {
+  const evs = [
+    up({ id: 'a2', source: 'college', type: 'regular-decision', title: 'Auburn University — regular decision', date: '2029-12-01', daysUntil: 380, collegeId: 'c-auburn' }),
+    up({ id: 'a1', source: 'college', type: 'early-action', title: 'Auburn University — early action', date: '2029-09-15', daysUntil: 300, collegeId: 'c-auburn' }),
+    up({ id: 'b1', source: 'college', type: 'regular-decision', title: 'MIT — regular decision', date: '2030-01-01', daysUntil: 410, collegeId: 'c-mit' }),
+    up({ id: 'g1', source: 'goal', type: 'deadline', title: 'Some goal', date: '2026-06-10', daysUntil: 4 }),
+  ];
+
+  it('collapses college events to one plan each, names cleaned, sorted by soonest, non-college excluded', () => {
+    const plans = collegePlans(evs);
+    expect(plans.map((p) => p.name)).toEqual(['Auburn University', 'MIT']);
+    expect(plans.some((p) => p.name === 'Some goal')).toBe(false);
+  });
+
+  it('orders each college’s deadlines soonest-first with plain labels + estimated hear-back', () => {
+    const auburn = collegePlans(evs)[0]!;
+    expect(auburn.deadlines.map((d) => d.label)).toEqual(['Early Action', 'Regular Decision']);
+    expect(auburn.deadlines[0]!.decisionDate).toBe('2029-10-30'); // 2029-09-15 + 45d
+    expect(auburn.soonestDaysUntil).toBe(300);
   });
 });

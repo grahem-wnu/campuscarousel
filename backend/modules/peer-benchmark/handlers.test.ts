@@ -74,12 +74,41 @@ describe('detail (GET /colleges/:id/benchmark)', () => {
       typicalVolunteerHours: 40,
     });
     await data.courses.create({ name: 'AP Bio', gradePoints: 4.0, units: 1 } as Parameters<Data['courses']['create']>[0]);
-    await data.clinical.create({ date: '2026-01-01', facility: 'Hoag', hours: 60, visibility: 'family' } as Parameters<Data['clinical']['create']>[0]);
+    await data.experiences.create({ date: '2026-01-01', facility: 'Hoag', hours: 60, visibility: 'family' } as Parameters<Data['experiences']['create']>[0]);
 
     const res = await h.detail(ctx({ params: { id } }));
     const body = res.body as { comparison: { gpaStatus: string; clinicalHoursStatus: string } };
     expect(body.comparison.gpaStatus).toBe('above');
     expect(body.comparison.clinicalHoursStatus).toBe('above');
+  });
+
+  it('falls back to the onboarding GPA when no courses are entered', async () => {
+    const id = await seedCollege();
+    await data.studentProfile.put({ currentGPA: 3.4 } as Parameters<Data['studentProfile']['put']>[0]);
+    const res = await h.detail(ctx({ params: { id } }));
+    expect((res.body as { keira: { gpa?: number } }).keira.gpa).toBe(3.4);
+  });
+
+  it('prefers a real course GPA over the onboarding GPA', async () => {
+    const id = await seedCollege();
+    await data.studentProfile.put({ currentGPA: 3.4 } as Parameters<Data['studentProfile']['put']>[0]);
+    await data.courses.create({ name: 'AP Bio', grade: 'A' } as Parameters<Data['courses']['create']>[0]);
+    const res = await h.detail(ctx({ params: { id } }));
+    expect((res.body as { keira: { gpa?: number } }).keira.gpa).toBe(4.0);
+  });
+
+  it('returns major-aware metric labels (construction → no TEAS row, internship hours)', async () => {
+    const id = await seedCollege();
+    await data.studentProfile.put({ intendedMajors: ['Construction Management'] } as Parameters<Data['studentProfile']['put']>[0]);
+    const res = await h.detail(ctx({ params: { id } }));
+    expect((res.body as { labels: { exam?: string; experience: string } }).labels).toEqual({ experience: 'Internship / jobsite hours' });
+  });
+
+  it('returns TEAS + clinical-hours labels for a nursing student', async () => {
+    const id = await seedCollege();
+    await data.studentProfile.put({ intendedMajors: ['Nursing (BSN)'] } as Parameters<Data['studentProfile']['put']>[0]);
+    const res = await h.detail(ctx({ params: { id } }));
+    expect((res.body as { labels: { exam?: string; experience: string } }).labels).toEqual({ exam: 'TEAS', experience: 'Clinical hours' });
   });
 });
 
@@ -114,10 +143,24 @@ describe('refresh (POST /colleges/:id/benchmark/refresh)', () => {
     await expectStatus(h.refresh(ctx({ params: { id }, body: { bogus: 1 } })), 422);
   });
 
-  it('propagates a 503 when AI research is unavailable', async () => {
+  it('auto-calculates and persists a 0-100 college fit score from the comparison', async () => {
+    const id = await seedCollege();
+    await h.refresh(ctx({ params: { id }, body: {} }));
+    const college = await data.colleges.get(id);
+    expect(typeof college?.fitScore).toBe('number');
+    expect(college!.fitScore!).toBeGreaterThanOrEqual(0);
+    expect(college!.fitScore!).toBeLessThanOrEqual(100);
+  });
+
+  it('marks the benchmark failed (not a thrown error) when AI research is unavailable', async () => {
+    // Refresh is async now: the request is accepted (200) and hands off to the worker; a research
+    // failure surfaces as hydrationStatus 'failed' on the benchmark, which the UI polls for. (With no
+    // queue configured the dispatcher runs the research inline, so the 'failed' write lands here.)
     const hh = makeHandlers(() => data, () => downResearcher);
     const id = await seedCollege();
-    await expectStatus(hh.refresh(ctx({ params: { id }, body: {} })), 503);
+    const res = await hh.refresh(ctx({ params: { id }, body: {} }));
+    expect(res.status).toBe(200);
+    expect((await data.benchmarks.get(id))?.hydrationStatus).toBe('failed');
   });
 });
 
@@ -130,6 +173,24 @@ describe('aggregate (GET /benchmarks/aggregate)', () => {
     const body = res.body as { keira: unknown; rows: unknown[] };
     expect(body.rows).toHaveLength(2);
     expect(body.keira).toBeDefined();
+  });
+
+  it('records one monthly snapshot and returns the trend; re-loading the same month does not duplicate', async () => {
+    const a = await seedCollege('UCLA');
+    await data.benchmarks.put(a, { avgGPAAdmitted: 3.8, typicalClinicalHours: 40 });
+    const first = (await h.aggregate(ctx())).body as { trend: { month: string }[] };
+    expect(first.trend).toHaveLength(1);
+    expect(first.trend[0]?.month).toMatch(/^\d{4}-\d{2}$/);
+    const second = (await h.aggregate(ctx())).body as { trend: unknown[] };
+    expect(second.trend).toHaveLength(1); // same calendar month → replaced, not appended
+    expect((await data.benchmarkHistory.get())?.snapshots).toHaveLength(1);
+  });
+
+  it('does not record a snapshot when no college has benchmark data yet', async () => {
+    await seedCollege('UCLA'); // no benchmark put
+    const res = (await h.aggregate(ctx())).body as { trend: unknown[] };
+    expect(res.trend).toHaveLength(0);
+    expect(await data.benchmarkHistory.get()).toBeNull();
   });
 });
 
@@ -150,8 +211,8 @@ describe('gaps (GET /benchmarks/gaps)', () => {
 
 describe('privacy — a parent never has private-entry hours folded into Keira’s stats', () => {
   beforeEach(async () => {
-    await data.clinical.create({ date: '2026-01-01', facility: 'Hoag', hours: 5, visibility: 'family' } as Parameters<Data['clinical']['create']>[0]);
-    await data.clinical.create({ date: '2026-01-02', facility: 'Private', hours: 10, visibility: 'private' } as Parameters<Data['clinical']['create']>[0]);
+    await data.experiences.create({ date: '2026-01-01', facility: 'Hoag', hours: 5, visibility: 'family' } as Parameters<Data['experiences']['create']>[0]);
+    await data.experiences.create({ date: '2026-01-02', facility: 'Private', hours: 10, visibility: 'private' } as Parameters<Data['experiences']['create']>[0]);
     await data.activities.create({ userId: 'keira', date: '2026-01-01', category: 'volunteer', title: 'CHOC', hours: 8, visibility: 'family' } as Parameters<Data['activities']['create']>[0]);
     await data.activities.create({ userId: 'keira', date: '2026-01-02', category: 'volunteer', title: 'Secret', hours: 12, visibility: 'private' } as Parameters<Data['activities']['create']>[0]);
   });
@@ -183,5 +244,16 @@ describe('privacy — a parent never has private-entry hours folded into Keira�
     const res = await h.gaps(ctx({ requester: kate }));
     const stats = (res.body as { keira: { clinicalHours: number } }).keira;
     expect(stats.clinicalHours).toBe(5);
+  });
+
+  it('the PERSISTED trend snapshot excludes private hours even when Keira triggers it', async () => {
+    const a = await seedCollege('UCLA');
+    await data.benchmarks.put(a, { avgGPAAdmitted: 3.8, typicalClinicalHours: 40 });
+    // Keira (owner) loads the dashboard — her live view includes private hours, but the family-visible
+    // snapshot written to history must not, since a parent can later read that trend.
+    const res = (await h.aggregate(ctx({ requester: keira }))).body as { keira: { clinicalHours: number }; trend: { clinicalHours: number; volunteerHours: number }[] };
+    expect(res.keira.clinicalHours).toBe(15); // live view (owner) includes private
+    expect(res.trend[0]?.clinicalHours).toBe(5); // persisted snapshot is family-visible only
+    expect(res.trend[0]?.volunteerHours).toBe(8);
   });
 });

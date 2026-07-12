@@ -18,6 +18,21 @@
     font-family: theme("fontFamily.sans");
   }
 
+  /* Field Notes: page titles speak in the editorial serif. One rule, every module inherits —
+     components opt in for big numbers / entry headings via the `font-display` utility. */
+  h1 {
+    font-family: theme("fontFamily.display");
+    letter-spacing: -0.015em;
+    @apply text-ink-900;
+  }
+
+  /* Native controls pick up the warm palette (date pickers, selects, checkboxes). */
+  input,
+  select,
+  textarea {
+    accent-color: theme("colors.primary.600");
+  }
+
   /* Respect users who prefer reduced motion. */
   @media (prefers-reduced-motion: reduce) {
     *,
@@ -34,7 +49,29 @@
   .pb-safe {
     padding-bottom: env(safe-area-inset-bottom);
   }
-  .bottom-safe {
-    bottom: calc(env(safe-area-inset-bottom) + 1rem);
+  /* Floating-action stack sits ABOVE the mobile bottom tab bar (h-bottombar-h = 4rem) plus a
+     1rem gap and the iOS safe-area inset, so the FABs never overlap a nav item. On desktop the
+     bar is hidden and md:bottom-6 takes over. */
+  .bottom-fabstack {
+    bottom: calc(env(safe-area-inset-bottom) + 5rem);
+  }
+
+  /* Always-visible thin horizontal scrollbar for scrollable strips (e.g. the detail-page tabs). On
+     touch devices the default overlay scrollbar auto-hides, so users can't tell the strip scrolls.
+     Styling ::-webkit-scrollbar gives a persistent (non-overlay) bar that shows whenever the strip
+     overflows (it stays hidden when everything fits, e.g. on desktop). */
+  .scrollbar-x-always {
+    scrollbar-width: thin; /* Firefox */
+    scrollbar-color: theme("colors.ink.300") transparent;
+  }
+  .scrollbar-x-always::-webkit-scrollbar {
+    height: 4px;
+  }
+  .scrollbar-x-always::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar-x-always::-webkit-scrollbar-thumb {
+    background-color: theme("colors.ink.300");
+    border-radius: 9999px;
   }
 }

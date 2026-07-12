@@ -1,10 +1,11 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createRouter, Errors, validate, z } from './index.js';
+import { maybeStudentId } from '../tenant/index.js';
 import type { ApiEvent, ApiResponse } from './event.js';
 import type { RouteDef } from './types.js';
 
-const KEIRA = { 'cognito:username': 'keira', 'custom:role': 'student' };
-const ADMIN = { 'cognito:username': 'grahem', 'custom:role': 'admin' };
+const KEIRA = { 'cognito:username': 'keira', 'custom:role': 'student', 'custom:tenantId': 'fam1' };
+const ADMIN = { 'cognito:username': 'grahem', 'custom:role': 'admin', 'custom:tenantId': 'fam1' };
 
 function event(opts: {
   method?: string;
@@ -13,14 +14,16 @@ function event(opts: {
   rawBody?: string;
   claims?: Record<string, unknown> | null;
   query?: Record<string, string>;
+  headers?: Record<string, string>;
 }): ApiEvent {
-  const { method = 'GET', path = '/', body, rawBody, claims = KEIRA, query } = opts;
+  const { method = 'GET', path = '/', body, rawBody, claims = KEIRA, query, headers } = opts;
   const serializedBody =
     rawBody !== undefined ? rawBody : body !== undefined ? JSON.stringify(body) : null;
   return {
     rawPath: path,
     body: serializedBody,
     queryStringParameters: query,
+    headers,
     requestContext: {
       http: { method, path },
       authorizer: claims ? { jwt: { claims } } : undefined,
@@ -63,6 +66,8 @@ const routes: RouteDef[] = [
     },
   },
   { method: 'GET', path: '/forbidden', handler: async () => { throw Errors.forbidden('nope'); } },
+  // Echoes the active student resolved into the AsyncLocalStorage context (multi-student).
+  { method: 'GET', path: '/whoami', handler: async () => ({ status: 200, body: { student: maybeStudentId() ?? null } }) },
 ];
 
 const dispatch = createRouter(routes);
@@ -126,6 +131,13 @@ describe('createRouter', () => {
     expect(res.body).toMatchObject({ error: { code: 'unauthorized' } });
   });
 
+  it('401s when the JWT carries no tenant claim (SaaS isolation, fail closed)', async () => {
+    const noTenant = { 'cognito:username': 'keira', 'custom:role': 'student' };
+    const res = parse(await dispatch(event({ path: '/activities', claims: noTenant })));
+    expect(res.status).toBe(401);
+    expect(res.body).toMatchObject({ error: { code: 'unauthorized' } });
+  });
+
   it('enforces route role guards (403 for the wrong role)', async () => {
     const denied = parse(await dispatch(event({ method: 'POST', path: '/admin/reset', claims: KEIRA })));
     expect(denied.status).toBe(403);
@@ -156,6 +168,44 @@ describe('createRouter', () => {
     expect(res.body).toEqual({ error: { code: 'internal', message: 'Internal server error' } });
     expect(spy).toHaveBeenCalled();
     spy.mockRestore();
+  });
+
+  it('sets the active student from the X-Student-Id header (multi-student)', async () => {
+    const res = parse(await dispatch(event({ path: '/whoami', headers: { 'X-Student-Id': 's-keira' } })));
+    expect(res.body).toEqual({ student: 's-keira' });
+  });
+
+  it('reads the X-Student-Id header case-insensitively', async () => {
+    const res = parse(await dispatch(event({ path: '/whoami', headers: { 'x-student-id': 's-milo' } })));
+    expect(res.body).toEqual({ student: 's-milo' });
+  });
+
+  it('leaves the active student unset when no header and no DEFAULT_STUDENT_ID', async () => {
+    const prev = process.env.DEFAULT_STUDENT_ID;
+    delete process.env.DEFAULT_STUDENT_ID;
+    const res = parse(await dispatch(event({ path: '/whoami' })));
+    expect(res.body).toEqual({ student: null });
+    if (prev !== undefined) process.env.DEFAULT_STUDENT_ID = prev;
+  });
+
+  it('falls back to DEFAULT_STUDENT_ID when the header is absent (transition compatibility)', async () => {
+    const prev = process.env.DEFAULT_STUDENT_ID;
+    process.env.DEFAULT_STUDENT_ID = 's-default';
+    const res = parse(await dispatch(event({ path: '/whoami' })));
+    expect(res.body).toEqual({ student: 's-default' });
+    if (prev === undefined) delete process.env.DEFAULT_STUDENT_ID;
+    else process.env.DEFAULT_STUDENT_ID = prev;
+  });
+
+  it('lets a view-only member read (GET) but refuses any mutation (403)', async () => {
+    const MEMBER = { 'cognito:username': 'grandma', 'custom:role': 'member', 'custom:tenantId': 'fam1' };
+    const read = parse(await dispatch(event({ method: 'GET', path: '/activities', claims: MEMBER })));
+    expect(read.status).toBe(200);
+    const write = parse(await dispatch(event({ method: 'POST', path: '/activities', claims: MEMBER, body: { title: 'x' } })));
+    expect(write.status).toBe(403);
+    expect(write.body).toMatchObject({ error: { code: 'forbidden' } });
+    const del = await dispatch(event({ method: 'DELETE', path: '/activities/1', claims: MEMBER }));
+    expect(del.statusCode).toBe(403);
   });
 
   it('throws when two routes share method+path', () => {

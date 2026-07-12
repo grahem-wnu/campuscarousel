@@ -20,6 +20,24 @@ describe('getRequester', () => {
     expect(req).toEqual<Requester>({ username: 'kate', role: 'parent' });
   });
 
+  it('resolves the tenant claim (SaaS) and platform-admin flag', () => {
+    const req = getRequester(
+      eventWithClaims({
+        'cognito:username': 'keira',
+        'custom:role': 'student',
+        'custom:tenantId': 'fam1',
+        'custom:platformAdmin': 'true',
+      }),
+    );
+    expect(req).toMatchObject({ username: 'keira', role: 'student', tenantId: 'fam1', platformAdmin: true });
+  });
+
+  it('omits tenantId/platformAdmin when their claims are absent', () => {
+    const req = getRequester(eventWithClaims({ 'cognito:username': 'keira', 'custom:role': 'student' }));
+    expect(req.tenantId).toBeUndefined();
+    expect(req.platformAdmin).toBeUndefined();
+  });
+
   it('throws Unauthorized when there is no authorizer/claims at all', () => {
     expect(() => getRequester({})).toThrow(UnauthorizedError);
   });

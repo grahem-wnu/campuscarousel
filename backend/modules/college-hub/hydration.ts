@@ -37,22 +37,37 @@ export async function hydrateCollege(
 /** One seam for "make this college hydrate". Production = inline; future = SQS enqueue. */
 export type HydrationDispatcher = (collegeId: string) => Promise<void>;
 
+/** Resolve the hydrator for a run: an explicitly-injected one is used as-is (tests); otherwise we
+ *  build the Bedrock hydrator with the student's intended majors so the prompt is major-aware. Both
+ *  the inline dispatcher and the SQS worker run in the active-student context, so studentProfile is
+ *  reachable here. Falls back to a generic hydrator if the profile read fails. */
+async function resolveHydrator(getData: () => Data, injected?: Hydrator): Promise<Hydrator> {
+  if (injected) return injected;
+  let majors: string[] = [];
+  try {
+    majors = (await getData().studentProfile.get())?.intendedMajors ?? [];
+  } catch {
+    majors = [];
+  }
+  return makeBedrockHydrator({}, majors);
+}
+
 /** Inline dispatcher — hydrate now, within the request. Used until the SQS worker path is wired. */
 export function makeInlineDispatcher(
   getData: () => Data,
-  hydrator: Hydrator = makeBedrockHydrator(),
+  hydrator?: Hydrator,
 ): HydrationDispatcher {
-  return (collegeId) => hydrateCollege(getData, hydrator, collegeId);
+  return async (collegeId) => hydrateCollege(getData, await resolveHydrator(getData, hydrator), collegeId);
 }
 
 /** SQS worker-side handler for the shared `hydrationRegistry` (payload → Promise<void>). */
 export function makeWorkerHandler(
   getData: () => Data,
-  hydrator: Hydrator = makeBedrockHydrator(),
+  hydrator?: Hydrator,
 ): (payload: unknown) => Promise<void> {
   return async (payload) => {
     const msg = (payload ?? {}) as Partial<CollegeHydrationMessage>;
     if (typeof msg.collegeId !== 'string' || !msg.collegeId) return;
-    await hydrateCollege(getData, hydrator, msg.collegeId);
+    await hydrateCollege(getData, await resolveHydrator(getData, hydrator), msg.collegeId);
   };
 }

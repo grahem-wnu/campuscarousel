@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { College, Visit } from '../../shared/data/index.js';
-import { curatedPrep, logisticsFor, makeBedrockPrep, NURSING_QUESTIONS, type BedrockInvoker } from './prep.js';
+import { curatedPrep, logisticsFor, makeBedrockPrep, PROGRAM_QUESTIONS, type BedrockInvoker } from './prep.js';
 
 const college = (over: Partial<College> = {}): College => ({
   collegeId: 'uci',
   name: 'UC Irvine',
   location: 'Irvine, CA',
-  contactInfo: { nursingAdmissionsEmail: 'nursing@uci.edu', campusVisitUrl: 'https://uci.edu/visit' },
+  contactInfo: { programAdmissionsEmail: 'nursing@uci.edu', campusVisitUrl: 'https://uci.edu/visit' },
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
   ...over,
@@ -36,10 +36,10 @@ describe('logisticsFor', () => {
 });
 
 describe('curatedPrep', () => {
-  it('returns the full nursing-question checklist + logistics, marked curated', async () => {
+  it('returns the full program-question checklist + logistics, marked curated', async () => {
     const p = await curatedPrep({ college: college(), visit: visit() });
     expect(p.source).toBe('curated');
-    expect(p.questions).toEqual([...NURSING_QUESTIONS]);
+    expect(p.questions).toEqual([...PROGRAM_QUESTIONS]);
     expect(p.logistics.contact).toBe('nursing@uci.edu');
     expect(p.bestTime).toMatch(/classes are in session/i);
   });
@@ -68,7 +68,7 @@ describe('makeBedrockPrep', () => {
     expect(p.source).toBe('ai');
     expect(p.bestTime).toBe('Visit during the April open house.');
     expect(p.questions).toContain('Ask about the sim lab');
-    expect(p.questions.length).toBe(NURSING_QUESTIONS.length + 1);
+    expect(p.questions.length).toBe(PROGRAM_QUESTIONS.length + 1);
   });
 
   it('falls back to curated when the model throws', async () => {
@@ -76,7 +76,7 @@ describe('makeBedrockPrep', () => {
     const gen = makeBedrockPrep({ modelId: 'test-model', client });
     const p = await gen({ college: college(), visit: visit() });
     expect(p.source).toBe('curated');
-    expect(p.questions).toEqual([...NURSING_QUESTIONS]);
+    expect(p.questions).toEqual([...PROGRAM_QUESTIONS]);
   });
 
   it('falls back when the model output has no JSON object', async () => {
@@ -86,5 +86,35 @@ describe('makeBedrockPrep', () => {
     const gen = makeBedrockPrep({ modelId: 'test-model', client });
     const p = await gen({ college: college(), visit: visit() });
     expect(p.source).toBe('curated');
+  });
+
+  it('builds a major-aware prompt naming the major + pack guidance', async () => {
+    let sentPrompt = '';
+    const client: BedrockInvoker = {
+      send: async (command: unknown) => {
+        const body = JSON.parse(new TextDecoder().decode((command as { input: { body: Uint8Array } }).input.body));
+        sentPrompt = body.messages[0].content as string;
+        return { body: new TextEncoder().encode(JSON.stringify({ content: [{ text: '{"bestTime":"x","extraQuestions":[]}' }] })) };
+      },
+    };
+    const gen = makeBedrockPrep({ modelId: 'test-model', client });
+    await gen({ college: college(), visit: visit(), majors: ['Nursing'] });
+    expect(sentPrompt).toContain('Nursing');
+    expect(sentPrompt).toContain('Major-specific guidance:');
+  });
+
+  it('builds a neutral prompt with no majors', async () => {
+    let sentPrompt = '';
+    const client: BedrockInvoker = {
+      send: async (command: unknown) => {
+        const body = JSON.parse(new TextDecoder().decode((command as { input: { body: Uint8Array } }).input.body));
+        sentPrompt = body.messages[0].content as string;
+        return { body: new TextEncoder().encode(JSON.stringify({ content: [{ text: '{"bestTime":"x","extraQuestions":[]}' }] })) };
+      },
+    };
+    const gen = makeBedrockPrep({ modelId: 'test-model', client });
+    await gen({ college: college(), visit: visit() });
+    expect(sentPrompt).toContain('their intended college program');
+    expect(sentPrompt).not.toContain('Major-specific guidance:');
   });
 });

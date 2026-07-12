@@ -10,28 +10,23 @@ import {
   Select,
   Spinner,
   Table,
-  Tabs,
   useToast,
+  safeHref,
   type Column,
-  type TabItem,
 } from '../../shared/ui';
-import { deleteVisit, getPrep, listColleges, listVisits } from './api';
-import { TripPlanner } from './TripPlanner';
+import { deleteVisit, listColleges, listVisits, regeneratePrep } from './api';
 import { VisitForm } from './VisitForm';
 import {
   buildComparison,
   formatCost,
   sortVisitsByDateDesc,
-  totalTravelCost,
   visitedOn,
   visitTypeLabel,
   wouldAttendLabel,
   wouldAttendTone,
   type ComparisonRow,
 } from './logic';
-import type { CollegeOption, Visit, VisitPrep } from './types';
-
-type TabId = 'visits' | 'trip';
+import type { CollegeOption, Visit } from './types';
 
 const comparisonColumns: Column<ComparisonRow>[] = [
   { key: 'date', header: 'Date', render: (r) => r.date },
@@ -47,7 +42,7 @@ const comparisonColumns: Column<ComparisonRow>[] = [
   { key: 'cost', header: 'Travel', align: 'right', render: (r) => (r.travelCost != null ? formatCost(r.travelCost) : '—') },
 ];
 
-/** Campus Visit Planner — pick a college, plan/debrief visits, get nursing prep, plan trips. */
+/** Campus Visit Planner — pick a college, plan/debrief visits, and get visit prep. */
 export default function VisitPlannerPage() {
   const toast = useToast();
   const [colleges, setColleges] = useState<CollegeOption[]>([]);
@@ -57,11 +52,10 @@ export default function VisitPlannerPage() {
   const [loadingVisits, setLoadingVisits] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [tab, setTab] = useState<TabId>('visits');
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Visit | null>(null);
-  const [prep, setPrep] = useState<{ visit: Visit; data: VisitPrep } | null>(null);
-  const [prepLoading, setPrepLoading] = useState(false);
+  const [expandedPrep, setExpandedPrep] = useState<Set<string>>(new Set());
+  const [regenerating, setRegenerating] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -102,7 +96,6 @@ export default function VisitPlannerPage() {
   const ordered = useMemo(() => sortVisitsByDateDesc(visits), [visits]);
   const visited = useMemo(() => visitedOn(visits), [visits]);
   const comparison = useMemo(() => buildComparison(visits), [visits]);
-  const travel = useMemo(() => totalTravelCost(visits), [visits]);
 
   function openNew(): void {
     setEditing(null);
@@ -124,36 +117,46 @@ export default function VisitPlannerPage() {
     }
   }
 
-  async function openPrep(v: Visit): Promise<void> {
-    setPrepLoading(true);
+  /** (Re)generate a visit's prep on the server and cache the updated visit in state. */
+  async function regenerate(v: Visit): Promise<Visit | null> {
+    setRegenerating(v.visitId);
     try {
-      setPrep({ visit: v, data: await getPrep(collegeId, v.visitId) });
+      const updated = await regeneratePrep(collegeId, v.visitId);
+      setVisits((prev) => prev.map((x) => (x.visitId === updated.visitId ? updated : x)));
+      return updated;
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Could not generate prep.');
+      return null;
     } finally {
-      setPrepLoading(false);
+      setRegenerating(null);
     }
   }
 
-  const tabs: TabItem[] = [
-    { id: 'visits', label: 'Visits', count: visits.length },
-    { id: 'trip', label: 'Trip Planner' },
-  ];
+  /** Show/hide a visit's saved prep — no server call. Visits saved before prep was cached generate it
+   *  once on first open, then it's just a toggle. */
+  async function togglePrep(v: Visit): Promise<void> {
+    if (expandedPrep.has(v.visitId)) {
+      setExpandedPrep((prev) => {
+        const next = new Set(prev);
+        next.delete(v.visitId);
+        return next;
+      });
+      return;
+    }
+    if (!v.prep && !(await regenerate(v))) return; // generation failed — don't open an empty panel
+    setExpandedPrep((prev) => new Set(prev).add(v.visitId));
+  }
 
   return (
     <div className="mx-auto max-w-3xl space-y-5 p-4 sm:p-6">
       <header>
         <h1 className="text-2xl font-bold text-ink-900">Campus Visits</h1>
         <p className="mt-0.5 text-sm text-ink-500">
-          Plan visits, prep nursing-specific questions, debrief after, and group nearby schools into trips.
+          Plan visits, prep questions to ask, and debrief after.
         </p>
       </header>
 
-      <Tabs items={tabs} value={tab} onChange={(id) => setTab(id as TabId)} />
-
-      {tab === 'trip' ? (
-        <TripPlanner />
-      ) : loadingColleges ? (
+      {loadingColleges ? (
         <div className="flex justify-center py-16">
           <Spinner />
         </div>
@@ -176,7 +179,6 @@ export default function VisitPlannerPage() {
               </Select>
             </Field>
             {visited ? <Badge tone="success">Visited on {visited}</Badge> : null}
-            {travel > 0 ? <Badge tone="neutral">Travel {formatCost(travel)}</Badge> : null}
             <Button icon="plus" onClick={openNew}>
               Plan visit
             </Button>
@@ -197,7 +199,7 @@ export default function VisitPlannerPage() {
             <EmptyState
               icon="calendar"
               title="No visits planned"
-              description="Plan a campus visit and we'll prep nursing-specific questions and logistics for you."
+              description="Plan a campus visit and we'll prep questions to ask and logistics for you."
               action={
                 <Button icon="plus" onClick={openNew}>
                   Plan your first visit
@@ -237,14 +239,60 @@ export default function VisitPlannerPage() {
                         </div>
                       ) : null}
                       <div className="mt-3 flex flex-wrap gap-2">
-                        <Button size="sm" variant="outline" icon="check" loading={prepLoading} onClick={() => void openPrep(v)}>
-                          Prep
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          icon="check"
+                          loading={regenerating === v.visitId && !expandedPrep.has(v.visitId)}
+                          onClick={() => void togglePrep(v)}
+                        >
+                          {expandedPrep.has(v.visitId) ? 'Hide prep' : 'Prep'}
                         </Button>
                         <Button size="sm" variant="ghost" onClick={() => openEdit(v)}>
                           Edit / debrief
                         </Button>
                         <Button size="sm" variant="ghost" icon="close" aria-label="Delete" onClick={() => void handleDelete(v)} />
                       </div>
+
+                      {expandedPrep.has(v.visitId) && v.prep ? (
+                        <div className="mt-3 space-y-3 rounded-lg border border-surface-border bg-surface-sunken p-3 text-sm">
+                          <div>
+                            <h4 className="font-semibold text-ink-900">Best time</h4>
+                            <p className="mt-1 text-ink-700">{v.prep.bestTime}</p>
+                          </div>
+                          <div>
+                            <h4 className="font-semibold text-ink-900">Questions to ask</h4>
+                            <ul className="mt-1 list-disc space-y-1 pl-5 text-ink-700">
+                              {v.prep.questions.map((q) => (
+                                <li key={q}>{q}</li>
+                              ))}
+                            </ul>
+                          </div>
+                          {v.prep.logistics.address || v.prep.logistics.contact || v.prep.logistics.campusVisitUrl ? (
+                            <div>
+                              <h4 className="font-semibold text-ink-900">Logistics</h4>
+                              <ul className="mt-1 space-y-0.5 text-ink-700">
+                                {v.prep.logistics.address ? <li>📍 {v.prep.logistics.address}</li> : null}
+                                {v.prep.logistics.contact ? <li>✉️ {v.prep.logistics.contact}</li> : null}
+                                {safeHref(v.prep.logistics.campusVisitUrl) ? (
+                                  <li>
+                                    🔗{' '}
+                                    <a className="text-primary-600 underline" href={safeHref(v.prep.logistics.campusVisitUrl)} target="_blank" rel="noreferrer">
+                                      Campus visit page
+                                    </a>
+                                  </li>
+                                ) : null}
+                              </ul>
+                            </div>
+                          ) : null}
+                          <div className="flex items-center justify-between gap-2 pt-1">
+                            <span className="text-xs text-ink-400">{v.prep.source === 'ai' ? 'Tailored by AI.' : 'Standard checklist.'}</span>
+                            <Button size="sm" variant="ghost" loading={regenerating === v.visitId} onClick={() => void regenerate(v)}>
+                              Regenerate
+                            </Button>
+                          </div>
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 </Card>
@@ -273,44 +321,6 @@ export default function VisitPlannerPage() {
         />
       </Modal>
 
-      <Modal open={Boolean(prep)} onClose={() => setPrep(null)} title="Visit prep">
-        {prep ? (
-          <div className="space-y-4">
-            <div>
-              <h4 className="text-sm font-semibold text-ink-900">Best time</h4>
-              <p className="mt-1 text-sm text-ink-700">{prep.data.bestTime}</p>
-            </div>
-            <div>
-              <h4 className="text-sm font-semibold text-ink-900">Nursing questions to ask</h4>
-              <ul className="mt-1 list-disc space-y-1 pl-5 text-sm text-ink-700">
-                {prep.data.questions.map((q) => (
-                  <li key={q}>{q}</li>
-                ))}
-              </ul>
-            </div>
-            {prep.data.logistics.address || prep.data.logistics.contact || prep.data.logistics.campusVisitUrl ? (
-              <div>
-                <h4 className="text-sm font-semibold text-ink-900">Logistics</h4>
-                <ul className="mt-1 space-y-0.5 text-sm text-ink-700">
-                  {prep.data.logistics.address ? <li>📍 {prep.data.logistics.address}</li> : null}
-                  {prep.data.logistics.contact ? <li>✉️ {prep.data.logistics.contact}</li> : null}
-                  {prep.data.logistics.campusVisitUrl ? (
-                    <li>
-                      🔗{' '}
-                      <a className="text-primary-600 underline" href={prep.data.logistics.campusVisitUrl} target="_blank" rel="noreferrer">
-                        Campus visit page
-                      </a>
-                    </li>
-                  ) : null}
-                </ul>
-              </div>
-            ) : null}
-            <p className="text-xs text-ink-400">
-              {prep.data.source === 'ai' ? 'Tailored by AI.' : 'Standard nursing checklist.'}
-            </p>
-          </div>
-        ) : null}
-      </Modal>
     </div>
   );
 }

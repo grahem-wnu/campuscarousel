@@ -90,11 +90,11 @@ export function ScholarshipForm({ initial, submitLabel = 'Save scholarship', onS
   return (
     <form onSubmit={submit} className="space-y-4">
       <Field label="Name" required>
-        <Input autoFocus value={v.name} onChange={(e) => set('name', e.target.value)} placeholder="Future Nurses of America Scholarship" />
+        <Input autoFocus value={v.name} onChange={(e) => set('name', e.target.value)} placeholder="e.g. National Merit Scholarship" />
       </Field>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Field label="Provider">
-          <Input value={v.provider} onChange={(e) => set('provider', e.target.value)} placeholder="American Nurses Association" />
+          <Input value={v.provider} onChange={(e) => set('provider', e.target.value)} placeholder="e.g. a foundation or professional association" />
         </Field>
         <Field label="Type">
           <Select value={v.type} onChange={(e) => set('type', e.target.value as ScholarshipType | '')}>

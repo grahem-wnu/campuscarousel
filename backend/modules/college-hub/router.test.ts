@@ -23,7 +23,7 @@ beforeEach(() => {
   );
 });
 
-const claimsFor = (r: Requester) => ({ 'cognito:username': r.username, 'custom:role': r.role });
+const claimsFor = (r: Requester) => ({ 'cognito:username': r.username, 'custom:role': r.role, 'custom:tenantId': r.tenantId ?? 'test-tenant' });
 function event(
   method: string,
   path: string,
@@ -64,12 +64,21 @@ describe('router integration', () => {
     expect((parse(res).colleges as unknown[])).toHaveLength(1);
   });
 
-  it('routes /colleges/discover (static beats :id) without adding', async () => {
+  it('routes /colleges/discover (static beats :id) as an async job, then polls it', async () => {
+    // Discovery is async: POST creates a job (here it runs inline via the stub), GET polls it.
     const res = await dispatch(event('POST', '/colleges/discover', { as: keira, body: { state: 'Ohio' } }));
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(202);
+    const jobId = (parse(res) as { jobId: string }).jobId;
+    expect(jobId).toBeTruthy();
+    expect(parse(res).status).toBe('complete'); // stub ran inline
     expect((parse(res).candidates as { name: string }[])[0]?.name).toBe('Discovered U');
+
+    const poll = await dispatch(event('GET', `/colleges/discover/${jobId}`, { as: keira }));
+    expect(poll.statusCode).toBe(200);
+    expect((parse(poll).candidates as { name: string }[])[0]?.name).toBe('Discovered U');
+
     const list = await dispatch(event('GET', '/colleges', { as: keira }));
-    expect((parse(list).colleges as unknown[])).toHaveLength(0);
+    expect((parse(list).colleges as unknown[])).toHaveLength(0); // discovery adds nothing
   });
 
   it('routes /colleges/hydrate-all and /colleges/bulk-add', async () => {

@@ -23,6 +23,7 @@ const config: Config = {
   theme: {
     fontFamily: {
       sans: [...fontFamily.sans],
+      display: [...fontFamily.display],
     },
     extend: {
       colors: {

@@ -40,3 +40,16 @@ export function ssmReadConfigStatement(
     resources: [`arn:aws:ssm:${region}:${account}:parameter${ssmPrefix}/*`],
   });
 }
+
+/**
+ * Least-privilege SES send permission for the reminder-digest Lambda (v2.1 F1). Scoped to SES
+ * identities in this account/region (the verified sender); no wildcard resource beyond the identity
+ * namespace. `ses:SendEmail` is the IAM action for both the v1 and v2 SendEmail APIs.
+ */
+export function sesSendStatement(region: string, account: string): PolicyStatement {
+  return new PolicyStatement({
+    sid: "SendReminderDigest",
+    actions: ["ses:SendEmail"],
+    resources: [`arn:aws:ses:${region}:${account}:identity/*`],
+  });
+}

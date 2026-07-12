@@ -1,7 +1,24 @@
 // The module's data calls. Thin wrappers over the shared typed API client.
 
 import { api } from '../../shared/api';
-import type { ApplicationRow, Essay, EssayInput, EssayReview, EssayStatus, FindResponse } from './types';
+import type {
+  Application,
+  ApplicationInput,
+  ApplicationRow,
+  CollegeOption,
+  DecisionRow,
+  Essay,
+  EssayInput,
+  EssayReviewJob,
+  EssayStatus,
+  FindResponse,
+  PracticeQuestionJob,
+  Recommendation,
+  RecommendationInput,
+  RecommenderBrief,
+  TestScore,
+  TestScoreInput,
+} from './types';
 
 export async function listEssays(filters: { collegeId?: string; status?: EssayStatus } = {}): Promise<Essay[]> {
   const res = await api.get<{ essays: Essay[] }>('/essays', { query: filters });
@@ -32,12 +49,94 @@ export function findExperiences(id: string, prompt?: string): Promise<FindRespon
   return api.post<FindResponse>(`/essays/${encodeURIComponent(id)}/find-experiences`, prompt ? { prompt } : {});
 }
 
-export async function reviewEssay(id: string, opts: { version?: number; content?: string; targetWords?: number } = {}): Promise<EssayReview> {
-  const res = await api.post<{ review: EssayReview }>(`/essays/${encodeURIComponent(id)}/review`, opts);
-  return res.review;
+/** Start an async essay evaluation. The review runs ~15–20s on the essay-coach worker (near the
+ *  request path's ~30s ceiling), so POST returns 202 with a pending job; poll getEssayEvaluationJob
+ *  with the returned jobId until it settles, then render the result (never a rewrite). */
+export function startEssayEvaluation(
+  essayId: string,
+  opts: { content?: string; targetWords?: number } = {},
+): Promise<EssayReviewJob> {
+  return api.post<EssayReviewJob>(`/essays/${encodeURIComponent(essayId)}/review`, opts);
+}
+
+/** Poll an essay-evaluation job's status + result. */
+export function getEssayEvaluationJob(essayId: string, jobId: string): Promise<EssayReviewJob> {
+  return api.get<EssayReviewJob>(`/essays/${encodeURIComponent(essayId)}/review/${encodeURIComponent(jobId)}`);
+}
+
+/** Start an async practice-question job (questions-first: sample questions for a college BEFORE an
+ *  essay exists). Model-only generation runs ~25–30s and 503s at the request path's ~30s ceiling, so
+ *  poll getPracticeQuestionJob with the returned jobId until it settles, then render the result. */
+export function startPracticeQuestions(
+  input: { collegeId?: string; collegeName?: string; count?: number } = {},
+): Promise<PracticeQuestionJob> {
+  return api.post<PracticeQuestionJob>('/essays/practice-questions', input);
+}
+
+/** Poll a practice-question job's status + result. */
+export function getPracticeQuestionJob(jobId: string): Promise<PracticeQuestionJob> {
+  return api.get<PracticeQuestionJob>(`/essays/practice-questions/${encodeURIComponent(jobId)}`);
+}
+
+/** Roster colleges, slimmed to what the essay UI needs (picker + real prompts). */
+export async function listCollegeOptions(): Promise<CollegeOption[]> {
+  const res = await api.get<{ colleges: Array<CollegeOption & Record<string, unknown>> }>('/colleges');
+  return res.colleges.map((c) => ({ collegeId: c.collegeId, name: c.name, essayPrompts: c.essayPrompts }));
 }
 
 export async function getOverview(): Promise<ApplicationRow[]> {
   const res = await api.get<{ applications: ApplicationRow[] }>('/applications/overview');
   return res.applications;
+}
+
+// --- Application tracker ----------------------------------------------------
+export async function listApplications(): Promise<Application[]> {
+  const res = await api.get<{ applications: Application[] }>('/applications');
+  return res.applications;
+}
+export function createApplication(input: ApplicationInput): Promise<Application> {
+  return api.post<Application>('/applications', input);
+}
+export function updateApplication(id: string, patch: Partial<ApplicationInput>): Promise<Application> {
+  return api.put<Application>(`/applications/${encodeURIComponent(id)}`, patch);
+}
+export function deleteApplication(id: string): Promise<void> {
+  return api.del<void>(`/applications/${encodeURIComponent(id)}`);
+}
+export async function getDecisionMatrix(): Promise<DecisionRow[]> {
+  const res = await api.get<{ decisions: DecisionRow[] }>('/applications/decision-matrix');
+  return res.decisions;
+}
+
+// --- Recommendation strategy board -----------------------------------------
+export async function listRecommendations(): Promise<Recommendation[]> {
+  const res = await api.get<{ recommendations: Recommendation[] }>('/recommendations');
+  return res.recommendations;
+}
+export function createRecommendation(input: RecommendationInput): Promise<Recommendation> {
+  return api.post<Recommendation>('/recommendations', input);
+}
+export function updateRecommendation(id: string, patch: Partial<RecommendationInput>): Promise<Recommendation> {
+  return api.put<Recommendation>(`/recommendations/${encodeURIComponent(id)}`, patch);
+}
+export function deleteRecommendation(id: string): Promise<void> {
+  return api.del<void>(`/recommendations/${encodeURIComponent(id)}`);
+}
+export async function generateRecommenderBrief(id: string, focus?: string): Promise<{ brief: RecommenderBrief; recommendation: Recommendation }> {
+  return api.post<{ brief: RecommenderBrief; recommendation: Recommendation }>(`/recommendations/${encodeURIComponent(id)}/brief`, focus ? { focus } : {});
+}
+
+// --- Test-score tracker -----------------------------------------------------
+export async function listTestScores(): Promise<TestScore[]> {
+  const res = await api.get<{ testScores: TestScore[] }>('/test-scores');
+  return res.testScores;
+}
+export function createTestScore(input: TestScoreInput): Promise<TestScore> {
+  return api.post<TestScore>('/test-scores', input);
+}
+export function updateTestScore(id: string, patch: Partial<TestScoreInput>): Promise<TestScore> {
+  return api.put<TestScore>(`/test-scores/${encodeURIComponent(id)}`, patch);
+}
+export function deleteTestScore(id: string): Promise<void> {
+  return api.del<void>(`/test-scores/${encodeURIComponent(id)}`);
 }

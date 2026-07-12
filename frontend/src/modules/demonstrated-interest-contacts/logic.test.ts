@@ -35,13 +35,13 @@ describe('sortByDateDesc', () => {
 describe('filterContacts', () => {
   const contacts = [
     contact({ contactId: '1', name: 'Mr. Chu', role: 'AP Bio', organization: 'Mission HS', relationship: 'teacher', linkedCollegeId: 'col1' }),
-    contact({ contactId: '2', name: 'Nurse Pat', organization: 'Hoag', relationship: 'nurse', linkedCollegeId: 'col2' }),
+    contact({ contactId: '2', name: 'Nurse Pat', organization: 'Hoag', relationship: 'professional', linkedCollegeId: 'col2' }),
   ];
   it('returns all with no filters', () => {
     expect(filterContacts(contacts, {})).toHaveLength(2);
   });
   it('filters by relationship', () => {
-    expect(filterContacts(contacts, { relationship: 'nurse' }).map((c) => c.contactId)).toEqual(['2']);
+    expect(filterContacts(contacts, { relationship: 'professional' }).map((c) => c.contactId)).toEqual(['2']);
   });
   it('filters by linked college', () => {
     expect(filterContacts(contacts, { collegeId: 'col1' }).map((c) => c.contactId)).toEqual(['1']);

@@ -17,10 +17,10 @@ beforeEach(async () => {
   // family + private activities (private only countable by keira)
   await data.activities.create({ userId: 'keira', date: '2026-06-03', category: 'volunteer', title: 'Soup kitchen', hours: 4, visibility: 'family' } as Parameters<Data['activities']['create']>[0]);
   await data.activities.create({ userId: 'keira', date: '2026-06-04', category: 'personal', title: 'Private reflection', hours: 2, visibility: 'private' } as Parameters<Data['activities']['create']>[0]);
-  await data.clinical.create({ date: '2026-05-01', facility: 'County', hours: 6, visibility: 'family' } as Parameters<Data['clinical']['create']>[0]);
-  await data.clinical.create({ date: '2026-05-02', facility: 'Private clinic', hours: 3, visibility: 'private' } as Parameters<Data['clinical']['create']>[0]);
+  await data.experiences.create({ date: '2026-05-01', facility: 'County', hours: 6, visibility: 'family' } as Parameters<Data['experiences']['create']>[0]);
+  await data.experiences.create({ date: '2026-05-02', facility: 'Private clinic', hours: 3, visibility: 'private' } as Parameters<Data['experiences']['create']>[0]);
   await data.courses.create({ name: 'AP Bio', gradePoints: 4.5, units: 1, type: 'AP' } as Parameters<Data['courses']['create']>[0]);
-  await data.teas.create({ type: 'practice-test', date: '2026-05-01', overallScore: 80 } as Parameters<Data['teas']['create']>[0]);
+  await data.exams.create({ type: 'practice-test', date: '2026-05-01', overallScore: 80 } as Parameters<Data['exams']['create']>[0]);
   await data.colleges.create({ name: 'OSU', status: 'applying', applicationDeadlines: { regularDecision: '2026-12-01' } } as Parameters<Data['colleges']['create']>[0]);
   await data.goals.create({ title: 'Hit TEAS 80', status: 'in-progress', progress: 60, targetDate: '2026-08-01' } as Parameters<Data['goals']['create']>[0]);
   await data.budget.put({ totalBudget: 80000 } as Parameters<Data['budget']['put']>[0]);
@@ -42,7 +42,7 @@ describe('GET /dashboard', () => {
     expect(b).not.toHaveProperty('family');
   });
 
-  it('PRIVACY: a parent view EXCLUDES keira’s private activities/clinical and has a family section', async () => {
+  it('PRIVACY: a parent view EXCLUDES keira’s private activities/experiences and has a family section', async () => {
     const res = await h.get(ctx({ requester: kate }));
     const b = res.body as { role: string; activity: { totalHours: number }; clinicalHours: number; recentFeed: { title: string }[]; family: { budget: { totalBudget: number }; goals: { total: number } } };
     expect(b.role).toBe('parent');

@@ -2,7 +2,7 @@
 // Amplify ID token and parses the error envelope). Modules never use raw fetch.
 
 import { api } from '../../shared/api';
-import type { Course, CourseInput, GpaResult, ListFilters, PrereqReport } from './types';
+import type { Course, CourseInput, GpaResult, ListFilters, PrereqMatrix, PrereqReport } from './types';
 
 export async function listCourses(filters: ListFilters = {}): Promise<Course[]> {
   const res = await api.get<{ courses: Course[] }>('/courses', {
@@ -29,4 +29,8 @@ export function getGpa(): Promise<GpaResult> {
 
 export function getPrerequisites(collegeId: string): Promise<PrereqReport> {
   return api.get<PrereqReport>(`/courses/prerequisites/${encodeURIComponent(collegeId)}`);
+}
+
+export function getPrereqMatrix(): Promise<PrereqMatrix> {
+  return api.get<PrereqMatrix>('/courses/prerequisites');
 }

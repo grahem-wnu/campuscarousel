@@ -9,6 +9,7 @@
 // functional, and the failure is contained to that request.
 
 import type { Data } from '../../shared/data/index.js';
+import { currentStudentId, currentTenantId } from '../../shared/tenant/index.js';
 import { HYDRATION_TYPE, makeInlineDispatcher, type HydrationDispatcher } from './hydration.js';
 
 /** Minimal structural type of the SQS client (just `send`) — keeps tests injectable without a hard
@@ -38,11 +39,14 @@ export function makeSqsEnqueuer(getData: () => Data, options: SqsEnqueuerOptions
       await client.send(
         new SendMessageCommand({
           QueueUrl: queueUrl,
-          MessageBody: JSON.stringify({ type: HYDRATION_TYPE, collegeId }),
+          MessageBody: JSON.stringify({ type: HYDRATION_TYPE, collegeId, tenantId: currentTenantId(), studentId: currentStudentId() }),
         }),
       );
-    } catch {
-      // Queue unavailable / send failed — hydrate inline so the request still completes.
+    } catch (err) {
+      // Queue unavailable / send failed — hydrate inline so the request still completes. LOG it: a
+      // silent swallow here once masked a missing SendMessage grant on the worker, turning a fast
+      // enqueue into a ~140s inline hydrate per college that blew the seed's 300s budget. Surface it.
+      console.error('[college-hydrate] enqueue failed, falling back to inline hydrate', { collegeId, err });
       await fallback(collegeId);
     }
   };

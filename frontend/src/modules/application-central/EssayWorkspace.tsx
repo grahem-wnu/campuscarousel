@@ -1,147 +1,261 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Badge, Button, Card, Icon, Spinner, Textarea } from '../../shared/ui';
-import { ESSAY_STATUS_META, wordCount, wordTargetTone } from './logic';
-import { addDraft, findExperiences, reviewEssay, updateEssay } from './api';
-import type { Essay, EssayReview, FindResult } from './types';
+import { VERDICT_META, ratingRows, ratingTone, wordCount, wordTargetTone } from './logic';
+import { getEssayEvaluationJob, startEssayEvaluation, updateEssay } from './api';
+import type { Essay, EssayReview } from './types';
 
 interface Props {
   essay: Essay;
+  collegeName?: string;
   onChanged: (essay: Essay) => void;
   onBack: () => void;
+  /** Return to the questions-first front door (auto-saving the current body first). */
+  onTryAnother?: () => void;
 }
 
-const TARGET_WORDS = 650; // common-app-ish default
+/** Common App cap — the coaching default when an essay has no target of its own. */
+const DEFAULT_TARGET_WORDS = 650;
 
-/** The essay workspace: prompt, editor with live word count + version history, and an AI context
- *  sidebar — "Find relevant experiences" (grounded in her real, privacy-filtered data) and
- *  "Check my essay" (feedback only, never a rewrite). */
-export function EssayWorkspace({ essay, onChanged, onBack }: Props) {
-  const latest = (essay.drafts ?? []).at(-1);
-  const [text, setText] = useState(latest?.content ?? '');
-  const [savingDraft, setSavingDraft] = useState(false);
+/** Async evaluation runs ~15–20s on the essay-coach worker; poll until it settles. */
+export const POLL_MS = 3000;
+const MAX_POLLS = 30; // ~90s ceiling — the worker has 300s but a review is usually well under a minute.
 
-  const [find, setFind] = useState<FindResult | null>(null);
-  const [finding, setFinding] = useState(false);
+/** The workspace has three views: `editing` (prompt, editor, coach sidebar), `evaluating` (a clear
+ *  full "up to a minute" panel while the async job runs), and `result` (the rubric-rated feedback —
+ *  bars + score + verdict + strengths/improve, never a rewrite — with "Back to editing"). */
+type Mode = 'editing' | 'evaluating' | 'result';
+
+/** The essay workspace: prompt, a single autosaved editor with a live word count, and an AI coach
+ *  sidebar — "Try a different question" (autosave the body, then back to the questions-first front
+ *  door) and "Evaluate" (async rubric-rated feedback, grounded in her real privacy-filtered
+ *  experiences + what the target college looks for — never a rewrite). The body autosaves as a
+ *  single-slot draft (debounce + blur); there is no version history or draft lifecycle. */
+export function EssayWorkspace({ essay, collegeName, onChanged, onBack, onTryAnother }: Props) {
+  // Seed once from the latest draft (useState initializer runs on mount only, and this component has
+  // no `key`, so an onChanged after autosave never resets the editor).
+  const [text, setText] = useState(() => (essay.drafts ?? []).at(-1)?.content ?? '');
+  const [saving, setSaving] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [mode, setMode] = useState<Mode>('editing');
   const [review, setReview] = useState<EssayReview | null>(null);
-  const [reviewing, setReviewing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Monotonic request id: a slow evaluation must never overwrite a newer one (or a "Back to editing").
+  const reqRef = useRef(0);
+  // Guards the debounce so the seeded value is never autosaved before the user edits it.
+  const dirtyRef = useRef(false);
 
   const wc = wordCount(text);
-  const meta = ESSAY_STATUS_META[essay.status ?? 'brainstorming'];
+  const target = essay.targetWords ?? DEFAULT_TARGET_WORDS;
 
-  async function saveDraft() {
+  /** Persist the current body as the single autosaved draft (a single-slot overwrite — no history).
+   *  Returns true on success, false if the save failed (so callers that navigate away can abort and
+   *  avoid losing the body). An empty body is a no-op success. */
+  const saveBody = useCallback(async (): Promise<boolean> => {
+    if (!text.trim()) return true;
+    setSaving(true);
+    setError(null);
+    try {
+      onChanged(
+        await updateEssay(essay.essayId, {
+          drafts: [{ version: 1, content: text, createdAt: new Date().toISOString(), wordCount: wc }],
+        }),
+      );
+      return true;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not save.');
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  }, [text, wc, essay.essayId, onChanged]);
+
+  // Autosave: debounce on the body (skipping the seeded value via dirtyRef). saveBody is memoized on
+  // its inputs, so a new keystroke replaces the pending timer — honest deps, no eslint-disable.
+  useEffect(() => {
+    if (!dirtyRef.current) return; // don't save the seeded value
+    const t = setTimeout(() => { void saveBody(); }, 800);
+    return () => clearTimeout(t);
+  }, [saveBody]);
+
+  /** Preserve the current body as an attempt, then return to the questions-first front door. If the
+   *  autosave fails, stay put (the error is shown) so the body is never silently lost. */
+  async function tryAnother() {
+    if (await saveBody()) onTryAnother?.();
+  }
+
+  /** Start an async evaluation and poll until it settles. Evaluation runs ~15–20s (near the request
+   *  path's ~30s ceiling), so the API returns 202 and the essay-coach worker fills the result. The
+   *  reqRef stale-guard wraps the WHOLE start+poll sequence (a newer Evaluate, or "Back to editing",
+   *  bumps it and this run bails without touching state). */
+  async function evaluate() {
     if (!text.trim()) return;
-    setSavingDraft(true);
+    const myReq = ++reqRef.current;
+    setMode('evaluating');
+    setReview(null);
     setError(null);
     try {
-      onChanged(await addDraft(essay.essayId, text));
+      let job = await startEssayEvaluation(essay.essayId, { content: text, targetWords: target });
+      for (let i = 0; job.status === 'pending' && i < MAX_POLLS; i++) {
+        await new Promise((r) => setTimeout(r, POLL_MS));
+        if (myReq !== reqRef.current) return; // superseded by a newer request
+        job = await getEssayEvaluationJob(essay.essayId, job.jobId);
+      }
+      if (myReq !== reqRef.current) return;
+      if (job.status === 'failed' || (job.status === 'complete' && !job.result)) {
+        setError('Could not evaluate your essay right now — please try again in a moment.');
+        setMode('editing');
+        return;
+      }
+      if (job.status === 'pending') {
+        setError('Evaluation is taking longer than expected — please try again in a moment.');
+        setMode('editing');
+        return;
+      }
+      setReview(job.result ?? null);
+      setMode('result');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not save the draft.');
-    } finally {
-      setSavingDraft(false);
+      if (myReq !== reqRef.current) return;
+      setError(err instanceof Error ? err.message : 'Could not evaluate the essay.');
+      setMode('editing');
     }
   }
 
-  async function runFind() {
-    setFinding(true);
-    setError(null);
+  /** Return to the editor from the result view (the body is preserved in local state). */
+  function backToEditing() {
+    reqRef.current++; // invalidate any in-flight evaluation
+    setMode('editing');
+  }
+
+  /** Copy the current essay text, ready to paste into the Common App / a college portal. */
+  async function copyEssay() {
     try {
-      setFind((await findExperiences(essay.essayId)).result);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not find experiences.');
-    } finally {
-      setFinding(false);
+      await navigator.clipboard.writeText(text.trim());
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    } catch {
+      setError('Could not copy — select the text in the editor and copy it manually.');
     }
   }
 
-  async function runReview() {
-    if (!text.trim()) return;
-    setReviewing(true);
-    setError(null);
-    try {
-      setReview(await reviewEssay(essay.essayId, { content: text, targetWords: TARGET_WORDS }));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not review the essay.');
-    } finally {
-      setReviewing(false);
-    }
+  // Evaluating — a clear full panel while the async essay-coach job runs.
+  if (mode === 'evaluating') {
+    return (
+      <Card role="status" className="flex flex-col items-center gap-3 py-16 text-center">
+        <Spinner />
+        <p className="font-display text-base font-semibold text-ink-800">
+          Evaluating your essay — this can take up to a minute.
+        </p>
+        <p className="text-sm text-ink-500">The coach is reading your draft and rating it against the rubric.</p>
+      </Card>
+    );
   }
 
-  async function setStatus(status: Essay['status']) {
-    onChanged(await updateEssay(essay.essayId, { status }));
+  // Result — the rubric-rated feedback, with a way back to the editor (body preserved).
+  if (mode === 'result' && review) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <Button size="sm" variant="ghost" onClick={backToEditing}>← Back</Button>
+        </div>
+        <Card className="space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold uppercase tracking-wide text-ink-500">Feedback</p>
+            <Badge tone="neutral">{review.wordCount}w · never a rewrite</Badge>
+          </div>
+          {review.overall !== undefined && review.verdict ? (
+            <div className="flex items-center gap-2">
+              <span className="text-2xl font-bold text-ink-900">{review.overall}<span className="text-sm font-normal text-ink-400">/10</span></span>
+              <Badge tone={VERDICT_META[review.verdict].tone}>{VERDICT_META[review.verdict].label}</Badge>
+            </div>
+          ) : review.source === 'curated' ? (
+            <p className="text-xs text-ink-400">AI rating unavailable right now — showing basic checks.</p>
+          ) : null}
+          {review.ratings ? (
+            <ul className="space-y-1">
+              {ratingRows(review.ratings).map((r) => (
+                <li key={r.key} className="flex items-center justify-between gap-2 text-sm">
+                  <span className="text-ink-600">{r.label}</span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="h-1.5 w-16 overflow-hidden rounded-full bg-surface-sunken">
+                      <span
+                        className={`block h-full rounded-full ${ratingTone(r.score) === 'success' ? 'bg-success-500' : ratingTone(r.score) === 'warn' ? 'bg-warn-500' : 'bg-error-500'}`}
+                        style={{ width: `${r.score * 10}%` }}
+                      />
+                    </span>
+                    <span className="w-4 text-right text-xs font-semibold text-ink-700">{r.score}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {review.strengths.length ? <div><p className="text-xs font-medium text-success-700">Strengths</p><ul className="list-disc pl-5 text-sm text-ink-700">{review.strengths.map((s, i) => <li key={i}>{s}</li>)}</ul></div> : null}
+          {review.improvements.length ? <div><p className="text-xs font-medium text-warn-700">Improve</p><ul className="list-disc pl-5 text-sm text-ink-700">{review.improvements.map((s, i) => <li key={i}>{s}</li>)}</ul></div> : null}
+          {review.authenticity ? <p className="text-sm italic text-ink-600">{review.authenticity}</p> : null}
+        </Card>
+        <div>
+          <Button size="sm" onClick={backToEditing}>Back to editing</Button>
+        </div>
+      </div>
+    );
   }
 
+  // Editing — the writing surface with the coach sidebar.
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <Button size="sm" variant="ghost" onClick={onBack}>← Essays</Button>
-        <div className="flex items-center gap-2">
-          <Badge tone={meta.tone}>{meta.label}</Badge>
-          {essay.status !== 'final' ? (
-            <Button size="sm" variant="outline" onClick={() => void setStatus('final')}>Mark final</Button>
-          ) : null}
-        </div>
       </div>
 
       <Card>
-        <p className="text-xs font-semibold uppercase tracking-wide text-ink-500">Prompt</p>
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs font-semibold uppercase tracking-wide text-ink-500">Prompt</p>
+          {collegeName ? (
+            <span className="flex items-center gap-1 text-xs font-medium text-primary-700">
+              <Icon name="school" size={13} /> {collegeName}
+            </span>
+          ) : null}
+        </div>
         <p className="mt-1 text-sm text-ink-800">{essay.prompt || 'No prompt set — add one in the essay’s details.'}</p>
       </Card>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         {/* Editor */}
         <div className="space-y-2 lg:col-span-2">
-          <Textarea rows={16} value={text} onChange={(e) => setText(e.target.value)} placeholder="Write your essay here…" className="font-serif" />
-          <div className="flex items-center justify-between text-sm">
-            <Badge tone={wordTargetTone(wc, TARGET_WORDS)}>{wc} / {TARGET_WORDS} words</Badge>
-            <Button size="sm" loading={savingDraft} disabled={!text.trim()} onClick={() => void saveDraft()}>
-              Save draft v{(essay.drafts?.length ?? 0) + 1}
-            </Button>
+          <Textarea
+            rows={16}
+            value={text}
+            onChange={(e) => { dirtyRef.current = true; setText(e.target.value); }}
+            onBlur={() => void saveBody()}
+            placeholder="Write your essay here…"
+            className="font-serif"
+          />
+          <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+            <span className="flex items-center gap-2">
+              <Badge tone={wordTargetTone(wc, target)}>{wc} / {target} words</Badge>
+              {saving ? <span className="text-xs text-ink-400">Saving…</span> : null}
+            </span>
+            <span className="flex items-center gap-2">
+              <Button size="sm" variant="outline" icon={copied ? 'check' : 'copy'} disabled={!text.trim()} onClick={() => void copyEssay()}>
+                {copied ? 'Copied' : 'Copy essay'}
+              </Button>
+            </span>
           </div>
-          {essay.drafts && essay.drafts.length > 0 ? (
-            <p className="text-xs text-ink-400">Version history: {essay.drafts.map((d) => `v${d.version} (${d.wordCount ?? wordCount(d.content)}w)`).join(' · ')}</p>
-          ) : null}
         </div>
 
-        {/* AI sidebar */}
+        {/* AI coach sidebar */}
         <div className="space-y-3">
           <Card className="space-y-2 border border-primary-200 bg-primary-50">
-            <div className="flex items-center gap-1.5 text-sm font-semibold text-primary-800">
-              <Icon name="star" size={15} /> Essay partner
+            <div className="flex items-center gap-1.5 font-display text-base font-semibold text-primary-900">
+              <Icon name="star" size={15} className="text-secondary-600" /> Essay coach
             </div>
-            <Button size="sm" variant="outline" block loading={finding} onClick={() => void runFind()}>Find relevant experiences</Button>
-            <Button size="sm" variant="outline" block loading={reviewing} disabled={!text.trim()} onClick={() => void runReview()}>Check my essay (feedback only)</Button>
-            <p className="text-[11px] text-primary-700">The AI suggests and critiques — it never writes the essay for you.</p>
+            {onTryAnother ? (
+              <Button size="sm" variant="outline" block loading={saving} onClick={() => void tryAnother()}>Try a different question</Button>
+            ) : null}
+            <Button size="sm" variant="outline" block disabled={!text.trim()} onClick={() => void evaluate()}>Evaluate</Button>
+            <p className="text-[11px] text-primary-700">
+              Grounded in your logged experiences{collegeName ? ` and what ${collegeName} looks for` : ''}. The AI coaches and rates — it never writes the essay for you.
+            </p>
           </Card>
-
-          {finding ? <div className="flex justify-center py-3"><Spinner /></div> : find ? (
-            <Card className="space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-wide text-ink-500">Draw on these</p>
-              <ul className="space-y-1.5 text-sm">
-                {find.suggestedExperiences.map((s, i) => (
-                  <li key={i}><span className="font-medium text-ink-800">{s.title}</span> <span className="text-ink-500">— {s.why}</span></li>
-                ))}
-              </ul>
-              {find.angles.length ? (
-                <>
-                  <p className="pt-1 text-xs font-semibold uppercase tracking-wide text-ink-500">Angles</p>
-                  <ul className="list-disc space-y-0.5 pl-5 text-sm text-ink-700">{find.angles.map((a, i) => <li key={i}>{a}</li>)}</ul>
-                </>
-              ) : null}
-            </Card>
-          ) : null}
-
-          {reviewing ? <div className="flex justify-center py-3"><Spinner /></div> : review ? (
-            <Card className="space-y-2">
-              <div className="flex items-center justify-between">
-                <p className="text-xs font-semibold uppercase tracking-wide text-ink-500">Feedback</p>
-                <Badge tone="neutral">{review.wordCount}w · feedback only</Badge>
-              </div>
-              {review.strengths.length ? <div><p className="text-xs font-medium text-success-700">Strengths</p><ul className="list-disc pl-5 text-sm text-ink-700">{review.strengths.map((s, i) => <li key={i}>{s}</li>)}</ul></div> : null}
-              {review.improvements.length ? <div><p className="text-xs font-medium text-warn-700">Improve</p><ul className="list-disc pl-5 text-sm text-ink-700">{review.improvements.map((s, i) => <li key={i}>{s}</li>)}</ul></div> : null}
-              {review.authenticity ? <p className="text-sm italic text-ink-600">{review.authenticity}</p> : null}
-            </Card>
-          ) : null}
         </div>
       </div>
 

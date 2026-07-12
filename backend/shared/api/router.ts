@@ -4,6 +4,7 @@
 // body, and translates any thrown error into the standard envelope.
 
 import { getRequester, requireRole } from '../auth/index.js';
+import { runWithStudent, runWithTenant } from '../tenant/index.js';
 import { Errors } from './errors.js';
 import { json, responseForError } from './respond.js';
 import type { ApiEvent, ApiResponse, LambdaHandler } from './event.js';
@@ -23,6 +24,9 @@ interface CompiledRoute {
   specificity: number;
   route: RouteDef;
 }
+
+/** Methods that mutate state — refused for view-only members (see the role guard in dispatch). */
+const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 function splitPath(path: string): string[] {
   return path.split('/').filter((s) => s.length > 0);
@@ -52,6 +56,16 @@ function matchSegments(compiled: CompiledRoute, pathSegs: string[]): Record<stri
     }
   }
   return params;
+}
+
+/** Case-insensitive header lookup (HTTP API usually lowercases keys, but don't rely on it). */
+function readHeader(headers: Record<string, string | undefined> | undefined, name: string): string | undefined {
+  if (!headers) return undefined;
+  const lower = name.toLowerCase();
+  for (const [key, value] of Object.entries(headers)) {
+    if (key.toLowerCase() === lower && value !== undefined && value !== '') return value;
+  }
+  return undefined;
 }
 
 function normalizeRecord(input?: Record<string, string | undefined>): Record<string, string> {
@@ -125,13 +139,41 @@ export function createRouter(routes: RouteDef[]): LambdaHandler {
       if (matched.route.roles && matched.route.roles.length > 0) {
         requireRole(...matched.route.roles)(requester);
       }
+      if (matched.route.platformAdmin && !requester.platformAdmin) {
+        throw Errors.forbidden('Requires platform admin');
+      }
+      // View-only members (grandparents, counselors, family friends — JWT role 'member') can read the
+      // family's journey but never change it. Enforced once here so the 24 CRUD modules need no edits:
+      // any mutating method is refused for a member. Reads (GET/HEAD) pass through.
+      if (requester.role === 'member' && MUTATING_METHODS.has(method)) {
+        throw Errors.forbidden('Your access is view-only');
+      }
+      // SaaS isolation: every request must carry a tenant (or be a platform-admin route). The handler
+      // runs inside the tenant's AsyncLocalStorage context so the data layer scopes all keys to it.
+      // Transition compatibility: a request with no tenant claim falls back to DEFAULT_TENANT_ID when
+      // set (the legacy single-family migration tenant), so existing users keep working before their
+      // tokens carry a tenant. With the env unset, a missing claim is rejected (strict / fail closed).
+      const tenantId =
+        requester.tenantId ?? (requester.platformAdmin ? undefined : process.env.DEFAULT_TENANT_ID);
+      if (!tenantId && !requester.platformAdmin) {
+        throw Errors.unauthorized('Missing tenant claim');
+      }
+      // Multi-student: per-child data is scoped to the active student the frontend selects, sent as the
+      // `X-Student-Id` header. The router nests `runWithStudent` inside the tenant context so per-child
+      // repos resolve `S#<studentId>#`. Family-level handlers (the roster, reminders) ignore it. A
+      // request with no header falls back to DEFAULT_STUDENT_ID (the legacy single-child migration id)
+      // for transition compatibility; with the env unset, per-child repos fail closed if none is set.
+      const studentId =
+        readHeader(event.headers, 'x-student-id') ?? process.env.DEFAULT_STUDENT_ID ?? undefined;
       const ctx: HandlerContext = {
         requester,
         params: matched.params,
         query: normalizeRecord(event.queryStringParameters),
         body: parseBody(event),
       };
-      const result = await matched.route.handler(ctx);
+      const invoke = () => matched.route.handler(ctx);
+      const withStudent = () => (studentId ? runWithStudent(studentId, invoke) : invoke());
+      const result = tenantId ? await runWithTenant(tenantId, withStudent) : await invoke();
       return json(result.status, result.body);
     } catch (err) {
       return responseForError(err);

@@ -19,7 +19,7 @@ const ROWS: Row[] = [
   { label: 'Direct admit', value: (c) => (c.isDirectAdmit ? 'Yes' : c.isDirectAdmit === false ? 'No' : '—') },
   { label: 'Ranking', value: (c) => c.ranking ?? '—' },
   { label: 'Net cost / yr', value: (c) => (bestCost(c) !== undefined ? costLabel(bestCost(c)) : '—') },
-  { label: 'Acceptance (nursing)', value: (c) => c.acceptanceRateNursing ?? '—' },
+  { label: 'Acceptance (program)', value: (c) => c.acceptanceRateProgram ?? '—' },
   { label: 'Avg GPA', value: (c) => c.avgGPAAdmitted ?? '—' },
   { label: 'Fit score', value: (c) => (c.fitScore !== undefined ? String(c.fitScore) : '—') },
 ];
@@ -33,13 +33,16 @@ export function CompareView({ colleges, open, onClose }: Props) {
 
   return (
     <Modal open={open} onClose={onClose} title={`Compare ${colleges.length} colleges`} size="lg">
-      <div className="overflow-x-auto">
+      {/* Bounded scroll container (both axes) so the college headers can stick to the top as you
+          scroll the comparison rows. Sticky needs a scrolling ancestor with a height bound — the
+          modal body alone isn't enough once the inner table also scrolls horizontally. */}
+      <div className="max-h-[60vh] overflow-auto">
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr>
-              <th className="w-36 p-2 text-left text-ink-500" />
+              <th className="sticky top-0 z-10 w-36 border-b border-surface-border bg-surface-raised p-2 text-left text-ink-500" />
               {colleges.map((c) => (
-                <th key={c.collegeId} className="min-w-[10rem] p-2 text-left align-bottom">
+                <th key={c.collegeId} className="sticky top-0 z-10 min-w-[10rem] border-b border-surface-border bg-surface-raised p-2 text-left align-bottom">
                   <div className="flex items-center gap-2">
                     <CollegeLogo college={c} size={28} />
                     <span className="font-semibold text-ink-900">{c.name}</span>

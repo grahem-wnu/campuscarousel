@@ -1,8 +1,9 @@
 import type { ComponentType } from "react";
 import type { IconName } from "../ui/Icon";
 
-/** App roles (mirror of the backend `custom:role` claim). */
-export type Role = "admin" | "parent" | "student";
+/** App roles (mirror of the backend `custom:role` claim). `parent` = managing guardian, `member` =
+ *  view-only supporter (grandparent, counselor, family friend). */
+export type Role = "admin" | "parent" | "student" | "member";
 
 /** Where a nav entry appears in the shell. */
 export type NavGroup = "primary" | "secondary";
@@ -37,6 +38,8 @@ export interface NavEntry {
   roles?: Role[];
   /** Hide from the menus but still register the route (e.g. detail pages). */
   hidden?: boolean;
+  /** Platform super-admin only (Grahem). Hidden from the menu AND the router for everyone else. */
+  platformAdmin?: boolean;
 }
 
 /** Result of assembling all module manifests. */

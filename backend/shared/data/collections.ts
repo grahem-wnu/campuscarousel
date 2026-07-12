@@ -15,7 +15,18 @@ import type {
   Conversation,
   ConversationMessage,
   Benchmark,
+  BenchmarkHistory,
+  BenchmarkSnapshot,
+  FocusOverview,
+  Invite,
+  FamilyMember,
   Profile,
+  ReminderSettings,
+  SetupState,
+  Student,
+  TimelineDismissals,
+  StudentProfile,
+  Tenant,
   Touchpoint,
   Timestamped,
   Visit,
@@ -229,6 +240,36 @@ export function makeBenchmarks(client: TableClient): BenchmarkRepo {
   };
 }
 
+/** Per-student singleton: the rolling history of monthly benchmark snapshots (progress over time). */
+export interface BenchmarkHistoryRepo {
+  get(): Promise<BenchmarkHistory | null>;
+  put(snapshots: BenchmarkSnapshot[]): Promise<BenchmarkHistory>;
+}
+
+export function makeBenchmarkHistory(client: TableClient): BenchmarkHistoryRepo {
+  return {
+    async get() {
+      const item = await client.get('BENCHMARK_HISTORY', SK_DETAILS);
+      return item ? toDomain<BenchmarkHistory>(item) : null;
+    },
+    async put(snapshots) {
+      const existing = await client.get('BENCHMARK_HISTORY', SK_DETAILS);
+      const now = isoNow();
+      const domain: BenchmarkHistory = {
+        snapshots,
+        createdAt: (existing?.createdAt as string | undefined) ?? now,
+        updatedAt: now,
+      };
+      await client.put({
+        ...(domain as unknown as Record<string, unknown>),
+        PK: 'BENCHMARK_HISTORY',
+        SK: SK_DETAILS,
+      });
+      return domain;
+    },
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Conversations: a DETAILS marker (listable via GSI1 "CONVERSATIONS") + MESSAGE# items.
 // ---------------------------------------------------------------------------
@@ -331,6 +372,116 @@ export function makeBudget(client: TableClient): BudgetRepo {
   };
 }
 
+// Reminder settings: global singleton (PK=REMINDER_SETTINGS) driving the email digest (v2.1 F1).
+export interface ReminderSettingsRepo {
+  get(): Promise<ReminderSettings | null>;
+  put(input: Omit<ReminderSettings, 'createdAt' | 'updatedAt'>): Promise<ReminderSettings>;
+  update(patch: Partial<Omit<ReminderSettings, 'createdAt' | 'updatedAt'>>): Promise<ReminderSettings>;
+}
+
+export function makeReminderSettings(client: TableClient): ReminderSettingsRepo {
+  const write = async (domain: ReminderSettings): Promise<ReminderSettings> => {
+    await client.put({
+      ...(domain as unknown as Record<string, unknown>),
+      PK: 'REMINDER_SETTINGS',
+      SK: SK_DETAILS,
+    });
+    return domain;
+  };
+  return {
+    async get() {
+      const item = await client.get('REMINDER_SETTINGS', SK_DETAILS);
+      return item ? toDomain<ReminderSettings>(item) : null;
+    },
+    async put(input) {
+      const existing = await client.get('REMINDER_SETTINGS', SK_DETAILS);
+      const now = isoNow();
+      return write({ ...input, createdAt: (existing?.createdAt as string | undefined) ?? now, updatedAt: now });
+    },
+    async update(patch) {
+      const existing = await client.get('REMINDER_SETTINGS', SK_DETAILS);
+      if (!existing) throw new NotFoundError('REMINDER_SETTINGS', 'singleton');
+      const current = toDomain<ReminderSettings>(existing);
+      return write({ ...current, ...patch, createdAt: current.createdAt, updatedAt: isoNow() });
+    },
+  };
+}
+
+// Setup state: family-level singleton (PK=SETUP) — FTUE progress for the onboarding loop.
+// Unlike the other singletons, `update` UPSERTS (no throw when absent): the loop may persist
+// `setupComplete` before any `put` has run.
+export interface SetupStateRepo {
+  get(): Promise<SetupState | null>;
+  put(input: Omit<SetupState, 'createdAt' | 'updatedAt'>): Promise<SetupState>;
+  update(patch: Partial<Omit<SetupState, 'createdAt' | 'updatedAt'>>): Promise<SetupState>;
+}
+
+export function makeSetupState(client: TableClient): SetupStateRepo {
+  const write = async (domain: SetupState): Promise<SetupState> => {
+    await client.put({ ...(domain as unknown as Record<string, unknown>), PK: 'SETUP', SK: SK_DETAILS });
+    return domain;
+  };
+  return {
+    async get() {
+      const item = await client.get('SETUP', SK_DETAILS);
+      return item ? toDomain<SetupState>(item) : null;
+    },
+    async put(input) {
+      const existing = await client.get('SETUP', SK_DETAILS);
+      const now = isoNow();
+      return write({ ...input, createdAt: (existing?.createdAt as string | undefined) ?? now, updatedAt: now });
+    },
+    async update(patch) {
+      const existing = await client.get('SETUP', SK_DETAILS);
+      const now = isoNow();
+      const current = existing ? toDomain<SetupState>(existing) : ({ createdAt: now } as SetupState);
+      return write({ ...current, ...patch, createdAt: current.createdAt ?? now, updatedAt: now });
+    },
+  };
+}
+
+// Timeline dismissals: per-student singleton (PK=TIMELINE_DISMISSALS). Stores the ids of derived
+// timeline events the family has removed, so every read path can filter them out.
+export interface TimelineDismissalsRepo {
+  /** The dismissed event ids (empty if none recorded). */
+  list(): Promise<string[]>;
+  /** Add an event id to the dismissed set (idempotent); returns the updated list. */
+  add(eventId: string): Promise<string[]>;
+  /** Un-dismiss an event id; returns the updated list. */
+  remove(eventId: string): Promise<string[]>;
+}
+
+export function makeTimelineDismissals(client: TableClient): TimelineDismissalsRepo {
+  const PK = 'TIMELINE_DISMISSALS';
+  const read = async (): Promise<string[]> => {
+    const item = await client.get(PK, SK_DETAILS);
+    return item ? toDomain<TimelineDismissals>(item).eventIds ?? [] : [];
+  };
+  const write = async (eventIds: string[]): Promise<string[]> => {
+    const existing = await client.get(PK, SK_DETAILS);
+    const now = isoNow();
+    await client.put({
+      eventIds,
+      createdAt: (existing?.createdAt as string | undefined) ?? now,
+      updatedAt: now,
+      PK,
+      SK: SK_DETAILS,
+    });
+    return eventIds;
+  };
+  return {
+    list: read,
+    async add(eventId) {
+      const ids = await read();
+      return ids.includes(eventId) ? ids : write([...ids, eventId]);
+    },
+    async remove(eventId) {
+      const ids = await read();
+      return ids.includes(eventId) ? write(ids.filter((id) => id !== eventId)) : ids;
+    },
+  };
+}
+
 export interface ProfileRepo {
   get(userId: string): Promise<Profile | null>;
   put(input: Omit<Profile, 'createdAt' | 'updatedAt'>): Promise<Profile>;
@@ -358,6 +509,277 @@ export function makeProfiles(client: TableClient): ProfileRepo {
       if (!existing) throw new NotFoundError('USER', userId);
       const current = toDomain<Profile>(existing);
       return write({ ...current, ...patch, userId, createdAt: current.createdAt, updatedAt: isoNow() });
+    },
+  };
+}
+
+// Student profile: global singleton (PK=STUDENT_PROFILE) for the onboarding wizard (v2.1 F4).
+export interface StudentProfileRepo {
+  get(): Promise<StudentProfile | null>;
+  put(input: Omit<StudentProfile, 'createdAt' | 'updatedAt'>): Promise<StudentProfile>;
+}
+
+export function makeStudentProfile(client: TableClient): StudentProfileRepo {
+  return {
+    async get() {
+      const item = await client.get('STUDENT_PROFILE', SK_DETAILS);
+      return item ? toDomain<StudentProfile>(item) : null;
+    },
+    async put(input) {
+      const existing = await client.get('STUDENT_PROFILE', SK_DETAILS);
+      const now = isoNow();
+      const domain: StudentProfile = {
+        ...input,
+        createdAt: (existing?.createdAt as string | undefined) ?? now,
+        updatedAt: now,
+      };
+      await client.put({
+        ...(domain as unknown as Record<string, unknown>),
+        PK: 'STUDENT_PROFILE',
+        SK: SK_DETAILS,
+      });
+      return domain;
+    },
+  };
+}
+
+// Focus singletons: per-student cached, web-grounded AI documents written by the async hydration
+// worker and read by GET /focus. Two of them share the FocusOverview shape:
+//   FOCUS_OVERVIEW — overview of the student's intended major
+//   CAREER_PATH    — roadmap from the student's free-text career goal to that career
+export interface FocusOverviewRepo {
+  get(): Promise<FocusOverview | null>;
+  put(input: Omit<FocusOverview, 'createdAt' | 'updatedAt'>): Promise<FocusOverview>;
+}
+
+/** A per-student singleton holding one FocusOverview-shaped document at the given PK. */
+function makeFocusDoc(client: TableClient, pk: string): FocusOverviewRepo {
+  return {
+    async get() {
+      const item = await client.get(pk, SK_DETAILS);
+      return item ? toDomain<FocusOverview>(item) : null;
+    },
+    async put(input) {
+      const existing = await client.get(pk, SK_DETAILS);
+      const now = isoNow();
+      const domain: FocusOverview = {
+        ...input,
+        createdAt: (existing?.createdAt as string | undefined) ?? now,
+        updatedAt: now,
+      };
+      await client.put({
+        ...(domain as unknown as Record<string, unknown>),
+        PK: pk,
+        SK: SK_DETAILS,
+      });
+      return domain;
+    },
+  };
+}
+
+export function makeFocusOverview(client: TableClient): FocusOverviewRepo {
+  return makeFocusDoc(client, 'FOCUS_OVERVIEW');
+}
+
+export function makeCareerPath(client: TableClient): FocusOverviewRepo {
+  return makeFocusDoc(client, 'CAREER_PATH');
+}
+
+// ---------------------------------------------------------------------------
+// Student registry (PK: STUDENT#<studentId>) — FAMILY-LEVEL (built on the family-scoped client, so
+// keys become T#<tenant>#STUDENT#… and the GSI1PK='STUDENTS' collection lists one family's kids).
+// The roster + source for the active-student switcher. Distinct from the per-child StudentProfile.
+// ---------------------------------------------------------------------------
+export interface StudentRepo {
+  get(studentId: string): Promise<Student | null>;
+  create(input: Omit<Student, 'studentId' | 'createdAt' | 'updatedAt'>): Promise<Student>;
+  update(
+    studentId: string,
+    patch: Partial<Omit<Student, 'studentId' | 'createdAt' | 'updatedAt'>>,
+  ): Promise<Student>;
+  delete(studentId: string): Promise<void>;
+  list(): Promise<Student[]>;
+}
+
+export function makeStudents(client: TableClient): StudentRepo {
+  const write = async (domain: Student): Promise<Student> => {
+    await client.put({
+      ...(domain as unknown as Record<string, unknown>),
+      PK: `STUDENT#${domain.studentId}`,
+      SK: SK_DETAILS,
+      GSI1PK: 'STUDENTS',
+      GSI1SK: dateSortKey(domain.createdAt, domain.studentId),
+    });
+    return domain;
+  };
+  return {
+    async get(studentId) {
+      const item = await client.get(`STUDENT#${studentId}`, SK_DETAILS);
+      return item ? toDomain<Student>(item) : null;
+    },
+    async create(input) {
+      const now = isoNow();
+      return write({ ...input, studentId: newId(), createdAt: now, updatedAt: now });
+    },
+    async update(studentId, patch) {
+      const existing = await client.get(`STUDENT#${studentId}`, SK_DETAILS);
+      if (!existing) throw new NotFoundError('STUDENT', studentId);
+      const current = toDomain<Student>(existing);
+      return write({ ...current, ...patch, studentId, createdAt: current.createdAt, updatedAt: isoNow() });
+    },
+    async delete(studentId) {
+      await client.delete(`STUDENT#${studentId}`, SK_DETAILS);
+    },
+    async list() {
+      const items = await client.queryIndex('GSI1', 'STUDENTS', { ascending: true });
+      return items.map((i) => toDomain<Student>(i));
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Family members (PK: MEMBER#<userId>) — FAMILY-LEVEL (family-scoped client → keys become
+// T#<tenant>#MEMBER#…, listed via GSI1PK='MEMBERS'). Everyone with login access to the family beyond
+// the student: managing guardians + the wider support circle (grandparents, counselors, friends).
+// ---------------------------------------------------------------------------
+export interface MemberRepo {
+  get(userId: string): Promise<FamilyMember | null>;
+  put(input: Omit<FamilyMember, 'createdAt' | 'updatedAt'>): Promise<FamilyMember>;
+  update(
+    userId: string,
+    patch: Partial<Omit<FamilyMember, 'userId' | 'createdAt' | 'updatedAt'>>,
+  ): Promise<FamilyMember>;
+  delete(userId: string): Promise<void>;
+  list(): Promise<FamilyMember[]>;
+}
+
+export function makeMembers(client: TableClient): MemberRepo {
+  const write = async (domain: FamilyMember): Promise<FamilyMember> => {
+    await client.put({
+      ...(domain as unknown as Record<string, unknown>),
+      PK: `MEMBER#${domain.userId}`,
+      SK: SK_DETAILS,
+      GSI1PK: 'MEMBERS',
+      GSI1SK: dateSortKey(domain.createdAt, domain.userId),
+    });
+    return domain;
+  };
+  return {
+    async get(userId) {
+      const item = await client.get(`MEMBER#${userId}`, SK_DETAILS);
+      return item ? toDomain<FamilyMember>(item) : null;
+    },
+    async put(input) {
+      const existing = await client.get(`MEMBER#${input.userId}`, SK_DETAILS);
+      const now = isoNow();
+      return write({ ...input, createdAt: (existing?.createdAt as string | undefined) ?? now, updatedAt: now });
+    },
+    async update(userId, patch) {
+      const existing = await client.get(`MEMBER#${userId}`, SK_DETAILS);
+      if (!existing) throw new NotFoundError('MEMBER', userId);
+      const current = toDomain<FamilyMember>(existing);
+      return write({ ...current, ...patch, userId, createdAt: current.createdAt, updatedAt: isoNow() });
+    },
+    async delete(userId) {
+      await client.delete(`MEMBER#${userId}`, SK_DETAILS);
+    },
+    async list() {
+      const items = await client.queryIndex('GSI1', 'MEMBERS', { ascending: true });
+      return items.map((i) => toDomain<FamilyMember>(i));
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Tenant registry (PK: TENANT#<id>) — the one GLOBAL namespace (SaaS platform). Always built on the
+// UN-scoped base client, so registry keys are never tenant-prefixed. Enumerable via GSI1PK='TENANTS'.
+// ---------------------------------------------------------------------------
+export interface TenantRepo {
+  get(tenantId: string): Promise<Tenant | null>;
+  create(input: Omit<Tenant, 'createdAt' | 'updatedAt'>): Promise<Tenant>;
+  update(
+    tenantId: string,
+    patch: Partial<Omit<Tenant, 'tenantId' | 'createdAt' | 'updatedAt'>>,
+  ): Promise<Tenant>;
+  list(): Promise<Tenant[]>;
+}
+
+export function makeTenants(client: TableClient): TenantRepo {
+  const write = async (domain: Tenant): Promise<Tenant> => {
+    await client.put({
+      ...(domain as unknown as Record<string, unknown>),
+      PK: `TENANT#${domain.tenantId}`,
+      SK: SK_DETAILS,
+      GSI1PK: 'TENANTS',
+      GSI1SK: dateSortKey(domain.createdAt, domain.tenantId),
+    });
+    return domain;
+  };
+  return {
+    async get(tenantId) {
+      const item = await client.get(`TENANT#${tenantId}`, SK_DETAILS);
+      return item ? toDomain<Tenant>(item) : null;
+    },
+    async create(input) {
+      const now = isoNow();
+      return write({ ...input, createdAt: now, updatedAt: now });
+    },
+    async update(tenantId, patch) {
+      const existing = await client.get(`TENANT#${tenantId}`, SK_DETAILS);
+      if (!existing) throw new NotFoundError('TENANT', tenantId);
+      const current = toDomain<Tenant>(existing);
+      return write({ ...current, ...patch, tenantId, createdAt: current.createdAt, updatedAt: isoNow() });
+    },
+    async list() {
+      const items = await client.queryIndex('GSI1', 'TENANTS', { ascending: true });
+      return items.map((i) => toDomain<Tenant>(i));
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Invite registry (PK: INVITE#<code>) — GLOBAL (base client, never tenant-prefixed). Enumerable via
+// GSI1PK='INVITES'. Mirrors the tenant registry. Codes are the partition, so lookup-by-code is O(1).
+// ---------------------------------------------------------------------------
+export interface InviteRepo {
+  get(code: string): Promise<Invite | null>;
+  create(input: Omit<Invite, 'createdAt' | 'updatedAt'>): Promise<Invite>;
+  update(
+    code: string,
+    patch: Partial<Omit<Invite, 'code' | 'createdAt' | 'updatedAt'>>,
+  ): Promise<Invite>;
+  list(): Promise<Invite[]>;
+}
+
+export function makeInvites(client: TableClient): InviteRepo {
+  const write = async (domain: Invite): Promise<Invite> => {
+    await client.put({
+      ...(domain as unknown as Record<string, unknown>),
+      PK: `INVITE#${domain.code}`,
+      SK: SK_DETAILS,
+      GSI1PK: 'INVITES',
+      GSI1SK: dateSortKey(domain.createdAt, domain.code),
+    });
+    return domain;
+  };
+  return {
+    async get(code) {
+      const item = await client.get(`INVITE#${code}`, SK_DETAILS);
+      return item ? toDomain<Invite>(item) : null;
+    },
+    async create(input) {
+      const now = isoNow();
+      return write({ ...input, createdAt: now, updatedAt: now });
+    },
+    async update(code, patch) {
+      const existing = await client.get(`INVITE#${code}`, SK_DETAILS);
+      if (!existing) throw new NotFoundError('INVITE', code);
+      const current = toDomain<Invite>(existing);
+      return write({ ...current, ...patch, code, createdAt: current.createdAt, updatedAt: isoNow() });
+    },
+    async list() {
+      const items = await client.queryIndex('GSI1', 'INVITES', { ascending: false });
+      return items.map((i) => toDomain<Invite>(i));
     },
   };
 }

@@ -6,6 +6,7 @@ import type { ComponentType } from "react";
  *
  *  - `ai-panel`   → the AI Assistant slide-over body (opened by the floating chat button)
  *  - `quick-add`  → the global Quick-Add form body (opened by the FAB)
+ *  - `tour`       → the post-onboarding guided tour overlay (listens for the `start-tour` event)
  *
  * A module registers its component from its `nav.manifest.ts` (which the shell imports
  * eagerly when globbing nav), e.g.:
@@ -16,7 +17,7 @@ import type { ComponentType } from "react";
  * If no module has registered a slot, the shell shows a friendly placeholder. This is
  * the only sanctioned way to inject into the shell; modules never edit shell files.
  */
-export type SlotName = "ai-panel" | "quick-add";
+export type SlotName = "ai-panel" | "quick-add" | "onboarding" | "tour";
 
 type SlotLoader = () => Promise<{ default: ComponentType }>;
 

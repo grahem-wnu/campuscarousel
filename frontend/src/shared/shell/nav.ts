@@ -8,7 +8,7 @@ import type { AssembledNav, NavEntry, Role } from "./types";
  * Duplicate `id`s or duplicate `route`s across modules are a build-time mistake (the
  * backend has `check:routes`; here we throw loudly so it surfaces in dev/CI).
  */
-export function assembleNav(entries: NavEntry[], role?: Role): AssembledNav {
+export function assembleNav(entries: NavEntry[], role?: Role, platformAdmin?: boolean): AssembledNav {
   const byId = new Set<string>();
   const byRoute = new Set<string>();
   for (const e of entries) {
@@ -18,7 +18,7 @@ export function assembleNav(entries: NavEntry[], role?: Role): AssembledNav {
     byRoute.add(e.route);
   }
 
-  const visible = entries.filter((e) => canSee(e, role));
+  const visible = entries.filter((e) => canSee(e, role, platformAdmin));
   const sort = (a: NavEntry, b: NavEntry) =>
     a.order - b.order || a.label.localeCompare(b.label);
 
@@ -30,8 +30,10 @@ export function assembleNav(entries: NavEntry[], role?: Role): AssembledNav {
   };
 }
 
-/** Role gate for a single entry. No `roles` = visible to everyone. */
-export function canSee(entry: NavEntry, role?: Role): boolean {
+/** Visibility gate for a single entry. Platform-admin entries require the platformAdmin flag; otherwise
+ *  no `roles` = visible to everyone, else the caller's role must be in `roles`. */
+export function canSee(entry: NavEntry, role?: Role, platformAdmin?: boolean): boolean {
+  if (entry.platformAdmin && !platformAdmin) return false;
   if (!entry.roles || entry.roles.length === 0) return true;
   if (!role) return false;
   return entry.roles.includes(role);

@@ -2,8 +2,7 @@
 // can be unit-tested in the node environment. The GPA functions MIRROR the backend's gpa.ts exactly
 // so the client-side "what-if" projection matches what GET /courses/gpa would return.
 
-import type { BadgeTone } from '../../shared/ui';
-import type { Course, CourseType, GpaResult, Semester, Subject, Year } from './types';
+import type { Course, CourseType, GpaResult, Semester, Year } from './types';
 import { SEMESTERS, YEARS } from './types';
 
 /** Standard 4.0-scale points for a letter grade, or null if it isn't a graded letter. */
@@ -58,26 +57,6 @@ export function computeGpa(courses: readonly Course[]): GpaResult {
 /** Format a GPA number to 2 decimals for display. */
 export function formatGpa(n: number): string {
   return n.toFixed(2);
-}
-
-export type CourseImportance = 'required' | 'recommended' | 'elective';
-
-/**
- * Importance for color-coding the grid: nursing programs lean on science/math (and health
- * sciences); humanities are recommended; everything else is elective. A UI heuristic, not a
- * data field.
- */
-export function courseImportance(subject: Subject | undefined): CourseImportance {
-  if (subject === 'science' || subject === 'math' || subject === 'health-sciences') return 'required';
-  if (subject === 'english' || subject === 'social-studies' || subject === 'world-language') {
-    return 'recommended';
-  }
-  return 'elective';
-}
-
-/** Badge tone for an importance level. */
-export function importanceTone(importance: CourseImportance): BadgeTone {
-  return importance === 'required' ? 'error' : importance === 'recommended' ? 'warn' : 'neutral';
 }
 
 /** Grid columns: each academic year split into semesters that get their own sub-column. */

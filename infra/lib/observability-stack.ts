@@ -7,7 +7,10 @@ import {
   Metric,
   TreatMissingData,
 } from "aws-cdk-lib/aws-cloudwatch";
+import { SnsAction } from "aws-cdk-lib/aws-cloudwatch-actions";
 import { LogGroup, RetentionDays } from "aws-cdk-lib/aws-logs";
+import { Topic } from "aws-cdk-lib/aws-sns";
+import { EmailSubscription } from "aws-cdk-lib/aws-sns-subscriptions";
 import type { Construct } from "constructs";
 import type { EnvConfig } from "./config";
 import { putOutput } from "./ssm";
@@ -71,8 +74,19 @@ export class ObservabilityStack extends Stack {
       period: Duration.minutes(5),
     });
 
-    const mkAlarm = (idSuffix: string, metric: Metric, threshold: number) =>
-      new Alarm(this, `Alarm-${idSuffix}`, {
+    // SNS topic every alarm publishes to. Without this the alarms flip to ALARM state silently
+    // and no one is paged. An email subscriber is added when `alertEmail` is configured (it must
+    // be confirmed once via the SNS opt-in email); the topic can also fan out to Slack/PagerDuty.
+    const alarmTopic = new Topic(this, "AlarmTopic", {
+      topicName: `${config.namePrefix}-alarms`,
+    });
+    if (config.alertEmail) {
+      alarmTopic.addSubscription(new EmailSubscription(config.alertEmail));
+    }
+    const alarmAction = new SnsAction(alarmTopic);
+
+    const mkAlarm = (idSuffix: string, metric: Metric, threshold: number) => {
+      const alarm = new Alarm(this, `Alarm-${idSuffix}`, {
         alarmName: `${config.namePrefix}-${idSuffix}`,
         metric,
         threshold,
@@ -80,6 +94,10 @@ export class ObservabilityStack extends Stack {
         comparisonOperator: ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
         treatMissingData: TreatMissingData.NOT_BREACHING,
       });
+      alarm.addAlarmAction(alarmAction);
+      alarm.addOkAction(alarmAction);
+      return alarm;
+    };
 
     mkAlarm("routing-errors", lambdaErrors(routingFunctionName), 1);
     mkAlarm("routing-throttles", lambdaThrottles(routingFunctionName), 1);
@@ -99,7 +117,9 @@ export class ObservabilityStack extends Stack {
     );
 
     putOutput(this, config, "appLogGroupName", appLogGroup.logGroupName, "Application log group");
+    putOutput(this, config, "alarmTopicArn", alarmTopic.topicArn, "CloudWatch alarm SNS topic");
 
     new CfnOutput(this, "AppLogGroupName", { value: appLogGroup.logGroupName });
+    new CfnOutput(this, "AlarmTopicArn", { value: alarmTopic.topicArn });
   }
 }

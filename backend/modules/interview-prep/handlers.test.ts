@@ -150,4 +150,11 @@ describe('question bank', () => {
   it('422s an empty custom question', async () => {
     await expectStatus(h.addQuestion(ctx({ body: { question: '' } })), 422);
   });
+
+  it("includes the student's major-pack questions (nursing → 'Why do you want to become a nurse?')", async () => {
+    await data.studentProfile.put({ intendedMajors: ['Nursing'] });
+    const list = await h.listQuestions(ctx());
+    const questions = (list.body as { questions: { question: string }[] }).questions.map((q) => q.question);
+    expect(questions).toContain('Why do you want to become a nurse?');
+  });
 });

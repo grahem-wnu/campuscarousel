@@ -28,6 +28,15 @@ import {
   updateSchema,
 } from './schema.js';
 
+/** Read the active student's intended major(s) so AI discovery targets the right academic focus. */
+async function activeMajors(data: Data): Promise<string[]> {
+  try {
+    return (await data.studentProfile.get())?.intendedMajors ?? [];
+  } catch {
+    return [];
+  }
+}
+
 export interface ScholarshipHandlers {
   list: Handler;
   summary: Handler;
@@ -112,7 +121,8 @@ export function makeHandlers(
     // POST /scholarships/discover — synchronous AI discovery; returns selectable results, saves nothing.
     discover: async (ctx) => {
       const input = validateBody(discoverSchema, ctx);
-      const results = await getDiscoverer().discover(input);
+      const majors = await activeMajors(getData());
+      const results = await getDiscoverer().discover(input, majors);
       return { status: 200, body: { results } };
     },
 

@@ -92,7 +92,7 @@ describe('follow-ups (GET /touchpoints/follow-ups)', () => {
 
 describe('contacts', () => {
   it('creates, gets, updates, deletes (404 when missing)', async () => {
-    const created = await h.createContact(ctx({ body: { name: 'Nurse Pat', relationship: 'nurse' } }));
+    const created = await h.createContact(ctx({ body: { name: 'Nurse Pat', relationship: 'professional' } }));
     const cid = (created.body as { contactId: string }).contactId;
     expect(created.status).toBe(201);
 

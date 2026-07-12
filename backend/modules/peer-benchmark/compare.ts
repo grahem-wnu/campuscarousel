@@ -72,6 +72,36 @@ export function compareToBenchmark(stats: KeiraStats, benchmark: Benchmark | nul
   return comparison;
 }
 
+/** Points a per-metric status is worth toward the 0-100 fit score. */
+const FIT_POINTS = { above: 100, at: 80, below: 35 } as const;
+
+/**
+ * The spec's auto-calculated `College.fitScore` (0-100): how the student's profile stacks up against
+ * this college's typical-admit requirements. Derived from the same per-metric comparison that drives
+ * readiness — above=100, at=80, below=35 — averaged over the comparable metrics. A TEAS exam the
+ * program reports but the student hasn't taken counts as a gap. Undefined (no score yet) until at
+ * least two metrics are comparable, matching the 'insufficient-data' readiness threshold — so a
+ * brand-new profile honestly shows "no fit score yet" rather than a fabricated number.
+ */
+export function computeFitScore(stats: KeiraStats, benchmark: Benchmark | null | undefined): number | undefined {
+  if (!hasBenchmarkData(benchmark)) return undefined;
+  const c = compareToBenchmark(stats, benchmark);
+  const pts: number[] = [];
+  const add = (s: MetricStatus | undefined): void => {
+    if (s) pts.push(FIT_POINTS[s]);
+  };
+  add(c.gpaStatus);
+  if (c.teasStatus === 'not-taken') {
+    if (typeof benchmark?.avgTEASScore === 'number') pts.push(FIT_POINTS.below); // expected but missing → a gap
+  } else {
+    add(c.teasStatus);
+  }
+  add(c.clinicalHoursStatus);
+  add(c.volunteerHoursStatus);
+  if (pts.length < 2) return undefined;
+  return Math.round(pts.reduce((a, b) => a + b, 0) / pts.length);
+}
+
 /** One college's row in the aggregate matrix. */
 export interface MatrixRow {
   collegeId: string;

@@ -4,8 +4,9 @@ import { HttpApi, HttpMethod, CorsHttpMethod } from "aws-cdk-lib/aws-apigatewayv
 import { HttpUserPoolAuthorizer } from "aws-cdk-lib/aws-apigatewayv2-authorizers";
 import { HttpLambdaIntegration } from "aws-cdk-lib/aws-apigatewayv2-integrations";
 import type { Table } from "aws-cdk-lib/aws-dynamodb";
+import type { Bucket } from "aws-cdk-lib/aws-s3";
 import type { UserPool, UserPoolClient } from "aws-cdk-lib/aws-cognito";
-import { Code, Function as LambdaFunction, Runtime } from "aws-cdk-lib/aws-lambda";
+import { Code, Function as LambdaFunction, Runtime, Tracing } from "aws-cdk-lib/aws-lambda";
 import { RetentionDays } from "aws-cdk-lib/aws-logs";
 import { PolicyStatement } from "aws-cdk-lib/aws-iam";
 import type { Queue } from "aws-cdk-lib/aws-sqs";
@@ -13,14 +14,20 @@ import type { Construct } from "constructs";
 import type { EnvConfig } from "./config";
 import { envHostname } from "./config";
 import { putOutput } from "./ssm";
-import { bedrockInvokeStatement } from "./policies";
+import { bedrockInvokeStatement, sesSendStatement } from "./policies";
 
 export interface ApiStackProps extends StackProps {
   readonly config: EnvConfig;
   readonly table: Table;
+  readonly documentsBucket: Bucket;
   readonly userPool: UserPool;
   readonly userPoolClient: UserPoolClient;
   readonly hydrationQueue: Queue;
+  readonly assetsQueue: Queue;
+  /** Interactive lane for user-initiated focus overview / career-path jobs (AsyncStack). */
+  readonly focusQueue: Queue;
+  /** Interactive lane for user-initiated essay-coach jobs (questions + evaluation) (AsyncStack). */
+  readonly essayCoachQueue: Queue;
 }
 
 /**
@@ -44,7 +51,7 @@ export class ApiStack extends Stack {
 
   constructor(scope: Construct, id: string, props: ApiStackProps) {
     super(scope, id, props);
-    const { config, table, userPool, userPoolClient, hydrationQueue } = props;
+    const { config, table, documentsBucket, userPool, userPoolClient, hydrationQueue, assetsQueue, focusQueue, essayCoachQueue } = props;
 
     const routing = new LambdaFunction(this, "RoutingFn", {
       functionName: `${config.namePrefix}-api-routing`,
@@ -56,10 +63,36 @@ export class ApiStack extends Stack {
       // CRUD default timeout — hydration is offloaded to the SQS worker.
       timeout: Duration.seconds(30),
       memorySize: 512,
+      // Active tracing for end-to-end latency visibility (API -> SQS -> worker -> Bedrock).
+      tracing: Tracing.ACTIVE,
       logRetention: RetentionDays.ONE_MONTH,
       environment: {
         TABLE_NAME: table.tableName,
+        DOCUMENTS_BUCKET: documentsBucket.bucketName,
+        // SaaS transition: requests with no tenant claim fall back to this tenant (the legacy single
+        // family, migrated to T#primary#). Existing users keep working before their tokens carry a tenant.
+        DEFAULT_TENANT_ID: "primary",
+        // Multi-student transition: requests with no X-Student-Id header fall back to this child (the
+        // legacy single child, migrated to T#primary#S#keira#). The migration pins this same id. Once
+        // the frontend ships the switcher it always sends the header; this just covers the cutover gap.
+        // NOTE: like DEFAULT_TENANT_ID, this is a STAGING/migration aid — prod must be migrated to
+        // T#primary#S#keira# before a prod deploy or header-less reads resolve to an empty partition.
+        DEFAULT_STUDENT_ID: "keira",
+        // Public app URL for links in invite / family-member emails (sent from the routing Lambda).
+        // Derived from the env hostname so links point at campuscarousel.com, not the code default.
+        APP_URL: `https://${envHostname(config)}`,
+        // Verified SES sender for reminder "send test" + invite/family emails served by this Lambda
+        // (the digest worker gets this too). Without it the reminders handler 409s "not configured".
+        REMINDER_SENDER_EMAIL: config.reminderSenderEmail,
         HYDRATION_QUEUE_URL: hydrationQueue.queueUrl,
+        ASSETS_QUEUE_URL: assetsQueue.queueUrl,
+        // Interactive focus jobs go to their own queue so a "Generate" click never waits behind bulk
+        // college hydration. The focus dispatchers prefer this; they fall back to HYDRATION_QUEUE_URL.
+        FOCUS_QUEUE_URL: focusQueue.queueUrl,
+        // Interactive essay-coach jobs (practice questions + evaluation) go to their own model-only
+        // queue so a click never waits behind bulk hydration. The enqueuers prefer this; they fall
+        // back to FOCUS_QUEUE_URL / HYDRATION_QUEUE_URL.
+        ESSAY_COACH_QUEUE_URL: essayCoachQueue.queueUrl,
         USER_POOL_ID: userPool.userPoolId,
         USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId,
         BEDROCK_MODEL_ID: config.bedrockSonnetProfile,
@@ -74,13 +107,63 @@ export class ApiStack extends Stack {
 
     // Least-privilege grants.
     table.grantReadWriteData(routing);
+    documentsBucket.grantReadWrite(routing); // presigned PUT/GET of family documents (v2.1 F2)
+    documentsBucket.grantDelete(routing);
     hydrationQueue.grantSendMessages(routing);
+    assetsQueue.grantSendMessages(routing);
+    focusQueue.grantSendMessages(routing);
+    essayCoachQueue.grantSendMessages(routing);
     routing.addToRolePolicy(bedrockInvokeStatement(this.account, config.bedrockSonnetProfile));
+    // Send reminder test emails + invite/family-member emails via SES (verified domain identity).
+    routing.addToRolePolicy(sesSendStatement(this.region, this.account));
     routing.addToRolePolicy(
       new PolicyStatement({
         sid: "ReadEnvConfig",
         actions: ["ssm:GetParameter", "ssm:GetParameters", "ssm:GetParametersByPath"],
         resources: [`arn:aws:ssm:${this.region}:${this.account}:parameter${config.ssmPrefix}/*`],
+      }),
+    );
+    // Family-member management (invite/re-role/remove the wider support circle) creates & maintains
+    // member logins in THIS pool only. Least-privilege: no list/global cognito access.
+    routing.addToRolePolicy(
+      new PolicyStatement({
+        sid: "ManageFamilyMembers",
+        actions: [
+          "cognito-idp:AdminCreateUser",
+          "cognito-idp:AdminUpdateUserAttributes",
+          "cognito-idp:AdminDeleteUser",
+        ],
+        resources: [userPool.userPoolArn],
+      }),
+    );
+
+    // Public auth Lambda (SaaS sub-project 2) — the only unauthenticated endpoints: invite
+    // redemption (POST /auth/redeem) and open self-serve signup (POST /auth/signup). A new parent
+    // has no token yet, so neither is behind the JWT authorizer. Both provision a family tenant +
+    // the parent's Cognito account; the handler dispatches on path. Least-privilege: table CRUD
+    // (global invite/tenant registries) + Cognito AdminCreateUser/AdminSetUserPassword on THIS
+    // pool only. PUBLIC_SIGNUP_ENABLED is the signup kill switch — flip to "false" and deploy to
+    // close open signup without touching the invite flow.
+    const redeem = new LambdaFunction(this, "RedeemFn", {
+      functionName: `${config.namePrefix}-auth-redeem`,
+      runtime: Runtime.NODEJS_20_X,
+      handler: "index.handler",
+      code: Code.fromAsset(join(__dirname, "../../backend/dist/redeem")),
+      timeout: Duration.seconds(30),
+      memorySize: 256,
+      logRetention: RetentionDays.ONE_MONTH,
+      environment: {
+        TABLE_NAME: table.tableName,
+        USER_POOL_ID: userPool.userPoolId,
+        PUBLIC_SIGNUP_ENABLED: "true",
+      },
+    });
+    table.grantReadWriteData(redeem);
+    redeem.addToRolePolicy(
+      new PolicyStatement({
+        sid: "CognitoProvisionFamily",
+        actions: ["cognito-idp:AdminCreateUser", "cognito-idp:AdminSetUserPassword"],
+        resources: [userPool.userPoolArn],
       }),
     );
 
@@ -97,10 +180,17 @@ export class ApiStack extends Stack {
     // check and the browser blocks the real request ("Failed to fetch"). API Gateway only
     // auto-answers preflight (204) when NO route matches the OPTIONS request, so we leave
     // OPTIONS unrouted and let the corsPreflight config handle it.
+    // Prod only trusts its real origin; localhost (Vite dev) is allowed on staging only so a
+    // developer's machine can't be a CORS-trusted origin against the production API.
+    const allowOrigins =
+      config.stage === "prod"
+        ? [`https://${envHostname(config)}`]
+        : [`https://${envHostname(config)}`, "http://localhost:5173"];
+
     const api = new HttpApi(this, "HttpApi", {
       apiName: `${config.namePrefix}-api`,
       corsPreflight: {
-        allowOrigins: [`https://${envHostname(config)}`, "http://localhost:5173"],
+        allowOrigins,
         allowMethods: [
           CorsHttpMethod.GET,
           CorsHttpMethod.POST,
@@ -109,7 +199,9 @@ export class ApiStack extends Stack {
           CorsHttpMethod.DELETE,
           CorsHttpMethod.OPTIONS,
         ],
-        allowHeaders: ["authorization", "content-type"],
+        // `x-student-id` carries the active child (multi-student); the browser sends a CORS preflight
+        // for it, so it MUST be allow-listed or every per-child request fails with "Failed to fetch".
+        allowHeaders: ["authorization", "content-type", "x-student-id"],
         maxAge: Duration.hours(1),
       },
     });
@@ -128,6 +220,20 @@ export class ApiStack extends Stack {
       ],
       integration,
       authorizer,
+    });
+
+    // PUBLIC routes — invite redemption + open self-serve signup. NO authorizer (the parent has
+    // no token yet). One Lambda serves both; it dispatches on the request path.
+    const publicAuthIntegration = new HttpLambdaIntegration("RedeemIntegration", redeem);
+    api.addRoutes({
+      path: "/auth/redeem",
+      methods: [HttpMethod.POST],
+      integration: publicAuthIntegration,
+    });
+    api.addRoutes({
+      path: "/auth/signup",
+      methods: [HttpMethod.POST],
+      integration: publicAuthIntegration,
     });
 
     this.httpApiName = `${config.namePrefix}-api`;

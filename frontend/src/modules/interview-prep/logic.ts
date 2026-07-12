@@ -66,6 +66,15 @@ export function historyStats(sessions: readonly Interview[]): HistoryStats {
   };
 }
 
+/** Merge a freshly dictated phrase into the existing answer text, with sensible spacing (one space
+ *  between the prior text and the new phrase, no leading space on an empty field, trimmed addition). */
+export function appendDictation(existing: string, addition: string): string {
+  const add = addition.trim();
+  if (!add) return existing;
+  const base = existing.replace(/\s+$/, '');
+  return base ? `${base} ${add}` : add;
+}
+
 /** Progress through a mock: how many of its questions have been answered. */
 export function mockProgress(session: Interview): { answered: number; total: number } {
   const total = session.questions?.length ?? 0;

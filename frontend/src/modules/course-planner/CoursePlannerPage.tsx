@@ -13,12 +13,15 @@ import { deleteCourse, listCourses } from './api';
 import { CourseForm } from './CourseForm';
 import { CourseGrid } from './CourseGrid';
 import { GpaCalculator } from './GpaCalculator';
-import { PrereqChecker } from './PrereqChecker';
 import type { Course } from './types';
 
-type TabId = 'grid' | 'gpa' | 'prerequisites';
+// NOTE: the Prerequisites tab (PrereqMatrix + PrereqChecker) is intentionally hidden — it was too
+// confusing in its current form. The components, their tests, and the backend endpoints are left in
+// place so the feature can be brought back redesigned without rebuilding it. Re-add the tab + render
+// branch below to restore it.
+type TabId = 'grid' | 'gpa';
 
-/** Course Planner — 4-year grid, GPA calculator (with what-if), and prerequisite checker. */
+/** Course Planner — 4-year grid and GPA calculator (with what-if). */
 export default function CoursePlannerPage() {
   const toast = useToast();
   const [courses, setCourses] = useState<Course[]>([]);
@@ -69,7 +72,6 @@ export default function CoursePlannerPage() {
   const tabs: TabItem[] = [
     { id: 'grid', label: '4-Year Plan', count: courses.length },
     { id: 'gpa', label: 'GPA' },
-    { id: 'prerequisites', label: 'Prerequisites' },
   ];
 
   return (
@@ -78,7 +80,7 @@ export default function CoursePlannerPage() {
         <div>
           <h1 className="text-2xl font-bold text-ink-900">Course Planner</h1>
           <p className="mt-0.5 text-sm text-ink-500">
-            Map your four years, track your GPA, and see how your courses cover college prerequisites.
+            Map your four years and track your GPA.
           </p>
         </div>
         <Button icon="plus" onClick={openNew}>
@@ -101,13 +103,11 @@ export default function CoursePlannerPage() {
         </div>
       ) : tab === 'gpa' ? (
         <GpaCalculator courses={courses} />
-      ) : tab === 'prerequisites' ? (
-        <PrereqChecker courses={courses} />
       ) : courses.length === 0 ? (
         <EmptyState
           icon="course"
           title="Start your course plan"
-          description="Add your classes — past, current, and planned. Track grades for GPA, and tag which college prerequisites each course satisfies."
+          description="Add your classes — past, current, and planned — and track grades for your GPA."
           action={
             <Button icon="plus" onClick={openNew}>
               Add your first course

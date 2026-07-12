@@ -1,20 +1,153 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Badge, Button, Card, EmptyState, Modal, Spinner, Tabs, type TabItem } from '../../shared/ui';
-import { analyzeTimeline, getTimeline, getUpcoming } from './api';
+import { Link } from 'react-router-dom';
+import { Badge, Button, Card, Icon, Modal, Spinner, Tabs, type TabItem } from '../../shared/ui';
+import { analyzeTimeline, dismissTimelineEvent, getTimeline, getUpcoming } from './api';
 import {
   GROUP_LABEL,
   SOURCE_DOT,
   SOURCE_LABEL,
+  collegePlans,
   countdownLabel,
+  eventLink,
   eventsByDate,
+  formatLongDate,
   groupUpcoming,
   monthGrid,
   monthLabel,
 } from './logic';
-import type { Analysis, TimelineEvent, UpcomingEvent } from './types';
+import type { Analysis, CollegePlan, TimelineEvent, UpcomingEvent } from './types';
+import { clearbitLogoFromWebsite, faviconFromWebsite } from '../college-hub/logic';
 
 type TabId = 'upcoming' | 'calendar';
 const nowDate = new Date();
+
+/** Leading icon for an upcoming event: a best-effort college logo (the hydrated URL, then a Clearbit
+ *  hotlink from the website), falling back to a school glyph (college) or the source-colored dot.
+ *  Advances through the logo candidates on load error, so a broken URL never shows as broken. */
+function EventIcon({ e }: { e: UpcomingEvent }) {
+  const candidates = [e.logoUrl, clearbitLogoFromWebsite(e.website), faviconFromWebsite(e.website)].filter(
+    (u): u is string => !!u,
+  );
+  const [idx, setIdx] = useState(0);
+  const src = candidates[idx];
+  if (src) {
+    return (
+      <img
+        src={src}
+        alt=""
+        className="mt-0.5 h-6 w-6 shrink-0 rounded bg-white object-contain"
+        onError={() => setIdx((i) => i + 1)}
+      />
+    );
+  }
+  if (e.source === 'college') {
+    return (
+      <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded bg-primary-50 text-primary-600">
+        <Icon name="school" size={14} />
+      </span>
+    );
+  }
+  return <span className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${SOURCE_DOT[e.source]}`} aria-hidden />;
+}
+
+/** A "where dated items come from" link in the empty-state guide. */
+function TimelineSource({
+  to,
+  icon,
+  label,
+  hint,
+}: {
+  to: string;
+  icon: 'school' | 'teas' | 'calendar' | 'scholarship' | 'application' | 'goal';
+  label: string;
+  hint: string;
+}) {
+  return (
+    <Link
+      to={to}
+      className="group flex items-start gap-2 rounded-lg border border-surface-border px-3 py-2 transition hover:border-primary-200 hover:bg-surface-sunken"
+    >
+      <span className="mt-0.5 text-primary-600"><Icon name={icon} size={16} /></span>
+      <span className="min-w-0">
+        <span className="flex items-center gap-1 text-sm font-medium text-ink-800 group-hover:text-primary-700">
+          {label}
+          <Icon name="chevron-right" size={12} className="text-ink-300 group-hover:text-primary-500" />
+        </span>
+        <span className="block text-xs text-ink-400">{hint}</span>
+      </span>
+    </Link>
+  );
+}
+
+/** College logo for an application-plan row — same best-effort chain as EventIcon, school glyph fallback. */
+function CollegePlanLogo({ plan }: { plan: CollegePlan }) {
+  const candidates = [plan.logoUrl, clearbitLogoFromWebsite(plan.website), faviconFromWebsite(plan.website)].filter(
+    (u): u is string => !!u,
+  );
+  const [idx, setIdx] = useState(0);
+  const src = candidates[idx];
+  if (src) {
+    return <img src={src} alt="" className="mt-0.5 h-7 w-7 shrink-0 rounded bg-white object-contain" onError={() => setIdx((i) => i + 1)} />;
+  }
+  return (
+    <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded bg-primary-50 text-primary-600">
+      <Icon name="school" size={15} />
+    </span>
+  );
+}
+
+/** Plain-language college application plans: one card per school, each deadline shown as apply-by →
+ *  estimated hear-back, with the jargon explained once in a legend (not on every row). */
+function CollegeApplicationsCard({ plans }: { plans: CollegePlan[] }) {
+  return (
+    <Card className="space-y-3">
+      <div>
+        <h2 className="text-sm font-semibold text-ink-800">College applications</h2>
+        <p className="mt-0.5 text-xs text-ink-500">
+          When to apply to each school and when you&rsquo;ll likely hear back. Hear-back dates are estimates.
+        </p>
+      </div>
+      {/* Explain the deadline jargon once, here — not on every row. */}
+      <div className="flex flex-wrap gap-x-4 gap-y-1 rounded-md bg-surface-sunken px-3 py-2 text-[11px] text-ink-500">
+        <span><span className="font-medium text-ink-700">Early Action:</span> apply early, hear back early (not binding).</span>
+        <span><span className="font-medium text-ink-700">Regular Decision:</span> the standard deadline; decisions in spring.</span>
+      </div>
+      <ul className="divide-y divide-surface-border">
+        {plans.map((p) => (
+          <li key={p.collegeId ?? p.name}>
+            <Link
+              to={p.collegeId ? `/colleges/${p.collegeId}` : '/colleges'}
+              className="group -mx-2 flex items-start gap-3 rounded-md px-2 py-2.5 transition hover:bg-surface-sunken"
+            >
+              <CollegePlanLogo plan={p} />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium leading-snug text-ink-800 group-hover:text-primary-700">{p.name}</p>
+                <div className="mt-1 space-y-1.5">
+                  {p.deadlines.map((d) => (
+                    <div key={d.type} className="text-xs">
+                      <p className="text-ink-700">
+                        Apply by {formatLongDate(d.submitDate)}{' '}
+                        <span className="text-ink-400">· {d.label} · {countdownLabel(d.submitDaysUntil)}</span>
+                      </p>
+                      {d.decisionDate ? (
+                        <p className="text-ink-400">↳ Decision ~{formatLongDate(d.decisionDate)}</p>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <Icon
+                name="chevron-right"
+                size={16}
+                className="mt-0.5 shrink-0 text-ink-300 transition-transform group-hover:translate-x-0.5 group-hover:text-primary-500"
+              />
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </Card>
+  );
+}
 
 /** Master Timeline — one unified calendar across every module: upcoming (prioritized) + a month
  *  calendar color-coded by source, plus AI focus/conflict analysis. */
@@ -31,11 +164,15 @@ export default function TimelinePage() {
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [showAnalysis, setShowAnalysis] = useState(false);
+  // Overdue items are usually stale (missed visits, decided-against deadlines) — collapse by default.
+  const [overdueOpen, setOverdueOpen] = useState(false);
 
   const load = useCallback(async () => {
     setError(null);
     try {
-      const [up, ev] = await Promise.all([getUpcoming(90), getTimeline()]);
+      // Wide horizon (~5 yrs): an underclassman's application deadlines are 1–3 years out, so a 90-day
+      // window would show nothing. Grouping ('Later') keeps near-term items on top.
+      const [up, ev] = await Promise.all([getUpcoming(1825), getTimeline()]);
       setUpcoming(up);
       setAll(ev);
     } catch (e) {
@@ -49,7 +186,24 @@ export default function TimelinePage() {
     void load();
   }, [load]);
 
-  const grouped = useMemo(() => groupUpcoming(upcoming), [upcoming]);
+  // College deadlines get their own plain-language section (collapsed one-card-per-college); everything
+  // else keeps the chronological time-bucket grouping.
+  const plans = useMemo(() => collegePlans(upcoming), [upcoming]);
+  const grouped = useMemo(() => groupUpcoming(upcoming.filter((e) => e.source !== 'college')), [upcoming]);
+
+  // Remove a derived event from the timeline. It has no row of its own, so this records a dismissal
+  // server-side (filtered from every read path); the underlying source record is left untouched.
+  async function dismiss(e: UpcomingEvent): Promise<void> {
+    if (!window.confirm(`Remove "${e.title}" from your timeline? This won't delete the underlying item.`)) return;
+    setUpcoming((prev) => prev.filter((x) => x.id !== e.id));
+    setAll((prev) => prev.filter((x) => x.id !== e.id));
+    try {
+      await dismissTimelineEvent(e.id);
+    } catch {
+      void load(); // restore on failure
+    }
+  }
+
   const byDate = useMemo(() => eventsByDate(all), [all]);
   const grid = useMemo(() => monthGrid(calYear, calMonth), [calYear, calMonth]);
 
@@ -80,7 +234,7 @@ export default function TimelinePage() {
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-ink-900">Timeline</h1>
-          <p className="mt-0.5 text-sm text-ink-500">Every deadline, goal, test, visit, and milestone in one place.</p>
+          <p className="mt-0.5 text-sm text-ink-500">Every deadline, exam, visit, goal, and renewal across the app — collected here automatically.</p>
         </div>
         <Button variant="outline" icon="chat" onClick={() => void runAnalyze()}>What should I focus on?</Button>
       </header>
@@ -95,28 +249,83 @@ export default function TimelinePage() {
       ) : loading ? (
         <div className="flex justify-center py-16"><Spinner /></div>
       ) : all.length === 0 ? (
-        <EmptyState icon="calendar" title="Your timeline is empty" description="As you add college deadlines, goals, test dates, and campus visits across the app, they’ll all appear here in one calendar." />
+        <Card className="space-y-4">
+          <div className="flex items-start gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-50 text-primary-600">
+              <Icon name="calendar" size={20} />
+            </span>
+            <div>
+              <h2 className="text-sm font-semibold text-ink-800">Nothing dated yet</h2>
+              <p className="mt-0.5 text-sm text-ink-500">
+                You don’t add things here directly — this calendar fills itself from dated items across the app.
+                Add any of these and they’ll show up automatically:
+              </p>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <TimelineSource to="/colleges" icon="school" label="Add a college" hint="Application deadlines appear once it finishes refreshing." />
+            <TimelineSource to="/exams" icon="teas" label="Add an exam date" hint="Official test dates land on the calendar." />
+            <TimelineSource to="/visits" icon="calendar" label="Plan a campus visit" hint="Visit dates show here too." />
+            <TimelineSource to="/finaid" icon="application" label="Add a financial-aid item" hint="FAFSA/CSS and aid deadlines." />
+            <TimelineSource to="/goals" icon="goal" label="Set a goal" hint="Goals with a target date appear." />
+          </div>
+        </Card>
       ) : tab === 'upcoming' ? (
         <div className="space-y-4">
-          {grouped.map(({ group, events }) => (
-            <Card key={group}>
-              <h2 className={`mb-2 text-sm font-semibold ${group === 'overdue' ? 'text-error-700' : 'text-ink-800'}`}>{GROUP_LABEL[group]}</h2>
-              <ul className="divide-y divide-surface-border">
-                {events.map((e) => (
-                  <li key={e.id} className="flex items-center justify-between gap-3 py-1.5 text-sm">
-                    <span className="flex items-center gap-2 truncate">
-                      <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${SOURCE_DOT[e.source]}`} aria-hidden />
-                      <span className="truncate text-ink-800">{e.title}</span>
-                      <Badge tone="neutral">{SOURCE_LABEL[e.source]}</Badge>
-                    </span>
-                    <span className={`shrink-0 text-xs ${e.daysUntil < 0 ? 'font-medium text-error-600' : 'text-ink-500'}`}>
-                      {e.date.slice(5)} · {countdownLabel(e.daysUntil)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </Card>
-          ))}
+          {plans.length > 0 ? <CollegeApplicationsCard plans={plans} /> : null}
+          {grouped.map(({ group, events }) => {
+            const isOverdue = group === 'overdue';
+            const collapsed = isOverdue && !overdueOpen;
+            return (
+              <Card key={group}>
+                {isOverdue ? (
+                  <button
+                    type="button"
+                    onClick={() => setOverdueOpen((o) => !o)}
+                    aria-expanded={overdueOpen}
+                    className="mb-2 flex w-full items-center gap-1.5 text-sm font-semibold text-error-700"
+                  >
+                    <Icon name="chevron-right" size={16} className={`shrink-0 transition-transform ${overdueOpen ? 'rotate-90' : ''}`} />
+                    {GROUP_LABEL[group]}
+                    <span className="rounded-full bg-error-100 px-2 py-0.5 text-xs font-normal text-error-700">{events.length}</span>
+                  </button>
+                ) : (
+                  <h2 className="mb-2 text-sm font-semibold text-ink-800">{GROUP_LABEL[group]}</h2>
+                )}
+                {collapsed ? null : (
+                  <ul className="divide-y divide-surface-border">
+                    {events.map((e) => (
+                      <li key={e.id} className="flex items-stretch gap-1">
+                        <Link
+                          to={eventLink(e)}
+                          className="group -ml-2 flex flex-1 items-start gap-3 rounded-md px-2 py-2.5 transition hover:bg-surface-sunken"
+                        >
+                          <EventIcon e={e} />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium leading-snug text-ink-800 group-hover:text-primary-700">{e.title}</p>
+                            <p className="mt-0.5 text-xs text-ink-400">
+                              {e.source !== 'college' ? `${SOURCE_LABEL[e.source]} · ` : ''}
+                              {e.date} ·{' '}
+                              <span className={e.daysUntil < 0 ? 'font-medium text-error-600' : ''}>{countdownLabel(e.daysUntil)}</span>
+                            </p>
+                          </div>
+                        </Link>
+                        <button
+                          type="button"
+                          onClick={() => void dismiss(e)}
+                          aria-label={`Remove ${e.title} from the timeline`}
+                          title="Remove from timeline"
+                          className="shrink-0 self-center rounded-md p-1.5 text-ink-300 transition hover:bg-error-50 hover:text-error-600"
+                        >
+                          <Icon name="close" size={16} />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </Card>
+            );
+          })}
         </div>
       ) : (
         <Card>

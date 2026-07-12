@@ -1,4 +1,5 @@
 import { Button, Card, Icon, Spinner } from '../../shared/ui';
+import { CertGuidanceSection } from './CertGuidanceSection';
 import { costLabel } from './logic';
 import type { CertSuggestion } from './types';
 
@@ -46,24 +47,26 @@ export function SuggestionsPanel({ suggestions, loading, careerGoal, onAdd, onDi
       ) : (
         <ul className="mt-3 space-y-2">
           {suggestions.map((s) => (
-            <li
-              key={s.name}
-              className="flex items-start justify-between gap-3 rounded-md bg-surface-raised p-3"
-            >
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-ink-900">{s.name}</p>
-                {s.issuingOrganization ? (
-                  <p className="text-xs text-ink-500">{s.issuingOrganization}</p>
-                ) : null}
-                <p className="mt-1 text-sm text-ink-600">{s.why}</p>
-                <div className="mt-1 flex flex-wrap gap-x-3 text-xs text-ink-500">
-                  {s.typicalCost !== undefined ? <span>{costLabel(s.typicalCost)}</span> : null}
-                  {s.renewalFrequency ? <span>{s.renewalFrequency}</span> : null}
+            <li key={s.name} className="rounded-md bg-surface-raised p-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-ink-900">{s.name}</p>
+                  {s.issuingOrganization ? (
+                    <p className="text-xs text-ink-500">{s.issuingOrganization}</p>
+                  ) : null}
+                  <p className="mt-1 text-sm text-ink-600">{s.why}</p>
+                  <div className="mt-1 flex flex-wrap gap-x-3 text-xs text-ink-500">
+                    {s.typicalCost !== undefined ? <span>{costLabel(s.typicalCost)}</span> : null}
+                    {s.renewalFrequency ? <span>{s.renewalFrequency}</span> : null}
+                  </div>
                 </div>
+                <Button size="sm" variant="outline" icon="plus" onClick={() => onAdd(s)}>
+                  Add
+                </Button>
               </div>
-              <Button size="sm" variant="outline" icon="plus" onClick={() => onAdd(s)}>
-                Add
-              </Button>
+              <div className="mt-2">
+                <CertGuidanceSection certName={s.name} />
+              </div>
             </li>
           ))}
         </ul>

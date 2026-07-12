@@ -8,7 +8,9 @@ export default defineConfig({
   plugins: [react()],
   build: {
     outDir: "dist",
-    sourcemap: true,
+    // 'hidden' emits maps for local debugging but does NOT reference them from the shipped
+    // bundle, so original TypeScript source isn't published to CloudFront for anyone to read.
+    sourcemap: "hidden",
   },
   server: {
     port: 5173,

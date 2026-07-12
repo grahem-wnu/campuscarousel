@@ -4,12 +4,13 @@
 import { api } from '../../shared/api';
 import type {
   College,
-  CollegeCandidate,
   CollegeChecklist,
   CollegeInput,
   CollegeNote,
   ChecklistItem,
   DiscoverFilters,
+  DiscoveryJob,
+  HsPrepPlan,
   ListFilters,
 } from './types';
 
@@ -59,9 +60,20 @@ export function hydrateAll(): Promise<{ requested: number }> {
   return api.post<{ requested: number }>('/colleges/hydrate-all');
 }
 
-export async function discoverColleges(filters: DiscoverFilters): Promise<CollegeCandidate[]> {
-  const res = await api.post<{ candidates: CollegeCandidate[] }>('/colleges/discover', filters);
-  return res.candidates;
+/** Start an async discovery job. Web-grounded discovery runs on the SQS worker (it can exceed the
+ *  30s API budget), so this returns a job to poll via getDiscovery — it does NOT block on results. */
+export function startDiscovery(filters: DiscoverFilters): Promise<DiscoveryJob> {
+  return api.post<DiscoveryJob>('/colleges/discover', filters);
+}
+
+/** Poll a discovery job's status + candidates. */
+export function getDiscovery(jobId: string): Promise<DiscoveryJob> {
+  return api.get<DiscoveryJob>(`/colleges/discover/${encodeURIComponent(jobId)}`);
+}
+
+/** One-time: fetch campus imagery + logos for existing colleges that have no campus photo yet. */
+export function backfillAssets(): Promise<{ requested: number }> {
+  return api.post<{ requested: number }>('/colleges/assets-backfill');
 }
 
 export function bulkAddColleges(colleges: CollegeInput[]): Promise<{ created: College[]; skipped: string[] }> {
@@ -84,4 +96,24 @@ export async function getChecklist(id: string): Promise<ChecklistItem[]> {
 
 export function putChecklist(id: string, items: ChecklistItem[]): Promise<CollegeChecklist> {
   return api.put<CollegeChecklist>(`/colleges/${encodeURIComponent(id)}/checklist`, { items });
+}
+
+/** AI-suggested application steps for this college, tailored to the student's major. Returns an
+ *  editable list (label + optional ISO dueDate); the caller merges + persists via putChecklist. */
+export async function suggestChecklist(id: string): Promise<{ label: string; dueDate?: string }[]> {
+  const res = await api.post<{ suggestions: { label: string; dueDate?: string }[] }>(
+    `/colleges/${encodeURIComponent(id)}/checklist/suggest`,
+    {},
+  );
+  return res.suggestions ?? [];
+}
+
+/** Kick off the AI "how to prepare in high school" plan for this college (tailored to the student's
+ *  major + grad year). Generation runs async on the worker, so this returns 202 with the current
+ *  status ('in-progress' in prod; 'complete' + plan when the backend ran it inline). Poll
+ *  getCollege() until hsPrepStatus settles to 'complete' (use hsPrepPlan) or 'failed'. */
+export async function generatePrep(
+  id: string,
+): Promise<{ status: 'pending' | 'in-progress' | 'complete' | 'failed'; plan: HsPrepPlan | null }> {
+  return api.post(`/colleges/${encodeURIComponent(id)}/prep`, {});
 }

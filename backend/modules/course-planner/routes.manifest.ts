@@ -18,6 +18,7 @@ const handlers = makeHandlers((): Data => (cached ??= dataFromEnv()));
 
 export const routes: RouteDef[] = [
   { method: 'GET', path: '/courses/gpa', handler: handlers.gpa },
+  { method: 'GET', path: '/courses/prerequisites', handler: handlers.prerequisitesMatrix },
   { method: 'GET', path: '/courses/prerequisites/:collegeId', handler: handlers.prerequisites },
   { method: 'GET', path: '/courses', handler: handlers.list },
   { method: 'POST', path: '/courses', handler: handlers.create },

@@ -7,13 +7,15 @@ import type {
   Activity,
   Certification,
   College,
+  FinAidItem,
   Goal,
   Scholarship,
-  Teas,
+  ExamScore,
   Visit,
 } from '../../shared/data/index.js';
+import { collegeDeadlineDate } from '../../shared/college-deadline.js';
 
-export const EVENT_SOURCES = ['activity', 'goal', 'college', 'teas', 'visit', 'scholarship', 'certification'] as const;
+export const EVENT_SOURCES = ['activity', 'goal', 'college', 'exam', 'visit', 'scholarship', 'certification', 'finaid'] as const;
 export type EventSource = (typeof EVENT_SOURCES)[number];
 
 export interface TimelineEvent {
@@ -26,6 +28,10 @@ export interface TimelineEvent {
   /** The owning record id + (for sub-entities) college, so the UI can deep-link to the module. */
   refId?: string;
   collegeId?: string;
+  /** College logo (college-sourced events only) so the UI can show which school a deadline is for. */
+  logoUrl?: string;
+  /** College website (college events) — lets the UI derive a best-effort logo when `logoUrl` fails. */
+  website?: string;
 }
 
 const MS_PER_DAY = 86_400_000;
@@ -40,10 +46,15 @@ export interface EventSources {
   activities: readonly Activity[]; // already visibility-filtered by the caller
   goals: readonly Goal[];
   colleges: readonly College[];
-  teas: readonly Teas[];
+  exams: readonly ExamScore[];
   visits: readonly Visit[];
   scholarships: readonly Scholarship[];
   certifications: readonly Certification[];
+  /** Financial-aid items (v2.1 Module 19). Optional so existing callers need no change. */
+  finaid?: readonly FinAidItem[];
+  /** The student's graduation year — projects college application deadlines onto their senior-year
+   *  cycle (so an underclassman's deadlines aren't dated to the current, already-past cycle). */
+  graduationYear?: number;
 }
 
 /** Build the unified, date-ascending event stream from all sources. */
@@ -59,14 +70,17 @@ export function buildEvents(s: EventSources): TimelineEvent[] {
   for (const c of s.colleges) {
     if (c.status === 'removed') continue;
     const d = c.applicationDeadlines;
-    if (d?.earlyAction) push({ source: 'college', type: 'early-action', title: `${c.name} — early action`, date: d.earlyAction, refId: c.collegeId, collegeId: c.collegeId });
-    if (d?.regularDecision) push({ source: 'college', type: 'regular-decision', title: `${c.name} — regular decision`, date: d.regularDecision, refId: c.collegeId, collegeId: c.collegeId });
-    if (d?.nursingApp) push({ source: 'college', type: 'nursing-app', title: `${c.name} — nursing app`, date: d.nursingApp, refId: c.collegeId, collegeId: c.collegeId });
+    const logoUrl = c.branding?.logoUrl;
+    const website = c.website;
+    if (d?.earlyAction) push({ source: 'college', type: 'early-action', title: `${c.name} — early action`, date: collegeDeadlineDate(d.earlyAction, s.graduationYear), refId: c.collegeId, collegeId: c.collegeId, logoUrl, website });
+    if (d?.regularDecision) push({ source: 'college', type: 'regular-decision', title: `${c.name} — regular decision`, date: collegeDeadlineDate(d.regularDecision, s.graduationYear), refId: c.collegeId, collegeId: c.collegeId, logoUrl, website });
+    if (d?.programApp) push({ source: 'college', type: 'program-app', title: `${c.name} — program app`, date: collegeDeadlineDate(d.programApp, s.graduationYear), refId: c.collegeId, collegeId: c.collegeId, logoUrl, website });
   }
-  for (const t of s.teas) if (t.type === 'official-exam') push({ source: 'teas', type: 'official-exam', title: 'TEAS official exam', date: t.date, refId: t.recordId });
+  for (const t of s.exams) if (t.type === 'official-exam') push({ source: 'exam', type: 'official-exam', title: 'Official exam', date: t.date, refId: t.recordId });
   for (const v of s.visits) push({ source: 'visit', type: v.visitType ?? 'visit', title: `Campus visit${v.visitType ? ` — ${v.visitType}` : ''}`, date: v.date, refId: v.visitId, collegeId: v.collegeId });
   for (const sc of s.scholarships) if (!['awarded', 'denied', 'expired'].includes(sc.status ?? '') && sc.applicationDeadline) push({ source: 'scholarship', type: 'deadline', title: sc.name, date: sc.applicationDeadline, refId: sc.scholarshipId });
   for (const c of s.certifications) if (c.renewalRequired && c.expirationDate) push({ source: 'certification', type: 'expiration', title: `${c.name} renewal`, date: c.expirationDate, refId: c.certId });
+  for (const f of s.finaid ?? []) if (f.deadline && f.status !== 'n/a') push({ source: 'finaid', type: f.kind, title: f.title, date: f.deadline, refId: f.itemId, collegeId: f.relatedCollegeId });
 
   return out.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.source.localeCompare(b.source)));
 }

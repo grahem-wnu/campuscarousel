@@ -1,7 +1,7 @@
 // Privacy enforcement (frozen contract). This is the single source of truth for the rule that
 // every visibility-bearing module obeys:
 //
-//   `private` entries (journal, clinical-hours, why-nursing) are visible ONLY to the student
+//   `private` entries (journal, experience, motivation) are visible ONLY to the student
 //   (Keira) — hidden from the parent and the admin — while the AI path receives ALL entries,
 //   including private, when the student is the authenticated caller.
 //

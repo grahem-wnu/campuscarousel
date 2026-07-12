@@ -31,6 +31,7 @@ export type IconName =
   | "star-filled"
   | "search"
   | "check"
+  | "copy"
   | "user"
   | "logout"
   | "warning"
@@ -61,6 +62,7 @@ const PATHS: Record<IconName, string> = {
   "star-filled": "M12 4l2.5 5.2 5.7.8-4.1 4 1 5.7L12 17l-5.1 2.7 1-5.7-4.1-4 5.7-.8z",
   search: "M11 11m-7 0a7 7 0 1 0 14 0 7 7 0 1 0-14 0M21 21l-5-5",
   check: "M5 12l5 5L20 7",
+  copy: "M9 9h11v11H9zM5 15H4V4h11v1",
   user: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM5 20a7 7 0 0 1 14 0",
   logout: "M15 12H4m0 0 4-4m-4 4 4 4M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4",
   warning: "M12 4 2 20h20zM12 10v5M12 17.5v.5",

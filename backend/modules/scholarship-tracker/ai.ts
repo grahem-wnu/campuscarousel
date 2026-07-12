@@ -5,57 +5,51 @@
 // [] (empty candidate list), hydration → a `{ hydrationStatus: 'failed' }` patch. Mirrors
 // backend/modules/college-hub/ai.ts.
 //
-// The spec also calls for a web-search tool; that is not yet available server-side (no shared web
-// client) — Bedrock general knowledge is used meanwhile and the gap is noted on the checkpoint, same
-// as college-hub. The discovery prompt still instructs "do not invent", and parsed URLs are kept
-// only when they look like real links.
+// Both go through the shared web-grounded Bedrock call site (`converseWithSearch`): when the
+// `AI_WEB_SEARCH` env flag is on (it is, on the API + worker Lambdas), the model can call the
+// `web_search` tool (Tavily) to ground scholarship amounts/deadlines/eligibility in live sources,
+// then we parse its final JSON; when off or unconfigured it degrades to model knowledge — the exact
+// prior behaviour. Everything stays injectable (invoker + searcher) so tests run with no network.
+// The discovery prompt still instructs "do not invent", and parsed URLs are kept only when real.
 
+import { converseWithSearch, type BedrockInvoker, type WebSearcher } from '../../shared/ai/index.js';
 import type { Scholarship } from '../../shared/data/index.js';
 import { buildDiscoverPrompt, parseDiscoverResults, type DiscoveredScholarship, type ScholarshipDiscoverer } from './discover.js';
 import type { DiscoverInput } from './schema.js';
 
-/** Minimal structural type of the Bedrock client (just `send`) — keeps tests injectable without a
- *  hard dependency on the SDK's concrete class. */
-export interface BedrockInvoker {
-  send(command: unknown): Promise<{ body?: Uint8Array }>;
-}
+export type { BedrockInvoker };
 
 export interface AiOptions {
   modelId?: string;
-  client?: BedrockInvoker;
+  /** Inject the shared Bedrock seam (tests); else the real SDK client. */
+  invoker?: BedrockInvoker;
+  /** Inject the web searcher (tests); else Tavily. */
+  searcher?: WebSearcher;
+  /** Force web search on/off; defaults to the `AI_WEB_SEARCH` env flag. */
+  webSearch?: boolean;
 }
 
-/** Invoke Bedrock (Anthropic Messages) and return the assistant's raw text. Throws on any problem. */
+/** Run a prompt through the shared web-grounded Bedrock loop and return the model's final text.
+ *  Web search is used when `AI_WEB_SEARCH` is on; otherwise it answers from model knowledge.
+ *  Throws on a missing model id / invoker error — callers catch and degrade. */
 async function invokeText(prompt: string, options: AiOptions): Promise<string> {
-  const modelId = options.modelId ?? process.env.BEDROCK_MODEL_ID;
-  if (!modelId) throw new Error('BEDROCK_MODEL_ID is not set');
-  const { BedrockRuntimeClient, InvokeModelCommand } = await import('@aws-sdk/client-bedrock-runtime');
-  const client: BedrockInvoker = options.client ?? (new BedrockRuntimeClient({}) as unknown as BedrockInvoker);
-  const command = new InvokeModelCommand({
-    modelId,
-    contentType: 'application/json',
-    accept: 'application/json',
-    body: new TextEncoder().encode(
-      JSON.stringify({
-        anthropic_version: 'bedrock-2023-05-31',
-        max_tokens: 2048,
-        messages: [{ role: 'user', content: prompt }],
-      }),
-    ),
+  const { text } = await converseWithSearch(prompt, {
+    modelId: options.modelId,
+    invoker: options.invoker,
+    searcher: options.searcher,
+    webSearch: options.webSearch,
+    maxTokens: 2048,
   });
-  const res = await client.send(command);
-  if (!res.body) throw new Error('empty Bedrock response');
-  const decoded = JSON.parse(new TextDecoder().decode(res.body)) as { content?: Array<{ text?: string }> };
-  return (decoded.content ?? []).map((c) => (typeof c?.text === 'string' ? c.text : '')).join('\n');
+  return text;
 }
 
 /** Bedrock-backed discoverer (synchronous; fits the routing Lambda's budget for a single search).
  *  Returns [] on any failure so the endpoint never throws. */
 export function makeBedrockDiscoverer(options: AiOptions = {}): ScholarshipDiscoverer {
   return {
-    async discover(input: DiscoverInput): Promise<DiscoveredScholarship[]> {
+    async discover(input: DiscoverInput, majors: string[] = []): Promise<DiscoveredScholarship[]> {
       try {
-        const text = await invokeText(buildDiscoverPrompt(input), options);
+        const text = await invokeText(buildDiscoverPrompt(input, majors), options);
         return parseDiscoverResults(text, input.count ?? 20);
       } catch {
         return [];
@@ -99,7 +93,7 @@ function buildHydratePrompt(name: string, provider?: string): string {
     `Provide factual details about the scholarship "${name}"${provider ? ` from ${provider}` : ''}.`,
     'Respond with ONLY a JSON object (no prose, no code fences) using these keys where known:',
     'provider, amount (number USD), amountDescription, type (one of: merit, need-based,',
-    'nursing-specific, community-service, diversity, state-specific, organization, other),',
+    'major-specific, community-service, diversity, state-specific, organization, other),',
     'eligibility (string[]), applicationDeadline ("YYYY-MM-DD"), applicationUrl,',
     'requiredMaterials (string[]), isRenewable (boolean), renewalRequirements.',
     'Omit any field you are unsure of rather than guessing. Do not invent a URL.',

@@ -1,9 +1,10 @@
 /**
- * Design tokens — the single source of truth for Keira's Journey visual language.
+ * Design tokens — the single source of truth for Campus Carousel visual language.
  *
- * Aesthetic (master spec §"Design Notes"): warm, approachable, aspirational — not
- * clinical/corporate. Soft blue-green primary + warm sand secondary on a warm-neutral
- * scale. Defined once here and consumed by `tailwind.config.ts`; modules use the
+ * Aesthetic: "Field Notes" — a beautifully kept notebook of the journey. Warm paper
+ * surfaces, true-ink text, deep evergreen primary, burnished amber accent, and an
+ * editorial serif (Fraunces) for titles and big numbers. Warm and personal, never
+ * clinical/corporate, never template-generic. Defined once here and consumed by `tailwind.config.ts`; modules use the
  * generated token classes (e.g. `bg-primary-500`, `text-ink-700`), never raw hex.
  *
  * Dark-mode-ready: colors are organized as numbered scales so a dark theme can remap
@@ -24,46 +25,46 @@ export type ColorScale = {
   900: string;
 };
 
-/** Primary — a calm teal/blue-green. Aspirational, not sterile. */
+/** Primary — deep evergreen. The ink-and-forest voice of the Field Notes identity. */
 const primary: ColorScale = {
-  50: "#eefcfb",
-  100: "#d3f6f3",
-  200: "#abece8",
-  300: "#74ddd8",
-  400: "#3cc4c1",
-  500: "#1fa8a6",
-  600: "#15868a",
-  700: "#156a6f",
-  800: "#15565a",
-  900: "#15484c",
+  50: "#eff5f0",
+  100: "#d9e8dc",
+  200: "#b5d2bd",
+  300: "#8ab598",
+  400: "#5f9474",
+  500: "#3f7a59",
+  600: "#2f6349",
+  700: "#27553f",
+  800: "#1f4634",
+  900: "#183628",
 };
 
-/** Secondary — warm sand/terracotta. The "earth tone" warmth from the spec. */
+/** Secondary — burnished amber into terracotta. The warm accent that earns attention. */
 const secondary: ColorScale = {
-  50: "#fdf6ef",
-  100: "#f9e7d4",
-  200: "#f2cca8",
-  300: "#e9aa72",
-  400: "#e08947",
-  500: "#d86f2c",
-  600: "#c75721",
-  700: "#a5421f",
-  800: "#843620",
-  900: "#6c2f1d",
+  50: "#fbf4e8",
+  100: "#f5e3cb",
+  200: "#ebcb9c",
+  300: "#dfae6a",
+  400: "#d29244",
+  500: "#c97b2d",
+  600: "#b26124",
+  700: "#984a20",
+  800: "#7d3b20",
+  900: "#66311d",
 };
 
-/** Ink — warm neutral scale for text, borders, surfaces (not a cold gray). */
+/** Ink — warm paper-and-ink neutrals. 50 is the page ("paper"), 900 is true ink. */
 const ink: ColorScale = {
-  50: "#f8f7f4",
-  100: "#efede7",
-  200: "#ddd9cf",
-  300: "#c3bdae",
-  400: "#a39a86",
-  500: "#857c68",
-  600: "#6b6353",
-  700: "#564f43",
-  800: "#3b372f",
-  900: "#26231e",
+  50: "#fbf7ef",
+  100: "#f3ede0",
+  200: "#e4dccb",
+  300: "#cdc2ab",
+  400: "#ac9f85",
+  500: "#8a7f6b",
+  600: "#6e6454",
+  700: "#574f42",
+  800: "#3c362c",
+  900: "#221d14",
 };
 
 /** Semantic accents. Used for badges, status, deadlines (spec uses red/yellow/green coding). */
@@ -108,10 +109,10 @@ const error: ColorScale = {
 
 /** Application surfaces, mapped from the scales above so dark mode can remap centrally. */
 const surface = {
-  /** Page background. */
+  /** Page background — warm paper. */
   base: ink[50],
-  /** Cards, panels. */
-  raised: "#ffffff",
+  /** Cards, panels — cream-white "entry" surface, warmer than pure white. */
+  raised: "#fffdf8",
   /** Subtle fills (table stripes, hover). */
   sunken: ink[100],
   /** Hairline borders. */
@@ -144,6 +145,9 @@ export const fontFamily = {
     "Arial",
     "sans-serif",
   ],
+  /** Editorial display face — page titles, entry headings, big numbers. Source Serif 4: sturdy
+   *  print-grade serif, deliberately free of swashy/cursive quirk. */
+  display: ['"Source Serif 4"', "Georgia", "Cambria", '"Times New Roman"', "serif"],
 } as const;
 
 export const fontSize = {
@@ -192,11 +196,11 @@ export const borderRadius = {
 /** Shadows — gentle elevation, never harsh. */
 export const boxShadow = {
   none: "none",
-  sm: "0 1px 2px 0 rgb(38 35 30 / 0.05)",
-  DEFAULT: "0 1px 3px 0 rgb(38 35 30 / 0.08), 0 1px 2px -1px rgb(38 35 30 / 0.08)",
-  md: "0 4px 12px -2px rgb(38 35 30 / 0.10)",
-  lg: "0 12px 28px -8px rgb(38 35 30 / 0.18)",
-  fab: "0 8px 20px -4px rgb(21 134 138 / 0.45)",
+  sm: "0 1px 2px 0 rgb(34 29 20 / 0.05)",
+  DEFAULT: "0 1px 3px 0 rgb(34 29 20 / 0.07), 0 1px 2px -1px rgb(34 29 20 / 0.07)",
+  md: "0 4px 12px -2px rgb(34 29 20 / 0.09)",
+  lg: "0 12px 28px -8px rgb(34 29 20 / 0.16)",
+  fab: "0 8px 20px -4px rgb(39 85 63 / 0.45)",
 } as const;
 
 /** z-index ladder for the shell so overlays compose predictably. */

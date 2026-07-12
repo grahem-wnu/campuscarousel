@@ -1,5 +1,5 @@
 import { Badge, Card, Icon } from '../../shared/ui';
-import { CATEGORY_META, displayProgress, isAutoProgress, milestoneProgress } from './logic';
+import { CATEGORY_META, STATUS_META, displayProgress, isAutoProgress, milestoneProgress } from './logic';
 import { ProgressBar } from './ProgressBar';
 import type { Goal } from './types';
 
@@ -11,6 +11,7 @@ interface GoalCardProps {
 /** Compact goal card for the board + timeline. Click opens the detail. */
 export function GoalCard({ goal, onOpen }: GoalCardProps) {
   const meta = goal.category ? CATEGORY_META[goal.category] : null;
+  const status = STATUS_META[goal.status ?? 'not-started'];
   const total = goal.milestones?.length ?? 0;
   const done = goal.milestones?.filter((m) => m.completed).length ?? 0;
 
@@ -49,6 +50,7 @@ export function GoalCard({ goal, onOpen }: GoalCardProps) {
       />
 
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-400">
+        <Badge tone={status.tone}>{status.label}</Badge>
         {goal.period ? (
           <span className="inline-flex items-center gap-1">
             <Icon name="calendar" size={12} />

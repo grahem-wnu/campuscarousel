@@ -24,6 +24,13 @@ export class NotFoundError extends Error {
 }
 
 const STAMP_KEYS = new Set(['createdAt', 'updatedAt']);
+/** Hydratable system fields — library/hydration managed, never a human "edit". Excluded from
+ *  userEdited tracking, and actively removed from it (self-heal) if a prior write wrongly added one.
+ *  (Setting hydrationStatus via update() used to mark it user-owned, which then blocked
+ *  mergePreservingUserEdits from ever clearing the "Refreshing…" badge.) */
+// System-computed fields that update()/merge must never treat as human-edited. fitScore is
+// auto-calculated from the peer benchmark, so a refresh always recomputes it (never user-owned).
+const HYDRATION_SYSTEM_FIELDS = new Set(['hydrationStatus', 'lastDataRefresh', 'addedBy', 'fitScore']);
 
 export const isoNow = (): string => new Date().toISOString();
 export const newId = (): string => randomUUID();
@@ -147,7 +154,12 @@ export function makeDetailsRepo<T extends Timestamped, IdKey extends keyof T & s
       if (hydratable) {
         const edited = new Set<string>((current as { userEdited?: string[] }).userEdited ?? []);
         for (const key of Object.keys(patch as Record<string, unknown>)) {
-          if (key !== idField && !STAMP_KEYS.has(key) && key !== 'userEdited') edited.add(key);
+          if (key === idField || STAMP_KEYS.has(key) || key === 'userEdited') continue;
+          if (HYDRATION_SYSTEM_FIELDS.has(key)) {
+            edited.delete(key); // never user-owned; heal any record a prior bug poisoned
+            continue;
+          }
+          edited.add(key);
         }
         (merged as { userEdited?: string[] }).userEdited = [...edited];
       }

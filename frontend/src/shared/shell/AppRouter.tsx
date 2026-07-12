@@ -20,8 +20,8 @@ function Welcome() {
   return (
     <EmptyState
       icon="school"
-      title="Welcome to Keira's Journey"
-      description="Your modules will appear here as they come online. This is the home of the path to a BSN."
+      title="Welcome to Campus Carousel"
+      description="Your modules will appear here as they come online. This is the home of the journey to college."
     />
   );
 }
@@ -45,13 +45,13 @@ export function AppRouter() {
   const { user } = useAuth();
 
   const { nav, routes } = useMemo(() => {
-    const assembled = assembleNav(loadNavEntries(), user?.role);
+    const assembled = assembleNav(loadNavEntries(), user?.role, user?.platformAdmin);
     const built = assembled.routes.map((entry) => ({
       path: entry.route,
       Component: lazy(entry.element) as ComponentType,
     }));
     return { nav: assembled, routes: built };
-  }, [user?.role]);
+  }, [user?.role, user?.platformAdmin]);
 
   const homeTarget = nav.primary[0]?.route;
 

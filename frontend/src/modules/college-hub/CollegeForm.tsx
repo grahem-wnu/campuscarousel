@@ -89,7 +89,7 @@ export function CollegeForm({ initial, busy, error, createHint, onSubmit, onCanc
           <Input type="url" value={website} onChange={(e) => setWebsite(e.target.value)} placeholder="https://…" />
         </Field>
         <Field label="Ranking">
-          <Input value={ranking} onChange={(e) => setRanking(e.target.value)} placeholder="e.g. #42 nursing" />
+          <Input value={ranking} onChange={(e) => setRanking(e.target.value)} placeholder="e.g. #42 in your field" />
         </Field>
         <Field label="Out-of-state tuition / yr">
           <Input type="number" min="0" value={tuitionOut} onChange={(e) => setTuitionOut(e.target.value)} />

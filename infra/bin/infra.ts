@@ -3,6 +3,7 @@ import { App, Tags } from "aws-cdk-lib";
 import { getEnvConfig, getGlobalConfig, type Stage } from "../lib/config";
 import { DataStack } from "../lib/data-stack";
 import { AuthStack } from "../lib/auth-stack";
+import { AssetsStack } from "../lib/assets-stack";
 import { AsyncStack } from "../lib/async-stack";
 import { ApiStack } from "../lib/api-stack";
 import { WebStack } from "../lib/web-stack";
@@ -52,17 +53,30 @@ for (const stage of stages) {
   const data = new DataStack(app, id("Data", stage), { env, config: cfg });
   const auth = new AuthStack(app, id("Auth", stage), { env, config: cfg });
 
-  // --- Async (SQS + DLQ + worker) ---
-  const asyncStack = new AsyncStack(app, id("Async", stage), { env, config: cfg, table: data.table });
+  // --- Assets (private media S3 + CloudFront OAC) for campus photos + logos ---
+  const assets = new AssetsStack(app, id("Assets", stage), { env, config: cfg });
+
+  // --- Async (SQS + DLQ + workers): text hydration + parallel imagery fetch ---
+  const asyncStack = new AsyncStack(app, id("Async", stage), {
+    env,
+    config: cfg,
+    table: data.table,
+    assetsBucket: assets.bucket,
+    assetsBaseUrl: assets.baseUrl,
+  });
 
   // --- API (HTTP API + JWT authorizer + routing Lambda) ---
   const api = new ApiStack(app, id("Api", stage), {
     env,
     config: cfg,
     table: data.table,
+    documentsBucket: data.documentsBucket,
     userPool: auth.userPool,
     userPoolClient: auth.userPoolClient,
     hydrationQueue: asyncStack.hydrationQueue,
+    assetsQueue: asyncStack.assetsQueue,
+    focusQueue: asyncStack.focusQueue,
+    essayCoachQueue: asyncStack.essayCoachQueue,
   });
 
   // --- Web (private S3 + CloudFront OAC) ---
@@ -88,6 +102,7 @@ for (const stage of stages) {
 
   // Stack-level dependencies for clean deploy ordering.
   asyncStack.addDependency(data);
+  asyncStack.addDependency(assets); // worker writes to the media bucket + reads its CDN base url
   api.addDependency(data);
   api.addDependency(auth);
   api.addDependency(asyncStack);
@@ -96,7 +111,7 @@ for (const stage of stages) {
   if (dns) web.addDependency(dns);
 
   // Consistent tags across every resource in the env.
-  for (const s of [dns, data, auth, asyncStack, api, web, obs]) {
+  for (const s of [dns, data, auth, assets, asyncStack, api, web, obs]) {
     if (s) {
       Tags.of(s).add("project", cfg.project);
       Tags.of(s).add("stage", stage);

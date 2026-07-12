@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { curatedAnalyzer, extractJson, makeBedrockAnalyzer, type BedrockInvoker } from './ai.js';
+import { buildPrompt, curatedAnalyzer, extractJson, makeBedrockAnalyzer, type BedrockInvoker } from './ai.js';
 import { buildEvents, upcoming, type EventSources } from './events.js';
 import type { College, Goal, Scholarship } from '../../shared/data/index.js';
 
@@ -11,7 +11,7 @@ function stub(text: string): BedrockInvoker {
 const throwing: BedrockInvoker = { send: async () => { throw new Error('Throttle'); } };
 
 function ctx(sources: Partial<EventSources>) {
-  const full: EventSources = { activities: [], goals: [], colleges: [], teas: [], visits: [], scholarships: [], certifications: [], ...sources };
+  const full: EventSources = { activities: [], goals: [], colleges: [], exams: [], visits: [], scholarships: [], certifications: [], ...sources };
   const all = buildEvents(full);
   return { events: upcoming(all, TODAY, 90), allEvents: all, todayIso: TODAY };
 }
@@ -19,6 +19,31 @@ function ctx(sources: Partial<EventSources>) {
 describe('extractJson', () => {
   it('extracts JSON tolerating fences', () => {
     expect(extractJson('```json\n{"a":1}\n```')).toEqual({ a: 1 });
+  });
+});
+
+describe('buildPrompt major-awareness', () => {
+  it('names the major and folds in pack guidance', () => {
+    const p = buildPrompt([], TODAY, ['Nursing']);
+    expect(p).toContain('Nursing');
+    expect(p).toContain('Major-specific guidance:');
+  });
+
+  it('stays neutral with no majors', () => {
+    const p = buildPrompt([], TODAY);
+    expect(p).toContain('their intended college program');
+    expect(p).not.toContain('Major-specific guidance:');
+  });
+
+  it('calibrates to the student grade and guards against senior-year items for an underclassman', () => {
+    const p = buildPrompt([], TODAY, [], 2030); // class of 2030 in mid-2026 → pre-high-school
+    expect(p).toMatch(/NOT in high school yet/);
+    expect(p).toMatch(/AGE-APPROPRIATE/);
+    expect(p).toMatch(/do NOT tell an underclassman/);
+  });
+
+  it('omits grade context when no graduation year is given', () => {
+    expect(buildPrompt([], TODAY)).not.toMatch(/TIMELINE:/);
   });
 });
 
@@ -31,13 +56,13 @@ describe('curatedAnalyzer', () => {
     expect(a.source).toBe('curated');
     expect(a.priorities.join(' ')).toMatch(/Overdue/);
     expect(a.conflicts.join(' ')).toMatch(/1d apart|same day/); // OSU 06-15 & Merit 06-16
-    expect(a.missing.join(' ')).toMatch(/TEAS/); // no teas event
+    expect(a.missing.join(' ')).toMatch(/exam/); // no exam event
   });
 
   it('reports good coverage when exams/apps/visits exist', async () => {
     const a = await curatedAnalyzer(
       ctx({
-        teas: [{ recordId: 't', type: 'official-exam', date: '2026-08-01', createdAt: 'x', updatedAt: 'x' }],
+        exams: [{ recordId: 't', type: 'official-exam', date: '2026-08-01', createdAt: 'x', updatedAt: 'x' }],
         colleges: [{ collegeId: 'c', name: 'OSU', status: 'applying', applicationDeadlines: { regularDecision: '2026-12-01' }, createdAt: 'x', updatedAt: 'x' }],
         visits: [{ visitId: 'v', collegeId: 'c', date: '2026-09-01', createdAt: 'x', updatedAt: 'x' }],
       }),

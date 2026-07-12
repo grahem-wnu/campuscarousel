@@ -83,7 +83,7 @@ export function VisitForm({ collegeId, visit, onSaved, onCancel }: VisitFormProp
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="Attendees" hint="Comma-separated.">
-          <Input placeholder="e.g. Keira, Mom" value={attendees} onChange={(e) => setAttendees(e.target.value)} />
+          <Input placeholder="e.g. Mom, Dad" value={attendees} onChange={(e) => setAttendees(e.target.value)} />
         </Field>
         <Field label="Travel cost (USD)">
           <Input

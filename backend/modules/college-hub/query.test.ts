@@ -26,11 +26,11 @@ describe('filterColleges', () => {
 
   it('filters by status, programType, state, and top-pick', () => {
     const items = [
-      college({ name: 'A', status: 'target', programType: 'direct-admit-BSN', state: 'Ohio', isTopPick: true }),
-      college({ name: 'B', status: 'researching', programType: 'ABSN-only', state: 'Indiana' }),
+      college({ name: 'A', status: 'target', programType: 'direct-admit', state: 'Ohio', isTopPick: true }),
+      college({ name: 'B', status: 'researching', programType: 'accelerated', state: 'Indiana' }),
     ];
     expect(filterColleges(items, q({ status: 'target' })).map((c) => c.name)).toEqual(['A']);
-    expect(filterColleges(items, q({ programType: 'ABSN-only' })).map((c) => c.name)).toEqual(['B']);
+    expect(filterColleges(items, q({ programType: 'accelerated' })).map((c) => c.name)).toEqual(['B']);
     expect(filterColleges(items, q({ state: 'ohio' })).map((c) => c.name)).toEqual(['A']); // case-insensitive
     expect(filterColleges(items, q({ isTopPick: 'true' })).map((c) => c.name)).toEqual(['A']);
     expect(filterColleges(items, q({ isTopPick: 'false' })).map((c) => c.name)).toEqual(['B']);
@@ -56,6 +56,19 @@ describe('sortColleges', () => {
 
   it('defaults to name ascending', () => {
     expect(sortColleges(items, q()).map((c) => c.name)).toEqual(['Alpha', 'Bravo', 'Charlie']);
+  });
+
+  it('puts top picks first, then the chosen sort within each group', () => {
+    const mixed = [
+      college({ name: 'Bravo' }),
+      college({ name: 'Zulu', isTopPick: true }),
+      college({ name: 'Alpha', isTopPick: true }),
+      college({ name: 'Charlie' }),
+    ];
+    // picks [Alpha, Zulu] (name asc) above non-picks [Bravo, Charlie] (name asc)
+    expect(sortColleges(mixed, q()).map((c) => c.name)).toEqual(['Alpha', 'Zulu', 'Bravo', 'Charlie']);
+    // ...and still above non-picks even when a non-pick would otherwise win the sort.
+    expect(sortColleges(mixed, q({ sortBy: 'name', sortOrder: 'desc' })).map((c) => c.name)).toEqual(['Zulu', 'Alpha', 'Charlie', 'Bravo']);
   });
 
   it('sorts by fitScore desc', () => {

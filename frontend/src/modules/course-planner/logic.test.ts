@@ -2,9 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildGrid,
   computeGpa,
-  courseImportance,
   formatGpa,
-  importanceTone,
   letterToPoints,
   unscheduled,
   weightBonus,
@@ -51,22 +49,6 @@ describe('GPA logic mirrors the backend', () => {
   it('formatGpa to 2 decimals', () => {
     expect(formatGpa(3.5)).toBe('3.50');
     expect(formatGpa(4)).toBe('4.00');
-  });
-});
-
-describe('courseImportance / importanceTone', () => {
-  it('classifies subjects', () => {
-    expect(courseImportance('science')).toBe('required');
-    expect(courseImportance('math')).toBe('required');
-    expect(courseImportance('health-sciences')).toBe('required');
-    expect(courseImportance('english')).toBe('recommended');
-    expect(courseImportance('elective')).toBe('elective');
-    expect(courseImportance(undefined)).toBe('elective');
-  });
-  it('maps importance to a badge tone', () => {
-    expect(importanceTone('required')).toBe('error');
-    expect(importanceTone('recommended')).toBe('warn');
-    expect(importanceTone('elective')).toBe('neutral');
   });
 });
 

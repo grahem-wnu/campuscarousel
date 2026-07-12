@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Badge, Button, Card, EmptyState, Modal, Spinner } from '../../shared/ui';
+import { Badge, Button, Card, EmptyState, Spinner } from '../../shared/ui';
 import { getAggregate, getGaps } from './api';
 import { AggregateMatrix } from './AggregateMatrix';
 import { BenchmarkCard } from './BenchmarkCard';
 import { GapsCallout } from './GapsCallout';
+import { ProgressTrend } from './ProgressTrend';
 import { fmtGpa, fmtNum, READINESS_META } from './logic';
-import type { AggregateMatrix as Matrix, GapsAnalysis, Readiness } from './types';
+import { DEFAULT_BENCHMARK_LABELS, type AggregateMatrix as Matrix, type GapsAnalysis, type Readiness } from './types';
 
 const READINESS_ORDER: Readiness[] = ['strong', 'competitive', 'needs-work', 'insufficient-data'];
 
@@ -54,10 +55,11 @@ export default function PeerBenchmarkPage() {
 
   const rows = matrix?.rows ?? [];
   const keira = matrix?.keira;
+  const trend = matrix?.trend ?? [];
+  const labels = matrix?.labels ?? DEFAULT_BENCHMARK_LABELS;
 
-  // Current-standing rollup (a "progress" snapshot of now). Persisted month-over-month history
-  // would need a benchmark-snapshot store in the shared data layer, which is out of this module's
-  // lane — see the PR notes; this gives the at-a-glance distribution today.
+  // Current-standing rollup: the at-a-glance readiness distribution right now. Month-over-month
+  // history is shown separately by <ProgressTrend> from the persisted monthly snapshots.
   const standing = useMemo(() => {
     const counts: Record<Readiness, number> = { strong: 0, competitive: 0, 'needs-work': 0, 'insufficient-data': 0 };
     for (const r of rows) counts[r.comparison.overallReadiness ?? 'insufficient-data'] += 1;
@@ -78,8 +80,10 @@ export default function PeerBenchmarkPage() {
           <p className="text-xs font-medium uppercase tracking-wide text-ink-400">Your stats</p>
           <div className="mt-2 flex flex-wrap gap-x-6 gap-y-2 text-sm">
             <span className="text-ink-700">GPA <strong className="tabular-nums">{fmtGpa(keira.gpa)}</strong></span>
-            <span className="text-ink-700">TEAS <strong className="tabular-nums">{keira.teasScore === undefined ? 'not taken' : fmtNum(keira.teasScore)}</strong></span>
-            <span className="text-ink-700">Clinical <strong className="tabular-nums">{fmtNum(keira.clinicalHours)}h</strong></span>
+            {labels.exam ? (
+              <span className="text-ink-700">{labels.exam} <strong className="tabular-nums">{keira.teasScore === undefined ? 'not taken' : fmtNum(keira.teasScore)}</strong></span>
+            ) : null}
+            <span className="text-ink-700">{labels.experience} <strong className="tabular-nums">{fmtNum(keira.clinicalHours)}h</strong></span>
             <span className="text-ink-700">Volunteer <strong className="tabular-nums">{fmtNum(keira.volunteerHours)}h</strong></span>
             <span className="text-ink-700">Certifications <strong className="tabular-nums">{keira.certifications.length}</strong></span>
           </div>
@@ -119,20 +123,35 @@ export default function PeerBenchmarkPage() {
           </Card>
 
           <Card flush className="p-2">
-            <AggregateMatrix rows={rows} keira={keira!} onSelect={(id) => setSelected(id)} />
+            <AggregateMatrix
+              rows={rows}
+              keira={keira!}
+              labels={labels}
+              onSelect={(id) => setSelected((cur) => (cur === id ? null : id))}
+              expandedId={selected}
+              renderExpanded={(r) => (
+                <BenchmarkCard
+                  collegeId={r.collegeId}
+                  // When a research run finishes, reload the matrix + gaps so the Readiness column and
+                  // your-standing rollup update without a manual page refresh.
+                  onResearched={() => {
+                    void loadMatrix();
+                    void loadGaps();
+                  }}
+                />
+              )}
+            />
             <p className="px-3 pb-2 pt-1 text-xs text-ink-400">
               Each cell shows <span className="tabular-nums">your value / typical admitted student</span>. Green exceeds ·
-              yellow meets · red below · gray no data. Tap a row to refresh that school's benchmark.
+              yellow meets · red below · gray no data. Tap a row to expand it and run or view that school's benchmark.
             </p>
           </Card>
 
           <GapsCallout analysis={gaps} loading={gapsLoading} error={gapsError} onRetry={() => void loadGaps()} />
+
+          {trend.length > 0 ? <ProgressTrend trend={trend} labels={labels} /> : null}
         </>
       )}
-
-      <Modal open={Boolean(selected)} onClose={() => setSelected(null)} title="Benchmark detail">
-        {selected ? <BenchmarkCard collegeId={selected} /> : null}
-      </Modal>
     </div>
   );
 }

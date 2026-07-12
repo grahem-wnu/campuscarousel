@@ -19,3 +19,8 @@ export async function analyzeTimeline(horizonDays?: number): Promise<Analysis> {
   const res = await api.post<{ analysis: Analysis }>('/timeline/analyze', horizonDays ? { horizonDays } : {});
   return res.analysis;
 }
+
+/** Remove a derived event from the timeline by id (the source record is left untouched). */
+export async function dismissTimelineEvent(eventId: string): Promise<void> {
+  await api.post('/timeline/dismiss', { eventId });
+}

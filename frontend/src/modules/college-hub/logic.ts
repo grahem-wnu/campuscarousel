@@ -23,10 +23,10 @@ export const STATUS_META: Record<CollegeStatus, StatusMeta> = {
 };
 
 export const PROGRAM_TYPE_LABEL: Record<ProgramType, string> = {
-  'direct-admit-BSN': 'Direct-admit BSN',
-  'pre-nursing-secondary-app': 'Pre-nursing (secondary app)',
-  'ABSN-only': 'Accelerated BSN',
-  'RN-to-BSN-only': 'RN-to-BSN',
+  'direct-admit': 'Direct admit',
+  'secondary-application': 'Secondary application',
+  'accelerated': 'Accelerated',
+  'transfer-pathway': 'Transfer pathway',
 };
 
 /** Statuses a user may set in the UI (removed is reached via delete/restore, not the picker). */
@@ -51,13 +51,13 @@ export interface HydrationMeta {
 export function hydrationMeta(status: HydrationStatus | undefined): HydrationMeta | null {
   switch (status) {
     case 'in-progress':
-      return { label: 'Refreshing…', tone: 'info', busy: true };
+      return { label: 'Researching…', tone: 'info', busy: true };
     case 'pending':
       return { label: 'Queued', tone: 'neutral', busy: true };
     case 'partial':
       return { label: 'Partial data', tone: 'warn', busy: false };
     case 'failed':
-      return { label: 'Refresh failed', tone: 'error', busy: false };
+      return { label: 'Research failed', tone: 'error', busy: false };
     case 'complete':
     default:
       return null; // healthy / fully hydrated → no badge
@@ -76,9 +76,14 @@ export function costLabel(cost?: number): string {
   return `$${cost.toLocaleString('en-US')}`;
 }
 
-/** The best available annual cost figure for display/comparison. */
+/** The best available ANNUAL cost figure for at-a-glance cards/table/compare: the real net price
+ *  after aid if known, else the full cost of attendance, else tuition (a sticker fallback). The
+ *  4-year fields (`estimatedTotalCost`/`estimatedCostAfterAid`) are deliberately NOT used here —
+ *  they are 4-year totals and would mislabel as "/yr" and compound when multiplied for a 4-year view. */
 export function bestCost(c: College): number | undefined {
-  return c.estimatedCostAfterAid ?? c.estimatedTotalCost ?? c.tuitionOutOfState ?? c.tuitionInState;
+  return (
+    c.estimatedNetPriceAfterAid ?? c.costOfAttendanceOutOfState ?? c.tuitionOutOfState ?? c.tuitionInState
+  );
 }
 
 /** Bare domain from a URL ("https://www.osu.edu/x" → "osu.edu"), or undefined. */
@@ -93,14 +98,69 @@ export function domainOf(website?: string): string | undefined {
 }
 
 /**
- * Logo source chain: explicit branding URL, else a Clearbit hotlink derived from the website domain.
- * Returns null when neither is available (the component then renders the graduation-cap fallback).
- * The component also swaps to the cap on an <img> load error.
+ * Logo source chain: explicit branding URL (user/AI), else our cached logo (assets worker), else a
+ * live Clearbit hotlink derived from the website domain. Returns null when none is available (the
+ * component then renders the graduation-cap fallback). The component also swaps to the cap on an
+ * <img> load error.
  */
 export function logoSrc(c: College): string | null {
   if (c.branding?.logoUrl) return c.branding.logoUrl;
+  if (c.logoImageUrl) return c.logoImageUrl;
   const domain = domainOf(c.website);
   return domain ? `https://logo.clearbit.com/${domain}` : null;
+}
+
+/** Registrable root domain (last two labels) for logo lookups — Clearbit wants the root, not a
+ *  subdomain (dornsife.usc.edu → usc.edu). */
+export function rootDomainOf(website?: string): string | undefined {
+  const d = domainOf(website);
+  if (!d) return undefined;
+  const parts = d.split('.');
+  return parts.length > 2 ? parts.slice(-2).join('.') : d;
+}
+
+/** A best-effort Clearbit logo hotlink from a website's root domain (undefined if none). */
+export function clearbitLogoFromWebsite(website?: string): string | undefined {
+  const root = rootDomainOf(website);
+  return root ? `https://logo.clearbit.com/${root}` : undefined;
+}
+
+/** A high-availability favicon for a website's root domain (Google's S2 service almost always returns
+ *  the site's icon — for .edu schools that's typically the crest). Reliable fallback when a real logo
+ *  source fails. */
+export function faviconFromWebsite(website?: string): string | undefined {
+  const root = rootDomainOf(website);
+  return root ? `https://www.google.com/s2/favicons?domain=${root}&sz=128` : undefined;
+}
+
+/** Best-effort logo URL candidates, highest-quality first: explicit branding/cached logo, a Clearbit
+ *  hotlink (real logo when available), then the site favicon (very high availability). The UI tries
+ *  each in order, advancing on a load error; the graduation-cap is the final fallback. */
+export function logoCandidates(c: College): string[] {
+  const out: string[] = [];
+  if (c.logoImageUrl) out.push(c.logoImageUrl); // our cached copy (assets worker) — most reliable
+  if (c.branding?.logoUrl) out.push(c.branding.logoUrl);
+  const clearbit = clearbitLogoFromWebsite(c.website);
+  if (clearbit) out.push(clearbit);
+  const favicon = faviconFromWebsite(c.website);
+  if (favicon) out.push(favicon);
+  return [...new Set(out)];
+}
+
+/** Cached campus photo url, or null. Drives the card/detail hero banner when present. */
+export function campusImageSrc(c: College): string | null {
+  return c.campusImageUrl ?? null;
+}
+
+/** True if any college is mid imagery-fetch (drives the list's poll loop alongside hydration). */
+export function anyFetchingAssets(colleges: readonly College[]): boolean {
+  return colleges.some((c) => c.assetsStatus === 'in-progress' || c.assetsStatus === 'pending');
+}
+
+/** True while THIS college's campus photo / logo is still being fetched — drives the detail page's
+ *  poll loop and the Photos tab's "searching" state. */
+export function assetsBusy(c: College): boolean {
+  return c.assetsStatus === 'in-progress' || c.assetsStatus === 'pending';
 }
 
 /** A short fit-score band for quick scanning. */
@@ -110,6 +170,47 @@ export function fitBand(score: number | undefined): { label: string; tone: Badge
   if (score >= 60) return { label: `Good fit · ${score}`, tone: 'primary' };
   if (score >= 40) return { label: `Possible · ${score}`, tone: 'warn' };
   return { label: `Reach · ${score}`, tone: 'error' };
+}
+
+// --- At-a-glance snapshot extractors ------------------------------------------------------------
+// The hydrator stores ranking / acceptance / GPA / employment as rich narrative paragraphs (great for
+// the detailed table, too long for a fast triage strip). These pull the single concise token a parent
+// scanning quickly actually wants ("#21", "57%", "3.66"); the full text still lives in the Key stats
+// table below. All return null when nothing usable is found, so the tile renders a dash.
+
+/** A compact USD figure for snapshot tiles: "$60k", "$20k", "Free". null when unknown. */
+export function compactCost(cost?: number): string | null {
+  if (cost === undefined || cost === null) return null;
+  if (cost === 0) return 'Free';
+  if (cost < 1000) return `$${cost}`;
+  return `$${Math.round(cost / 1000)}k`;
+}
+
+/** First numeric rank in a ranking blurb → "#21" (matches "#5", "No. 21", "ranked No.21"). null if none. */
+export function rankValue(ranking?: string): string | null {
+  if (!ranking) return null;
+  const m = ranking.match(/(?:#|No\.?\s*)(\d{1,3})\b/i);
+  return m ? `#${m[1]}` : null;
+}
+
+/** First percentage in a blurb → "57%" (the low end of a range like "19–20%"). null if none. The
+ *  range arm lets the `%` sit on the high end while we report the first bound. */
+export function firstPercent(text?: string): string | null {
+  if (!text) return null;
+  const m = text.match(/(\d{1,3}(?:\.\d+)?)(?:\s*[–-]\s*\d{1,3}(?:\.\d+)?)?\s*%/);
+  return m ? `${m[1]}%` : null;
+}
+
+/** First GPA-shaped number (0–5 scale) in a blurb → "3.66"; the low end of a range. null if none. */
+export function gpaValue(text?: string): string | null {
+  if (!text) return null;
+  const m = text.match(/\b([0-5]\.\d{1,2})\b/);
+  return m?.[1] ?? null;
+}
+
+/** Concise selectivity for the strip: university rate preferred (program is often "not published"). */
+export function acceptanceValue(c: College): string | null {
+  return firstPercent(c.acceptanceRateUniversity) ?? firstPercent(c.acceptanceRateProgram);
 }
 
 /** Normalize a college name for duplicate detection (mirrors the server's dedupe rule). */
@@ -131,4 +232,26 @@ export function checklistPct(items: { completed: boolean }[]): number | null {
   if (items.length === 0) return null;
   const done = items.filter((i) => i.completed).length;
   return Math.round((done / items.length) * 100);
+}
+
+/** Split a free-text field that's secretly an enumerated list ("1) … 2) …" or "(1) … (2) …") into an
+ *  intro + bullet items, so the UI can render bullets instead of a wall of text. Returns null unless
+ *  it's a genuine list: markers numbered 1,2,3… in order (so stray "(3)" mentions don't false-trigger).
+ *  Markers may be "(1)" or "1)". Any text before marker 1 is the intro (often a header like "X: "). */
+export function bulletize(text: string): { intro: string; items: string[] } | null {
+  const markers: { start: number; end: number; num: number }[] = [];
+  for (const m of text.matchAll(/\(?(\d{1,2})\)\s+/g)) {
+    if (m.index === undefined) continue;
+    markers.push({ start: m.index, end: m.index + m[0].length, num: Number(m[1]) });
+  }
+  if (markers.length < 2 || markers[0]!.num !== 1) return null;
+  for (let i = 0; i < markers.length; i++) if (markers[i]!.num !== i + 1) return null;
+  const intro = text.slice(0, markers[0]!.start).trim();
+  const items: string[] = [];
+  for (let i = 0; i < markers.length; i++) {
+    const end = i + 1 < markers.length ? markers[i + 1]!.start : text.length;
+    const body = text.slice(markers[i]!.end, end).trim().replace(/[;\s]+$/, '');
+    if (body) items.push(body);
+  }
+  return { intro, items };
 }

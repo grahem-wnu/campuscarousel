@@ -17,7 +17,7 @@ beforeEach(() => {
   dispatch = createRouter(buildRoutes(makeHandlers({ getData: () => data })));
 });
 
-const claimsFor = (r: Requester) => ({ 'cognito:username': r.username, 'custom:role': r.role });
+const claimsFor = (r: Requester) => ({ 'cognito:username': r.username, 'custom:role': r.role, 'custom:tenantId': r.tenantId ?? 'test-tenant' });
 
 function event(
   method: string,
@@ -76,19 +76,11 @@ describe('router integration', () => {
   });
 
   it('routes the deeper /visits/:vid/prep over the shallower :vid route', async () => {
-    const id = await seedCollege({ contactInfo: { nursingAdmissionsEmail: 'n@uci.edu' } });
+    const id = await seedCollege({ contactInfo: { programAdmissionsEmail: 'n@uci.edu' } });
     const created = await dispatch(event('POST', `/colleges/${id}/visits`, { as: keira, body: { date: '2026-04-01' } }));
     const vid = (parse(created) as { visitId: string }).visitId;
     const res = await dispatch(event('POST', `/colleges/${id}/visits/${vid}/prep`, { as: keira, body: {} }));
     expect(res.statusCode).toBe(200);
-    expect((parse(res).questions as unknown[]).length).toBeGreaterThanOrEqual(8);
-  });
-
-  it('routes /visits/trip-plan to the trip planner', async () => {
-    await seedCollege({ name: 'Iowa', state: 'IA' });
-    await seedCollege({ name: 'Michigan', state: 'MI' });
-    const res = await dispatch(event('POST', '/visits/trip-plan', { as: keira, body: {} }));
-    expect(res.statusCode).toBe(200);
-    expect((parse(res).clusters as unknown[]).length).toBe(2);
+    expect(((parse(res).prep as { questions: unknown[] }).questions).length).toBeGreaterThanOrEqual(8);
   });
 });
