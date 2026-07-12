@@ -54,7 +54,7 @@ describe('parseTurn', () => {
 });
 
 describe('mergeMustInclude', () => {
-  it('puts the named colleges first, in the family order, then the model suggestions', () => {
+  it('treats the model suggestions as authoritative when it returns any (deduped, in model order)', () => {
     const merged = mergeMustInclude(
       ['Cedarville University', 'Capital University'],
       [
@@ -62,12 +62,42 @@ describe('mergeMustInclude', () => {
         { name: 'Capital University', state: 'OH' },
       ],
     );
-    expect(merged.map((c) => c.name)).toEqual(['Cedarville University', 'Capital University', 'Ohio State University']);
-    // The named school keeps the model's richer entry (state) when the model also suggested it.
-    expect(merged[1]).toEqual({ name: 'Capital University', state: 'OH' });
+    // The model's list wins — it already includes the family's picks (canonicalized) per the prompt.
+    expect(merged).toEqual([
+      { name: 'Ohio State University', state: 'OH' },
+      { name: 'Capital University', state: 'OH' },
+    ]);
   });
 
-  it('dedupes named colleges case-insensitively and drops blanks', () => {
+  it('does NOT re-add the family shorthand as a duplicate of the model\'s canonical name', () => {
+    // Regression: "USC" (family shorthand) must not survive alongside the model's full name, which is
+    // exactly the onboarding bug that seeded "USC" + "University of Southern California" as two colleges.
+    const merged = mergeMustInclude(
+      ['USC', 'U of Hawaii'],
+      [
+        { name: 'University of Southern California', state: 'CA' },
+        { name: 'University of Hawaii at Manoa', state: 'HI' },
+      ],
+    );
+    expect(merged.map((c) => c.name)).toEqual([
+      'University of Southern California',
+      'University of Hawaii at Manoa',
+    ]);
+    expect(merged.some((c) => c.name === 'USC' || c.name === 'U of Hawaii')).toBe(false);
+  });
+
+  it('dedupes the model list by normalized name (punctuation-insensitive equality still collapses exact repeats)', () => {
+    const merged = mergeMustInclude(
+      [],
+      [
+        { name: 'Duke University', state: 'NC' },
+        { name: '  duke university ', state: 'NC' },
+      ],
+    );
+    expect(merged).toEqual([{ name: 'Duke University', state: 'NC' }]);
+  });
+
+  it('falls back to the family names (deduped, blanks dropped) only when the model returns nothing', () => {
     const merged = mergeMustInclude(['  Duke University ', 'duke university', ''], []);
     expect(merged).toEqual([{ name: 'Duke University' }]);
   });
@@ -86,13 +116,15 @@ describe('makeBedrockCollegeSeeder (must-include guarantee)', () => {
     },
   };
 
-  it('returns the named colleges even when the model omits them', async () => {
+  it('trusts the model list on success and does not re-add family shorthand as a duplicate', async () => {
+    // The model is instructed to include every named school by its full name; on a successful call its
+    // list is authoritative, so raw family shorthand is not persisted alongside the canonical entry.
     const seeder = makeBedrockCollegeSeeder({
       modelId: 'test-model',
-      invoker: invokerReturning('[{"name":"Ohio State University","state":"OH"}]'),
+      invoker: invokerReturning('[{"name":"University of Southern California","state":"CA"}]'),
     });
-    const list = await seeder(['nursing'], 'Columbus, Ohio', ['Cedarville University']);
-    expect(list.map((c) => c.name)).toEqual(['Cedarville University', 'Ohio State University']);
+    const list = await seeder(['nursing'], 'Los Angeles, CA', ['USC']);
+    expect(list.map((c) => c.name)).toEqual(['University of Southern California']);
   });
 
   it('returns the named colleges even when the model call fails entirely', async () => {
