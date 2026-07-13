@@ -5,10 +5,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import type { UsageResponse } from './types';
+import type { FamiliesUsageResponse, UsageResponse } from './types';
 
 const h = vi.hoisted(() => ({
   getUsage: vi.fn(),
+  getFamiliesUsage: vi.fn(),
   user: { username: 'kate', role: 'admin', tenantId: 'fam1', platformAdmin: false } as {
     username: string;
     role: string;
@@ -19,6 +20,7 @@ const h = vi.hoisted(() => ({
 
 vi.mock('./api', () => ({
   getUsage: h.getUsage,
+  getFamiliesUsage: h.getFamiliesUsage,
   formatUsd: (m: number) => `$${(m / 1_000_000).toFixed(2)}`,
 }));
 vi.mock('../../shared/shell', () => ({ useAuth: () => ({ user: h.user }) }));
@@ -56,12 +58,12 @@ vi.mock('../../shared/ui', () => ({
     </select>
   ),
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  Table: ({ columns, rows, rowKey }: any) => (
+  Table: ({ columns, rows, rowKey, onRowClick }: any) => (
     <table>
       <tbody>
         {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
         {rows.map((r: any) => (
-          <tr key={rowKey(r)}>
+          <tr key={rowKey(r)} onClick={onRowClick ? () => onRowClick(r) : undefined}>
             {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
             {columns.map((c: any) => (
               <td key={c.key}>{c.render(r)}</td>
@@ -84,10 +86,21 @@ const RESPONSE: UsageResponse = {
   buckets: [{ key: 'focus', costMicros: 900_000, inputTokens: 60, outputTokens: 24, calls: 3 }],
 };
 
+const FAMILIES: FamiliesUsageResponse = {
+  families: [
+    { tenantId: 'fam2', familyName: 'Beta', costMicros: 2_000_000, inputTokens: 200, outputTokens: 80, calls: 5 },
+    { tenantId: 'fam1', familyName: 'Alpha', costMicros: 1_500_000, inputTokens: 100, outputTokens: 40, calls: 3 },
+  ],
+  totalCostMicros: 3_500_000,
+  totalInputTokens: 300,
+  totalOutputTokens: 120,
+};
+
 beforeEach(() => {
   vi.clearAllMocks();
   h.user = { username: 'kate', role: 'admin', tenantId: 'fam1', platformAdmin: false };
   h.getUsage.mockResolvedValue(RESPONSE);
+  h.getFamiliesUsage.mockResolvedValue(FAMILIES);
 });
 
 describe('AdminUsagePage', () => {
@@ -115,5 +128,33 @@ describe('AdminUsagePage', () => {
     render(<AdminUsagePage />);
     expect(screen.getByText(/admins only/i)).toBeTruthy();
     expect(h.getUsage).not.toHaveBeenCalled();
+  });
+
+  it('tenant admin goes straight to the own-family breakdown, never calling getFamiliesUsage', async () => {
+    render(<AdminUsagePage />);
+    await waitFor(() => expect(h.getUsage).toHaveBeenCalledTimes(1));
+    expect(h.getFamiliesUsage).not.toHaveBeenCalled();
+  });
+
+  it('platform admin sees the ranked All families view by default', async () => {
+    h.user = { username: 'grahem', role: 'admin', tenantId: 'fam1', platformAdmin: true };
+    render(<AdminUsagePage />);
+    await waitFor(() => expect(h.getFamiliesUsage).toHaveBeenCalledTimes(1));
+    // ranked family rows: family name + cost; grand total headline
+    expect(screen.getByText('Beta')).toBeTruthy();
+    expect(screen.getByText('Alpha')).toBeTruthy();
+    expect(screen.getByText('$3.50')).toBeTruthy(); // grand total
+    // the per-family breakdown is NOT fetched until a family is selected
+    expect(h.getUsage).not.toHaveBeenCalled();
+  });
+
+  it('platform admin clicking a family row drills into that family’s breakdown', async () => {
+    h.user = { username: 'grahem', role: 'admin', tenantId: 'fam1', platformAdmin: true };
+    render(<AdminUsagePage />);
+    await waitFor(() => expect(screen.getByText('Beta')).toBeTruthy());
+    fireEvent.click(screen.getByText('Beta'));
+    await waitFor(() =>
+      expect(h.getUsage).toHaveBeenCalledWith(expect.objectContaining({ tenantId: 'fam2' })),
+    );
   });
 });
