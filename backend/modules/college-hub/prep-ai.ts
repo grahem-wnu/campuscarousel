@@ -146,6 +146,7 @@ export function makeBedrockPrepSuggester(options: AiOptions = {}): PrepSuggester
   return async (college, majors = [], gradYear) => {
     try {
       const { text } = await converseWithSearch(buildPrepPrompt(college, majors, gradYear), {
+        feature: 'college-prep',
         modelId: options.modelId,
         invoker: options.invoker,
         searcher: options.searcher,

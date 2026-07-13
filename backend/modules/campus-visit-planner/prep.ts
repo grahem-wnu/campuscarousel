@@ -12,6 +12,7 @@
 // Mirrors backend/modules/certifications/suggester.ts (the house pattern for an AI feature).
 
 import { majorPhrase } from '../../shared/ai/major.js';
+import { invokeMessages, type BedrockSend } from '../../shared/metering/index.js';
 import { packFocusBriefs } from '../../shared/packs/index.js';
 import type { College, Visit } from '../../shared/data/index.js';
 
@@ -128,9 +129,7 @@ function buildPrompt(college: College, visit: Visit, majors: string[] = []): str
   ].join('');
 }
 
-function parsePrep(decoded: unknown): { bestTime?: string; extraQuestions: string[] } {
-  const content = (decoded as { content?: Array<{ text?: string }> })?.content;
-  const text = Array.isArray(content) ? content.map((c) => c?.text ?? '').join('\n') : '';
+function parsePrep(text: string): { bestTime?: string; extraQuestions: string[] } {
   const start = text.indexOf('{');
   const end = text.lastIndexOf('}');
   if (start === -1 || end <= start) throw new Error('no JSON object in model output');
@@ -151,24 +150,16 @@ export function makeBedrockPrep(options: BedrockPrepOptions = {}): PrepGenerator
     const modelId = options.modelId ?? process.env.BEDROCK_MODEL_ID;
     if (!modelId) return fallback({ college, visit, majors });
     try {
-      const { BedrockRuntimeClient, InvokeModelCommand } = await import('@aws-sdk/client-bedrock-runtime');
-      const client: BedrockInvoker = options.client ?? (new BedrockRuntimeClient({}) as unknown as BedrockInvoker);
-      const command = new InvokeModelCommand({
+      // Funnels through the metered `invokeMessages` seam so token usage is attributed to the
+      // family + `visit-planner`.
+      const text = await invokeMessages({
+        feature: 'visit-planner',
+        prompt: buildPrompt(college, visit, majors),
+        maxTokens: 800,
         modelId,
-        contentType: 'application/json',
-        accept: 'application/json',
-        body: new TextEncoder().encode(
-          JSON.stringify({
-            anthropic_version: 'bedrock-2023-05-31',
-            max_tokens: 800,
-            messages: [{ role: 'user', content: buildPrompt(college, visit, majors) }],
-          }),
-        ),
+        client: options.client as BedrockSend | undefined,
       });
-      const res = await client.send(command);
-      if (!res.body) return fallback({ college, visit, majors });
-      const decoded = JSON.parse(new TextDecoder().decode(res.body)) as unknown;
-      const { bestTime, extraQuestions } = parsePrep(decoded);
+      const { bestTime, extraQuestions } = parsePrep(text);
       const base = await curatedPrep({ college, visit });
       return {
         bestTime: bestTime && bestTime.length > 0 ? bestTime : base.bestTime,

@@ -5,6 +5,7 @@
 
 import { gradeContext } from '../../shared/ai/index.js';
 import { majorPhrase } from '../../shared/ai/major.js';
+import { invokeMessages, type BedrockSend } from '../../shared/metering/index.js';
 import { packFocusBriefs } from '../../shared/packs/index.js';
 import { daysUntil, type TimelineEvent, type UpcomingEvent } from './events.js';
 
@@ -57,22 +58,16 @@ export const curatedAnalyzer: Analyzer = async ({ events, allEvents }) => {
 // ---- Bedrock-backed (with curated fallback) -------------------------------
 
 async function invokeText(prompt: string, options: AiOptions): Promise<string> {
-  const modelId = options.modelId ?? process.env.BEDROCK_MODEL_ID;
-  if (!modelId) throw new Error('BEDROCK_MODEL_ID is not set');
-  const { BedrockRuntimeClient, InvokeModelCommand } = await import('@aws-sdk/client-bedrock-runtime');
-  const client: BedrockInvoker = options.client ?? (new BedrockRuntimeClient({}) as unknown as BedrockInvoker);
-  const command = new InvokeModelCommand({
-    modelId,
-    contentType: 'application/json',
-    accept: 'application/json',
-    body: new TextEncoder().encode(
-      JSON.stringify({ anthropic_version: 'bedrock-2023-05-31', max_tokens: 1200, messages: [{ role: 'user', content: prompt }] }),
-    ),
+  // Funnels through the metered `invokeMessages` seam so token usage is attributed to the
+  // family + `master-timeline`. Output feeds extractJson, so the block-join separator is
+  // immaterial (invokeMessages joins with '').
+  return invokeMessages({
+    feature: 'master-timeline',
+    prompt,
+    maxTokens: 1200,
+    modelId: options.modelId,
+    client: options.client as BedrockSend | undefined,
   });
-  const res = await client.send(command);
-  if (!res.body) throw new Error('empty Bedrock response');
-  const decoded = JSON.parse(new TextDecoder().decode(res.body)) as { content?: Array<{ text?: string }> };
-  return (decoded.content ?? []).map((c) => (typeof c?.text === 'string' ? c.text : '')).join('\n');
 }
 
 export function extractJson(text: string): unknown {

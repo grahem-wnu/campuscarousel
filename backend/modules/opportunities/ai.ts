@@ -121,6 +121,7 @@ export function buildDiscoverPrompt(input: DiscoverInput, majors: string[] = [])
 
 async function invokeText(prompt: string, options: AiOptions): Promise<string> {
   const { text } = await converseWithSearch(prompt, {
+    feature: 'opportunities',
     modelId: options.modelId,
     invoker: options.invoker,
     searcher: options.searcher,

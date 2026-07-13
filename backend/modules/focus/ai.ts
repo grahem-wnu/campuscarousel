@@ -70,6 +70,7 @@ export function makeBedrockFocusOverviewer(
 ): FocusOverviewer {
   return async () => {
     const { text, sources } = await converseWithSearch(buildOverviewPrompt(majors, careerGoal, graduationYear), {
+      feature: 'focus',
       modelId: options.modelId,
       invoker: options.invoker,
       searcher: options.searcher,
@@ -122,6 +123,7 @@ export function makeBedrockCareerPathGenerator(
 ): FocusOverviewer {
   return async () => {
     const { text, sources } = await converseWithSearch(buildCareerPathPrompt(careerGoal, majors, graduationYear), {
+      feature: 'focus',
       modelId: options.modelId,
       invoker: options.invoker,
       searcher: options.searcher,

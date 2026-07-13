@@ -2,11 +2,17 @@
 // feed the tool_result back, and the model's follow-up text is returned with the sources consulted.
 // Also: web search disabled, the final-round tool cutoff, and graceful degradation when search fails.
 
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { InMemoryTableClient } from '../data/index.js';
+import { runWithTenant } from '../tenant/index.js';
 import { converseWithSearch, type BedrockInvoker } from './bedrock.js';
 import type { SearchResult, WebSearcher } from './search.js';
 
 const MODEL = 'us.anthropic.claude-sonnet-4-6';
+
+const FIXTURE_RATES = {
+  'anthropic.claude-sonnet-4': { inputMicros: 3, outputMicros: 15, cacheReadMicros: 1, cacheWriteMicros: 4 },
+};
 
 /** The Anthropic request body shape the loop sends (subset asserted on). */
 interface CapturedRequest {
@@ -55,7 +61,33 @@ const finalResponse = {
   content: [{ type: 'text', text: 'The fall-2026 BSN deadline is February 1 [1].' }],
 };
 
+const ORIGINAL_MODEL = process.env.BEDROCK_MODEL_ID;
+afterEach(() => {
+  if (ORIGINAL_MODEL === undefined) delete process.env.BEDROCK_MODEL_ID;
+  else process.env.BEDROCK_MODEL_ID = ORIGINAL_MODEL;
+});
+
 describe('converseWithSearch', () => {
+  it('records token usage per round attributed to the feature', async () => {
+    process.env.BEDROCK_MODEL_ID = 'us.anthropic.claude-sonnet-4-20250514-v1:0';
+    const meterClient = new InMemoryTableClient();
+    // A single-round Anthropic response carrying a usage block:
+    const { invoker } = fakeInvoker([
+      { content: [{ type: 'text', text: 'done' }], usage: { input_tokens: 20, output_tokens: 8 } },
+    ]);
+    await runWithTenant('fam1', () =>
+      converseWithSearch('hi', {
+        feature: 'benchmark',
+        webSearch: false,
+        invoker,
+        recordDeps: { client: meterClient, rates: FIXTURE_RATES },
+      }),
+    );
+    const rows = await meterClient.query('T#fam1#USAGE');
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ feature: 'benchmark', inputTokens: 20, outputTokens: 8 });
+  });
+
   it('issues a web_search tool call, feeds tool_result back, and returns grounded text + sources', async () => {
     const { invoker, requests } = fakeInvoker([toolUseResponse, finalResponse]);
     const hits: SearchResult[] = [
@@ -64,6 +96,7 @@ describe('converseWithSearch', () => {
     const searcher: WebSearcher = vi.fn(async () => hits);
 
     const result = await converseWithSearch('When is the UMich BSN deadline?', {
+      feature: 'benchmark',
       modelId: MODEL,
       webSearch: true,
       invoker,
@@ -90,7 +123,7 @@ describe('converseWithSearch', () => {
     ]);
     const searcher: WebSearcher = vi.fn(async () => []);
 
-    const result = await converseWithSearch('hi', { modelId: MODEL, webSearch: false, invoker, searcher });
+    const result = await converseWithSearch('hi', { feature: 'benchmark', modelId: MODEL, webSearch: false, invoker, searcher });
 
     expect(result.rounds).toBe(1);
     expect(requests[0]!.tools).toBeUndefined();
@@ -103,7 +136,7 @@ describe('converseWithSearch', () => {
       throw new Error('no key');
     });
 
-    const result = await converseWithSearch('q', { modelId: MODEL, webSearch: true, invoker, searcher });
+    const result = await converseWithSearch('q', { feature: 'benchmark', modelId: MODEL, webSearch: true, invoker, searcher });
 
     expect(result.text).toMatch(/February 1/); // model still answered
     expect(result.sources).toEqual([]);
@@ -116,6 +149,7 @@ describe('converseWithSearch', () => {
     const searcher: WebSearcher = vi.fn(async () => []);
 
     const result = await converseWithSearch('q', {
+      feature: 'benchmark',
       modelId: MODEL,
       webSearch: true,
       maxRounds: 2,
@@ -131,7 +165,7 @@ describe('converseWithSearch', () => {
   it('throws if no model id is configured', async () => {
     const { invoker } = fakeInvoker([]);
     await expect(
-      converseWithSearch('q', { invoker, modelId: undefined, webSearch: false }),
+      converseWithSearch('q', { feature: 'benchmark', invoker, modelId: undefined, webSearch: false }),
     ).rejects.toThrow(/BEDROCK_MODEL_ID/);
   });
 });
