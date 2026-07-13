@@ -1,6 +1,6 @@
 // backend/shared/metering/pricing.test.ts
 import { describe, expect, it } from 'vitest';
-import { normalizeModelId, priceUsage } from './pricing.js';
+import { RATES, normalizeModelId, priceUsage } from './pricing.js';
 import type { ModelRates } from './types.js';
 
 const rates: Record<string, ModelRates> = {
@@ -37,5 +37,19 @@ describe('priceUsage', () => {
   it('flags an unknown model as unpriced with zero cost', () => {
     const priced = priceUsage('anthropic.some-future-model', { inputTokens: 100, outputTokens: 40, cacheReadTokens: 0, cacheWriteTokens: 0 }, rates);
     expect(priced).toEqual({ costMicros: 0, unpriced: true });
+  });
+
+  // Regression guard: the ACTUAL deployed Bedrock model id (staging/prod run
+  // us.anthropic.claude-sonnet-4-6) must be in the real RATES table, not unpriced.
+  // A live staging usage row on 2026-07-13 showed unpriced=true/costMicros=0 because
+  // only the `claude-sonnet-4` key existed — this test would have caught it.
+  it('prices the deployed us.anthropic.claude-sonnet-4-6 profile against the real RATES', () => {
+    const priced = priceUsage(
+      'us.anthropic.claude-sonnet-4-6',
+      { inputTokens: 280, outputTokens: 31, cacheReadTokens: 0, cacheWriteTokens: 0 },
+      RATES,
+    );
+    expect(priced.unpriced).toBe(false);
+    expect(priced.costMicros).toBe(280 * 3 + 31 * 15); // 1305 micro-dollars
   });
 });
