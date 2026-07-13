@@ -227,3 +227,60 @@ reconciliation job make any dropped record **visible**, not silent. Unknown mode
 - **Worker attribution gaps** — must be verified per worker during implementation.
 - **Cache-token field names** — confirm the exact `usage` field names Bedrock returns for
   cache-read / cache-creation on the Messages API during implementation.
+
+---
+
+## Phase 2 — finalized design (2026-07-13)
+
+Phase 1 is live in prod. Phase 2 is split into two independently-shippable sub-projects, built in
+order. This section supersedes the thinner §7 sketch above where they differ.
+
+### Correction to §7's premise — reconciliation is account-total, not per-family
+
+A shared Bedrock inference profile means AWS has **no tenant attribution** in *either* Cost
+Explorer **or** invocation logs (the earlier §7 claim that per-tenant drift "depends on the
+invocation-log path" was wrong — invocation logs don't carry the tenant either). Reconciliation
+therefore validates the app's **summed** cost/tokens against AWS's **account-total**, catching a
+bypassed call site, a wrong rate, or dropped records. Per-family trust comes from the app being the
+source of truth *and* the total reconciling. True per-family AWS attribution would require a tagged
+application-inference-profile **per tenant** — explicitly out of scope.
+
+### Sub-project A — All-families dashboard (ships first, no new infra)
+
+- **`GET /admin/usage/families?from=&to=`** — **platform-admin only** (`platformAdmin: true` route,
+  runs without tenant context). Iterates the tenants registry (`data.tenants.list()` on the base,
+  un-scoped client), queries each `T#<tenant>#USAGE` partition for the range via the same paginated
+  read + range helper as Phase 1, and sums per tenant. Returns families ranked by `costMicros` desc:
+  `{ families: [{ tenantId, tenantName, costMicros, inputTokens, outputTokens, calls }], totalCostMicros, ... }`.
+  Aggregation is **on-read** at current (handful-of-families) scale — no rollup dependency. `log` a
+  note if a future cap is introduced (never silently truncate the family list).
+- **Frontend** — extend the existing Usage page: for a platform admin, an **"All families"** ranked
+  table with **drill-down** (selecting a family sets `tenantId` and shows the existing per-family
+  breakdown). Gated on `user.platformAdmin`; tenant admins never see it. This also supplies the
+  family picker Phase 1 lacked.
+
+### Sub-project B — Reconciliation + rollups + drift alerting
+
+- **Infra (CDK):** enable **Bedrock model-invocation logging** to a new S3 bucket; grant a new
+  reconciliation Lambda read on that bucket + `ce:GetCostAndUsage`. Reuse the existing
+  `ObservabilityStack` SNS topic for alerts (SNS-only — do **not** add an email budget subscriber;
+  see the AWS budget-email deploy trap).
+- **Scheduled Lambda (EventBridge, daily), over the current + prior month:**
+  1. **Rollups** — recompute per-tenant / per-feature / per-student / per-model monthly summary rows
+     from raw records; idempotent overwrite (derived, recomputable). Stored so the families
+     dashboard *can* read them cheaply (optimization; on-read stays correct).
+  2. **Reconcile (account-total)** — sum app `costMicros` for the period; compare against
+     **Cost Explorer** `GetCostAndUsage` (actual Bedrock $) for the dollar check **and** the summed
+     token counts from the **S3 invocation logs** for the token check + dropped-row backstop;
+     compute drift %.
+  3. **Alert** — if `|drift| > threshold` (default **5%**, configurable via env — accounts for CE's
+     ~24h lag + rounding), publish to the `ObservabilityStack` SNS topic; emit CloudWatch metrics
+     (app cost, AWS cost, drift %).
+- **`GET /admin/usage/reconciliation?month=`** — platform-admin only; surfaces the latest stored
+  drift status on the Usage page, rendering the honest caveats (account-total, not per-family; CE
+  ~24h delayed).
+
+### Phase 2 defaults (tunable)
+
+Daily reconciliation cadence; 5% drift threshold; alerts via the existing SNS topic; reconciliation
+window = current + prior calendar month (UTC).

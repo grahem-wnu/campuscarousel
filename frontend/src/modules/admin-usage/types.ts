@@ -19,3 +19,21 @@ export interface UsageResponse {
 }
 
 export type GroupBy = UsageResponse['groupBy'];
+
+// GET /admin/usage/families (platform admin) — one ranked row per family plus grand totals.
+// Mirrors backend/modules/admin-usage/families.ts.
+export interface FamilyUsageRow {
+  tenantId: string;
+  familyName: string;
+  costMicros: number;
+  inputTokens: number;
+  outputTokens: number;
+  calls: number;
+}
+
+export interface FamiliesUsageResponse {
+  families: FamilyUsageRow[];
+  totalCostMicros: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+}

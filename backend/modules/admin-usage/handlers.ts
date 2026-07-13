@@ -5,15 +5,18 @@
 
 import { type Handler } from '../../shared/api/index.js';
 import { requireRole } from '../../shared/auth/index.js';
-import { type TableClient } from '../../shared/data/index.js';
+import { type Data, type TableClient } from '../../shared/data/index.js';
 import { maybeTenantId } from '../../shared/tenant/index.js';
-import { aggregate, type GroupBy, type UsageRow } from './aggregate.js';
+import { aggregate, type GroupBy } from './aggregate.js';
+import { rankFamilies, summarizeFamily, type FamilyUsageRow } from './families.js';
+import { queryAll, rangeToSkOpts, toUsageRow } from './reads.js';
 
 const requireAdmin = requireRole('admin');
 const GROUP_BY = new Set<GroupBy>(['feature', 'student', 'model', 'day']);
 
 export interface AdminUsageDeps {
   getClient: () => TableClient;
+  getData: () => Data; // for the tenant registry (families endpoint)
 }
 
 export function makeHandlers(deps: AdminUsageDeps) {
@@ -38,36 +41,24 @@ export function makeHandlers(deps: AdminUsageDeps) {
     const rows = items.map(toUsageRow);
     return { status: 200, body: { tenantId, groupBy, ...aggregate(rows, groupBy) } };
   };
-  return { usage };
-}
 
-// Paginate the Query so a wide range for an active family is not truncated at 1 MB. DynamoTableClient.query
-// already follows LastEvaluatedKey (do/while loop), and InMemoryTableClient returns the full partition, so a
-// single call suffices.
-async function queryAll(
-  client: TableClient,
-  pk: string,
-  opts: { skBetween?: [string, string] },
-): Promise<Array<Record<string, unknown>>> {
-  return (await client.query(pk, opts)) as Array<Record<string, unknown>>;
-}
-
-function rangeToSkOpts(from?: string, to?: string): { skBetween?: [string, string] } {
-  if (from && to) return { skBetween: [`TS#${from}`, `TS#${to}~`] };
-  if (from) return { skBetween: [`TS#${from}`, 'TS#~'] };
-  return {}; // whole partition
-}
-
-function toUsageRow(it: Record<string, unknown>): UsageRow {
-  return {
-    feature: String(it.feature ?? ''),
-    model: String(it.model ?? ''),
-    studentId: it.studentId as string | undefined,
-    inputTokens: Number(it.inputTokens ?? 0),
-    outputTokens: Number(it.outputTokens ?? 0),
-    cacheReadTokens: Number(it.cacheReadTokens ?? 0),
-    cacheWriteTokens: Number(it.cacheWriteTokens ?? 0),
-    costMicros: Number(it.costMicros ?? 0),
-    occurredAt: String(it.occurredAt ?? ''),
+  // GET /admin/usage/families — platformAdmin-only all-families ranking. The router enforces
+  // platformAdmin, so there is NO in-handler tenant scoping (never call currentTenantId here). Reads
+  // go through the BASE (un-scoped) client + the global tenant registry.
+  // On-read cost: N tenants × their range's rows, one Query each — O(N) queries. Fine at current
+  // scale; Phase 2B monthly rollups make this O(1). Never silently cap the tenant list.
+  const families: Handler = async (ctx) => {
+    const skOpts = rangeToSkOpts(ctx.query.from, ctx.query.to);
+    const client = deps.getClient();
+    const tenants = await deps.getData().tenants.list();
+    const rows: FamilyUsageRow[] = [];
+    for (const t of tenants) {
+      const items = await queryAll(client, `T#${t.tenantId}#USAGE`, skOpts);
+      const s = summarizeFamily(items.map(toUsageRow));
+      rows.push({ tenantId: t.tenantId, familyName: t.familyName, ...s });
+    }
+    return { status: 200, body: rankFamilies(rows) };
   };
+
+  return { usage, families };
 }
