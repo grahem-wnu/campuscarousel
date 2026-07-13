@@ -40,6 +40,7 @@ export const routes: RouteDef[] = [
   { method: 'PUT', path: '/colleges/:id', handler: handlers.update },
   { method: 'DELETE', path: '/colleges/:id', handler: handlers.remove },
   { method: 'PATCH', path: '/colleges/:id/top-pick', handler: handlers.topPick },
+  { method: 'PATCH', path: '/colleges/:id/bucket', handler: handlers.bucket },
   { method: 'POST', path: '/colleges/:id/hydrate', handler: handlers.hydrate },
   { method: 'GET', path: '/colleges/:id/notes', handler: handlers.listNotes },
   { method: 'POST', path: '/colleges/:id/notes', handler: handlers.addNote },

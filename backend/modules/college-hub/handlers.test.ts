@@ -4,6 +4,7 @@ import type { HandlerContext } from '../../shared/api/index.js';
 import type { Requester } from '../../shared/auth/index.js';
 import { makeHandlers, type CollegeHandlers } from './handlers.js';
 import type { Discoverer } from './ai.js';
+import { runBucketJob } from './bucket-ai.js';
 
 const keira: Requester = { username: 'keira', role: 'student' };
 const kate: Requester = { username: 'kate', role: 'parent' };
@@ -124,6 +125,55 @@ describe('list (GET /colleges)', () => {
   });
 });
 
+describe('list bucket back-fill enqueue', () => {
+  const seed = (over: Record<string, unknown>) =>
+    data.colleges.create({ name: 'Seed', userEdited: [], ...over } as Parameters<Data['colleges']['create']>[0]);
+
+  it('enqueues a bucket job for a hydrated, unbucketed college', async () => {
+    const enqueued: string[] = [];
+    const hh = makeHandlers({
+      getData: () => data,
+      dispatch: makeDispatch(),
+      assetsDispatch: makeAssetsDispatch(),
+      bucketDispatcher: async (id) => { enqueued.push(id); },
+    });
+    const c = await seed({ name: 'Hydrated', dataAsOf: '2026-01-01' });
+    await hh.list(ctx());
+    // fire-and-forget — let the microtask settle
+    await new Promise((r) => setTimeout(r, 0));
+    expect(enqueued).toEqual([c.collegeId]);
+  });
+
+  it('does NOT enqueue for already-bucketed or un-hydrated colleges', async () => {
+    const enqueued: string[] = [];
+    const hh = makeHandlers({
+      getData: () => data,
+      dispatch: makeDispatch(),
+      assetsDispatch: makeAssetsDispatch(),
+      bucketDispatcher: async (id) => { enqueued.push(id); },
+    });
+    await seed({ name: 'HasSuggestion', dataAsOf: '2026-01-01', suggestedBucket: 'reach' });
+    await seed({ name: 'HasOverride', dataAsOf: '2026-01-01', bucket: 'target' });
+    await seed({ name: 'NotHydrated' }); // no dataAsOf
+    await hh.list(ctx());
+    await new Promise((r) => setTimeout(r, 0));
+    expect(enqueued).toEqual([]);
+  });
+
+  it('a throwing dispatcher does not fail the list', async () => {
+    const hh = makeHandlers({
+      getData: () => data,
+      dispatch: makeDispatch(),
+      assetsDispatch: makeAssetsDispatch(),
+      bucketDispatcher: async () => { throw new Error('boom'); },
+    });
+    await seed({ name: 'Hydrated', dataAsOf: '2026-01-01' });
+    const res = await hh.list(ctx());
+    expect(res.status).toBe(200);
+    expect((res.body as { colleges: unknown[] }).colleges).toHaveLength(1);
+  });
+});
+
 describe('detail / update / remove / top-pick', () => {
   it('detail 404s for a missing college', async () => {
     await expectStatus(h.detail(ctx({ params: { id: 'ghost' } })), 404);
@@ -149,6 +199,52 @@ describe('detail / update / remove / top-pick', () => {
     const res = await h.topPick(ctx({ params: { id: c.collegeId }, body: { isTopPick: true } }));
     expect((res.body as { isTopPick: boolean }).isTopPick).toBe(true);
     await expectStatus(h.topPick(ctx({ params: { id: c.collegeId }, body: { isTopPick: 'yes' } })), 422);
+  });
+});
+
+describe('bucket (PATCH /colleges/:id/bucket)', () => {
+  it('sets College.bucket to the family override', async () => {
+    const c = await create({ name: 'Ohio State' });
+    const res = await h.bucket(ctx({ params: { id: c.collegeId }, body: { bucket: 'reach' } }));
+    expect(res.status).toBe(200);
+    expect((res.body as { bucket: string }).bucket).toBe('reach');
+    expect((await data.colleges.get(c.collegeId))?.bucket).toBe('reach');
+  });
+
+  it('clears the override with null (effective bucket reverts to suggestedBucket)', async () => {
+    const c = await create({ name: 'Ohio State' });
+    // A prior AI suggestion is a system field (via merge, never userEdited).
+    await data.colleges.mergePreservingUserEdits(c.collegeId, { suggestedBucket: 'target' });
+    await h.bucket(ctx({ params: { id: c.collegeId }, body: { bucket: 'reach' } }));
+    expect((await data.colleges.get(c.collegeId))?.bucket).toBe('reach');
+    // Clear → override gone; suggestion intact → effective bucket is the suggestion.
+    await h.bucket(ctx({ params: { id: c.collegeId }, body: { bucket: null } }));
+    const after = await data.colleges.get(c.collegeId);
+    expect(after?.bucket).toBeUndefined();
+    expect(after?.suggestedBucket).toBe('target');
+  });
+
+  it('422s on a bad bucket value', async () => {
+    const c = await create({ name: 'Ohio State' });
+    await expectStatus(h.bucket(ctx({ params: { id: c.collegeId }, body: { bucket: 'maybe' } })), 422);
+  });
+
+  it('404s for a missing college', async () => {
+    await expectStatus(h.bucket(ctx({ params: { id: 'ghost' }, body: { bucket: 'reach' } })), 404);
+  });
+
+  it('a re-hydration after an override leaves bucket intact and refreshes suggestedBucket', async () => {
+    const c = await create({ name: 'Ohio State' });
+    await h.bucket(ctx({ params: { id: c.collegeId }, body: { bucket: 'safety' } }));
+    // Simulate a hydration-driven bucket refresh: the suggester recomputes suggestedBucket*.
+    await runBucketJob(
+      () => data,
+      async () => ({ bucket: 'reach', rationale: '12% accept', confidence: 'high' }),
+      c.collegeId,
+    );
+    const after = await data.colleges.get(c.collegeId);
+    expect(after?.bucket).toBe('safety'); // the family override survives
+    expect(after?.suggestedBucket).toBe('reach'); // the suggestion refreshed underneath it
   });
 });
 

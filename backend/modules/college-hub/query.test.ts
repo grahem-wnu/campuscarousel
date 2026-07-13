@@ -45,6 +45,15 @@ describe('filterColleges', () => {
     expect(filterColleges(items, q({ search: 'bloom' })).map((c) => c.name)).toEqual(['Hoosier U']);
     expect(filterColleges(items, q({ search: 'zzz' }))).toHaveLength(0);
   });
+
+  it('filters by effective bucket (override wins; suggestion counts; non-match dropped)', () => {
+    const items = [
+      college({ name: 'Override', suggestedBucket: 'safety', bucket: 'reach' }), // override → reach
+      college({ name: 'Suggested', suggestedBucket: 'reach' }), // suggestion only → reach
+      college({ name: 'Other', suggestedBucket: 'target' }), // neither → dropped
+    ];
+    expect(filterColleges(items, q({ bucket: 'reach' })).map((c) => c.name).sort()).toEqual(['Override', 'Suggested']);
+  });
 });
 
 describe('sortColleges', () => {
