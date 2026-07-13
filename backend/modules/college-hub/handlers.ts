@@ -114,10 +114,16 @@ export function makeHandlers(deps: CollegeDeps): CollegeHandlers {
       const q = validateQuery(listQuerySchema, ctx);
       const items = await getData().colleges.list();
       // Back-fill: colleges hydrated before buckets existed get a suggestion the next time the list
-      // is viewed. Fire-and-forget; idempotent; never blocks or breaks the response.
+      // is viewed. Fire-and-forget; never blocks or breaks the response. Guard on `bucketAttempted`
+      // too, so a college with too little data to bucket isn't re-enqueued on every poll (the job
+      // stamps that flag even when it produces nothing). try/catch guards a sync-throwing dispatcher.
       for (const c of items) {
-        if (c.dataAsOf && !c.suggestedBucket && !c.bucket) {
-          void bucketDispatcher(c.collegeId).catch(() => {});
+        if (c.dataAsOf && !c.suggestedBucket && !c.bucket && !c.bucketAttempted) {
+          try {
+            void bucketDispatcher(c.collegeId).catch(() => {});
+          } catch {
+            /* fire-and-forget: a dispatcher failure must never break the list */
+          }
         }
       }
       return { status: 200, body: { colleges: queryColleges(items, q) } };

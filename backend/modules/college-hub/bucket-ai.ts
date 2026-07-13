@@ -125,11 +125,18 @@ export async function runBucketJob(
     const profile = await data.studentProfile.get();
     const run = suggester ?? ((i: SuggestBucketInput) => suggestBucket(i));
     const suggestion = await run({ college, currentGPA: profile?.currentGPA, gpaType: profile?.gpaType });
-    if (!suggestion) return; // nothing usable — leave the college Unclassified
+    // Always record the attempt (system flag) so a permanently-unclassifiable college — no acceptance
+    // rate or admitted GPA — isn't re-enqueued by the list back-fill on every poll. On success we also
+    // write the suggestion; on an empty result the college stays Unclassified but won't re-fire.
     await data.colleges.mergePreservingUserEdits(collegeId, {
-      suggestedBucket: suggestion.bucket,
-      suggestedBucketRationale: suggestion.rationale,
-      suggestedBucketConfidence: suggestion.confidence,
+      bucketAttempted: true,
+      ...(suggestion
+        ? {
+            suggestedBucket: suggestion.bucket,
+            suggestedBucketRationale: suggestion.rationale,
+            suggestedBucketConfidence: suggestion.confidence,
+          }
+        : {}),
     });
   } catch (err) {
     console.error('college-hub: bucket job failed', err);

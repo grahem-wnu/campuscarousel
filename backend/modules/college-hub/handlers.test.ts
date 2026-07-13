@@ -155,6 +155,7 @@ describe('list bucket back-fill enqueue', () => {
     await seed({ name: 'HasSuggestion', dataAsOf: '2026-01-01', suggestedBucket: 'reach' });
     await seed({ name: 'HasOverride', dataAsOf: '2026-01-01', bucket: 'target' });
     await seed({ name: 'NotHydrated' }); // no dataAsOf
+    await seed({ name: 'AlreadyTried', dataAsOf: '2026-01-01', bucketAttempted: true }); // too little data — attempted, no suggestion
     await hh.list(ctx());
     await new Promise((r) => setTimeout(r, 0));
     expect(enqueued).toEqual([]);

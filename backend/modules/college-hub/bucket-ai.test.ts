@@ -140,6 +140,19 @@ describe('async bucket job (worker + enqueuer)', () => {
     );
   });
 
+  it('stamps bucketAttempted (without a suggestion) so the back-fill will not re-fire', async () => {
+    const empty: BucketSuggester = async () => undefined;
+    await runWithTenant('t1', () =>
+      runWithStudent('s1', async () => {
+        const c = await newCollege();
+        await runBucketJob(getData, empty, c.collegeId);
+        const after = await data.colleges.get(c.collegeId);
+        expect(after?.suggestedBucket).toBeUndefined(); // nothing usable — stays Unclassified
+        expect(after?.bucketAttempted).toBe(true); // but the attempt is recorded (no re-enqueue storm)
+      }),
+    );
+  });
+
   it('makeSqsBucketEnqueuer sends a task:bucket message with tenant + student', async () => {
     let captured: { input?: { QueueUrl?: string; MessageBody?: string } } | undefined;
     const client: SqsSender = {
