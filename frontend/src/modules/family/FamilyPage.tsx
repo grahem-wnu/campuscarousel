@@ -173,8 +173,10 @@ function StudentRow({
 }) {
   const hasLogin = Boolean(student.loginUserId);
   return (
-    <li className="flex items-center gap-3 px-4 py-3">
-      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary-100 text-primary-700">
+    // flex-wrap + a full-width action row: on a phone the buttons drop below the name instead of
+    // colliding with "Class of …"; on ≥sm they sit inline. gap-y-2 spaces the wrapped row.
+    <li className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-100 text-primary-700">
         <Icon name="user" size={18} />
       </span>
       <div className="min-w-0 flex-1">
@@ -197,20 +199,28 @@ function StudentRow({
           <p className="text-xs text-ink-500">Class of {student.graduationYear}</p>
         ) : null}
       </div>
-      {onView && !isActive && student.status === "active" && (
-        <Button variant="ghost" size="sm" onClick={onView}>
-          View
+      <div className="flex w-full shrink-0 items-center justify-end gap-2 sm:w-auto">
+        {onView && !isActive && student.status === "active" && (
+          <Button variant="ghost" size="sm" onClick={onView}>
+            View
+          </Button>
+        )}
+        {/* Give the child their own login. An outline button so it reads as an action, not body text.
+            Once linked, we show who they signed up as instead. */}
+        {onInvite && !hasLogin && student.status === "active" && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onInvite}
+            aria-label={`Invite ${student.name} to sign in`}
+          >
+            Invite to sign in
+          </Button>
+        )}
+        <Button variant="ghost" size="sm" onClick={onEdit} aria-label={`Edit ${student.name}`}>
+          Edit
         </Button>
-      )}
-      {/* Give the child their own login. Once linked, we show who they signed up as instead. */}
-      {onInvite && !hasLogin && student.status === "active" && (
-        <Button variant="ghost" size="sm" onClick={onInvite}>
-          Invite {student.name} to sign in
-        </Button>
-      )}
-      <Button variant="ghost" size="sm" onClick={onEdit} aria-label={`Edit ${student.name}`}>
-        Edit
-      </Button>
+      </div>
     </li>
   );
 }
