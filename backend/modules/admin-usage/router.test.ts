@@ -269,6 +269,35 @@ describe('GET /admin/usage/reconciliation', () => {
     expect(String(body.caveat)).toContain('Cost Explorer');
   });
 
+  it('platform admin → 200 with actualsAvailable:false + null aws/drift when actuals were unavailable', async () => {
+    const dispatch = reconHarness((c) => {
+      void c.put(
+        statusRow('2026-07', {
+          awsCostMicros: null,
+          driftPct: null,
+          awsTokens: null,
+          breach: false,
+          actualsAvailable: false,
+        }),
+      );
+    });
+    const res = await dispatch(event('GET', '/admin/usage/reconciliation', platformAdmin, { month: '2026-07' }));
+    expect(res.statusCode).toBe(200);
+    const body = parse(res);
+    expect(body).toMatchObject({ month: '2026-07', appCostMicros: 1_000_000, actualsAvailable: false, breach: false });
+    expect(body.awsCostMicros).toBeNull();
+    expect(body.driftPct).toBeNull();
+  });
+
+  it('platform admin → 200 with actualsAvailable:true for a normal computed row', async () => {
+    const dispatch = reconHarness((c) => {
+      void c.put(statusRow('2026-07', { actualsAvailable: true }));
+    });
+    const res = await dispatch(event('GET', '/admin/usage/reconciliation', platformAdmin, { month: '2026-07' }));
+    const body = parse(res);
+    expect(body).toMatchObject({ actualsAvailable: true, breach: true });
+  });
+
   it('platform admin → 200 with not_computed when the month has no status row', async () => {
     const dispatch = reconHarness(() => {});
     const res = await dispatch(event('GET', '/admin/usage/reconciliation', platformAdmin, { month: '2026-07' }));

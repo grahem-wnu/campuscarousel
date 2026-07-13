@@ -19,8 +19,9 @@ export interface AlertPort {
 export interface MetricsPort {
   emit(metrics: {
     appCostMicros: number;
-    awsCostMicros: number;
-    driftPct: number;
+    /** null/undefined when AWS actuals were unavailable this run — the adapter omits the AWS gauges. */
+    awsCostMicros?: number | null;
+    driftPct?: number | null;
     month: string;
   }): Promise<void>;
 }

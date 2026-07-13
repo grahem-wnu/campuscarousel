@@ -72,16 +72,20 @@ export function makeHandlers(deps: AdminUsageDeps) {
     const client = deps.getClient();
     const row = await client.get('GLOBAL#RECON', `MONTH#${month}`);
     if (!row) return { status: 200, body: { month, status: 'not_computed' } };
+    // `actualsAvailable: false` means the rollups were recomputed but AWS actuals (Cost Explorer /
+    // invocation logs) couldn't be fetched this run — awsCostMicros/driftPct/awsTokens are null.
+    // Distinct from `not_computed` (no run at all). Legacy rows without the flag are treated available.
     return {
       status: 200,
       body: {
         month: row.month ?? month,
         appCostMicros: row.appCostMicros,
-        awsCostMicros: row.awsCostMicros,
-        driftPct: row.driftPct,
+        awsCostMicros: row.awsCostMicros ?? null,
+        driftPct: row.driftPct ?? null,
         appTokens: row.appTokens,
-        awsTokens: row.awsTokens,
+        awsTokens: row.awsTokens ?? null,
         breach: row.breach,
+        actualsAvailable: row.actualsAvailable !== false,
         computedAt: row.computedAt,
         caveat: row.caveat,
       },

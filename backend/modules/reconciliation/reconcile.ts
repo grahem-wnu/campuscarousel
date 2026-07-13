@@ -31,11 +31,15 @@ export interface ReconcileDeps {
 export interface MonthResult {
   month: string;
   appCostMicros: number;
-  awsCostMicros: number;
-  driftPct: number;
+  /** null when AWS actuals were unavailable for this window (e.g. Cost Explorer rate-limit). */
+  awsCostMicros: number | null;
+  /** null when there's no AWS baseline to reconcile against. */
+  driftPct: number | null;
   appTokens: number;
-  awsTokens: number;
+  awsTokens: number | null;
   breach: boolean;
+  /** false when the AWS actuals fetch failed — the app-side rollups are still recomputed + stored. */
+  actualsAvailable: boolean;
   tenants: number;
 }
 
@@ -86,24 +90,41 @@ export async function runReconciliation(deps: ReconcileDeps): Promise<ReconcileR
       }
     }
 
-    // --- 2. AWS actuals for this window ---
-    const awsCostMicros = await deps.costExplorer.bedrockCostMicros(
-      window.from.slice(0, 10),
-      window.to.slice(0, 10),
-    );
-    const awsToken = await deps.logs.tokenTotals(window.from, window.to);
-    const awsTokens = awsToken.inputTokens + awsToken.outputTokens;
     const appTokens = appInputTokens + appOutputTokens;
 
-    // --- 3. Drift ---
-    const drift = driftPct(appCostMicros, awsCostMicros);
-    const breach = isBreach(drift, deps.thresholdPct);
-
-    // --- 4. Persist rollups + status row ---
+    // --- 2. Persist the rollup rows FIRST — they're a pure recompute of app-side usage and do NOT
+    //        depend on AWS actuals, so a downstream actuals failure must never lose this work. ---
     for (const item of rollupItems(window.month, rollups, computedAt)) {
       // RollupItem is a closed shape; StoredItem carries an index signature (extra attrs allowed).
       await deps.baseClient.put(item as unknown as StoredItem);
     }
+
+    // --- 3. AWS actuals for this window — NON-FATAL. Cost Explorer has notably low rate limits; a
+    //        transient throw must not abort the invocation (losing the prior-month "stable check"
+    //        window too). On failure we mark actuals unavailable and reconcile nothing this run. ---
+    let awsCostMicros: number | null = null;
+    let awsTokens: number | null = null;
+    let actualsAvailable = true;
+    try {
+      awsCostMicros = await deps.costExplorer.bedrockCostMicros(
+        window.from.slice(0, 10),
+        window.to.slice(0, 10),
+      );
+      const awsToken = await deps.logs.tokenTotals(window.from, window.to);
+      awsTokens = awsToken.inputTokens + awsToken.outputTokens;
+    } catch (err) {
+      console.error('reconcile: AWS actuals unavailable for', window.month, err);
+      actualsAvailable = false;
+      awsCostMicros = null;
+      awsTokens = null;
+    }
+
+    // --- 4. Drift only when there's a baseline. Without actuals we can't reconcile — no drift, no
+    //        breach, no alert (a $0 drift would be misleading). ---
+    const drift = actualsAvailable ? driftPct(appCostMicros, awsCostMicros as number) : null;
+    const breach = drift !== null && isBreach(drift, deps.thresholdPct);
+
+    // --- 5. Status row ---
     await deps.baseClient.put({
       PK: 'GLOBAL#RECON',
       SK: `MONTH#${window.month}`,
@@ -114,20 +135,21 @@ export async function runReconciliation(deps: ReconcileDeps): Promise<ReconcileR
       appTokens,
       awsTokens,
       breach,
+      actualsAvailable,
       computedAt,
       caveat: CAVEAT,
     });
 
-    // --- 5. Metrics every run; alert only on breach ---
+    // --- 6. Metrics every run (aws/drift omitted when unavailable); alert only on a real breach. ---
     await deps.metrics.emit({ appCostMicros, awsCostMicros, driftPct: drift, month: window.month });
-    if (breach) {
+    if (breach && drift !== null) {
       await deps.alert.publish(
         `Bedrock cost drift ${drift.toFixed(1)}% for ${window.month}`,
         [
           `Month: ${window.month}`,
-          `App cost: ${appCostMicros} µ$  |  AWS cost: ${awsCostMicros} µ$`,
+          `App cost: ${appCostMicros} µ$  |  AWS cost: ${awsCostMicros ?? 0} µ$`,
           `Drift: ${drift.toFixed(2)}% (threshold ${deps.thresholdPct}%)`,
-          `App tokens: ${appTokens}  |  AWS tokens: ${awsTokens}`,
+          `App tokens: ${appTokens}  |  AWS tokens: ${awsTokens ?? 0}`,
           CAVEAT,
         ].join('\n'),
       );
@@ -141,6 +163,7 @@ export async function runReconciliation(deps: ReconcileDeps): Promise<ReconcileR
       appTokens,
       awsTokens,
       breach,
+      actualsAvailable,
       tenants: rollups.length,
     });
   }

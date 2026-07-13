@@ -247,6 +247,30 @@ function ReconciliationPanel({ recon }: { recon: ReconciliationResponse | null }
     );
   }
 
+  // Actuals fetch failed this run — rollups were recomputed but there's no AWS baseline to reconcile
+  // against. Show the app cost and say so, rather than a misleading $0 drift.
+  if (!recon.actualsAvailable || recon.awsCostMicros === null || recon.driftPct === null) {
+    return (
+      <div className="space-y-3 rounded-xl border border-surface-border bg-surface-raised p-4">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-ink-500">
+            Reconciliation · {recon.month}
+          </p>
+          <span className="rounded-full bg-warn-50 px-2 py-0.5 text-[11px] font-semibold text-warn-700">
+            Actuals unavailable
+          </span>
+        </div>
+        <div>
+          <p className="text-[11px] text-ink-400">App cost</p>
+          <p className="font-semibold tabular-nums text-ink-900">{formatUsd(recon.appCostMicros)}</p>
+        </div>
+        <p className="text-xs text-ink-500">
+          AWS actuals unavailable for this run — drift could not be computed. {recon.caveat}
+        </p>
+      </div>
+    );
+  }
+
   const ok = !recon.breach;
   return (
     <div className="space-y-3 rounded-xl border border-surface-border bg-surface-raised p-4">
