@@ -5,11 +5,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import type { FamiliesUsageResponse, UsageResponse } from './types';
+import type { FamiliesUsageResponse, ReconciliationResponse, UsageResponse } from './types';
 
 const h = vi.hoisted(() => ({
   getUsage: vi.fn(),
   getFamiliesUsage: vi.fn(),
+  getReconciliation: vi.fn(),
   user: { username: 'kate', role: 'admin', tenantId: 'fam1', platformAdmin: false } as {
     username: string;
     role: string;
@@ -21,6 +22,7 @@ const h = vi.hoisted(() => ({
 vi.mock('./api', () => ({
   getUsage: h.getUsage,
   getFamiliesUsage: h.getFamiliesUsage,
+  getReconciliation: h.getReconciliation,
   formatUsd: (m: number) => `$${(m / 1_000_000).toFixed(2)}`,
 }));
 vi.mock('../../shared/shell', () => ({ useAuth: () => ({ user: h.user }) }));
@@ -96,11 +98,24 @@ const FAMILIES: FamiliesUsageResponse = {
   totalOutputTokens: 120,
 };
 
+const RECON_BREACH: ReconciliationResponse = {
+  month: '2026-07',
+  appCostMicros: 1_000_000,
+  awsCostMicros: 950_000,
+  driftPct: 5.3,
+  appTokens: 140,
+  awsTokens: 138,
+  breach: true,
+  computedAt: '2026-07-13T07:00:00.000Z',
+  caveat: 'account-total incl. staging noise; Cost Explorer ~24h delayed',
+};
+
 beforeEach(() => {
   vi.clearAllMocks();
   h.user = { username: 'kate', role: 'admin', tenantId: 'fam1', platformAdmin: false };
   h.getUsage.mockResolvedValue(RESPONSE);
   h.getFamiliesUsage.mockResolvedValue(FAMILIES);
+  h.getReconciliation.mockResolvedValue({ month: '2026-07', status: 'not_computed' });
 });
 
 describe('AdminUsagePage', () => {
@@ -156,5 +171,29 @@ describe('AdminUsagePage', () => {
     await waitFor(() =>
       expect(h.getUsage).toHaveBeenCalledWith(expect.objectContaining({ tenantId: 'fam2' })),
     );
+  });
+
+  it('platform admin sees the reconciliation drift panel when a status row exists', async () => {
+    h.user = { username: 'grahem', role: 'admin', tenantId: 'fam1', platformAdmin: true };
+    h.getReconciliation.mockResolvedValue(RECON_BREACH);
+    render(<AdminUsagePage />);
+    await waitFor(() => expect(screen.getByText('Drift detected')).toBeTruthy());
+    expect(screen.getByText('5.3%')).toBeTruthy();
+    expect(screen.getByText('$1.00')).toBeTruthy(); // app cost
+    expect(screen.getByText('$0.95')).toBeTruthy(); // AWS cost
+    expect(screen.getByText(/Cost Explorer/)).toBeTruthy(); // caveat
+  });
+
+  it('platform admin sees "not yet computed" when reconciliation has not run (staging)', async () => {
+    h.user = { username: 'grahem', role: 'admin', tenantId: 'fam1', platformAdmin: true };
+    h.getReconciliation.mockResolvedValue({ month: '2026-07', status: 'not_computed' });
+    render(<AdminUsagePage />);
+    await waitFor(() => expect(screen.getByText(/not yet computed/i)).toBeTruthy());
+  });
+
+  it('tenant admin never fetches reconciliation', async () => {
+    render(<AdminUsagePage />);
+    await waitFor(() => expect(h.getUsage).toHaveBeenCalledTimes(1));
+    expect(h.getReconciliation).not.toHaveBeenCalled();
   });
 });

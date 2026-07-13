@@ -17,4 +17,5 @@ const h = makeHandlers({
 export const routes: RouteDef[] = [
   { method: 'GET', path: '/admin/usage', handler: h.usage, roles: ['admin'] },
   { method: 'GET', path: '/admin/usage/families', handler: h.families, platformAdmin: true },
+  { method: 'GET', path: '/admin/usage/reconciliation', handler: h.reconciliation, platformAdmin: true },
 ];

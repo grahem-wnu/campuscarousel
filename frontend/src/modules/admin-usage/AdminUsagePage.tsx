@@ -1,8 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../shared/shell';
 import { Button, Card, EmptyState, Field, Select, Spinner, Table, type Column } from '../../shared/ui';
-import { formatUsd, getFamiliesUsage, getUsage } from './api';
-import type { FamiliesUsageResponse, FamilyUsageRow, GroupBy, UsageBucket, UsageResponse } from './types';
+import { formatUsd, getFamiliesUsage, getReconciliation, getUsage } from './api';
+import {
+  isReconciliationComputed,
+  type FamiliesUsageResponse,
+  type FamilyUsageRow,
+  type GroupBy,
+  type ReconciliationResponse,
+  type UsageBucket,
+  type UsageResponse,
+} from './types';
 
 const GROUP_BY_OPTIONS: { value: GroupBy; label: string }[] = [
   { value: 'feature', label: 'Feature' },
@@ -37,6 +45,7 @@ export default function AdminUsagePage() {
   const [tenantId, setTenantId] = useState(''); // the drilled-into family (platform admin only)
   const [data, setData] = useState<UsageResponse | null>(null);
   const [families, setFamilies] = useState<FamiliesUsageResponse | null>(null);
+  const [recon, setRecon] = useState<ReconciliationResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -79,6 +88,19 @@ export default function AdminUsagePage() {
     if (viewMode === 'families') void loadFamilies();
     else void loadFamily();
   }, [isAdmin, viewMode, loadFamilies, loadFamily]);
+
+  // Platform-admin only: the latest drift-reconciliation status for this month. Best-effort — a
+  // failure just hides the panel (it's supplementary to the ranking); staging returns not_computed.
+  useEffect(() => {
+    if (!isPlatformAdmin) return;
+    let active = true;
+    getReconciliation({ month: range.from.slice(0, 7) })
+      .then((r) => active && setRecon(r))
+      .catch(() => active && setRecon(null));
+    return () => {
+      active = false;
+    };
+  }, [isPlatformAdmin, range.from]);
 
   const drillInto = (row: FamilyUsageRow) => {
     setTenantId(row.tenantId);
@@ -169,6 +191,8 @@ export default function AdminUsagePage() {
         ) : null}
       </div>
 
+      {showFamilies && isPlatformAdmin ? <ReconciliationPanel recon={recon} /> : null}
+
       {error ? (
         <Card className="border border-error-200 bg-error-50 text-error-700">
           <p className="text-sm">{error}</p>
@@ -200,6 +224,63 @@ export default function AdminUsagePage() {
           />
         </div>
       )}
+    </div>
+  );
+}
+
+/** Platform-admin drift panel: app $ vs AWS $ + drift %, green/amber by breach, plus the caveat.
+ *  Renders "not yet computed" when reconciliation hasn't run for the month (always so on staging). */
+function ReconciliationPanel({ recon }: { recon: ReconciliationResponse | null }) {
+  if (!recon) return null;
+
+  if (!isReconciliationComputed(recon)) {
+    return (
+      <div className="rounded-xl border border-surface-border bg-surface-raised p-4">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-ink-500">
+          Reconciliation · {recon.month}
+        </p>
+        <p className="mt-2 text-sm text-ink-600">
+          Not yet computed. Drift reconciliation runs in production only — there is no reconciliation
+          for this month yet.
+        </p>
+      </div>
+    );
+  }
+
+  const ok = !recon.breach;
+  return (
+    <div className="space-y-3 rounded-xl border border-surface-border bg-surface-raised p-4">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-ink-500">
+          Reconciliation · {recon.month}
+        </p>
+        <span
+          className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+            ok ? 'bg-success-50 text-success-700' : 'bg-warn-100 text-warn-800'
+          }`}
+        >
+          {ok ? 'Within threshold' : 'Drift detected'}
+        </span>
+      </div>
+      <div className="flex flex-wrap gap-x-8 gap-y-2">
+        <div>
+          <p className="text-[11px] text-ink-400">App cost</p>
+          <p className="font-semibold tabular-nums text-ink-900">{formatUsd(recon.appCostMicros)}</p>
+        </div>
+        <div>
+          <p className="text-[11px] text-ink-400">AWS cost</p>
+          <p className="font-semibold tabular-nums text-ink-900">{formatUsd(recon.awsCostMicros)}</p>
+        </div>
+        <div>
+          <p className="text-[11px] text-ink-400">Drift</p>
+          <p className={`font-semibold tabular-nums ${ok ? 'text-ink-900' : 'text-warn-700'}`}>
+            {recon.driftPct.toFixed(1)}%
+          </p>
+        </div>
+      </div>
+      <p className="text-xs text-ink-400">
+        Computed {new Date(recon.computedAt).toLocaleString()} · {recon.caveat}
+      </p>
     </div>
   );
 }
