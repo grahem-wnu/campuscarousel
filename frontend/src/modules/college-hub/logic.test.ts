@@ -10,10 +10,13 @@ import {
   compactCost,
   costLabel,
   domainOf,
+  effectiveBucket,
   firstPercent,
   fitBand,
   gpaValue,
+  groupByBucket,
   hydrationMeta,
+  isOverridden,
   logoSrc,
   normalizeName,
   rankValue,
@@ -157,6 +160,37 @@ describe('at-a-glance snapshot extractors', () => {
     expect(acceptanceValue(college({ acceptanceRateUniversity: '~57% overall', acceptanceRateProgram: 'Not published' }))).toBe('57%');
     expect(acceptanceValue(college({ acceptanceRateProgram: 'About 30% of applicants admitted' }))).toBe('30%');
     expect(acceptanceValue(college())).toBeNull();
+  });
+});
+
+describe('effectiveBucket / isOverridden', () => {
+  it('override wins over the AI suggestion; suggestion is the fallback', () => {
+    expect(effectiveBucket({ bucket: 'reach', suggestedBucket: 'safety' })).toBe('reach');
+    expect(effectiveBucket({ suggestedBucket: 'target' })).toBe('target');
+    expect(effectiveBucket({})).toBeUndefined();
+  });
+
+  it('isOverridden is true only when a family override is set', () => {
+    expect(isOverridden({ bucket: 'target' })).toBe(true);
+    expect(isOverridden({ suggestedBucket: 'target' })).toBe(false);
+    expect(isOverridden({})).toBe(false);
+  });
+});
+
+describe('groupByBucket', () => {
+  it('groups by effective bucket (override wins), preserving input order, incl. unclassified', () => {
+    const cs = [
+      college({ collegeId: 'a', suggestedBucket: 'reach' }),
+      college({ collegeId: 'b', bucket: 'safety', suggestedBucket: 'reach' }), // override → safety
+      college({ collegeId: 'c' }), // neither → unclassified
+      college({ collegeId: 'd', suggestedBucket: 'target' }),
+      college({ collegeId: 'e', suggestedBucket: 'reach' }),
+    ];
+    const g = groupByBucket(cs);
+    expect(g.reach.map((c) => c.collegeId)).toEqual(['a', 'e']);
+    expect(g.target.map((c) => c.collegeId)).toEqual(['d']);
+    expect(g.safety.map((c) => c.collegeId)).toEqual(['b']);
+    expect(g.unclassified.map((c) => c.collegeId)).toEqual(['c']);
   });
 });
 

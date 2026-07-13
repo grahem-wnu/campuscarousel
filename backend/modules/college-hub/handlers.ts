@@ -13,6 +13,7 @@ import {
 } from '../../shared/api/index.js';
 import type { College, Data } from '../../shared/data/index.js';
 import {
+  bucketSchema,
   bulkAddSchema,
   checklistSchema,
   createSchema,
@@ -29,6 +30,7 @@ import { findActiveByName, normalizeCollegeName } from './dedupe.js';
 import type { Discoverer } from './ai.js';
 import { makeBedrockChecklistSuggester, type ChecklistSuggester } from './checklist-ai.js';
 import { runPrepJob, type PrepDispatcher, type PrepSuggester } from './prep-ai.js';
+import { makeSqsBucketEnqueuer, type BucketDispatcher } from './bucket-ai.js';
 import { makeInlineDispatcher, type HydrationDispatcher } from './hydration.js';
 import { runDiscoveryJob, type DiscoverDispatcher } from './discover.js';
 import { makeAssetsEnqueuer, type AssetsDispatcher } from './assets-enqueue.js';
@@ -40,6 +42,7 @@ export interface CollegeHandlers {
   update: Handler;
   remove: Handler;
   topPick: Handler;
+  bucket: Handler;
   hydrate: Handler;
   hydrateAll: Handler;
   assetsBackfill: Handler;
@@ -71,6 +74,9 @@ export interface CollegeDeps {
   /** Prep-plan trigger; defaults to running the job inline with the handler's prepSuggester.
    *  Production injects the SQS enqueuer (routes.manifest) so the ~20s generation runs on the worker. */
   prepDispatch?: PrepDispatcher;
+  /** Bucket back-fill trigger (fire-and-forget from the list handler); defaults to the SQS enqueuer
+   *  (falls back to inline). Lets tests inject a spy and assert enqueue-on-list behavior. */
+  bucketDispatcher?: BucketDispatcher;
 }
 
 export function makeHandlers(deps: CollegeDeps): CollegeHandlers {
@@ -91,6 +97,9 @@ export function makeHandlers(deps: CollegeDeps): CollegeHandlers {
   // tests/local, using THIS handler's suggester stub when injected (runPrepJob builds the model-only
   // Bedrock generator when none is given). Production injects the SQS enqueuer via routes.manifest.
   const prepDispatch = deps.prepDispatch ?? ((collegeId: string) => runPrepJob(getData, deps.prepSuggester, collegeId));
+  // Bucket back-fill: colleges hydrated before buckets existed get a suggestion on the next list view.
+  // Production enqueues to SQS (falls back to inline); tests inject a spy.
+  const bucketDispatcher = deps.bucketDispatcher ?? makeSqsBucketEnqueuer(getData);
 
   /** Fetch a college or throw 404. */
   async function requireCollege(id: string): Promise<College> {
@@ -104,6 +113,19 @@ export function makeHandlers(deps: CollegeDeps): CollegeHandlers {
     list: async (ctx) => {
       const q = validateQuery(listQuerySchema, ctx);
       const items = await getData().colleges.list();
+      // Back-fill: colleges hydrated before buckets existed get a suggestion the next time the list
+      // is viewed. Fire-and-forget; never blocks or breaks the response. Guard on `bucketAttempted`
+      // too, so a college with too little data to bucket isn't re-enqueued on every poll (the job
+      // stamps that flag even when it produces nothing). try/catch guards a sync-throwing dispatcher.
+      for (const c of items) {
+        if (c.dataAsOf && !c.suggestedBucket && !c.bucket && !c.bucketAttempted) {
+          try {
+            void bucketDispatcher(c.collegeId).catch(() => {});
+          } catch {
+            /* fire-and-forget: a dispatcher failure must never break the list */
+          }
+        }
+      }
       return { status: 200, body: { colleges: queryColleges(items, q) } };
     },
 
@@ -162,6 +184,16 @@ export function makeHandlers(deps: CollegeDeps): CollegeHandlers {
       const { isTopPick } = validateBody(topPickSchema, ctx);
       await requireCollege(id);
       const updated = await getData().colleges.update(id, { isTopPick });
+      return { status: 200, body: updated };
+    },
+
+    // PATCH /colleges/:id/bucket — set/clear the family's admissions-bucket override. `null` reverts
+    // to the AI suggestion. Sets College.bucket ONLY (a user field); never touches suggestedBucket*.
+    bucket: async (ctx) => {
+      const { id } = validateParams(idParamSchema, ctx);
+      const { bucket } = validateBody(bucketSchema, ctx);
+      await requireCollege(id);
+      const updated = await getData().colleges.update(id, { bucket: bucket ?? undefined });
       return { status: 200, body: updated };
     },
 
@@ -342,6 +374,7 @@ export function buildRoutes(h: CollegeHandlers) {
     { method: 'PUT' as const, path: '/colleges/:id', handler: h.update },
     { method: 'DELETE' as const, path: '/colleges/:id', handler: h.remove },
     { method: 'PATCH' as const, path: '/colleges/:id/top-pick', handler: h.topPick },
+    { method: 'PATCH' as const, path: '/colleges/:id/bucket', handler: h.bucket },
     { method: 'POST' as const, path: '/colleges/:id/hydrate', handler: h.hydrate },
     { method: 'GET' as const, path: '/colleges/:id/notes', handler: h.listNotes },
     { method: 'POST' as const, path: '/colleges/:id/notes', handler: h.addNote },

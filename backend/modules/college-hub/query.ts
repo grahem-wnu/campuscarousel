@@ -27,6 +27,8 @@ export function filterColleges(items: readonly College[], q: ListQuery): College
     if (q.state && norm(c.state) !== norm(q.state)) return false;
     if (q.isTopPick === 'true' && !c.isTopPick) return false;
     if (q.isTopPick === 'false' && c.isTopPick) return false;
+    // Effective bucket = the family override if set, else the AI suggestion.
+    if (q.bucket && (c.bucket ?? c.suggestedBucket) !== q.bucket) return false;
     if (!matchesSearch(c, q.search ?? '')) return false;
     return true;
   });

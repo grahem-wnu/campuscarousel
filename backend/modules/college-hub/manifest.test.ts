@@ -14,7 +14,7 @@ describe('routes.manifest ↔ buildRoutes', () => {
     expect(manifestRoutes.map(sig).sort()).toEqual(built);
   });
 
-  it('expose all seventeen College Hub endpoints', () => {
+  it('expose all nineteen College Hub endpoints', () => {
     expect(manifestRoutes.map(sig).sort()).toEqual(
       [
         'DELETE /colleges/:id',
@@ -23,6 +23,7 @@ describe('routes.manifest ↔ buildRoutes', () => {
         'GET /colleges/:id/checklist',
         'GET /colleges/:id/notes',
         'GET /colleges/discover/:jobId',
+        'PATCH /colleges/:id/bucket',
         'PATCH /colleges/:id/top-pick',
         'POST /colleges',
         'POST /colleges/:id/checklist/suggest',
