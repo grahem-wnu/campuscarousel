@@ -4,38 +4,26 @@
 // and the Lambda role already grants bedrock:InvokeModel on that profile (a Sonnet inference
 // profile per the spec). Region comes from the Lambda runtime. Mirrors goal-tracker/bedrock.ts.
 
-import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime';
+import { BedrockRuntimeClient } from '@aws-sdk/client-bedrock-runtime';
+import { invokeMessages, type BedrockSend } from '../../shared/metering/index.js';
 import { makeAssistant, unavailableAssistant, type Assistant, type ChatMessage, type ModelInvoker } from './chat.js';
 
 type Invoker = Pick<BedrockRuntimeClient, 'send'>;
 
 /** Build a ModelInvoker over a Bedrock client. The client is resolved lazily so importing this
  *  module never constructs an AWS client (and tests can pass a fake). Uses the Anthropic messages
- *  API on Bedrock with a top-level `system` prompt and the conversation turns. */
+ *  API on Bedrock with a top-level `system` prompt and the conversation turns, funneled through the
+ *  metered `invokeMessages` seam so token usage is attributed to the family + `assistant`. */
 export function makeBedrockInvoker(getClient: () => Invoker): ModelInvoker {
-  return async (system: string, messages: ChatMessage[]) => {
-    const modelId = process.env.BEDROCK_MODEL_ID;
-    if (!modelId) throw new Error('BEDROCK_MODEL_ID is not set');
-    const command = new InvokeModelCommand({
-      modelId,
-      contentType: 'application/json',
-      accept: 'application/json',
-      body: JSON.stringify({
-        anthropic_version: 'bedrock-2023-05-31',
-        max_tokens: 1200,
-        temperature: 0.6,
-        system,
-        messages: messages.map((m) => ({ role: m.role, content: m.content })),
-      }),
+  return (system: string, messages: ChatMessage[]) =>
+    invokeMessages({
+      feature: 'assistant',
+      system,
+      messages: messages.map((m) => ({ role: m.role, content: m.content })),
+      maxTokens: 1200,
+      temperature: 0.6,
+      client: getClient() as unknown as BedrockSend,
     });
-    const res = (await (getClient().send as (c: InvokeModelCommand) => Promise<{ body: Uint8Array }>)(
-      command,
-    )) as { body: Uint8Array };
-    const payload = JSON.parse(new TextDecoder().decode(res.body)) as {
-      content?: { type: string; text?: string }[];
-    };
-    return (payload.content ?? []).map((block) => block.text ?? '').join('');
-  };
 }
 
 let cachedClient: BedrockRuntimeClient | undefined;

@@ -155,6 +155,7 @@ export function makeBedrockGuidanceResearcher(
     const modelId = options.modelId ?? process.env.BEDROCK_MODEL_ID;
     if (!modelId) return {};
     const { text } = await converseWithSearch(buildGuidancePrompt(certName, location), {
+      feature: 'cert-guidance',
       modelId,
       maxTokens: 1200,
       temperature: 0.3,

@@ -9,6 +9,8 @@
 // flag (or an explicit `webSearch` option). If search isn't configured (no key), the loop still
 // returns the model's best answer from its own knowledge — it degrades, never throws on that path.
 
+import { randomUUID } from 'node:crypto';
+import { parseUsage, recordUsage, type RecordDeps } from '../metering/index.js';
 import { tavilySearch, type SearchResult, type WebSearcher } from './search.js';
 
 /** The Bedrock seam: serialize-in, serialize-out. Injectable so tests run without loading the AWS
@@ -42,6 +44,7 @@ interface Message {
 interface AnthropicResponse {
   stop_reason?: string;
   content?: ContentBlock[];
+  usage?: Record<string, number>;
 }
 
 /** The custom web-search tool advertised to the model. */
@@ -59,6 +62,14 @@ const WEB_SEARCH_TOOL = {
 } as const;
 
 export interface ConverseOptions {
+  /** Feature label the recorded token usage is attributed to (e.g. 'benchmark', 'focus'). Required
+   *  so every web-grounded call is metered against a named surface. */
+  feature: string;
+  /** Groups all rounds of one converseWithSearch call under a single request id. Defaults to a
+   *  fresh uuid. */
+  requestId?: string;
+  /** Injectable metering client/rates (tests). */
+  recordDeps?: RecordDeps;
   /** Optional system prompt. */
   system?: string;
   maxTokens?: number;
@@ -107,13 +118,33 @@ async function defaultInvoker(): Promise<BedrockInvoker> {
   };
 }
 
+interface MeterCtx {
+  feature: string;
+  requestId: string;
+  recordDeps?: RecordDeps;
+}
+
 async function callModel(
   invoker: BedrockInvoker,
   modelId: string,
   body: Record<string, unknown>,
+  meter: MeterCtx,
 ): Promise<AnthropicResponse> {
   const resBody = await invoker.invoke(modelId, new TextEncoder().encode(JSON.stringify(body)));
-  return JSON.parse(new TextDecoder().decode(resBody)) as AnthropicResponse;
+  const response = JSON.parse(new TextDecoder().decode(resBody)) as AnthropicResponse;
+  // Record token usage for this round — recordUsage never throws, so metering can't break the call.
+  await recordUsage(
+    {
+      feature: meter.feature,
+      model: modelId,
+      usage: parseUsage(response),
+      requestId: meter.requestId,
+      callId: randomUUID(),
+      occurredAt: new Date().toISOString(),
+    },
+    meter.recordDeps,
+  );
+  return response;
 }
 
 function textOf(content: ContentBlock[]): string {
@@ -138,7 +169,7 @@ function formatResults(results: SearchResult[]): string {
  */
 export async function converseWithSearch(
   prompt: string,
-  options: ConverseOptions = {},
+  options: ConverseOptions,
 ): Promise<ConverseResult> {
   const modelId = options.modelId ?? process.env.BEDROCK_MODEL_ID;
   if (!modelId) throw new Error('BEDROCK_MODEL_ID is not set');
@@ -147,6 +178,12 @@ export async function converseWithSearch(
   const maxRounds = Math.max(1, options.maxRounds ?? 4);
   const searcher = options.searcher ?? tavilySearch;
   const invoker = options.invoker ?? (await defaultInvoker());
+  // One request id per converseWithSearch call so all rounds group under it.
+  const meter: MeterCtx = {
+    feature: options.feature,
+    requestId: options.requestId ?? randomUUID(),
+    recordDeps: options.recordDeps,
+  };
 
   const messages: Message[] = [{ role: 'user', content: prompt }];
   const sources: SearchResult[] = [];
@@ -183,7 +220,7 @@ export async function converseWithSearch(
     if (options.system) body.system = options.system;
     if (offerTools) body.tools = [WEB_SEARCH_TOOL];
 
-    const response = await callModel(invoker, modelId, body);
+    const response = await callModel(invoker, modelId, body, meter);
     const content = response.content ?? [];
 
     if (response.stop_reason !== 'tool_use' || !offerTools) {

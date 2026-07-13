@@ -143,6 +143,7 @@ export function makeBedrockChecklistSuggester(options: AiOptions = {}): Checklis
   return async (college, majors = []) => {
     try {
       const { text } = await converseWithSearch(buildChecklistPrompt(college, majors), {
+        feature: 'college-checklist',
         modelId: options.modelId,
         invoker: options.invoker,
         searcher: options.searcher,

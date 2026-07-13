@@ -65,6 +65,7 @@ async function invokeText(
   tune: { maxRounds?: number; maxTokens?: number } = {},
 ): Promise<string> {
   const { text } = await converseWithSearch(prompt, {
+    feature: 'college-hydrate',
     modelId: options.modelId,
     invoker: options.invoker,
     searcher: options.searcher,
@@ -375,6 +376,7 @@ export function makeBedrockHydrator(options: AiOptions = {}, majors: string[] = 
   return async ({ name, state }) => {
     try {
       const { text, sources } = await converseWithSearch(buildHydratePrompt(name, state, majors), {
+        feature: 'college-hydrate',
         modelId: options.modelId,
         invoker: options.invoker,
         searcher: options.searcher,
