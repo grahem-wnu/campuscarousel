@@ -60,5 +60,37 @@ export function makeHandlers(deps: AdminUsageDeps) {
     return { status: 200, body: rankFamilies(rows) };
   };
 
-  return { usage, families };
+  // GET /admin/usage/reconciliation — platformAdmin-only. Returns the latest drift-reconciliation
+  // status for `?month=YYYY-MM` (default current UTC month). The status row is written by the prod-only
+  // reconcile job under GLOBAL#RECON / MONTH#<month>, so it's read with a DIRECT get() — never
+  // rangeToSkOpts (that builds TS#… ranges, wrong for MONTH#-keyed rows). Absent → not_computed
+  // (staging is always not_computed; reconciliation runs in prod only).
+  const reconciliation: Handler = async (ctx) => {
+    const month = /^\d{4}-\d{2}$/.test(ctx.query.month ?? '')
+      ? ctx.query.month
+      : new Date().toISOString().slice(0, 7);
+    const client = deps.getClient();
+    const row = await client.get('GLOBAL#RECON', `MONTH#${month}`);
+    if (!row) return { status: 200, body: { month, status: 'not_computed' } };
+    // `actualsAvailable: false` means the rollups were recomputed but AWS actuals (Cost Explorer /
+    // invocation logs) couldn't be fetched this run — awsCostMicros/driftPct/awsTokens are null.
+    // Distinct from `not_computed` (no run at all). Legacy rows without the flag are treated available.
+    return {
+      status: 200,
+      body: {
+        month: row.month ?? month,
+        appCostMicros: row.appCostMicros,
+        awsCostMicros: row.awsCostMicros ?? null,
+        driftPct: row.driftPct ?? null,
+        appTokens: row.appTokens,
+        awsTokens: row.awsTokens ?? null,
+        breach: row.breach,
+        actualsAvailable: row.actualsAvailable !== false,
+        computedAt: row.computedAt,
+        caveat: row.caveat,
+      },
+    };
+  };
+
+  return { usage, families, reconciliation };
 }

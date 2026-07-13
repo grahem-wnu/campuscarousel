@@ -224,3 +224,97 @@ describe('GET /admin/usage/families', () => {
     expect(res.statusCode).toBe(403);
   });
 });
+
+describe('GET /admin/usage/reconciliation', () => {
+  function reconHarness(seed: (c: InMemoryTableClient) => void) {
+    const client = new InMemoryTableClient();
+    seed(client);
+    const data: Data = makeData(client);
+    const h = makeHandlers({ getClient: () => client, getData: () => data });
+    return createRouter([
+      { method: 'GET', path: '/admin/usage/reconciliation', handler: h.reconciliation, platformAdmin: true },
+    ]);
+  }
+
+  const statusRow = (month: string, extra: Partial<StoredItem> = {}): StoredItem => ({
+    PK: 'GLOBAL#RECON',
+    SK: `MONTH#${month}`,
+    month,
+    appCostMicros: 1_000_000,
+    awsCostMicros: 950_000,
+    driftPct: 5.26,
+    appTokens: 140,
+    awsTokens: 138,
+    breach: true,
+    computedAt: '2026-07-13T07:00:00.000Z',
+    caveat: 'account-total incl. staging noise; Cost Explorer ~24h delayed',
+    ...extra,
+  });
+
+  it('platform admin → 200 with the seeded status row for ?month=', async () => {
+    const dispatch = reconHarness((c) => {
+      void c.put(statusRow('2026-07'));
+    });
+    const res = await dispatch(event('GET', '/admin/usage/reconciliation', platformAdmin, { month: '2026-07' }));
+    expect(res.statusCode).toBe(200);
+    const body = parse(res);
+    expect(body).toMatchObject({
+      month: '2026-07',
+      appCostMicros: 1_000_000,
+      awsCostMicros: 950_000,
+      driftPct: 5.26,
+      breach: true,
+      computedAt: '2026-07-13T07:00:00.000Z',
+    });
+    expect(String(body.caveat)).toContain('Cost Explorer');
+  });
+
+  it('platform admin → 200 with actualsAvailable:false + null aws/drift when actuals were unavailable', async () => {
+    const dispatch = reconHarness((c) => {
+      void c.put(
+        statusRow('2026-07', {
+          awsCostMicros: null,
+          driftPct: null,
+          awsTokens: null,
+          breach: false,
+          actualsAvailable: false,
+        }),
+      );
+    });
+    const res = await dispatch(event('GET', '/admin/usage/reconciliation', platformAdmin, { month: '2026-07' }));
+    expect(res.statusCode).toBe(200);
+    const body = parse(res);
+    expect(body).toMatchObject({ month: '2026-07', appCostMicros: 1_000_000, actualsAvailable: false, breach: false });
+    expect(body.awsCostMicros).toBeNull();
+    expect(body.driftPct).toBeNull();
+  });
+
+  it('platform admin → 200 with actualsAvailable:true for a normal computed row', async () => {
+    const dispatch = reconHarness((c) => {
+      void c.put(statusRow('2026-07', { actualsAvailable: true }));
+    });
+    const res = await dispatch(event('GET', '/admin/usage/reconciliation', platformAdmin, { month: '2026-07' }));
+    const body = parse(res);
+    expect(body).toMatchObject({ actualsAvailable: true, breach: true });
+  });
+
+  it('platform admin → 200 with not_computed when the month has no status row', async () => {
+    const dispatch = reconHarness(() => {});
+    const res = await dispatch(event('GET', '/admin/usage/reconciliation', platformAdmin, { month: '2026-07' }));
+    expect(res.statusCode).toBe(200);
+    const body = parse(res);
+    expect(body).toEqual({ month: '2026-07', status: 'not_computed' });
+  });
+
+  it('non-platform admin (role admin) → 403', async () => {
+    const dispatch = reconHarness(() => {});
+    const res = await dispatch(event('GET', '/admin/usage/reconciliation', adminFam1, { month: '2026-07' }));
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('parent → 403', async () => {
+    const dispatch = reconHarness(() => {});
+    const res = await dispatch(event('GET', '/admin/usage/reconciliation', parentFam1));
+    expect(res.statusCode).toBe(403);
+  });
+});
