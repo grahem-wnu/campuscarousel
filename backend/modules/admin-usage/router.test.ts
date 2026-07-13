@@ -121,4 +121,26 @@ describe('admin-usage router integration', () => {
     const body = parse(res);
     expect(body.totalCostMicros).toBe(22); // only the in-range row
   });
+
+  it('admin with no tenant claim falls back to the router-established DEFAULT_TENANT_ID', async () => {
+    // The router applies DEFAULT_TENANT_ID (set to "primary" in api-stack) for admins whose JWT lacks
+    // custom:tenantId, and runs the handler inside runWithTenant('primary'). The handler must resolve the
+    // EFFECTIVE tenant, not the raw (absent) claim — otherwise it 400s where every other route succeeds.
+    const prev = process.env.DEFAULT_TENANT_ID;
+    process.env.DEFAULT_TENANT_ID = 'primary';
+    try {
+      const { dispatch } = harness((c) => {
+        void c.put(usageRow('primary', '2026-07-01T00:00:00.000Z#call1', { costMicros: 100 }));
+        void c.put(usageRow('fam2', '2026-07-01T00:00:00.000Z#call2', { costMicros: 999 }));
+      });
+      const res = await dispatch(event('GET', '/admin/usage', adminNoTenant, { groupBy: 'feature' }));
+      expect(res.statusCode).toBe(200);
+      const body = parse(res);
+      expect(body.tenantId).toBe('primary');
+      expect(body.totalCostMicros).toBe(100); // reads T#primary#USAGE, not fam2
+    } finally {
+      if (prev === undefined) delete process.env.DEFAULT_TENANT_ID;
+      else process.env.DEFAULT_TENANT_ID = prev;
+    }
+  });
 });

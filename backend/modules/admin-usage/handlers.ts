@@ -6,6 +6,7 @@
 import { type Handler } from '../../shared/api/index.js';
 import { requireRole } from '../../shared/auth/index.js';
 import { type TableClient } from '../../shared/data/index.js';
+import { maybeTenantId } from '../../shared/tenant/index.js';
 import { aggregate, type GroupBy, type UsageRow } from './aggregate.js';
 
 const requireAdmin = requireRole('admin');
@@ -19,8 +20,10 @@ export function makeHandlers(deps: AdminUsageDeps) {
   const usage: Handler = async (ctx) => {
     requireAdmin(ctx.requester);
     const req = ctx.requester;
-    // Platform admin may target any tenant; a tenant admin is always scoped to their own.
-    const tenantId = req.platformAdmin && ctx.query.tenantId ? ctx.query.tenantId : req.tenantId;
+    // Platform admin may target any tenant; a tenant admin is always scoped to their own. When there's
+    // no platform-admin override, resolve the EFFECTIVE tenant the router established (which applies the
+    // DEFAULT_TENANT_ID fallback for admins whose JWT lacks custom:tenantId), not the raw claim.
+    const tenantId = req.platformAdmin && ctx.query.tenantId ? ctx.query.tenantId : (req.tenantId ?? maybeTenantId());
     if (!tenantId) {
       return { status: 400, body: { error: { code: 'validation', message: 'tenantId required' } } };
     }
