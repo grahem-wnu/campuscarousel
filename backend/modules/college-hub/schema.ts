@@ -3,6 +3,7 @@
 // mirror the data-layer `College` type (frozen contract).
 
 import { z } from '../../shared/api/index.js';
+import { ADMISSION_BUCKETS } from '../../shared/data/index.js';
 
 export const COLLEGE_STATUSES = [
   'researching',
@@ -128,12 +129,16 @@ export const updateSchema = createSchema.partial();
 /** PATCH /colleges/:id/top-pick. */
 export const topPickSchema = z.object({ isTopPick: z.boolean() }).strict();
 
+/** PATCH /colleges/:id/bucket — set the family's admissions-bucket override; `null` clears it. */
+export const bucketSchema = z.object({ bucket: z.enum(ADMISSION_BUCKETS).nullable() }).strict();
+
 /** GET /colleges query — filters + sort + search. Unknown params ignored (API Gateway adds some). */
 export const listQuerySchema = z.object({
   status: z.enum(COLLEGE_STATUSES).optional(),
   programType: z.enum(PROGRAM_TYPES).optional(),
   state: z.string().max(100).optional(),
   isTopPick: z.enum(['true', 'false']).optional(),
+  bucket: z.enum(ADMISSION_BUCKETS).optional(),
   search: z.string().max(200).optional(),
   sortBy: z.enum(['name', 'fitScore', 'status', 'tuition', 'createdAt']).optional(),
   sortOrder: z.enum(['asc', 'desc']).optional(),

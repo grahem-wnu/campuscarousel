@@ -13,18 +13,21 @@ import { dataFromEnv, type Data } from '../../shared/data/index.js';
 import { HYDRATION_TYPE, makeWorkerHandler } from './hydration.js';
 import { makeDiscoverWorkerHandler } from './discover.js';
 import { makePrepWorkerHandler } from './prep-ai.js';
+import { makeBucketWorkerHandler } from './bucket-ai.js';
 
 let cached: Data | undefined;
 const getData = (): Data => (cached ??= dataFromEnv());
 const hydrate = makeWorkerHandler(getData);
 const discover = makeDiscoverWorkerHandler(getData);
 const prep = makePrepWorkerHandler(getData);
+const bucket = makeBucketWorkerHandler(getData);
 
 // One registration handles every async college job on the shared queue, routed by message shape:
-// `task:'prep'` is a prep-plan job; a `jobId` is a discovery job; otherwise it's a hydration job
-// (`collegeId`).
+// `task:'bucket'` is a bucket-suggestion job; `task:'prep'` is a prep-plan job; a `jobId` is a
+// discovery job; otherwise it's a hydration job (`collegeId`).
 const handler = async (payload: unknown): Promise<void> => {
   const msg = (payload ?? {}) as { jobId?: unknown; task?: unknown };
+  if (msg.task === 'bucket') return bucket(payload);
   if (msg.task === 'prep') return prep(payload);
   return typeof msg.jobId === 'string' ? discover(payload) : hydrate(payload);
 };

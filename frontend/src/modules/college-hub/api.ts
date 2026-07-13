@@ -3,6 +3,7 @@
 
 import { api } from '../../shared/api';
 import type {
+  AdmissionBucket,
   College,
   CollegeChecklist,
   CollegeInput,
@@ -51,6 +52,11 @@ export function deleteCollege(id: string): Promise<College> {
 export function setTopPick(id: string, isTopPick: boolean): Promise<College> {
   return api.patch<College>(`/colleges/${encodeURIComponent(id)}/top-pick`, { isTopPick });
 }
+
+/** Set (or clear, with `null`) the family's admissions-bucket override. `null` reverts to the AI
+ *  suggestion. Returns the updated college. Mirrors the top-pick call. */
+export const setBucket = (id: string, bucket: AdmissionBucket | null): Promise<College> =>
+  api.patch<College>(`/colleges/${encodeURIComponent(id)}/bucket`, { bucket });
 
 export function hydrateCollege(id: string): Promise<College> {
   return api.post<College>(`/colleges/${encodeURIComponent(id)}/hydrate`);

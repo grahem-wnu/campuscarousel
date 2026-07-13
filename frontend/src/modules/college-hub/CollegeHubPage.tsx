@@ -1,12 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Button, Card, EmptyState, Field, Modal, Select, Spinner } from '../../shared/ui';
+import { Button, Card, Chip, Chips, EmptyState, Field, Modal, Select, Spinner } from '../../shared/ui';
 import { CollegeCard } from './CollegeCard';
 import { CollegeTable } from './CollegeTable';
 import { CollegeForm } from './CollegeForm';
 import { CompareView } from './CompareView';
 import { DiscoverPanel } from './DiscoverPanel';
-import { PROGRAM_TYPE_LABEL, STATUS_META, anyFetchingAssets, anyHydrating } from './logic';
+import {
+  BUCKET_LABEL,
+  BUCKET_ORDER,
+  PROGRAM_TYPE_LABEL,
+  STATUS_META,
+  anyFetchingAssets,
+  anyHydrating,
+  groupByBucket,
+} from './logic';
 import {
   bulkAddColleges,
   createCollege,
@@ -17,6 +25,7 @@ import {
 import {
   COLLEGE_STATUSES,
   PROGRAM_TYPES,
+  type AdmissionBucket,
   type College,
   type CollegeCandidate,
   type CollegeInput,
@@ -26,6 +35,7 @@ import {
 } from './types';
 
 type ViewMode = 'cards' | 'table';
+type BucketFilter = AdmissionBucket | 'all';
 
 /** College Hub list: discover, add, filter/sort, card/table toggle, compare, bulk refresh. */
 export default function CollegeHubPage() {
@@ -38,6 +48,7 @@ export default function CollegeHubPage() {
   const [status, setStatus] = useState<CollegeStatus | ''>('');
   const [programType, setProgramType] = useState<ProgramType | ''>('');
   const [sortBy, setSortBy] = useState<NonNullable<ListFilters['sortBy']>>('name');
+  const [bucketFilter, setBucketFilter] = useState<BucketFilter>('all');
 
   const [showDiscover, setShowDiscover] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
@@ -112,6 +123,12 @@ export default function CollegeHubPage() {
     }
   }
 
+  // Reconcile the list with the server's updated college after a bucket set/clear (mirrors how the
+  // top-pick toggle updates state, but keyed off the authoritative row the PATCH returns).
+  function onBucketChanged(updated: College): void {
+    setColleges((prev) => prev.map((x) => (x.collegeId === updated.collegeId ? updated : x)));
+  }
+
   async function submitNew(input: CollegeInput): Promise<void> {
     setSubmitting(true);
     setFormError(null);
@@ -167,6 +184,13 @@ export default function CollegeHubPage() {
   // section above the rest.
   const topPicks = colleges.filter((c) => c.isTopPick);
   const moreColleges = colleges.filter((c) => !c.isTopPick);
+  // Group the non-top-picks into reach/target/safety/unclassified sub-sections (preserving the API's
+  // sort within each). The filter chips narrow to a single bucket; 'unclassified' shows only under All.
+  const grouped = groupByBucket(moreColleges);
+  const sections: { key: AdmissionBucket | 'unclassified'; label: string; items: College[] }[] = [
+    ...BUCKET_ORDER.map((b) => ({ key: b, label: BUCKET_LABEL[b], items: grouped[b] })),
+    { key: 'unclassified' as const, label: 'Unclassified', items: grouped.unclassified },
+  ].filter((s) => (bucketFilter === 'all' ? true : s.key === bucketFilter));
   const renderCard = (c: College) => (
     <CollegeCard
       key={c.collegeId}
@@ -268,11 +292,39 @@ export default function CollegeHubPage() {
             </section>
           ) : null}
           {moreColleges.length > 0 ? (
-            <section className="space-y-2">
-              {topPicks.length > 0 ? (
-                <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-400">More colleges</h2>
+            <section className="space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                {topPicks.length > 0 ? (
+                  <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-400">More colleges</h2>
+                ) : <span />}
+                <Chips>
+                  {(['all', ...BUCKET_ORDER] as BucketFilter[]).map((b) => (
+                    <Chip
+                      key={b}
+                      selected={bucketFilter === b}
+                      onClick={() => setBucketFilter(b)}
+                    >
+                      {b === 'all' ? 'All' : BUCKET_LABEL[b]}
+                    </Chip>
+                  ))}
+                </Chips>
+              </div>
+              {sections.map((s) =>
+                s.items.length > 0 ? (
+                  <div key={s.key} className="space-y-2">
+                    <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-ink-500">
+                      {s.label}
+                      <span className="rounded-full bg-surface-sunken px-1.5 py-0.5 text-[10px] font-medium text-ink-400">
+                        {s.items.length}
+                      </span>
+                    </h3>
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">{s.items.map(renderCard)}</div>
+                  </div>
+                ) : null,
+              )}
+              {sections.every((s) => s.items.length === 0) ? (
+                <p className="text-sm text-ink-400">No colleges in this bucket.</p>
               ) : null}
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">{moreColleges.map(renderCard)}</div>
             </section>
           ) : null}
         </div>
@@ -281,6 +333,7 @@ export default function CollegeHubPage() {
           colleges={colleges}
           onOpen={(x) => navigate(`/colleges/${x.collegeId}`)}
           onToggleTopPick={(x) => void toggleTopPick(x)}
+          onBucketChanged={onBucketChanged}
         />
       )}
 

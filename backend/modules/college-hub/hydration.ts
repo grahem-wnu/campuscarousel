@@ -12,9 +12,12 @@
 
 import type { Data } from '../../shared/data/index.js';
 import { makeBedrockHydrator, type Hydrator } from './ai.js';
+import { runBucketJob } from './bucket-ai.js';
 
-/** SQS message `type` discriminator for a single-college hydration job. */
-export const HYDRATION_TYPE = 'college-hydrate';
+/** SQS message `type` discriminator for a single-college hydration job. Re-exported from
+ *  `./constants.js` so existing importers are unaffected while breaking the bucket-ai import cycle. */
+export { HYDRATION_TYPE } from './constants.js';
+import { HYDRATION_TYPE } from './constants.js';
 
 export interface CollegeHydrationMessage {
   type: typeof HYDRATION_TYPE;
@@ -57,7 +60,11 @@ export function makeInlineDispatcher(
   getData: () => Data,
   hydrator?: Hydrator,
 ): HydrationDispatcher {
-  return async (collegeId) => hydrateCollege(getData, await resolveHydrator(getData, hydrator), collegeId);
+  return async (collegeId) => {
+    await hydrateCollege(getData, await resolveHydrator(getData, hydrator), collegeId);
+    // Refresh the admissions bucket off the freshly-hydrated numbers. Never throws.
+    await runBucketJob(getData, undefined, collegeId);
+  };
 }
 
 /** SQS worker-side handler for the shared `hydrationRegistry` (payload → Promise<void>). */
@@ -69,5 +76,7 @@ export function makeWorkerHandler(
     const msg = (payload ?? {}) as Partial<CollegeHydrationMessage>;
     if (typeof msg.collegeId !== 'string' || !msg.collegeId) return;
     await hydrateCollege(getData, await resolveHydrator(getData, hydrator), msg.collegeId);
+    // Refresh the admissions bucket off the freshly-hydrated numbers. Never throws.
+    await runBucketJob(getData, undefined, msg.collegeId);
   };
 }

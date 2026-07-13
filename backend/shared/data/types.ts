@@ -149,6 +149,10 @@ export type CollegeStatus =
   | 'enrolled'
   | 'removed';
 
+/** Admissions-likelihood bucket — SEPARATE from `College.status` (application lifecycle). */
+export const ADMISSION_BUCKETS = ['reach', 'target', 'safety'] as const;
+export type AdmissionBucket = (typeof ADMISSION_BUCKETS)[number];
+
 export interface College extends Timestamped, Hydratable {
   collegeId: string;
   name: string;
@@ -236,6 +240,18 @@ export interface College extends Timestamped, Hydratable {
    *  ASYNC on the SQS worker (like hydration) rather than on the 30s request path: the API sets
    *  'in-progress' and enqueues, the worker fills `hsPrepPlan` and flips this to 'complete'/'failed'. */
   hsPrepStatus?: 'pending' | 'in-progress' | 'complete' | 'failed';
+  /** AI-suggested admissions bucket (system field — written via mergePreservingUserEdits, never
+   *  marked userEdited). Refreshed on each hydration; absent until the first suggestion runs. */
+  suggestedBucket?: AdmissionBucket;
+  suggestedBucketRationale?: string;
+  suggestedBucketConfidence?: 'low' | 'medium' | 'high';
+  /** System flag: a bucket suggestion has been ATTEMPTED (whether or not it produced one). Set once a
+   *  college has too little data to bucket (no acceptance rate/GPA) so the list back-fill doesn't
+   *  re-enqueue a guaranteed-empty job on every poll. A re-hydration re-attempts directly regardless. */
+  bucketAttempted?: boolean;
+  /** Family override. When set, it is the effective bucket and hydration never touches it. Absent =
+   *  use `suggestedBucket`. This is the ONLY user-edited bucket field. */
+  bucket?: AdmissionBucket;
 }
 
 /** One recommendation in a high-school prep plan: a short label + an optional one-line "why/how". */
