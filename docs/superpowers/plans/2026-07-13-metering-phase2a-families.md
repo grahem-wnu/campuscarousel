@@ -167,8 +167,12 @@ export function rankFamilies(families: FamilyUsageRow[]): FamiliesUsageResponse 
 
 - [ ] **Step 1: Write failing router tests** (extend `backend/modules/admin-usage/router.test.ts`). Seed the tenant registry + per-tenant USAGE rows into an `InMemoryTableClient`, and drive through the manifest/`createRouter`. Study the existing `router.test.ts` in this module + `invites/router.test.ts` for how to seed tenants (`data.tenants.create({...})` or direct `put` of `PK=TENANT#<id>`, `GSI1PK='TENANTS'`) and how a `platformAdmin: true` route is dispatched (claims include `'custom:platformAdmin':'true'`).
 
+> **Seeding tenants in tests:** seed via `data.tenants.create({ tenantId, familyName, plan:'free', status:'active' })`, NOT a raw `put` — `InMemoryTableClient.queryIndex` silently skips items whose `GSI1SK` isn't a string, so a raw put without `GSI1SK` makes `tenants.list()` return empty. `data.tenants.create` stamps `GSI1PK`/`GSI1SK` correctly.
+
+> **Existing harness:** `getData` becomes a **required** field on `AdminUsageDeps`. Update the module's existing `harness()`/`makeHandlers({ getClient })` call sites in `router.test.ts` (and `buildRoutes` if present) to also pass `getData` (e.g. `getData: () => data` where `data = makeData(client)`), or the pre-existing `usage` tests won't compile.
+
 Cases:
-- **platform admin** → 200, `families` ranked by cost desc, each with `tenantId`, `familyName`, summed `costMicros`/tokens/`calls`; `totalCostMicros` = sum. Families with zero usage rows appear with zeros (or are included — assert the chosen behavior; **include all registered tenants**).
+- **platform admin** → 200, `families` ranked by cost desc, each with `tenantId`, `familyName`, summed `costMicros`/tokens/`calls`; `totalCostMicros` = sum. **Include all registered tenants** — a tenant with zero usage rows appears with zeros (assert this).
 - **from/to range** filters rows per tenant (seed an out-of-range row, assert excluded).
 - **non-platform admin** (role `admin`, no `platformAdmin`) → 403 (router enforces `platformAdmin`).
 - **parent** → 403.
