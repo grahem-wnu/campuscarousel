@@ -19,18 +19,24 @@ export function normalizeModelId(modelId: string): string {
  * so a $3.00 / 1M-token input rate is `3`. Cache rates are fractional (e.g. $0.30 / 1M = 0.3);
  * priceUsage() rounds the summed cost so the stored costMicros stays an integer.
  *
- * Rates below are for Amazon Bedrock Claude Sonnet 4 (us.anthropic.claude-sonnet-4-20250514-v1:0),
- * which is the current BEDROCK_MODEL_ID default. Source: Anthropic/Bedrock Sonnet-4 pricing —
+ * Keys are the normalizeModelId() output for each deployed Bedrock model/inference-profile.
+ * Staging/prod currently run `us.anthropic.claude-sonnet-4-6` (→ key `anthropic.claude-sonnet-4-6`,
+ * VERIFIED against a live staging usage row 2026-07-13). `anthropic.claude-sonnet-4` is kept in
+ * case an environment pins the dated Sonnet-4 profile. Both share Sonnet-tier pricing:
  * input $3.00, output $15.00, 5-min cache write $3.75 (1.25x input), cache read $0.30 (0.1x input)
- * per 1M tokens. Verified 2026-07-12. Re-check when BEDROCK_MODEL_ID changes.
+ * per 1M tokens. An unlisted model records tokens with unpriced=true, costMicros=0 (fail-safe) —
+ * add its key here. Re-check when BEDROCK_MODEL_ID changes.
  */
+const SONNET_RATES: ModelRates = {
+  inputMicros: 3,
+  outputMicros: 15,
+  cacheReadMicros: 0.3,
+  cacheWriteMicros: 3.75,
+};
+
 export const RATES: Record<string, ModelRates> = {
-  'anthropic.claude-sonnet-4': {
-    inputMicros: 3,
-    outputMicros: 15,
-    cacheReadMicros: 0.3,
-    cacheWriteMicros: 3.75,
-  },
+  'anthropic.claude-sonnet-4-6': SONNET_RATES,
+  'anthropic.claude-sonnet-4': SONNET_RATES,
 };
 
 export function priceUsage(
