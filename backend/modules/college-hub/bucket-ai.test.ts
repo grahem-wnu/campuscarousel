@@ -37,19 +37,19 @@ describe('parseBucketSuggestion', () => {
 
 describe('buildBucketPrompt', () => {
   it('notes when GPA is on file', () => {
-    const p = buildBucketPrompt({ college: { name: 'U', acceptanceRateProgram: '12%' } as any, currentGPA: 3.6, gpaType: 'unweighted' });
+    const p = buildBucketPrompt({ college: { name: 'U', acceptanceRateProgram: '12%' }, currentGPA: 3.6, gpaType: 'unweighted' });
     expect(p).toContain('3.6');
     expect(p).toContain('reach');
   });
   it('flags low confidence when GPA is absent', () => {
-    const p = buildBucketPrompt({ college: { name: 'U', acceptanceRateProgram: '12%' } as any });
+    const p = buildBucketPrompt({ college: { name: 'U', acceptanceRateProgram: '12%' } });
     expect(p.toLowerCase()).toContain('not on file');
   });
 });
 
 describe('suggestBucket', () => {
   it('short-circuits to undefined with nothing to reason from', async () => {
-    expect(await suggestBucket({ college: { name: 'X' } as any })).toBeUndefined(); // returns before any model call
+    expect(await suggestBucket({ college: { name: 'X' } })).toBeUndefined(); // returns before any model call
   });
 });
 
