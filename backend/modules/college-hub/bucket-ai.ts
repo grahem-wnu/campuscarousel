@@ -4,8 +4,10 @@
 // or when there's nothing to reason from. Mirrors prep-ai.ts.
 // VERIFIED IMPORTS (match prep-ai.ts:14 + bedrock.ts exactly):
 import { converseWithSearch, type BedrockInvoker, type WebSearcher } from '../../shared/ai/index.js';
-import type { College } from '../../shared/data/index.js';
+import type { College, Data } from '../../shared/data/index.js';
 import { ADMISSION_BUCKETS, type AdmissionBucket } from '../../shared/data/index.js';
+import { currentStudentId, currentTenantId } from '../../shared/tenant/index.js';
+import { HYDRATION_TYPE } from './constants.js'; // NOT './hydration.js' — avoids the import cycle
 
 export interface BucketSuggestion {
   bucket: AdmissionBucket;
@@ -88,4 +90,106 @@ export async function suggestBucket(
     console.error('college-hub: AI bucket suggestion failed', err);
     return undefined;
   }
+}
+
+// --- Async generation (SQS worker) --------------------------------------------------------------
+// Bucket suggestion is a fast model-only call, but we back-fill it as a fire-and-forget job (from the
+// list handler) and refresh it after each hydrate. It REUSES the shared College Hub queue/type with a
+// `task:'bucket'` discriminator (the worker routes by message shape — see hydration.manifest.ts), so
+// no new plumbing. Prefers the FOCUS queue (interactive lane) so bulk hydration can't starve it.
+
+/** SQS message for a bucket job (shares the College Hub queue/type; `task:'bucket'` selects this path). */
+export interface CollegeBucketMessage {
+  type: typeof HYDRATION_TYPE;
+  collegeId: string;
+  task: 'bucket';
+  tenantId: string; // MANDATORY — the worker fail-closes any message missing tenantId/studentId to the DLQ
+  studentId: string;
+}
+
+/** Suggester seam so tests can inject; production builds the model-only Bedrock one. */
+export type BucketSuggester = (input: SuggestBucketInput) => Promise<BucketSuggestion | undefined>;
+
+/** Run one bucket job: read the college + student GPA, suggest, merge (preserving user edits). Never
+ *  throws. Idempotent — safe to run twice (it just recomputes suggestedBucket*). No-op if gone. It
+ *  writes ONLY suggestedBucket* (system fields via mergePreservingUserEdits) — never `bucket`. */
+export async function runBucketJob(
+  getData: () => Data,
+  suggester: BucketSuggester | undefined,
+  collegeId: string,
+): Promise<void> {
+  const data = getData();
+  const college = await data.colleges.get(collegeId);
+  if (!college) return;
+  try {
+    const profile = await data.studentProfile.get();
+    const run = suggester ?? ((i: SuggestBucketInput) => suggestBucket(i));
+    const suggestion = await run({ college, currentGPA: profile?.currentGPA, gpaType: profile?.gpaType });
+    if (!suggestion) return; // nothing usable — leave the college Unclassified
+    await data.colleges.mergePreservingUserEdits(collegeId, {
+      suggestedBucket: suggestion.bucket,
+      suggestedBucketRationale: suggestion.rationale,
+      suggestedBucketConfidence: suggestion.confidence,
+    });
+  } catch (err) {
+    console.error('college-hub: bucket job failed', err);
+  }
+}
+
+/** Worker-side handler for a bucket job payload (`{ task: 'bucket', collegeId }`). */
+export function makeBucketWorkerHandler(
+  getData: () => Data,
+  suggester?: BucketSuggester,
+): (payload: unknown) => Promise<void> {
+  return async (payload) => {
+    const msg = (payload ?? {}) as Partial<CollegeBucketMessage>;
+    if (msg.task !== 'bucket' || typeof msg.collegeId !== 'string' || !msg.collegeId) return;
+    await runBucketJob(getData, suggester, msg.collegeId);
+  };
+}
+
+/** One seam for "start this bucket job". Production enqueues to SQS; falls back to inline suggestion. */
+export type BucketDispatcher = (collegeId: string) => Promise<void>;
+
+/** Minimal structural type of the SQS client (just `send`) — injectable without the SDK class. */
+export interface SqsSender {
+  send(command: unknown): Promise<unknown>;
+}
+
+export interface SqsBucketEnqueuerOptions {
+  /** Queue URL; defaults to the FOCUS queue, then the shared hydration queue. */
+  queueUrl?: string;
+  client?: SqsSender;
+  /** Dispatcher used when enqueue can't proceed; defaults to running the job inline. */
+  fallback?: BucketDispatcher;
+}
+
+/** Enqueue a bucket job to the FOCUS queue (falls back to the hydration queue, then inline). */
+export function makeSqsBucketEnqueuer(
+  getData: () => Data,
+  options: SqsBucketEnqueuerOptions = {},
+): BucketDispatcher {
+  const fallback = options.fallback ?? ((collegeId: string) => runBucketJob(getData, undefined, collegeId));
+  return async (collegeId) => {
+    const queueUrl = options.queueUrl ?? process.env.FOCUS_QUEUE_URL ?? process.env.HYDRATION_QUEUE_URL;
+    if (!queueUrl) return fallback(collegeId);
+    try {
+      const { SQSClient, SendMessageCommand } = await import('@aws-sdk/client-sqs');
+      const client: SqsSender = options.client ?? (new SQSClient({}) as unknown as SqsSender);
+      await client.send(
+        new SendMessageCommand({
+          QueueUrl: queueUrl,
+          MessageBody: JSON.stringify({
+            type: HYDRATION_TYPE,
+            collegeId,
+            task: 'bucket',
+            tenantId: currentTenantId(),
+            studentId: currentStudentId(),
+          } as CollegeBucketMessage),
+        }),
+      );
+    } catch {
+      await fallback(collegeId);
+    }
+  };
 }
