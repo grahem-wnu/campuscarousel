@@ -106,6 +106,20 @@ const RECON_BREACH: ReconciliationResponse = {
   appTokens: 140,
   awsTokens: 138,
   breach: true,
+  actualsAvailable: true,
+  computedAt: '2026-07-13T07:00:00.000Z',
+  caveat: 'account-total incl. staging noise; Cost Explorer ~24h delayed',
+};
+
+const RECON_ACTUALS_UNAVAILABLE: ReconciliationResponse = {
+  month: '2026-07',
+  appCostMicros: 1_000_000,
+  awsCostMicros: null,
+  driftPct: null,
+  appTokens: 140,
+  awsTokens: null,
+  breach: false,
+  actualsAvailable: false,
   computedAt: '2026-07-13T07:00:00.000Z',
   caveat: 'account-total incl. staging noise; Cost Explorer ~24h delayed',
 };
@@ -182,6 +196,17 @@ describe('AdminUsagePage', () => {
     expect(screen.getByText('$1.00')).toBeTruthy(); // app cost
     expect(screen.getByText('$0.95')).toBeTruthy(); // AWS cost
     expect(screen.getByText(/Cost Explorer/)).toBeTruthy(); // caveat
+  });
+
+  it('platform admin sees an "actuals unavailable" state (not a misleading $0 drift)', async () => {
+    h.user = { username: 'grahem', role: 'admin', tenantId: 'fam1', platformAdmin: true };
+    h.getReconciliation.mockResolvedValue(RECON_ACTUALS_UNAVAILABLE);
+    render(<AdminUsagePage />);
+    await waitFor(() => expect(screen.getByText('Actuals unavailable')).toBeTruthy());
+    expect(screen.getByText(/AWS actuals unavailable for this run/i)).toBeTruthy();
+    expect(screen.getByText('$1.00')).toBeTruthy(); // app cost still shown
+    expect(screen.queryByText('Drift detected')).toBeNull();
+    expect(screen.queryByText('Within threshold')).toBeNull();
   });
 
   it('platform admin sees "not yet computed" when reconciliation has not run (staging)', async () => {

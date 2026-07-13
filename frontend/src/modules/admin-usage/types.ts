@@ -44,11 +44,14 @@ export interface FamiliesUsageResponse {
 export interface ReconciliationStatus {
   month: string;
   appCostMicros: number;
-  awsCostMicros: number;
-  driftPct: number;
+  /** null when AWS actuals were unavailable this run (e.g. Cost Explorer rate-limit). */
+  awsCostMicros: number | null;
+  driftPct: number | null;
   appTokens: number;
-  awsTokens: number;
+  awsTokens: number | null;
   breach: boolean;
+  /** false → the rollups were recomputed but AWS actuals couldn't be fetched; there's no drift. */
+  actualsAvailable: boolean;
   computedAt: string;
   caveat: string;
 }

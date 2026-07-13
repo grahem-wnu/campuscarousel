@@ -136,16 +136,20 @@ export function cwMetricsPort(namespace: string): MetricsPort {
   return {
     async emit(m) {
       const dimensions = [{ Name: 'Stage', Value: stage }];
-      await client.send(
-        new PutMetricDataCommand({
-          Namespace: namespace,
-          MetricData: [
-            { MetricName: 'AppCostMicros', Value: m.appCostMicros, Unit: 'Count', Dimensions: dimensions },
-            { MetricName: 'AwsCostMicros', Value: m.awsCostMicros, Unit: 'Count', Dimensions: dimensions },
-            { MetricName: 'DriftPct', Value: m.driftPct, Unit: 'Percent', Dimensions: dimensions },
-          ],
-        }),
-      );
+      const metricData: {
+        MetricName: string;
+        Value: number;
+        Unit: 'Count' | 'Percent';
+        Dimensions: { Name: string; Value: string }[];
+      }[] = [{ MetricName: 'AppCostMicros', Value: m.appCostMicros, Unit: 'Count', Dimensions: dimensions }];
+      // Omit the AWS gauges when actuals were unavailable — don't emit a misleading 0.
+      if (m.awsCostMicros != null) {
+        metricData.push({ MetricName: 'AwsCostMicros', Value: m.awsCostMicros, Unit: 'Count', Dimensions: dimensions });
+      }
+      if (m.driftPct != null) {
+        metricData.push({ MetricName: 'DriftPct', Value: m.driftPct, Unit: 'Percent', Dimensions: dimensions });
+      }
+      await client.send(new PutMetricDataCommand({ Namespace: namespace, MetricData: metricData }));
     },
   };
 }

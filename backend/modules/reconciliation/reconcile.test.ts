@@ -111,4 +111,47 @@ describe('runReconciliation', () => {
     expect(result.months.map((m) => m.month)).toEqual(['2026-07', '2026-06']);
     expect(result.months[1]).toMatchObject({ month: '2026-06', appCostMicros: 0, tenants: 2 });
   });
+
+  it('marks actualsAvailable:true on the status row when AWS actuals succeed', async () => {
+    const { client } = await harness();
+    const status = await client.get('GLOBAL#RECON', 'MONTH#2026-07');
+    expect(status?.actualsAvailable).toBe(true);
+  });
+
+  describe('when AWS actuals are unavailable (Cost Explorer throws)', () => {
+    const throwingCostExplorer: CostExplorerPort = {
+      bedrockCostMicros: () => Promise.reject(new Error('ThrottlingException: rate exceeded')),
+    };
+
+    it('still writes the per-tenant rollups (app-side recompute is independent of AWS)', async () => {
+      const { client } = await harness({ costExplorer: throwingCostExplorer });
+      const r1 = await client.get('GLOBAL#USAGE', 'ROLLUP#2026-07#T#fam1');
+      const r2 = await client.get('GLOBAL#USAGE', 'ROLLUP#2026-07#T#fam2');
+      expect(r1).toMatchObject({ costMicros: 600, calls: 1 });
+      expect(r2).toMatchObject({ costMicros: 400, calls: 1 });
+    });
+
+    it('writes a status row with actualsAvailable:false, null aws/drift, breach false', async () => {
+      const { client } = await harness({ costExplorer: throwingCostExplorer });
+      const status = await client.get('GLOBAL#RECON', 'MONTH#2026-07');
+      expect(status).toMatchObject({
+        month: '2026-07',
+        appCostMicros: 1000, // app side still summed
+        actualsAvailable: false,
+        breach: false,
+      });
+      expect(status?.awsCostMicros).toBeNull();
+      expect(status?.driftPct).toBeNull();
+      expect(status?.awsTokens).toBeNull();
+    });
+
+    it('does NOT alert (no baseline to reconcile) but STILL emits metrics', async () => {
+      const { alert, metrics } = await harness({ costExplorer: throwingCostExplorer });
+      expect(alert.publish).not.toHaveBeenCalled();
+      expect(metrics.emit).toHaveBeenCalledTimes(2); // both windows still emit app-side metrics
+      expect(metrics.emit).toHaveBeenCalledWith(
+        expect.objectContaining({ month: '2026-07', appCostMicros: 1000, awsCostMicros: null, driftPct: null }),
+      );
+    });
+  });
 });
