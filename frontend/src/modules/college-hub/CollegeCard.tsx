@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Badge, Button, Card } from '../../shared/ui';
+import { BucketBadge } from './BucketBadge';
 import { CollegeLogo } from './CollegeLogo';
 import {
   PROGRAM_TYPE_LABEL,
@@ -80,6 +81,7 @@ export function CollegeCard({ college, selectedForCompare, onOpen, onToggleTopPi
         <div className="flex flex-wrap items-center gap-1.5">
           {college.isTopPick ? <Badge tone="warn">★ Top pick</Badge> : null}
           <Badge tone={status.tone}>{status.label}</Badge>
+          <BucketBadge college={college} />
           {college.programType ? <Badge tone="neutral">{PROGRAM_TYPE_LABEL[college.programType]}</Badge> : null}
           {fit ? <Badge tone={fit.tone}>{fit.label}</Badge> : null}
           <HydrationBadge status={college.hydrationStatus} />

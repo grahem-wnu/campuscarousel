@@ -2,7 +2,7 @@
 // be unit-tested in the node environment (no jsdom; the logic is what's tested).
 
 import type { BadgeTone } from '../../shared/ui';
-import type { College, CollegeStatus, HydrationStatus, ProgramType } from './types';
+import type { AdmissionBucket, College, CollegeStatus, HydrationStatus, ProgramType } from './types';
 
 export interface StatusMeta {
   label: string;
@@ -170,6 +170,56 @@ export function fitBand(score: number | undefined): { label: string; tone: Badge
   if (score >= 60) return { label: `Good fit · ${score}`, tone: 'primary' };
   if (score >= 40) return { label: `Possible · ${score}`, tone: 'warn' };
   return { label: `Reach · ${score}`, tone: 'error' };
+}
+
+// --- Admissions buckets (reach / target / safety) -----------------------------------------------
+// A college's admissions-likelihood bucket. `bucket` is the family override; `suggestedBucket` is the
+// AI's pick. The EFFECTIVE bucket the UI shows/groups by is the override when present, else the
+// suggestion. These are pure helpers so the list page + table + badge all agree.
+
+/** Display order for bucket sections (most selective → least). */
+export const BUCKET_ORDER: AdmissionBucket[] = ['reach', 'target', 'safety'];
+
+/** Human labels for a bucket. */
+export const BUCKET_LABEL: Record<AdmissionBucket, string> = {
+  reach: 'Reach',
+  target: 'Target',
+  safety: 'Safety',
+};
+
+/** Badge tone per bucket (Field Notes palette): reach=amber (warn), target=evergreen (primary),
+ *  safety=ink/muted (neutral). Reuses existing Badge tokens — no new color slop. */
+export const BUCKET_TONE: Record<AdmissionBucket, BadgeTone> = {
+  reach: 'warn',
+  target: 'primary',
+  safety: 'neutral',
+};
+
+/** The bucket the UI acts on: the family override wins, else the AI suggestion, else undefined. */
+export function effectiveBucket(c: {
+  bucket?: AdmissionBucket;
+  suggestedBucket?: AdmissionBucket;
+}): AdmissionBucket | undefined {
+  return c.bucket ?? c.suggestedBucket;
+}
+
+/** True when the family has set an explicit override (not just the AI suggestion). */
+export function isOverridden(c: { bucket?: AdmissionBucket; suggestedBucket?: AdmissionBucket }): boolean {
+  return c.bucket != null;
+}
+
+/** Group colleges into reach/target/safety sections + an 'unclassified' bucket, preserving input order. */
+export function groupByBucket<T extends { bucket?: AdmissionBucket; suggestedBucket?: AdmissionBucket }>(
+  colleges: T[],
+): Record<AdmissionBucket | 'unclassified', T[]> {
+  const groups: Record<AdmissionBucket | 'unclassified', T[]> = {
+    reach: [],
+    target: [],
+    safety: [],
+    unclassified: [],
+  };
+  for (const c of colleges) groups[effectiveBucket(c) ?? 'unclassified'].push(c);
+  return groups;
 }
 
 // --- At-a-glance snapshot extractors ------------------------------------------------------------

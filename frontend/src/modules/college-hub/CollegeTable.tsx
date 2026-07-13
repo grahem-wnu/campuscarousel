@@ -1,4 +1,5 @@
 import { Badge, Icon } from '../../shared/ui';
+import { BucketPicker } from './BucketPicker';
 import { CollegeLogo } from './CollegeLogo';
 import { PROGRAM_TYPE_LABEL, STATUS_META, bestCost, costLabel } from './logic';
 import { HydrationBadge } from './HydrationBadge';
@@ -8,10 +9,12 @@ interface Props {
   colleges: College[];
   onOpen: (c: College) => void;
   onToggleTopPick: (c: College) => void;
+  /** Called with the server's updated college after a bucket set/clear so the page can reconcile. */
+  onBucketChanged?: (updated: College) => void;
 }
 
 /** Dense table view of the college list (toggled from the card view). */
-export function CollegeTable({ colleges, onOpen, onToggleTopPick }: Props) {
+export function CollegeTable({ colleges, onOpen, onToggleTopPick, onBucketChanged }: Props) {
   return (
     <div className="overflow-x-auto rounded-lg border border-surface-border">
       <table className="w-full border-collapse text-sm">
@@ -20,6 +23,7 @@ export function CollegeTable({ colleges, onOpen, onToggleTopPick }: Props) {
             <th className="p-2" />
             <th className="p-2 font-medium">College</th>
             <th className="p-2 font-medium">Status</th>
+            <th className="p-2 font-medium">Bucket</th>
             <th className="p-2 font-medium">Program</th>
             <th className="p-2 font-medium">Net cost/yr</th>
             <th className="p-2 font-medium">Fit</th>
@@ -55,6 +59,9 @@ export function CollegeTable({ colleges, onOpen, onToggleTopPick }: Props) {
                   <Badge tone={STATUS_META[c.status ?? 'researching'].tone}>
                     {STATUS_META[c.status ?? 'researching'].label}
                   </Badge>
+                </td>
+                <td className="p-2">
+                  <BucketPicker college={c} onChanged={onBucketChanged} />
                 </td>
                 <td className="p-2 text-ink-700">{c.programType ? PROGRAM_TYPE_LABEL[c.programType] : '—'}</td>
                 <td className="p-2 text-ink-700">{cost !== undefined ? costLabel(cost) : '—'}</td>

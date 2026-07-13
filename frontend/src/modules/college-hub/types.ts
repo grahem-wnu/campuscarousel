@@ -25,6 +25,10 @@ export type ProgramType = (typeof PROGRAM_TYPES)[number];
 export type HydrationStatus = 'pending' | 'in-progress' | 'complete' | 'partial' | 'failed';
 export type AssetsStatus = 'pending' | 'in-progress' | 'complete' | 'failed';
 
+/** Admissions-likelihood bucket — reach/target/safety. Separate from `status` (application
+ *  lifecycle). Single source of truth: components + logic import this type from here. */
+export type AdmissionBucket = 'reach' | 'target' | 'safety';
+
 export interface College {
   collegeId: string;
   name: string;
@@ -72,6 +76,13 @@ export interface College {
     campusVisitUrl?: string;
   };
   status?: CollegeStatus;
+  /** Family override for the admissions bucket. When set it is the effective bucket and hydration
+   *  never touches it. Absent = use `suggestedBucket`. The ONLY user-edited bucket field. */
+  bucket?: AdmissionBucket;
+  /** AI-suggested admissions bucket (system field — refreshed on hydration; absent until suggested). */
+  suggestedBucket?: AdmissionBucket;
+  suggestedBucketRationale?: string;
+  suggestedBucketConfidence?: 'low' | 'medium' | 'high';
   fitScore?: number;
   hydrationStatus?: HydrationStatus;
   lastDataRefresh?: string;
