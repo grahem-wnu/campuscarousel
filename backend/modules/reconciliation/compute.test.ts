@@ -84,9 +84,9 @@ describe('rollupItems', () => {
 
   it('emits unpricedCostMicros only when > 0', () => {
     const items = rollupItems('2026-07', tenants, '2026-07-13T07:00:00.000Z');
-    expect(items[1].unpricedCostMicros).toBe(12); // fam2 has unpriced cost
-    expect(items[2].unpricedCostMicros).toBeUndefined(); // fam3's 0 is omitted
-    expect(items[0].unpricedCostMicros).toBeUndefined(); // fam1 has none
+    expect(items[1]?.unpricedCostMicros).toBe(12); // fam2 has unpriced cost
+    expect(items[2]?.unpricedCostMicros).toBeUndefined(); // fam3's 0 is omitted
+    expect(items[0]?.unpricedCostMicros).toBeUndefined(); // fam1 has none
   });
 
   it('is idempotent — same inputs produce identical keys + values', () => {
