@@ -91,9 +91,12 @@ import { costExplorerPort, invocationLogPort, snsAlertPort, cwMetricsPort } from
 
 export const handler = async (): Promise<unknown> => {
   const bucket = process.env.RECON_LOG_BUCKET;
-  const topicArn = process.env.RECON_ALARM_TOPIC_ARN;      // resolved by CDK from the obs SSM param
+  const ssmPrefix = process.env.SSM_PREFIX;
   const thresholdPct = Number(process.env.RECON_DRIFT_THRESHOLD_PCT ?? '5');
-  if (!bucket || !topicArn) throw new Error('reconcile: RECON_LOG_BUCKET / RECON_ALARM_TOPIC_ARN not set');
+  if (!bucket || !ssmPrefix) throw new Error('reconcile: RECON_LOG_BUCKET / SSM_PREFIX not set');
+  // Resolve the alarm topic ARN from SSM at RUNTIME (avoids the deploy-ordering hazard).
+  // Reuse the repo's shared SSM reader if one exists; else @aws-sdk/client-ssm GetParameter on `${ssmPrefix}/alarmTopicArn`.
+  const topicArn = await readSsmParam(`${ssmPrefix}/alarmTopicArn`);
   const result = await runReconciliation({
     data: dataFromEnv(),
     baseClient: tableClientFromEnv(),
@@ -109,7 +112,7 @@ export const handler = async (): Promise<unknown> => {
 };
 ```
 
-- [ ] Add SDK deps to `backend/package.json` if absent: `@aws-sdk/client-cost-explorer`, `@aws-sdk/client-s3`, `@aws-sdk/client-sns`, `@aws-sdk/client-cloudwatch` (check first — some may already be present; revert the root lockfile churn, commit only backend/package.json + package-lock if the repo tracks it per-workspace).
+- [ ] Add SDK deps to `backend/package.json`: `@aws-sdk/client-cost-explorer`, `@aws-sdk/client-sns`, `@aws-sdk/client-cloudwatch`, and `@aws-sdk/client-ssm` (for the runtime topic-ARN read, unless a shared SSM reader already exists — check `backend/shared` first). `@aws-sdk/client-s3` is **already** a backend dep (no add). This is a single-lockfile npm-workspaces repo (no `backend/package-lock.json`) — you **MUST commit the resulting root `package-lock.json` delta** for the new packages (else `npm ci` in CI fails). Revert only *unrelated* churn (e.g. root `.gitignore`), not the legitimate lock additions.
 - [ ] Add the bundle entry in `backend/scripts/build-lambda.mjs`: `await bundle('lambda/reconcile.ts', 'reconcile');`
 - [ ] `npm run typecheck` + `npm test -- backend/modules/reconciliation` green. **Commit** — `feat(reconciliation): AWS port adapters + reconcile Lambda entry`
 
@@ -127,10 +130,15 @@ export const handler = async (): Promise<unknown> => {
 
 - [ ] **Step 2: In `async-stack.ts`, guarded `if (config.stage === 'prod')`:**
   - Create the invocation-log S3 bucket (mirror `assets-stack.ts` bucket style: `blockPublicAccess: BLOCK_ALL`, `encryption: S3_MANAGED`, `enforceSSL: true`, `removalPolicy: RETAIN` for prod). Add a bucket policy granting the Bedrock service principal (`bedrock.amazonaws.com`) `s3:PutObject` (with the `aws:SourceAccount` condition = this account).
-  - Create `new CfnModelInvocationLoggingConfiguration(this, 'BedrockInvocationLogging', { loggingConfig: { s3Config: { bucketName, keyPrefix: 'bedrock-invocation-logs/' }, textDataDeliveryEnabled: true, imageDataDeliveryEnabled: false, embeddingDataDeliveryEnabled: false } })` from `aws-cdk-lib/aws-bedrock`. **Account+region-global — only prod creates it.** Add `addDependency` on the bucket policy so the bucket can receive logs before the config activates.
-  - Read the alarm topic ARN from SSM: `StringParameter.valueForStringParameter(this, `${config.ssmPrefix}/alarmTopicArn`)` (written by ObservabilityStack via `putOutput`). *(If cross-stack ordering makes the SSM read unreliable at synth, instead expose `public readonly alarmTopic` on ObservabilityStack and pass its ARN as an AsyncStack prop — pick whichever the existing patterns support cleanly; SSM-at-runtime is preferred per the repo's "workers read config from SSM" convention.)*
-  - Define the reconcile Lambda (classic `LambdaFunction` + `Code.fromAsset('../../backend/dist/reconcile')`, `timeout: Duration.seconds(120)`, `memorySize: 256`, `logRetention: ONE_MONTH`) with env `{ TABLE_NAME, STAGE, RECON_LOG_BUCKET: bucket.bucketName, RECON_ALARM_TOPIC_ARN: topicArn, RECON_DRIFT_THRESHOLD_PCT: '5', SSM_PREFIX: config.ssmPrefix }`.
-  - Grants: `table.grantReadWriteData(fn)`; `fn.addToRolePolicy(costExplorerReadStatement())`, `s3ReadStatement(bucket.bucketArn)`, `snsPublishStatement(topicArn)`, `cloudwatchPutMetricStatement()`.
+  - **Enable Bedrock model-invocation logging via an `AwsCustomResource`** (NOT an L1 — `CfnModelInvocationLoggingConfiguration` / `AWS::Bedrock::ModelInvocationLoggingConfiguration` does NOT exist; model-invocation logging is API-only). Use `AwsCustomResource` from `aws-cdk-lib/custom-resources`:
+    - `onCreate`/`onUpdate`: `{ service: 'Bedrock', action: 'PutModelInvocationLoggingConfiguration', parameters: { loggingConfig: { s3Config: { bucketName: bucket.bucketName, keyPrefix: 'bedrock-invocation-logs/' }, textDataDeliveryEnabled: true, imageDataDeliveryEnabled: false, embeddingDataDeliveryEnabled: false } }, physicalResourceId: PhysicalResourceId.of('bedrock-invocation-logging') }`.
+    - `onDelete`: `{ service: 'Bedrock', action: 'DeleteModelInvocationLoggingConfiguration' }`.
+    - `policy: AwsCustomResourcePolicy.fromStatements([ new PolicyStatement({ actions: ['bedrock:PutModelInvocationLoggingConfiguration','bedrock:DeleteModelInvocationLoggingConfiguration'], resources: ['*'] }) ])` (these actions have no resource ARNs — comment the `*`).
+    - **Account+region-global — only prod creates it.** Add `customResource.node.addDependency(bucketPolicy)` so the bucket can receive logs before the config activates.
+  - Define the reconcile Lambda (classic `LambdaFunction` + `Code.fromAsset('../../backend/dist/reconcile')`, `timeout: Duration.seconds(120)`, `memorySize: 256`, `logRetention: ONE_MONTH`) with env `{ TABLE_NAME, STAGE, RECON_LOG_BUCKET: bucket.bucketName, RECON_DRIFT_THRESHOLD_PCT: '5', SSM_PREFIX: config.ssmPrefix }`. **Do NOT inject the alarm topic ARN at deploy time** (cross-stack SSM read has a from-scratch deploy-ordering hazard: AsyncStack deploys before ObservabilityStack; and prop-passing is a circular dep since obs already consumes async's worker name). Instead the Lambda **resolves `${SSM_PREFIX}/alarmTopicArn` from SSM at runtime** (by the time the daily schedule fires, obs has long since written it) — see the Lambda entry in 2.3.
+  - Grants: `table.grantReadWriteData(fn)`; `fn.addToRolePolicy(costExplorerReadStatement())`, `s3ReadStatement(bucket.bucketArn)`, `snsPublishStatement('arn:aws:sns:'+region+':'+account+':'+config.namePrefix+'-alarms')` (construct the topic ARN by convention for the grant — the runtime read still comes from SSM), `cloudwatchPutMetricStatement()`, **`ssmReadConfigStatement(this.region, this.account, config.ssmPrefix)`** (for the runtime topic-ARN read — this grant was missing).
+
+  **Required new imports in `async-stack.ts`** (extend the existing imports — `Rule`/`Schedule`/`LambdaFunctionTarget`/`Code`/`LambdaFunction`/`Duration`/`RetentionDays`/`CfnOutput`/`putOutput` are already imported): `Bucket, BlockPublicAccess, BucketEncryption` from `aws-cdk-lib/aws-s3` (currently only `type IBucket`); `RemovalPolicy` from `aws-cdk-lib`; `AwsCustomResource, AwsCustomResourcePolicy, PhysicalResourceId` from `aws-cdk-lib/custom-resources`; `PolicyStatement`, `ServicePrincipal` from `aws-cdk-lib/aws-iam` for the bucket policy.
   - Schedule: `new Rule(this, 'ReconcileSchedule', { schedule: Schedule.cron({ minute: '0', hour: '7' }), targets: [new LambdaFunctionTarget(fn)] })` (daily 07:00 UTC).
   - `putOutput` + `CfnOutput` the reconcile function name.
 
@@ -143,7 +151,7 @@ export const handler = async (): Promise<unknown> => {
 
 **Files:** Modify `backend/modules/admin-usage/handlers.ts` + `routes.manifest.ts` + `router.test.ts`; regenerate manifests. Frontend `admin-usage/{types,api,AdminUsagePage}.tsx` + test.
 
-- [ ] **Backend:** add a `reconciliation` handler (`platformAdmin: true`) that reads the latest status row(s): `queryAll(getClient(), 'GLOBAL#RECON', rangeToSkOpts(...))` or a direct `get('GLOBAL#RECON', 'MONTH#<month>')` for `?month=` (default current month). Returns `{ month, appCostMicros, awsCostMicros, driftPct, breach, computedAt, caveat }` or `{ month, status: 'not_computed' }` when absent (staging always returns not_computed — reconciliation is prod-only). Route `{ method: 'GET', path: '/admin/usage/reconciliation', handler: h.reconciliation, platformAdmin: true }`. Add tests: returns a seeded status row; 404-or-not_computed when absent; non-platform admin 403. Regenerate manifests + `check:routes`.
+- [ ] **Backend:** add a `reconciliation` handler (`platformAdmin: true`) that reads the latest status row **with a direct `get('GLOBAL#RECON', 'MONTH#<month>')`** for `?month=` (default current month). **Do NOT use `rangeToSkOpts`** — that builds `TS#…` ranges and is wrong for `MONTH#`-keyed rows; use `get` (or `query('GLOBAL#RECON', { skBeginsWith: 'MONTH#' })` if listing). The handler needs the base client via `getClient()` (already a dep). Returns `{ month, appCostMicros, awsCostMicros, driftPct, breach, computedAt, caveat }` or `{ month, status: 'not_computed' }` when absent (staging always returns not_computed — reconciliation is prod-only). Route `{ method: 'GET', path: '/admin/usage/reconciliation', handler: h.reconciliation, platformAdmin: true }`. Add tests: returns a seeded status row; 404-or-not_computed when absent; non-platform admin 403. Regenerate manifests + `check:routes`.
 - [ ] **Frontend:** on the Usage page, for a platform admin in the families view, a small **Reconciliation** panel (Field Notes, no chart) showing the latest month's drift: `app $ vs AWS $`, drift %, a green/amber status by `breach`, `computedAt`, and the caveat text. Gracefully render "not yet computed" when `status: 'not_computed'`. Add a `getReconciliation()` api fn + types + a test (renders drift; renders not-computed).
 - [ ] Full `npm test` + `typecheck` + `lint` + `check:routes` green. **Commit(s)** per piece.
 
