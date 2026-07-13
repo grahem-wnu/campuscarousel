@@ -5,9 +5,10 @@
 
 import { type Handler } from '../../shared/api/index.js';
 import { requireRole } from '../../shared/auth/index.js';
-import { type TableClient } from '../../shared/data/index.js';
+import { type Data, type TableClient } from '../../shared/data/index.js';
 import { maybeTenantId } from '../../shared/tenant/index.js';
 import { aggregate, type GroupBy } from './aggregate.js';
+import { rankFamilies, summarizeFamily, type FamilyUsageRow } from './families.js';
 import { queryAll, rangeToSkOpts, toUsageRow } from './reads.js';
 
 const requireAdmin = requireRole('admin');
@@ -15,6 +16,7 @@ const GROUP_BY = new Set<GroupBy>(['feature', 'student', 'model', 'day']);
 
 export interface AdminUsageDeps {
   getClient: () => TableClient;
+  getData: () => Data; // for the tenant registry (families endpoint)
 }
 
 export function makeHandlers(deps: AdminUsageDeps) {
@@ -39,5 +41,24 @@ export function makeHandlers(deps: AdminUsageDeps) {
     const rows = items.map(toUsageRow);
     return { status: 200, body: { tenantId, groupBy, ...aggregate(rows, groupBy) } };
   };
-  return { usage };
+
+  // GET /admin/usage/families — platformAdmin-only all-families ranking. The router enforces
+  // platformAdmin, so there is NO in-handler tenant scoping (never call currentTenantId here). Reads
+  // go through the BASE (un-scoped) client + the global tenant registry.
+  // On-read cost: N tenants × their range's rows, one Query each — O(N) queries. Fine at current
+  // scale; Phase 2B monthly rollups make this O(1). Never silently cap the tenant list.
+  const families: Handler = async (ctx) => {
+    const skOpts = rangeToSkOpts(ctx.query.from, ctx.query.to);
+    const client = deps.getClient();
+    const tenants = await deps.getData().tenants.list();
+    const rows: FamilyUsageRow[] = [];
+    for (const t of tenants) {
+      const items = await queryAll(client, `T#${t.tenantId}#USAGE`, skOpts);
+      const s = summarizeFamily(items.map(toUsageRow));
+      rows.push({ tenantId: t.tenantId, familyName: t.familyName, ...s });
+    }
+    return { status: 200, body: rankFamilies(rows) };
+  };
+
+  return { usage, families };
 }
