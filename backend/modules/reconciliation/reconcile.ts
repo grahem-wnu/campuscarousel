@@ -8,7 +8,7 @@
 // each family's partition by literal PK through the BASE (unscoped) client. Per-tenant try/catch — one
 // bad family never aborts the run.
 
-import { type Data, type TableClient } from '../../shared/data/index.js';
+import { type Data, type StoredItem, type TableClient } from '../../shared/data/index.js';
 import { summarizeFamily } from '../admin-usage/families.js';
 import { queryAll, rangeToSkOpts, toUsageRow } from '../admin-usage/reads.js';
 import { driftPct, isBreach, monthWindows, rollupItems, type TenantRollup } from './compute.js';
@@ -101,7 +101,8 @@ export async function runReconciliation(deps: ReconcileDeps): Promise<ReconcileR
 
     // --- 4. Persist rollups + status row ---
     for (const item of rollupItems(window.month, rollups, computedAt)) {
-      await deps.baseClient.put(item);
+      // RollupItem is a closed shape; StoredItem carries an index signature (extra attrs allowed).
+      await deps.baseClient.put(item as unknown as StoredItem);
     }
     await deps.baseClient.put({
       PK: 'GLOBAL#RECON',
