@@ -42,6 +42,55 @@ export function ssmReadConfigStatement(
 }
 
 /**
+ * Cost Explorer read for the reconciliation Lambda (Phase 2B). `ce:GetCostAndUsage` is a global,
+ * resource-less action — Cost Explorer exposes no resource ARNs — so `*` is the ONLY valid resource
+ * (this is the documented exception, not an over-grant).
+ */
+export function costExplorerReadStatement(): PolicyStatement {
+  return new PolicyStatement({
+    sid: "ReadBedrockCost",
+    actions: ["ce:GetCostAndUsage"],
+    resources: ["*"], // Cost Explorer has no resource-level ARNs.
+  });
+}
+
+/**
+ * Read the Bedrock model-invocation-log bucket (Phase 2B). GetObject on the objects + ListBucket on
+ * the bucket itself, scoped to exactly this bucket.
+ */
+export function s3ReadStatement(bucketArn: string): PolicyStatement {
+  return new PolicyStatement({
+    sid: "ReadInvocationLogs",
+    actions: ["s3:GetObject", "s3:ListBucket"],
+    resources: [bucketArn, `${bucketArn}/*`],
+  });
+}
+
+/**
+ * Publish drift alerts to the ObservabilityStack alarm SNS topic (Phase 2B). Scoped to the one topic.
+ */
+export function snsPublishStatement(topicArn: string): PolicyStatement {
+  return new PolicyStatement({
+    sid: "PublishDriftAlert",
+    actions: ["sns:Publish"],
+    resources: [topicArn],
+  });
+}
+
+/**
+ * Emit reconciliation gauges to CloudWatch (Phase 2B). `cloudwatch:PutMetricData` is a resource-less
+ * action (no metric ARNs) — `*` is the only valid resource; access is instead constrained by the
+ * `cloudwatch:namespace` condition in practice. Documented exception, not an over-grant.
+ */
+export function cloudwatchPutMetricStatement(): PolicyStatement {
+  return new PolicyStatement({
+    sid: "PutMeteringMetrics",
+    actions: ["cloudwatch:PutMetricData"],
+    resources: ["*"], // PutMetricData has no resource-level ARNs.
+  });
+}
+
+/**
  * Least-privilege SES send permission for the reminder-digest Lambda (v2.1 F1). Scoped to SES
  * identities in this account/region (the verified sender); no wildcard resource beyond the identity
  * namespace. `ses:SendEmail` is the IAM action for both the v1 and v2 SendEmail APIs.

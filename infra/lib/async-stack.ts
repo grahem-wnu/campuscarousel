@@ -1,17 +1,31 @@
 import { join } from "node:path";
-import { CfnOutput, Duration, Stack, type StackProps } from "aws-cdk-lib";
+import { CfnOutput, Duration, RemovalPolicy, Stack, type StackProps } from "aws-cdk-lib";
 import type { Table } from "aws-cdk-lib/aws-dynamodb";
 import { Rule, Schedule } from "aws-cdk-lib/aws-events";
 import { LambdaFunction as LambdaFunctionTarget } from "aws-cdk-lib/aws-events-targets";
+import { PolicyStatement, ServicePrincipal } from "aws-cdk-lib/aws-iam";
 import { Code, Function as LambdaFunction, Runtime, Tracing } from "aws-cdk-lib/aws-lambda";
 import { SqsEventSource } from "aws-cdk-lib/aws-lambda-event-sources";
 import { RetentionDays } from "aws-cdk-lib/aws-logs";
 import { Queue } from "aws-cdk-lib/aws-sqs";
-import type { IBucket } from "aws-cdk-lib/aws-s3";
+import { BlockPublicAccess, Bucket, BucketEncryption, type IBucket } from "aws-cdk-lib/aws-s3";
+import {
+  AwsCustomResource,
+  AwsCustomResourcePolicy,
+  PhysicalResourceId,
+} from "aws-cdk-lib/custom-resources";
 import type { Construct } from "constructs";
 import { envHostname, type EnvConfig } from "./config";
 import { putOutput } from "./ssm";
-import { bedrockInvokeStatement, sesSendStatement, ssmReadConfigStatement } from "./policies";
+import {
+  bedrockInvokeStatement,
+  cloudwatchPutMetricStatement,
+  costExplorerReadStatement,
+  s3ReadStatement,
+  sesSendStatement,
+  snsPublishStatement,
+  ssmReadConfigStatement,
+} from "./policies";
 
 export interface AsyncStackProps extends StackProps {
   readonly config: EnvConfig;
@@ -51,6 +65,8 @@ export class AsyncStack extends Stack {
   public readonly essayCoachQueue: Queue;
   public readonly essayCoachDeadLetterQueue: Queue;
   public readonly essayCoachWorkerFunctionName: string;
+  /** PROD-ONLY: daily Bedrock cost-reconciliation Lambda name (undefined in staging). */
+  public readonly reconcileFunctionName?: string;
 
   constructor(scope: Construct, id: string, props: AsyncStackProps) {
     super(scope, id, props);
@@ -342,5 +358,130 @@ export class AsyncStack extends Stack {
 
     new CfnOutput(this, "EssayCoachQueueUrl", { value: this.essayCoachQueue.queueUrl });
     new CfnOutput(this, "EssayCoachDlqUrl", { value: this.essayCoachDeadLetterQueue.queueUrl });
+
+    // --- PROD-ONLY: Bedrock cost reconciliation (Phase 2B) --------------------------------------
+    // Staging + prod share ONE AWS account + one Bedrock inference profile, so Cost Explorer $ and
+    // the account-global model-invocation logging config are account-total — they can't separate the
+    // two envs. Reconciliation therefore runs in PROD ONLY (staging's tiny QA usage is absorbed as
+    // noise by the drift threshold), which also avoids the account-global single-owner conflict on the
+    // logging config. Everything below is created only when config.stage === 'prod', so staging synth
+    // cleanly omits the bucket, the logging config, and the reconcile Lambda + schedule.
+    if (config.stage === "prod") {
+      // Invocation-log bucket. RETAIN (prod data) + all-public-access blocked + SSE + TLS-only, mirroring
+      // the assets bucket. Bedrock delivers model-invocation logs here under the keyPrefix below.
+      const logBucket = new Bucket(this, "BedrockInvocationLogs", {
+        bucketName: `${config.namePrefix}-bedrock-logs-${this.account}`,
+        blockPublicAccess: BlockPublicAccess.BLOCK_ALL,
+        encryption: BucketEncryption.S3_MANAGED,
+        enforceSSL: true,
+        removalPolicy: RemovalPolicy.RETAIN,
+      });
+
+      // Let the Bedrock service principal deliver logs into the bucket, constrained to THIS account.
+      const bucketPolicy = logBucket.addToResourcePolicy(
+        new PolicyStatement({
+          sid: "AllowBedrockLogDelivery",
+          actions: ["s3:PutObject"],
+          resources: [`${logBucket.bucketArn}/*`],
+          principals: [new ServicePrincipal("bedrock.amazonaws.com")],
+          conditions: { StringEquals: { "aws:SourceAccount": this.account } },
+        }),
+      );
+
+      // Enable Bedrock model-invocation logging via an AwsCustomResource. There is NO L1 for this
+      // (no CfnModelInvocationLoggingConfiguration / AWS::Bedrock::ModelInvocationLoggingConfiguration) —
+      // model-invocation logging is API-only. Account+region-global, so only prod owns it.
+      const loggingConfig = new AwsCustomResource(this, "BedrockInvocationLoggingConfig", {
+        onCreate: {
+          service: "Bedrock",
+          action: "PutModelInvocationLoggingConfiguration",
+          parameters: {
+            loggingConfig: {
+              s3Config: { bucketName: logBucket.bucketName, keyPrefix: "bedrock-invocation-logs/" },
+              textDataDeliveryEnabled: true,
+              imageDataDeliveryEnabled: false,
+              embeddingDataDeliveryEnabled: false,
+            },
+          },
+          physicalResourceId: PhysicalResourceId.of("bedrock-invocation-logging"),
+        },
+        onUpdate: {
+          service: "Bedrock",
+          action: "PutModelInvocationLoggingConfiguration",
+          parameters: {
+            loggingConfig: {
+              s3Config: { bucketName: logBucket.bucketName, keyPrefix: "bedrock-invocation-logs/" },
+              textDataDeliveryEnabled: true,
+              imageDataDeliveryEnabled: false,
+              embeddingDataDeliveryEnabled: false,
+            },
+          },
+          physicalResourceId: PhysicalResourceId.of("bedrock-invocation-logging"),
+        },
+        onDelete: {
+          service: "Bedrock",
+          action: "DeleteModelInvocationLoggingConfiguration",
+        },
+        policy: AwsCustomResourcePolicy.fromStatements([
+          new PolicyStatement({
+            // These Bedrock actions have no resource-level ARNs — `*` is the only valid resource.
+            actions: [
+              "bedrock:PutModelInvocationLoggingConfiguration",
+              "bedrock:DeleteModelInvocationLoggingConfiguration",
+            ],
+            resources: ["*"],
+          }),
+        ]),
+      });
+      // The bucket must accept Bedrock's PutObject before the logging config activates.
+      if (bucketPolicy.policyDependable) {
+        loggingConfig.node.addDependency(bucketPolicy.policyDependable);
+      }
+
+      // Reconcile Lambda. Reads raw usage + AWS actuals, writes rollups + a status row, alerts on drift.
+      // The alarm-topic ARN is resolved from SSM at RUNTIME (see the entry), NOT injected here — obs
+      // deploys after async, so a deploy-time cross-stack read/prop would be a from-scratch ordering
+      // hazard (and prop-passing is circular since obs already consumes async's worker name).
+      const reconcile = new LambdaFunction(this, "MeteringReconcile", {
+        functionName: `${config.namePrefix}-metering-reconcile`,
+        runtime: Runtime.NODEJS_20_X,
+        handler: "index.handler",
+        code: Code.fromAsset(join(__dirname, "../../backend/dist/reconcile")),
+        timeout: Duration.seconds(120),
+        memorySize: 256,
+        logRetention: RetentionDays.ONE_MONTH,
+        environment: {
+          TABLE_NAME: table.tableName,
+          STAGE: config.stage,
+          RECON_LOG_BUCKET: logBucket.bucketName,
+          RECON_DRIFT_THRESHOLD_PCT: "5",
+          SSM_PREFIX: config.ssmPrefix,
+        },
+      });
+      this.reconcileFunctionName = reconcile.functionName;
+
+      // Least-privilege grants. The SNS topic ARN is constructed by naming convention (obs names it
+      // `${namePrefix}-alarms`) for the IAM grant; the actual ARN still comes from SSM at runtime.
+      const alarmTopicArn = `arn:aws:sns:${this.region}:${this.account}:${config.namePrefix}-alarms`;
+      table.grantReadWriteData(reconcile);
+      reconcile.addToRolePolicy(costExplorerReadStatement());
+      reconcile.addToRolePolicy(s3ReadStatement(logBucket.bucketArn));
+      reconcile.addToRolePolicy(snsPublishStatement(alarmTopicArn));
+      reconcile.addToRolePolicy(cloudwatchPutMetricStatement());
+      // For the runtime read of `${SSM_PREFIX}/alarmTopicArn`.
+      reconcile.addToRolePolicy(ssmReadConfigStatement(this.region, this.account, config.ssmPrefix));
+
+      // Daily at 07:00 UTC — Cost Explorer is ~24h delayed, so a morning run reconciles yesterday.
+      new Rule(this, "ReconcileSchedule", {
+        ruleName: `${config.namePrefix}-metering-reconcile`,
+        schedule: Schedule.cron({ minute: "0", hour: "7" }),
+        targets: [new LambdaFunctionTarget(reconcile)],
+      });
+
+      putOutput(this, config, "reconcileFn", reconcile.functionName, "Metering reconciliation Lambda name");
+      putOutput(this, config, "bedrockLogBucket", logBucket.bucketName, "Bedrock invocation-log S3 bucket");
+      new CfnOutput(this, "ReconcileFn", { value: reconcile.functionName });
+      new CfnOutput(this, "BedrockLogBucket", { value: logBucket.bucketName });
+    }
   }
 }

@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { createRouter, type ApiEvent, type RouteDef } from '../../shared/api/index.js';
-import { InMemoryTableClient, type StoredItem } from '../../shared/data/index.js';
+import { InMemoryTableClient, makeData, type Data, type StoredItem } from '../../shared/data/index.js';
 import { makeHandlers } from './handlers.js';
 
 function event(
@@ -47,10 +47,13 @@ function usageRow(tenant: string, sk: string, extra: Partial<StoredItem> = {}): 
 function harness(seed: (c: InMemoryTableClient) => void) {
   const client = new InMemoryTableClient();
   seed(client);
+  const data: Data = makeData(client);
+  const h = makeHandlers({ getClient: () => client, getData: () => data });
   const routes: RouteDef[] = [
-    { method: 'GET', path: '/admin/usage', handler: makeHandlers({ getClient: () => client }).usage, roles: ['admin'] },
+    { method: 'GET', path: '/admin/usage', handler: h.usage, roles: ['admin'] },
+    { method: 'GET', path: '/admin/usage/families', handler: h.families, platformAdmin: true },
   ];
-  return { dispatch: createRouter(routes), client };
+  return { dispatch: createRouter(routes), client, data };
 }
 
 describe('admin-usage router integration', () => {
@@ -142,5 +145,176 @@ describe('admin-usage router integration', () => {
       if (prev === undefined) delete process.env.DEFAULT_TENANT_ID;
       else process.env.DEFAULT_TENANT_ID = prev;
     }
+  });
+});
+
+describe('GET /admin/usage/families', () => {
+  // Seed tenants via data.tenants.create (stamps GSI1PK/GSI1SK so tenants.list() finds them); usage
+  // rows go in as raw puts on the same client under T#<tenant>#USAGE (what the handler reads by PK).
+  async function familiesHarness(
+    seedTenants: (data: Data) => Promise<void>,
+    seedUsage: (c: InMemoryTableClient) => void,
+  ) {
+    const client = new InMemoryTableClient();
+    const data: Data = makeData(client);
+    await seedTenants(data);
+    seedUsage(client);
+    const h = makeHandlers({ getClient: () => client, getData: () => data });
+    return createRouter([
+      { method: 'GET', path: '/admin/usage/families', handler: h.families, platformAdmin: true },
+    ]);
+  }
+
+  const threeTenants = async (data: Data) => {
+    await data.tenants.create({ tenantId: 'fam1', familyName: 'Alpha', plan: 'free', status: 'active' });
+    await data.tenants.create({ tenantId: 'fam2', familyName: 'Beta', plan: 'free', status: 'active' });
+    await data.tenants.create({ tenantId: 'fam3', familyName: 'Gamma', plan: 'free', status: 'active' });
+  };
+
+  it('platform admin → 200, families ranked by cost desc, zero-usage tenant included, grand total', async () => {
+    const dispatch = await familiesHarness(threeTenants, (c) => {
+      void c.put(usageRow('fam1', '2026-07-01T00:00:00.000Z#a', { costMicros: 100, inputTokens: 10, outputTokens: 5 }));
+      void c.put(usageRow('fam1', '2026-07-02T00:00:00.000Z#b', { costMicros: 40, inputTokens: 4, outputTokens: 2 }));
+      void c.put(usageRow('fam2', '2026-07-02T00:00:00.000Z#c', { costMicros: 999, inputTokens: 20, outputTokens: 8 }));
+      // fam3 has NO usage rows — must still appear with zeros.
+    });
+    const res = await dispatch(event('GET', '/admin/usage/families', platformAdmin));
+    expect(res.statusCode).toBe(200);
+    const body = parse(res);
+    const families = body.families as Array<Record<string, unknown>>;
+    expect(families.map((f) => f.tenantId)).toEqual(['fam2', 'fam1', 'fam3']); // cost desc; zero-usage fam3 last
+    expect(families[0]).toMatchObject({ tenantId: 'fam2', familyName: 'Beta', costMicros: 999, calls: 1 });
+    expect(families[1]).toMatchObject({ tenantId: 'fam1', familyName: 'Alpha', costMicros: 140, inputTokens: 14, calls: 2 });
+    expect(families[2]).toMatchObject({ tenantId: 'fam3', familyName: 'Gamma', costMicros: 0, inputTokens: 0, calls: 0 });
+    expect(body.totalCostMicros).toBe(1139);
+  });
+
+  it('from/to range filters rows per tenant (out-of-range excluded)', async () => {
+    const dispatch = await familiesHarness(
+      async (data) => {
+        await data.tenants.create({ tenantId: 'fam1', familyName: 'Alpha', plan: 'free', status: 'active' });
+      },
+      (c) => {
+        void c.put(usageRow('fam1', '2026-06-30T00:00:00.000Z#early', { costMicros: 11 })); // before
+        void c.put(usageRow('fam1', '2026-07-05T00:00:00.000Z#mid', { costMicros: 22 })); // in
+        void c.put(usageRow('fam1', '2026-08-15T00:00:00.000Z#late', { costMicros: 33 })); // after
+      },
+    );
+    const res = await dispatch(
+      event('GET', '/admin/usage/families', platformAdmin, {
+        from: '2026-07-01T00:00:00Z',
+        to: '2026-07-31T23:59:59Z',
+      }),
+    );
+    expect(res.statusCode).toBe(200);
+    const body = parse(res);
+    expect(body.totalCostMicros).toBe(22);
+    expect((body.families as Array<Record<string, unknown>>)[0]).toMatchObject({ costMicros: 22, calls: 1 });
+  });
+
+  it('non-platform admin (role admin) → 403', async () => {
+    const dispatch = await familiesHarness(async () => {}, () => {});
+    const res = await dispatch(event('GET', '/admin/usage/families', adminFam1));
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('parent → 403', async () => {
+    const dispatch = await familiesHarness(async () => {}, () => {});
+    const res = await dispatch(event('GET', '/admin/usage/families', parentFam1));
+    expect(res.statusCode).toBe(403);
+  });
+});
+
+describe('GET /admin/usage/reconciliation', () => {
+  function reconHarness(seed: (c: InMemoryTableClient) => void) {
+    const client = new InMemoryTableClient();
+    seed(client);
+    const data: Data = makeData(client);
+    const h = makeHandlers({ getClient: () => client, getData: () => data });
+    return createRouter([
+      { method: 'GET', path: '/admin/usage/reconciliation', handler: h.reconciliation, platformAdmin: true },
+    ]);
+  }
+
+  const statusRow = (month: string, extra: Partial<StoredItem> = {}): StoredItem => ({
+    PK: 'GLOBAL#RECON',
+    SK: `MONTH#${month}`,
+    month,
+    appCostMicros: 1_000_000,
+    awsCostMicros: 950_000,
+    driftPct: 5.26,
+    appTokens: 140,
+    awsTokens: 138,
+    breach: true,
+    computedAt: '2026-07-13T07:00:00.000Z',
+    caveat: 'account-total incl. staging noise; Cost Explorer ~24h delayed',
+    ...extra,
+  });
+
+  it('platform admin → 200 with the seeded status row for ?month=', async () => {
+    const dispatch = reconHarness((c) => {
+      void c.put(statusRow('2026-07'));
+    });
+    const res = await dispatch(event('GET', '/admin/usage/reconciliation', platformAdmin, { month: '2026-07' }));
+    expect(res.statusCode).toBe(200);
+    const body = parse(res);
+    expect(body).toMatchObject({
+      month: '2026-07',
+      appCostMicros: 1_000_000,
+      awsCostMicros: 950_000,
+      driftPct: 5.26,
+      breach: true,
+      computedAt: '2026-07-13T07:00:00.000Z',
+    });
+    expect(String(body.caveat)).toContain('Cost Explorer');
+  });
+
+  it('platform admin → 200 with actualsAvailable:false + null aws/drift when actuals were unavailable', async () => {
+    const dispatch = reconHarness((c) => {
+      void c.put(
+        statusRow('2026-07', {
+          awsCostMicros: null,
+          driftPct: null,
+          awsTokens: null,
+          breach: false,
+          actualsAvailable: false,
+        }),
+      );
+    });
+    const res = await dispatch(event('GET', '/admin/usage/reconciliation', platformAdmin, { month: '2026-07' }));
+    expect(res.statusCode).toBe(200);
+    const body = parse(res);
+    expect(body).toMatchObject({ month: '2026-07', appCostMicros: 1_000_000, actualsAvailable: false, breach: false });
+    expect(body.awsCostMicros).toBeNull();
+    expect(body.driftPct).toBeNull();
+  });
+
+  it('platform admin → 200 with actualsAvailable:true for a normal computed row', async () => {
+    const dispatch = reconHarness((c) => {
+      void c.put(statusRow('2026-07', { actualsAvailable: true }));
+    });
+    const res = await dispatch(event('GET', '/admin/usage/reconciliation', platformAdmin, { month: '2026-07' }));
+    const body = parse(res);
+    expect(body).toMatchObject({ actualsAvailable: true, breach: true });
+  });
+
+  it('platform admin → 200 with not_computed when the month has no status row', async () => {
+    const dispatch = reconHarness(() => {});
+    const res = await dispatch(event('GET', '/admin/usage/reconciliation', platformAdmin, { month: '2026-07' }));
+    expect(res.statusCode).toBe(200);
+    const body = parse(res);
+    expect(body).toEqual({ month: '2026-07', status: 'not_computed' });
+  });
+
+  it('non-platform admin (role admin) → 403', async () => {
+    const dispatch = reconHarness(() => {});
+    const res = await dispatch(event('GET', '/admin/usage/reconciliation', adminFam1, { month: '2026-07' }));
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('parent → 403', async () => {
+    const dispatch = reconHarness(() => {});
+    const res = await dispatch(event('GET', '/admin/usage/reconciliation', parentFam1));
+    expect(res.statusCode).toBe(403);
   });
 });
