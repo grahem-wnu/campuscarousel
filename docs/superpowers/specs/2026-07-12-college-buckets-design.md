@@ -84,15 +84,28 @@ Two paths, so nothing needs clicking and coverage self-heals:
    `suggestBucket`, persisting `suggestedBucket*` on the college. (Hydration is student-scoped, so
    the student's profile is reachable.)
 
-2. **Existing colleges** — `GET /colleges` (list handler) enqueues a cheap async **`bucket`** job
+2. **Existing colleges** — `GET /colleges` (list handler) enqueues a cheap async bucket job
    (reusing the **focus queue** so it never contends with bulk hydration) for any college that is
-   *hydrated* (`hydratedAt`/`dataAsOf` present) but has no `suggestedBucket`. Fire-and-forget SQS
-   send; deduped by a short-lived marker so repeated list loads don't re-enqueue. The `bucket` job
-   loads the one college + profile, runs `suggestBucket`, and persists. Buckets fill in within
-   seconds of first view.
+   *hydrated* (`dataAsOf` present) but has no `suggestedBucket`. Fire-and-forget SQS send. The job
+   is **idempotent** — it just recomputes and persists `suggestedBucket*` via `mergePreservingUserEdits`
+   (never touching `bucket`) — so a rare double-enqueue from two near-simultaneous list loads is
+   harmless. No dedup marker needed in v1; we accept the occasional redundant recompute rather than
+   add a write on the read path.
 
-The `bucket` job is a new message `kind` routed by the existing shared worker
-(`hydration.manifest.ts` glob), same pattern as focus/essay-coach kinds.
+**Message shape & routing (verified against the worker):** the shared worker
+(`backend/lambda/hydration.ts`) routes by the top-level **`type`**, and college-hub registers one
+`type` (`'college-hydrate'`) then **sub-routes by a `task` field** in `hydration.manifest.ts`
+(exactly how `task:'prep'` works today — NOT a `kind` field; only the focus module uses `kind`).
+So the bucket message is:
+
+```ts
+{ type: 'college-hydrate', task: 'bucket', collegeId, tenantId, studentId }
+```
+
+`tenantId` **and** `studentId` are **mandatory** — the worker fail-closes any message missing either
+to the DLQ (`hydration.ts` guard). The enqueuer supplies them from `currentTenantId()` /
+`currentStudentId()` (same as `prep-ai.ts`). The new `task:'bucket'` branch lives in college-hub's
+`hydration.manifest.ts` handler, mirroring the `prep` branch — no new top-level registry `type`.
 
 ## API
 
@@ -103,7 +116,12 @@ Mirrors the existing `PATCH /colleges/:id/top-pick`:
   never touches `suggestedBucket*`. Roles: `admin`, `parent`, `student` (student pinned to own
   scope by the router). Validated by a strict zod schema.
 - **`GET /colleges`** — add optional `bucket` filter to `listQuerySchema`
-  (`z.enum(ADMISSION_BUCKETS).optional()`), filtering on the **effective** bucket.
+  (`z.enum(ADMISSION_BUCKETS).optional()`), filtering on the **effective** bucket
+  (`c.bucket ?? c.suggestedBucket`) inside `filterColleges` in
+  `backend/modules/college-hub/query.ts`.
+
+The `PATCH …/bucket` body schema is `z.object({ bucket: z.enum(ADMISSION_BUCKETS).nullable() }).strict()`
+— `null` clears the override.
 
 No new table, GSI, or stack change. The focus queue already exists.
 
