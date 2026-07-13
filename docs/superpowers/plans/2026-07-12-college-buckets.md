@@ -63,49 +63,55 @@ git commit -m "feat(college-buckets): College.bucket + suggestedBucket* fields +
 
 Mirror `prep-ai.ts`: `converseWithSearch(..., { webSearch:false })`, model id from options (→ `BEDROCK_MODEL_ID`), injectable `invoker`, return `undefined` on any failure. The inputs (`acceptanceRateProgram`, `acceptanceRateUniversity`, `avgGPAAdmitted`) are **strings** (e.g. "under 20%") — the PROMPT interprets them; do NOT regex-parse.
 
-- [ ] **Step 1: Write the failing test** `bucket-ai.test.ts`. Use an injected `invoker` that returns canned JSON so no network is hit (see how `prep-ai.test.ts` injects). Cases:
+- [ ] **Step 1: Write the failing test** `bucket-ai.test.ts`. **Do NOT try to fake the low-level Bedrock `invoker`** — its real type is `BedrockInvoker { invoke(modelId, body: Uint8Array): Promise<Uint8Array> }` returning serialized Anthropic bytes, not `{text}`. `prep-ai.test.ts` does not unit-test the model call either; it tests the **pure** functions and drives the job through an injected higher-level suggester. Follow that. Cases (pure functions only here; `runBucketJob` via injected `BucketSuggester` is tested in Chunk 3):
 
 ```ts
 import { describe, it, expect } from 'vitest';
-import { suggestBucket, parseBucketSuggestion } from './bucket-ai.js';
-
-const invokerReturning = (json: string) => async () => ({ text: json, sources: [] as string[] });
+import { parseBucketSuggestion, buildBucketPrompt } from './bucket-ai.js';
 
 describe('parseBucketSuggestion', () => {
   it('parses a valid suggestion', () => {
     expect(parseBucketSuggestion('{"bucket":"reach","rationale":"12% accept","confidence":"high"}'))
       .toEqual({ bucket: 'reach', rationale: '12% accept', confidence: 'high' });
   });
+  it('extracts JSON embedded in prose', () => {
+    expect(parseBucketSuggestion('Here: {"bucket":"safety","rationale":"70% accept","confidence":"high"} ok')?.bucket)
+      .toBe('safety');
+  });
   it('returns undefined on a bad bucket value', () => {
     expect(parseBucketSuggestion('{"bucket":"maybe","rationale":"x","confidence":"low"}')).toBeUndefined();
+  });
+  it('returns undefined on a bad confidence value', () => {
+    expect(parseBucketSuggestion('{"bucket":"reach","rationale":"x","confidence":"certain"}')).toBeUndefined();
+  });
+  it('returns undefined on empty rationale', () => {
+    expect(parseBucketSuggestion('{"bucket":"reach","rationale":"","confidence":"low"}')).toBeUndefined();
   });
   it('returns undefined on non-JSON', () => {
     expect(parseBucketSuggestion('the answer is reach')).toBeUndefined();
   });
 });
 
-describe('suggestBucket', () => {
-  const college = { name: 'Test U', acceptanceRateProgram: '12%', avgGPAAdmitted: '3.8' } as any;
-  it('returns the parsed suggestion from the model', async () => {
-    const out = await suggestBucket(
-      { college, currentGPA: 3.6, gpaType: 'unweighted' },
-      { invoker: invokerReturning('{"bucket":"reach","rationale":"below avg + selective","confidence":"medium"}') },
-    );
-    expect(out?.bucket).toBe('reach');
+describe('buildBucketPrompt', () => {
+  it('notes when GPA is on file', () => {
+    const p = buildBucketPrompt({ college: { name: 'U', acceptanceRateProgram: '12%' } as any, currentGPA: 3.6, gpaType: 'unweighted' });
+    expect(p).toContain('3.6');
+    expect(p).toContain('reach');
   });
-  it('returns undefined when the college has no acceptance rate AND no admitted GPA', async () => {
-    const out = await suggestBucket({ college: { name: 'X' } as any, currentGPA: 3.6 }, { invoker: invokerReturning('{}') });
-    expect(out).toBeUndefined(); // nothing to reason from — short-circuits before the model
-  });
-  it('returns undefined (never throws) when the model errors', async () => {
-    const out = await suggestBucket(
-      { college, currentGPA: 3.6 },
-      { invoker: async () => { throw new Error('bedrock down'); } },
-    );
-    expect(out).toBeUndefined();
+  it('flags low confidence when GPA is absent', () => {
+    const p = buildBucketPrompt({ college: { name: 'U', acceptanceRateProgram: '12%' } as any });
+    expect(p.toLowerCase()).toContain('not on file');
   });
 });
 ```
+
+> The insufficient-data short-circuit (`suggestBucket` returns `undefined` when the college has no acceptance rate AND no admitted GPA) and the never-throws behavior are covered in Chunk 3's `runBucketJob` tests via an injected suggester, plus one direct `suggestBucket` short-circuit test that needs no model call:
+> ```ts
+> import { suggestBucket } from './bucket-ai.js';
+> it('suggestBucket short-circuits to undefined with nothing to reason from', async () => {
+>   expect(await suggestBucket({ college: { name: 'X' } as any })).toBeUndefined(); // returns before any model call
+> });
+> ```
 
 - [ ] **Step 2: Run it — Expected: FAIL** (module not found). Run: `npx vitest run backend/modules/college-hub/bucket-ai.test.ts --exclude '**/agents/**'`
 
@@ -116,7 +122,8 @@ describe('suggestBucket', () => {
 // numbers we already hydrated (acceptance rate, admitted GPA) against the student's GPA; no web
 // search, so it's fast and request-safe. Pure prompt-build + parse; returns undefined on any failure
 // or when there's nothing to reason from. Mirrors prep-ai.ts.
-import { converseWithSearch } from './converse.js'; // <-- confirm the exact import prep-ai.ts uses
+// VERIFIED IMPORTS (match prep-ai.ts:14 + ai.ts:44-55 exactly):
+import { converseWithSearch, type BedrockInvoker, type WebSearcher } from '../../shared/ai/index.js';
 import type { College } from '../../shared/data/index.js';
 import { ADMISSION_BUCKETS, type AdmissionBucket } from '../../shared/data/index.js';
 
@@ -134,8 +141,8 @@ export interface SuggestBucketInput {
 
 export interface BucketAiOptions {
   modelId?: string;
-  invoker?: unknown;   // match prep-ai.ts AiOptions shape
-  searcher?: unknown;
+  invoker?: BedrockInvoker;   // NOT `unknown` — must match converseWithSearch's option type (compile error otherwise)
+  searcher?: WebSearcher;
 }
 
 const CONFIDENCES = ['low', 'medium', 'high'] as const;
@@ -204,7 +211,7 @@ export async function suggestBucket(
 }
 ```
 
-> **Implementer note:** open `prep-ai.ts` and copy its EXACT import of `converseWithSearch` and the `AiOptions`/invoker type, so the injected-invoker test path and the `feature` tag match the real seam. Adjust the block above to match.
+> **Implementer note:** the imports above are verified against `prep-ai.ts:14` (`converseWithSearch` from `../../shared/ai/index.js`) and `ai.ts:44-55` (`AiOptions` = `{ modelId?; invoker?: BedrockInvoker; searcher?: WebSearcher }`). `feature` is a REQUIRED `ConverseOptions` field. Still open `prep-ai.ts` to confirm nothing drifted.
 
 - [ ] **Step 4: Run the test — Expected: PASS.**
 
@@ -226,11 +233,13 @@ export async function suggestBucket(
 
 - [ ] **Step 2: Run — Expected: FAIL.**
 
+- [ ] **Step 3a: Break the import cycle first.** Chunk 3 makes `hydration.ts` import `runBucketJob` from `bucket-ai.ts`, while `bucket-ai.ts` needs `HYDRATION_TYPE` from `hydration.ts` — a cycle. Create `backend/modules/college-hub/constants.ts` with `export const HYDRATION_TYPE = 'college-hydrate';`, change `hydration.ts` to `export { HYDRATION_TYPE } from './constants.js';` (re-export so existing importers are unaffected), and have `bucket-ai.ts` import `HYDRATION_TYPE` from `./constants.js`. Run `cd backend && npx tsc --noEmit` after this refactor — Expected: PASS, no behavior change.
+
 - [ ] **Step 3: Implement**, mirroring `prep-ai.ts` exactly:
 
 ```ts
 // ... append to bucket-ai.ts ...
-import { HYDRATION_TYPE } from './hydration.js';
+import { HYDRATION_TYPE } from './constants.js';   // NOT './hydration.js' — avoids the import cycle
 import { currentStudentId, currentTenantId } from '../../shared/tenant/index.js';
 import type { Data } from '../../shared/data/index.js';
 
@@ -369,7 +378,11 @@ Add to `listQuerySchema`: `bucket: z.enum(ADMISSION_BUCKETS).optional(),`.
 
 > Confirm `colleges.update` with `{ bucket: undefined }` actually removes the attribute; if the hydratable repo ignores `undefined`, use a dedicated clear (e.g. a `REMOVE`-capable update or set to a sentinel the effective-bucket calc treats as "unset"). Add a test that asserts `null` truly reverts the effective bucket to the suggestion.
 
-- [ ] **Step 4: Route.** In `routes.manifest.ts`, after the `top-pick` line: `{ method: 'PATCH', path: '/colleges/:id/bucket', handler: handlers.bucket },`
+- [ ] **Step 4: Register the route in ALL THREE required places** (the route table is triplicated + guarded — doing only one breaks the build):
+  1. `handlers.ts` — add `bucket: Handler;` to the `CollegeHandlers` interface (~line 36-55), or the `makeHandlers` object literal is an excess-property TS error.
+  2. `handlers.ts` — add to `buildRoutes()` (~line 332-353), after the `top-pick` entry: `{ method: 'PATCH', path: '/colleges/:id/bucket', handler: handlers.bucket },`.
+  3. `routes.manifest.ts` — add the same line after the `top-pick` line (keeps `buildRoutes ↔ routes.manifest` parity).
+  4. `manifest.test.ts` — this test hard-codes the exact endpoint set (currently 18 literal entries, asserting "expose all seventeen…"-style parity + count). Add `'PATCH /colleges/:id/bucket'` to its expected array and bump the count/wording, or both its assertions fail. Update the test in the SAME commit.
 
 - [ ] **Step 5: Auto-enqueue on list (test-first).** In the `list` handler, after fetching `items`, fire-and-forget a bucket job for each college that is **hydrated** (`dataAsOf` present) but has no `suggestedBucket` and no `bucket`. Use an injected `bucketDispatcher` (default `makeSqsBucketEnqueuer(getData)`) so it's testable. It MUST NOT break the list:
 
@@ -395,18 +408,19 @@ Wire `bucketDispatcher` into `makeHandlers` deps (default to the SQS enqueuer), 
 
 ### Task 5: Bucket UI in the college hub
 
-**Files (confirm exact names against the module):**
-- Modify: `frontend/src/modules/college-hub/api.ts` (add `setBucket`)
-- Create: `frontend/src/modules/college-hub/buckets.ts` (pure helpers: effective bucket, grouping, labels/colors)
-- Create: `frontend/src/modules/college-hub/BucketBadge.tsx`
+**Files (verified names):**
+- Modify: `frontend/src/modules/college-hub/types.ts` (~line 28) — the FE restates `College` independently; add the 4 new fields + an `AdmissionBucket` type (single source of truth; `logic.ts`/components import it from here, do NOT re-declare).
+- Modify: `frontend/src/modules/college-hub/api.ts` (add `setBucket`, using `api.patch<College>` + `encodeURIComponent(id)` like the existing top-pick call at api.ts:52)
+- Modify: `frontend/src/modules/college-hub/logic.ts` (+ `logic.test.ts`) — add the pure bucket helpers HERE (the module's existing home for pure logic), not a new file.
+- Create: `frontend/src/modules/college-hub/BucketBadge.tsx` + `BucketBadge.test.tsx` (`// @vitest-environment jsdom`)
 - Create: `frontend/src/modules/college-hub/BucketPicker.tsx`
-- Modify: the college list component (grouped sections + filter chips)
-- Create tests: `buckets.test.ts`, `BucketBadge.test.tsx` (`// @vitest-environment jsdom`)
+- Modify: `frontend/src/modules/college-hub/CollegeHubPage.tsx` (the real list page — has an existing top-picks vs "More colleges" split at ~168-273 and a card/table toggle) and `CollegeTable.tsx` (the table view).
 
-- [ ] **Step 1: Pure helpers (test-first).** `buckets.ts`:
+- [ ] **Step 0: Add the fields to the FE `College` type** (`types.ts:28`): `bucket?: AdmissionBucket; suggestedBucket?: AdmissionBucket; suggestedBucketRationale?: string; suggestedBucketConfidence?: 'low'|'medium'|'high';` and `export type AdmissionBucket = 'reach'|'target'|'safety';`. Everything else imports `AdmissionBucket` from here.
+
+- [ ] **Step 1: Pure helpers (test-first)** — add to `logic.ts` (import `AdmissionBucket` from `./types`):
 
 ```ts
-export type AdmissionBucket = 'reach' | 'target' | 'safety';
 export const BUCKET_ORDER: AdmissionBucket[] = ['reach', 'target', 'safety'];
 export const BUCKET_LABEL: Record<AdmissionBucket, string> = { reach: 'Reach', target: 'Target', safety: 'Safety' };
 export function effectiveBucket(c: { bucket?: AdmissionBucket; suggestedBucket?: AdmissionBucket }): AdmissionBucket | undefined {
@@ -427,14 +441,18 @@ Test `groupByBucket`/`effectiveBucket`/`isOverridden` (override wins over sugges
 
 ```ts
 export const setBucket = (id: string, bucket: AdmissionBucket | null) =>
-  api.patch(`/colleges/${id}/bucket`, { bucket }); // confirm the app's api client method/signature
+  api.patch<College>(`/colleges/${encodeURIComponent(id)}/bucket`, { bucket }); // matches top-pick call, api.ts:52
 ```
 
 - [ ] **Step 3: `BucketBadge.tsx` (test-first, jsdom).** A small pill: label + Field-Notes color (reach=amber, target=evergreen, safety=ink/muted — use existing tokens, NO new icon-circle/card slop per the Field Notes rule). Shows a subtle "set by you" marker when `isOverridden`. Test: renders the effective label; shows the override marker only when `bucket` is set.
 
 - [ ] **Step 4: `BucketPicker.tsx`.** Clicking the badge opens a 3-option selector (Reach/Target/Safety) + the AI rationale as a hint + a "use AI's pick" reset. Selecting calls `setBucket(id, choice)`; reset calls `setBucket(id, null)`. Keep it a plain controlled popover; match existing college-hub interaction patterns.
 
-- [ ] **Step 5: Grouped list + filter chips.** In the college list component: render `groupByBucket(colleges)` as ordered sections **Reach → Target → Safety → Unclassified**, each with a header + count; put a `BucketBadge` on each card. Add a filter chip row (All / Reach / Target / Safety) that filters the rendered set by effective bucket (client-side is fine; the `?bucket=` param is available if a server round-trip is preferred). Preserve existing sort/search behavior within each section.
+- [ ] **Step 5: Grouped list + filter chips in `CollegeHubPage.tsx`.** The page today splits into **Top picks** then **More colleges** (~168-273) with a card/table toggle. Reconcile bucket grouping as follows (keeps top-picks primacy — the `isTopPick` surface from #40-era is intentional):
+  - Keep the **Top picks** section exactly as-is at the top (a top pick can be any bucket; show its `BucketBadge` on the card).
+  - Replace the flat **More colleges** section with `groupByBucket(nonTopPickColleges)` rendered as ordered sub-sections **Reach → Target → Safety → Unclassified**, each with a header + count. Put a `BucketBadge` on every card.
+  - Add a filter chip row (All / Reach / Target / Safety) above "More colleges" that filters the grouped set by effective bucket (client-side; the `?bucket=` server param exists but client-side matches the existing in-page search/sort). Preserve existing search/sort within each sub-section.
+  - **Table view (`CollegeTable.tsx`):** add a **Bucket** column showing the `BucketBadge` (click → `BucketPicker`). Do NOT group the table — grouping is the card view's job; the table stays a flat sortable grid (add bucket as a sortable column if trivial, else just display).
 
 - [ ] **Step 6: FE typecheck + tests — Expected: PASS.** `cd frontend && npx tsc --noEmit` then `npx vitest run frontend/src/modules/college-hub --exclude '**/agents/**'` (from root).
 
