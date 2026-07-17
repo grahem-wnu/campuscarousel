@@ -167,4 +167,4 @@ npx cdk deploy --all   # deploy the stacks
 
 ## License
 
-UNLICENSED — private. All rights reserved.
+[MIT](./LICENSE) — free to clone, modify, and use for any purpose. No attribution required.
