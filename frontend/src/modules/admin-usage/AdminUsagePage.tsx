@@ -134,7 +134,16 @@ export default function AdminUsagePage() {
   ];
 
   const familyColumns: Column<FamilyUsageRow>[] = [
-    { key: 'family', header: 'Family', render: (f) => <span className="font-medium text-ink-900">{f.familyName}</span> },
+    {
+      key: 'family',
+      header: 'Family',
+      render: (f) => (
+        <span className="flex flex-col">
+          <span className="font-medium text-ink-900">{f.familyName}</span>
+          {f.email ? <span className="text-xs text-ink-500">{f.email}</span> : null}
+        </span>
+      ),
+    },
     { key: 'calls', header: 'Calls', align: 'right', render: (f) => <span className="tabular-nums text-ink-700">{f.calls.toLocaleString()}</span> },
     { key: 'input', header: 'Input tokens', align: 'right', render: (f) => <span className="tabular-nums text-ink-700">{f.inputTokens.toLocaleString()}</span> },
     { key: 'output', header: 'Output tokens', align: 'right', render: (f) => <span className="tabular-nums text-ink-700">{f.outputTokens.toLocaleString()}</span> },

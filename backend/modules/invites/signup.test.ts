@@ -30,12 +30,12 @@ describe('publicSignup', () => {
     expect(provisioned).toEqual([{ email: 'new@x.com', password: 'pw12345678', tenantId: 'fam1' }]);
   });
 
-  it('defaults the family name when omitted or blank', async () => {
+  it('trims the family name before storing it', async () => {
     await publicSignup(
       { data, provisioner, newTenantId: () => 'fam2' },
-      { email: 'new@x.com', password: 'pw12345678', familyName: '  ' },
+      { email: 'new@x.com', password: 'pw12345678', familyName: '  Rhoads  ' },
     );
-    expect(await data.tenants.get('fam2')).toMatchObject({ familyName: 'Family' });
+    expect(await data.tenants.get('fam2')).toMatchObject({ familyName: 'Rhoads' });
   });
 
   it('propagates provisioner failures (tenant may orphan; signup is retryable)', async () => {
@@ -45,13 +45,16 @@ describe('publicSignup', () => {
       },
     };
     await expect(
-      publicSignup({ data, provisioner, newTenantId: () => 'fam3' }, { email: 'new@x.com', password: 'pw12345678' }),
+      publicSignup(
+        { data, provisioner, newTenantId: () => 'fam3' },
+        { email: 'new@x.com', password: 'pw12345678', familyName: 'Nguyen' },
+      ),
     ).rejects.toThrow('cognito down');
   });
 });
 
 describe('signupSchema', () => {
-  const valid = { email: 'new@x.com', password: 'pw12345678' };
+  const valid = { email: 'new@x.com', password: 'pw12345678', familyName: 'Nguyen' };
 
   it('accepts a minimal valid body', () => {
     expect(signupSchema.safeParse(valid).success).toBe(true);
@@ -61,5 +64,13 @@ describe('signupSchema', () => {
     expect(signupSchema.safeParse({ ...valid, password: 'short' }).success).toBe(false);
     expect(signupSchema.safeParse({ ...valid, email: 'not-an-email' }).success).toBe(false);
     expect(signupSchema.safeParse({ ...valid, code: 'ABCD1234' }).success).toBe(false);
+  });
+
+  it('requires a non-blank family name (open signup has no invite to fall back on)', () => {
+    expect(signupSchema.safeParse({ email: valid.email, password: valid.password }).success).toBe(false);
+    expect(signupSchema.safeParse({ ...valid, familyName: '   ' }).success).toBe(false);
+    // Whitespace is trimmed, not preserved.
+    const parsed = signupSchema.parse({ ...valid, familyName: '  Rhoads ' });
+    expect(parsed.familyName).toBe('Rhoads');
   });
 });

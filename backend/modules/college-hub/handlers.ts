@@ -30,7 +30,7 @@ import { findActiveByName, normalizeCollegeName } from './dedupe.js';
 import type { Discoverer } from './ai.js';
 import { makeBedrockChecklistSuggester, type ChecklistSuggester } from './checklist-ai.js';
 import { runPrepJob, type PrepDispatcher, type PrepSuggester } from './prep-ai.js';
-import { makeSqsBucketEnqueuer, type BucketDispatcher } from './bucket-ai.js';
+import { effectiveGPA, makeSqsBucketEnqueuer, type BucketDispatcher } from './bucket-ai.js';
 import { makeInlineDispatcher, type HydrationDispatcher } from './hydration.js';
 import { runDiscoveryJob, type DiscoverDispatcher } from './discover.js';
 import { makeAssetsEnqueuer, type AssetsDispatcher } from './assets-enqueue.js';
@@ -116,9 +116,13 @@ export function makeHandlers(deps: CollegeDeps): CollegeHandlers {
       // Back-fill: colleges hydrated before buckets existed get a suggestion the next time the list
       // is viewed. Fire-and-forget; never blocks or breaks the response. Guard on `bucketAttempted`
       // too, so a college with too little data to bucket isn't re-enqueued on every poll (the job
-      // stamps that flag even when it produces nothing). try/catch guards a sync-throwing dispatcher.
+      // stamps that flag even when it produces nothing). A college whose attempt was skipped for a
+      // missing GPA re-fires once the profile HAS one (the job clears the skip flag, so at most once
+      // per GPA arrival). try/catch guards a sync-throwing dispatcher.
+      const hasGPA = (await effectiveGPA(getData())).currentGPA != null;
       for (const c of items) {
-        if (c.dataAsOf && !c.suggestedBucket && !c.bucket && !c.bucketAttempted) {
+        const retryWithGPA = hasGPA && c.bucketSkippedNoGPA === true;
+        if (c.dataAsOf && !c.suggestedBucket && !c.bucket && (!c.bucketAttempted || retryWithGPA)) {
           try {
             void bucketDispatcher(c.collegeId).catch(() => {});
           } catch {

@@ -25,6 +25,8 @@ export type GroupBy = UsageResponse['groupBy'];
 export interface FamilyUsageRow {
   tenantId: string;
   familyName: string;
+  /** Signup parent's email — disambiguates same-named families; absent on pre-consent tenants. */
+  email?: string;
   costMicros: number;
   inputTokens: number;
   outputTokens: number;

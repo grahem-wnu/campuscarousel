@@ -46,7 +46,10 @@ that shares every dependency with redeem. Not worth it at this scale.
 ## API Contract
 
 ### `POST /auth/signup` (public — no authorizer)
-**Request**: `{ email: string (valid email, ≤320), password: string (8–256), familyName?: string (≤120) }` (strict)
+**Request**: `{ email: string (valid email, ≤320), password: string (8–256), familyName: string (required, trimmed, 1–120) }` (strict)
+> `familyName` became **required** on 2026-07-21: an optional field produced a real prod tenant
+> literally named "Family" (the default), indistinguishable on the admin Usage page. Open signup has
+> no invite record to fall back on, so the name must come from the form.
 **Response**: `201 { tenantId }`
 **Errors**:
 - `403 forbidden` — `PUBLIC_SIGNUP_ENABLED` is not `"true"` ("Sign-up is currently closed.")

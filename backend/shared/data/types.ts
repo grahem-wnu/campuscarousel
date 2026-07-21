@@ -249,6 +249,11 @@ export interface College extends Timestamped, Hydratable {
    *  college has too little data to bucket (no acceptance rate/GPA) so the list back-fill doesn't
    *  re-enqueue a guaranteed-empty job on every poll. A re-hydration re-attempts directly regardless. */
   bucketAttempted?: boolean;
+  /** System flag: the attempt was skipped because the STUDENT has no GPA on file (selectivity-only
+   *  classification called everything "reach", so we don't classify without stats). Lets the list
+   *  back-fill re-enqueue exactly once a GPA appears, and lets the UI hint "add a GPA". Cleared
+   *  (set false) by the first attempt that runs with a GPA present. */
+  bucketSkippedNoGPA?: boolean;
   /** Family override. When set, it is the effective bucket and hydration never touches it. Absent =
    *  use `suggestedBucket`. This is the ONLY user-edited bucket field. */
   bucket?: AdmissionBucket;

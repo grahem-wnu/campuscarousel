@@ -191,6 +191,11 @@ export default function CollegeHubPage() {
     ...BUCKET_ORDER.map((b) => ({ key: b, label: BUCKET_LABEL[b], items: grouped[b] })),
     { key: 'unclassified' as const, label: 'Unclassified', items: grouped.unclassified },
   ].filter((s) => (bucketFilter === 'all' ? true : s.key === bucketFilter));
+  // The bucket job skips classification while the student has no GPA on file (rather than guessing
+  // "reach" for everything). Surface why the list is unclassified and where to fix it.
+  const needsGPAForBuckets = colleges.some(
+    (c) => c.bucketSkippedNoGPA && !c.bucket && !c.suggestedBucket,
+  );
   const renderCard = (c: College) => (
     <CollegeCard
       key={c.collegeId}
@@ -309,6 +314,15 @@ export default function CollegeHubPage() {
                   ))}
                 </Chips>
               </div>
+              {needsGPAForBuckets ? (
+                <p className="rounded-md bg-surface-sunken px-3 py-2 text-xs text-ink-500">
+                  Reach / target / safety suggestions need a GPA on file — add graded courses in{' '}
+                  <a href="/courses" className="font-medium text-primary-700 hover:underline">
+                    Courses
+                  </a>{' '}
+                  and they'll fill in automatically.
+                </p>
+              ) : null}
               {sections.map((s) =>
                 s.items.length > 0 ? (
                   <div key={s.key} className="space-y-2">

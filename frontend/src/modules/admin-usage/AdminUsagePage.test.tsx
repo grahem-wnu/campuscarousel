@@ -90,7 +90,7 @@ const RESPONSE: UsageResponse = {
 
 const FAMILIES: FamiliesUsageResponse = {
   families: [
-    { tenantId: 'fam2', familyName: 'Beta', costMicros: 2_000_000, inputTokens: 200, outputTokens: 80, calls: 5 },
+    { tenantId: 'fam2', familyName: 'Beta', email: 'beta@x.com', costMicros: 2_000_000, inputTokens: 200, outputTokens: 80, calls: 5 },
     { tenantId: 'fam1', familyName: 'Alpha', costMicros: 1_500_000, inputTokens: 100, outputTokens: 40, calls: 3 },
   ],
   totalCostMicros: 3_500_000,
@@ -172,6 +172,8 @@ describe('AdminUsagePage', () => {
     // ranked family rows: family name + cost; grand total headline
     expect(screen.getByText('Beta')).toBeTruthy();
     expect(screen.getByText('Alpha')).toBeTruthy();
+    // signup email shown under the name (disambiguates same-named families); absent → no crash
+    expect(screen.getByText('beta@x.com')).toBeTruthy();
     expect(screen.getByText('$3.50')).toBeTruthy(); // grand total
     // the per-family breakdown is NOT fetched until a family is selected
     expect(h.getUsage).not.toHaveBeenCalled();

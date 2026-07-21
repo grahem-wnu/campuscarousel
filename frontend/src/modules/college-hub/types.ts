@@ -83,6 +83,9 @@ export interface College {
   suggestedBucket?: AdmissionBucket;
   suggestedBucketRationale?: string;
   suggestedBucketConfidence?: 'low' | 'medium' | 'high';
+  /** System flag: bucket suggestion was skipped because the student has no GPA on file. Drives the
+   *  "add a GPA to get suggestions" hint on the hub page. */
+  bucketSkippedNoGPA?: boolean;
   fitScore?: number;
   hydrationStatus?: HydrationStatus;
   lastDataRefresh?: string;

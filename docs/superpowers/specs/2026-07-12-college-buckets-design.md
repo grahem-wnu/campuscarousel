@@ -69,7 +69,12 @@ the existing Bedrock seam (`BEDROCK_MODEL_ID` env, `invokeMessages`).
 - **safety** — high acceptance rate (~>60%) AND student GPA at/above the admitted average.
 - **reach** — low acceptance rate (~<25%) OR student GPA clearly below the admitted average.
 - **target** — student stats near the admitted profile; moderate selectivity.
-- **Missing GPA** — bucket off acceptance rate alone, `confidence: 'low'`, and say so in the rationale.
+- **Missing GPA** — do NOT classify (return `undefined`, no model call). Selectivity-only reasoning
+  binned every college "reach" for a fresh profile (observed in prod, 2026-07-20 signup), which reads
+  as broken on the first screen a new family sees. The job stamps `bucketSkippedNoGPA` so the list
+  back-fill re-enqueues exactly once a GPA appears, and the hub page hints "add graded courses".
+  GPA resolution matches the dashboard: course-derived GPA first (`computeGpa`), then the
+  self-reported `profile.currentGPA`.
 - **Missing acceptance rate too** — return `undefined` (nothing to reason from); college stays Unclassified.
 
 Pure function `suggestBucket(input): Promise<BucketSuggestion | undefined>` in

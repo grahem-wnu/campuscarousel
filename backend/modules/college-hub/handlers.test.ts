@@ -161,6 +161,26 @@ describe('list bucket back-fill enqueue', () => {
     expect(enqueued).toEqual([]);
   });
 
+  it('re-enqueues a GPA-skipped college once a GPA is on file (and not before)', async () => {
+    const enqueued: string[] = [];
+    const hh = makeHandlers({
+      getData: () => data,
+      dispatch: makeDispatch(),
+      assetsDispatch: makeAssetsDispatch(),
+      bucketDispatcher: async (id) => { enqueued.push(id); },
+    });
+    const c = await seed({ name: 'SkippedNoGPA', dataAsOf: '2026-01-01', bucketAttempted: true, bucketSkippedNoGPA: true });
+    // Still no GPA → the attempted college stays quiet.
+    await hh.list(ctx());
+    await new Promise((r) => setTimeout(r, 0));
+    expect(enqueued).toEqual([]);
+    // GPA arrives → exactly this college re-fires.
+    await data.studentProfile.put({ currentGPA: 3.4 });
+    await hh.list(ctx());
+    await new Promise((r) => setTimeout(r, 0));
+    expect(enqueued).toEqual([c.collegeId]);
+  });
+
   it('a throwing dispatcher does not fail the list', async () => {
     const hh = makeHandlers({
       getData: () => data,
@@ -235,6 +255,7 @@ describe('bucket (PATCH /colleges/:id/bucket)', () => {
   });
 
   it('a re-hydration after an override leaves bucket intact and refreshes suggestedBucket', async () => {
+    await data.studentProfile.put({ currentGPA: 3.6 }); // the job refuses to classify without a GPA
     const c = await create({ name: 'Ohio State' });
     await h.bucket(ctx({ params: { id: c.collegeId }, body: { bucket: 'safety' } }));
     // Simulate a hydration-driven bucket refresh: the suggester recomputes suggestedBucket*.
