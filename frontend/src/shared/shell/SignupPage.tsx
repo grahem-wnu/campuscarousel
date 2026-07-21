@@ -71,8 +71,8 @@ export function SignupPage() {
             <Field label="Your email">
               <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="parent@example.com" />
             </Field>
-            <Field label="Family name" hint="Shown on your family's account — e.g. your last name.">
-              <Input value={familyName} onChange={(e) => setFamilyName(e.target.value)} placeholder="Smith" />
+            <Field label="Family name" required hint="Shown on your family's account — e.g. your last name.">
+              <Input required value={familyName} onChange={(e) => setFamilyName(e.target.value)} placeholder="Smith" />
             </Field>
             <Field label="Choose a password" hint="At least 8 characters.">
               <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />

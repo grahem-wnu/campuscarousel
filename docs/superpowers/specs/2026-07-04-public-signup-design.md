@@ -34,12 +34,12 @@ that shares every dependency with redeem. Not worth it at this scale.
 
 | File | Change |
 |------|--------|
-| `backend/modules/invites/schema.ts` | Add `signupSchema` = `{email, password (min 8), familyName?}` (redeem schema minus `code`) |
+| `backend/modules/invites/schema.ts` | Add `signupSchema` = `{email, password (min 8), familyName (required since 2026-07-21)}` (redeem schema minus `code`) |
 | `backend/modules/invites/signup.ts` (new) | `publicSignup(deps, input)`: create tenant (`plan: 'free'`, `status: 'active'`, consent stamp) → `provisioner.createParentUser(...)`. Same `TenantProvisioner` seam as redeem so it unit-tests without AWS. Throws 403 `Errors.forbidden` when `signupEnabled` dep is false. |
 | `backend/modules/invites/signup.test.ts` (new) | Unit tests (see Test Plan) |
 | `backend/lambda/redeem.ts` | Dispatch on `event.rawPath`: `/auth/signup` → `publicSignup` (reads `PUBLIC_SIGNUP_ENABLED`), else existing redeem. Update header comment: this is the public-auth Lambda, two routes. |
 | `infra/lib/api-stack.ts` | Add public `POST /auth/signup` route → existing `RedeemFn` integration; add `PUBLIC_SIGNUP_ENABLED: "true"` to its environment |
-| `frontend/src/shared/shell/SignupPage.tsx` (new) | Public page: email / family name (optional) / password → `POST /auth/signup`. On success, auto sign-in via `startSignIn(email, password)` and reload into the app (onboarding chat takes over); if auto sign-in fails, fall back to the "go to sign in" screen like JoinPage. |
+| `frontend/src/shared/shell/SignupPage.tsx` (new) | Public page: email / family name (required since 2026-07-21) / password → `POST /auth/signup`. On success, auto sign-in via `startSignIn(email, password)` and reload into the app (onboarding chat takes over); if auto sign-in fails, fall back to the "go to sign in" screen like JoinPage. |
 | `frontend/src/shared/shell/AuthGate.tsx` | Render `SignupPage` for paths starting with `/signup` (same pattern as `/join`) |
 | `frontend/src/shared/shell/LoginPage.tsx` | Add "New here? Create an account" link → `/signup` |
 
@@ -59,7 +59,7 @@ that shares every dependency with redeem. Not worth it at this scale.
 ## Data Model
 
 No new item types. Creates one **Tenant** (`PK: TENANT#<newId>`, `SK: DETAILS`) with
-`familyName` (default `"Family"`), `plan: 'free'`, `status: 'active'`,
+`familyName` (from the form — required, no default), `plan: 'free'`, `status: 'active'`,
 `consent: { acceptedAt, byEmail }` — and one Cognito user (Username = email,
 `custom:role=parent`, `custom:tenantId`, permanent password, `MessageAction: SUPPRESS`).
 

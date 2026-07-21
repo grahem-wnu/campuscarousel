@@ -162,8 +162,10 @@ at the router off the JWT (existing behavior) — no per-handler auth code.
 
 **Backend**
 - `bucket-ai.test.ts` — table-driven: low-accept → reach; high-accept + strong GPA → safety;
-  near-profile → target; missing GPA → confidence `low` + rationale mentions it; missing accept
-  rate → `undefined`; malformed AI output → `undefined` (no throw).
+  near-profile → target; missing GPA → `undefined` with NO model call, job stamps
+  `bucketSkippedNoGPA` (and the back-fill re-fires once a GPA appears); course-derived GPA counts
+  when the profile has none; missing accept rate → `undefined`; malformed AI output → `undefined`
+  (no throw).
 - `handlers.test.ts` — `PATCH /colleges/:id/bucket` sets/clears the override; a re-hydration does
   NOT stomp `bucket`; `null` reverts to suggestion; student-scope enforced; bad enum → 422.
 - list-handler — enqueues a `bucket` job for a hydrated-but-unbucketed college; does NOT enqueue

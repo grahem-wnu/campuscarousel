@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Button, Card, Chip, Chips, EmptyState, Field, Modal, Select, Spinner } from '../../shared/ui';
 import { CollegeCard } from './CollegeCard';
 import { CollegeTable } from './CollegeTable';
@@ -317,9 +317,9 @@ export default function CollegeHubPage() {
               {needsGPAForBuckets ? (
                 <p className="rounded-md bg-surface-sunken px-3 py-2 text-xs text-ink-500">
                   Reach / target / safety suggestions need a GPA on file — add graded courses in{' '}
-                  <a href="/courses" className="font-medium text-primary-700 hover:underline">
+                  <Link to="/courses" className="font-medium text-primary-700 hover:underline">
                     Courses
-                  </a>{' '}
+                  </Link>{' '}
                   and they'll fill in automatically.
                 </p>
               ) : null}
