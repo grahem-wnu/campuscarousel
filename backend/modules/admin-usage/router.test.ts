@@ -193,9 +193,9 @@ describe('GET /admin/usage/families', () => {
     // The signup email (consent record) rides along to disambiguate same-named families; tenants
     // provisioned before consent capture simply omit it.
     expect(families[1]).toMatchObject({ tenantId: 'fam1', familyName: 'Alpha', email: 'alpha@x.com', costMicros: 140, inputTokens: 14, calls: 2 });
-    expect(families[1].email).toBe('alpha@x.com');
+    expect(families[1]?.email).toBe('alpha@x.com');
     expect(families[2]).toMatchObject({ tenantId: 'fam3', familyName: 'Gamma', costMicros: 0, inputTokens: 0, calls: 0 });
-    expect(families[2].email).toBeUndefined();
+    expect(families[2]?.email).toBeUndefined();
     expect(body.totalCostMicros).toBe(1139);
   });
 
