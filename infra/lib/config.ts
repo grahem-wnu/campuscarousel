@@ -106,7 +106,11 @@ function project(app: App): string {
 function github(app: App): { org: string; repo: string } {
   return {
     org: (app.node.tryGetContext("githubOrg") as string) || "grahem-wnu",
-    repo: (app.node.tryGetContext("githubRepo") as string) || "keiras-journey",
+    // The GitHub repo was renamed keiras-journey -> campuscarousel (2026-07-18, product rename).
+    // This value feeds the deploy roles' OIDC trust condition — a mismatch breaks ALL CI deploys
+    // with "Not authorized to perform sts:AssumeRoleWithWebIdentity". The `project` name below is
+    // intentionally unchanged: it drives AWS resource names, not GitHub identity.
+    repo: (app.node.tryGetContext("githubRepo") as string) || "campuscarousel",
   };
 }
 

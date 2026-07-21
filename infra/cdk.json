@@ -16,7 +16,7 @@
   "context": {
     "project": "keiras-journey",
     "githubOrg": "grahem-wnu",
-    "githubRepo": "keiras-journey",
+    "githubRepo": "campuscarousel",
     "domainName": "campuscarousel.com",
     "bedrockSonnetProfile": "us.anthropic.claude-sonnet-4-6",
     "monthlyBudgetUsd": 75,
