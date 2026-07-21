@@ -24,10 +24,13 @@ export const redeemSchema = z
   .strict();
 
 // Public open-signup body (the redeem body minus the invite code; validated at the same entry).
+// `familyName` is REQUIRED here (unlike redeem, where the invite record carries the name): open
+// signup has no other source for it, and a blank name renders every such family as an
+// indistinguishable "Family" row on the admin Usage page.
 export const signupSchema = z
   .object({
     email: z.string().email().max(320),
     password: z.string().min(8).max(256),
-    familyName: z.string().max(120).optional(),
+    familyName: z.string().trim().min(1).max(120),
   })
   .strict();

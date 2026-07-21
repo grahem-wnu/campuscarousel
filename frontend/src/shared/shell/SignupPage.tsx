@@ -22,8 +22,8 @@ export function SignupPage() {
   const [created, setCreated] = useState(false);
 
   async function submit() {
-    if (!email.trim() || password.length < 8) {
-      toast.error("Enter your email and a password of at least 8 characters.");
+    if (!email.trim() || !familyName.trim() || password.length < 8) {
+      toast.error("Enter your email, your family name, and a password of at least 8 characters.");
       return;
     }
     setSubmitting(true);
@@ -31,7 +31,7 @@ export function SignupPage() {
       await api.post("/auth/signup", {
         email: email.trim(),
         password,
-        familyName: familyName.trim() || undefined,
+        familyName: familyName.trim(),
       });
       const result = await startSignIn(email.trim(), password);
       if (result.status === "done") {
@@ -71,8 +71,8 @@ export function SignupPage() {
             <Field label="Your email">
               <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="parent@example.com" />
             </Field>
-            <Field label="Family name (optional)">
-              <Input value={familyName} onChange={(e) => setFamilyName(e.target.value)} />
+            <Field label="Family name" required hint="Shown on your family's account — e.g. your last name.">
+              <Input required value={familyName} onChange={(e) => setFamilyName(e.target.value)} placeholder="Smith" />
             </Field>
             <Field label="Choose a password" hint="At least 8 characters.">
               <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />

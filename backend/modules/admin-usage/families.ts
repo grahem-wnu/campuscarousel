@@ -14,6 +14,9 @@ export interface FamilySummary {
 export interface FamilyUsageRow extends FamilySummary {
   tenantId: string;
   familyName: string;
+  /** Signup parent's email (tenant consent record) — disambiguates same-named families. Absent on
+   *  tenants provisioned before consent capture. */
+  email?: string;
 }
 
 export interface FamiliesUsageResponse {

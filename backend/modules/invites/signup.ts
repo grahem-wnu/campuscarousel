@@ -17,7 +17,8 @@ export interface SignupDeps {
 export interface SignupInput {
   email: string;
   password: string;
-  familyName?: string;
+  /** Required for open signup (enforced by signupSchema) — there is no invite to fall back on. */
+  familyName: string;
 }
 
 /** Open signup → returns the new tenant id. New families start on the free plan. */
@@ -26,7 +27,7 @@ export async function publicSignup(deps: SignupDeps, input: SignupInput): Promis
   const tenantId = (deps.newTenantId ?? newId)();
   await deps.data.tenants.create({
     tenantId,
-    familyName: input.familyName?.trim() || 'Family',
+    familyName: input.familyName.trim(),
     plan: 'free',
     status: 'active',
     consent: { acceptedAt: now().toISOString(), byEmail: input.email },

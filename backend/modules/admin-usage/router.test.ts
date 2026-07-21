@@ -166,7 +166,13 @@ describe('GET /admin/usage/families', () => {
   }
 
   const threeTenants = async (data: Data) => {
-    await data.tenants.create({ tenantId: 'fam1', familyName: 'Alpha', plan: 'free', status: 'active' });
+    await data.tenants.create({
+      tenantId: 'fam1',
+      familyName: 'Alpha',
+      plan: 'free',
+      status: 'active',
+      consent: { acceptedAt: '2026-07-01T00:00:00.000Z', byEmail: 'alpha@x.com' },
+    });
     await data.tenants.create({ tenantId: 'fam2', familyName: 'Beta', plan: 'free', status: 'active' });
     await data.tenants.create({ tenantId: 'fam3', familyName: 'Gamma', plan: 'free', status: 'active' });
   };
@@ -184,8 +190,12 @@ describe('GET /admin/usage/families', () => {
     const families = body.families as Array<Record<string, unknown>>;
     expect(families.map((f) => f.tenantId)).toEqual(['fam2', 'fam1', 'fam3']); // cost desc; zero-usage fam3 last
     expect(families[0]).toMatchObject({ tenantId: 'fam2', familyName: 'Beta', costMicros: 999, calls: 1 });
-    expect(families[1]).toMatchObject({ tenantId: 'fam1', familyName: 'Alpha', costMicros: 140, inputTokens: 14, calls: 2 });
+    // The signup email (consent record) rides along to disambiguate same-named families; tenants
+    // provisioned before consent capture simply omit it.
+    expect(families[1]).toMatchObject({ tenantId: 'fam1', familyName: 'Alpha', email: 'alpha@x.com', costMicros: 140, inputTokens: 14, calls: 2 });
+    expect(families[1]?.email).toBe('alpha@x.com');
     expect(families[2]).toMatchObject({ tenantId: 'fam3', familyName: 'Gamma', costMicros: 0, inputTokens: 0, calls: 0 });
+    expect(families[2]?.email).toBeUndefined();
     expect(body.totalCostMicros).toBe(1139);
   });
 

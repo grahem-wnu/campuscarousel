@@ -69,7 +69,12 @@ the existing Bedrock seam (`BEDROCK_MODEL_ID` env, `invokeMessages`).
 - **safety** — high acceptance rate (~>60%) AND student GPA at/above the admitted average.
 - **reach** — low acceptance rate (~<25%) OR student GPA clearly below the admitted average.
 - **target** — student stats near the admitted profile; moderate selectivity.
-- **Missing GPA** — bucket off acceptance rate alone, `confidence: 'low'`, and say so in the rationale.
+- **Missing GPA** — do NOT classify (return `undefined`, no model call). Selectivity-only reasoning
+  binned every college "reach" for a fresh profile (observed in prod, 2026-07-20 signup), which reads
+  as broken on the first screen a new family sees. The job stamps `bucketSkippedNoGPA` so the list
+  back-fill re-enqueues exactly once a GPA appears, and the hub page hints "add graded courses".
+  GPA resolution matches the dashboard: course-derived GPA first (`computeGpa`), then the
+  self-reported `profile.currentGPA`.
 - **Missing acceptance rate too** — return `undefined` (nothing to reason from); college stays Unclassified.
 
 Pure function `suggestBucket(input): Promise<BucketSuggestion | undefined>` in
@@ -157,8 +162,10 @@ at the router off the JWT (existing behavior) — no per-handler auth code.
 
 **Backend**
 - `bucket-ai.test.ts` — table-driven: low-accept → reach; high-accept + strong GPA → safety;
-  near-profile → target; missing GPA → confidence `low` + rationale mentions it; missing accept
-  rate → `undefined`; malformed AI output → `undefined` (no throw).
+  near-profile → target; missing GPA → `undefined` with NO model call, job stamps
+  `bucketSkippedNoGPA` (and the back-fill re-fires once a GPA appears); course-derived GPA counts
+  when the profile has none; missing accept rate → `undefined`; malformed AI output → `undefined`
+  (no throw).
 - `handlers.test.ts` — `PATCH /colleges/:id/bucket` sets/clears the override; a re-hydration does
   NOT stomp `bucket`; `null` reverts to suggestion; student-scope enforced; bad enum → 422.
 - list-handler — enqueues a `bucket` job for a hydrated-but-unbucketed college; does NOT enqueue
