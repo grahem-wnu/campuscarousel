@@ -33,8 +33,11 @@ vi.mock('../ui', () => ({
 
 import { SignupPage } from './SignupPage';
 
-function fillAndSubmit(email = 'new@x.com', password = 'pw12345678') {
+function fillAndSubmit(email = 'new@x.com', password = 'pw12345678', familyName = 'Rhoads') {
   fireEvent.change(screen.getByLabelText(/your email/i), { target: { value: email } });
+  if (familyName) {
+    fireEvent.change(screen.getByLabelText(/family name/i), { target: { value: familyName } });
+  }
   fireEvent.change(screen.getByLabelText(/choose a password/i), { target: { value: password } });
   fireEvent.click(screen.getByText('Create account'));
 }
@@ -55,7 +58,7 @@ describe('SignupPage', () => {
     expect(h.post).toHaveBeenCalledWith('/auth/signup', {
       email: 'new@x.com',
       password: 'pw12345678',
-      familyName: undefined,
+      familyName: 'Rhoads',
     });
     expect(h.startSignIn).toHaveBeenCalledWith('new@x.com', 'pw12345678');
     expect(window.location.pathname).toBe('/'); // replaceState, not window.location.href
@@ -64,6 +67,13 @@ describe('SignupPage', () => {
   it('rejects a short password client-side without calling the API', () => {
     render(<SignupPage />);
     fillAndSubmit('new@x.com', 'short');
+    expect(h.toastError).toHaveBeenCalled();
+    expect(h.post).not.toHaveBeenCalled();
+  });
+
+  it('rejects a missing family name client-side without calling the API', () => {
+    render(<SignupPage />);
+    fillAndSubmit('new@x.com', 'pw12345678', '');
     expect(h.toastError).toHaveBeenCalled();
     expect(h.post).not.toHaveBeenCalled();
   });

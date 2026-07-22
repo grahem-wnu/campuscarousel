@@ -7,6 +7,7 @@ import { converseWithSearch, type BedrockInvoker, type WebSearcher } from '../..
 import type { College, Data } from '../../shared/data/index.js';
 import { ADMISSION_BUCKETS, type AdmissionBucket } from '../../shared/data/index.js';
 import { currentStudentId, currentTenantId } from '../../shared/tenant/index.js';
+import { computeGpa } from '../course-planner/gpa.js';
 import { HYDRATION_TYPE } from './constants.js'; // NOT './hydration.js' — avoids the import cycle
 
 export interface BucketSuggestion {
@@ -66,13 +67,17 @@ export function buildBucketPrompt(input: SuggestBucketInput): string {
   ].filter(Boolean).join('\n');
 }
 
-/** Suggest a bucket. Short-circuits to undefined when there is nothing to reason from (no acceptance
- *  rate AND no admitted GPA). Never throws. */
+/** Suggest a bucket. Short-circuits to undefined when there is nothing to reason from: no student
+ *  GPA (selectivity-only classification binned everything "reach" — misleading on a fresh profile),
+ *  or no acceptance rate AND no admitted GPA on the college side. Never throws. */
 export async function suggestBucket(
   input: SuggestBucketInput,
   options: BucketAiOptions = {},
 ): Promise<BucketSuggestion | undefined> {
   const { college } = input;
+  if (input.currentGPA == null) {
+    return undefined;
+  }
   if (!college.acceptanceRateProgram && !college.acceptanceRateUniversity && !college.avgGPAAdmitted) {
     return undefined;
   }
@@ -110,6 +115,22 @@ export interface CollegeBucketMessage {
 /** Suggester seam so tests can inject; production builds the model-only Bedrock one. */
 export type BucketSuggester = (input: SuggestBucketInput) => Promise<BucketSuggestion | undefined>;
 
+/** The student's GPA for bucket reasoning, with the same precedence the dashboard shows: GPA computed
+ *  from graded courses first, then the self-reported profile GPA from onboarding. Empty when neither
+ *  exists — the caller must then SKIP classification, not guess from selectivity alone. */
+export async function effectiveGPA(
+  data: Data,
+): Promise<{ currentGPA?: number; gpaType?: 'weighted' | 'unweighted' }> {
+  const fromCourses = computeGpa(await data.courses.list());
+  if (fromCourses.gradedCount > 0) {
+    return { currentGPA: fromCourses.unweighted, gpaType: 'unweighted' };
+  }
+  const profile = await data.studentProfile.get();
+  return profile?.currentGPA != null
+    ? { currentGPA: profile.currentGPA, gpaType: profile.gpaType }
+    : {};
+}
+
 /** Run one bucket job: read the college + student GPA, suggest, merge (preserving user edits). Never
  *  throws. Idempotent — safe to run twice (it just recomputes suggestedBucket*). No-op if gone. It
  *  writes ONLY suggestedBucket* (system fields via mergePreservingUserEdits) — never `bucket`. */
@@ -122,14 +143,27 @@ export async function runBucketJob(
   const college = await data.colleges.get(collegeId);
   if (!college) return;
   try {
-    const profile = await data.studentProfile.get();
+    const gpa = await effectiveGPA(data);
+    // No GPA anywhere → don't classify at all (selectivity-only reasoning binned everything "reach").
+    // Stamp the skip so the list back-fill can re-enqueue exactly once a GPA appears, and the UI can
+    // hint "add a GPA" instead of showing a misleading bucket.
+    if (gpa.currentGPA == null) {
+      await data.colleges.mergePreservingUserEdits(collegeId, {
+        bucketAttempted: true,
+        bucketSkippedNoGPA: true,
+      });
+      return;
+    }
     const run = suggester ?? ((i: SuggestBucketInput) => suggestBucket(i));
-    const suggestion = await run({ college, currentGPA: profile?.currentGPA, gpaType: profile?.gpaType });
+    const suggestion = await run({ college, currentGPA: gpa.currentGPA, gpaType: gpa.gpaType });
     // Always record the attempt (system flag) so a permanently-unclassifiable college — no acceptance
     // rate or admitted GPA — isn't re-enqueued by the list back-fill on every poll. On success we also
     // write the suggestion; on an empty result the college stays Unclassified but won't re-fire.
+    // `bucketSkippedNoGPA: false` (not omitted): a GPA-present attempt must CLEAR a prior skip, or the
+    // back-fill would re-enqueue this college on every list view whenever the model returns nothing.
     await data.colleges.mergePreservingUserEdits(collegeId, {
       bucketAttempted: true,
+      bucketSkippedNoGPA: false,
       ...(suggestion
         ? {
             suggestedBucket: suggestion.bucket,

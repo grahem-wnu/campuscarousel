@@ -55,7 +55,7 @@ export function makeHandlers(deps: AdminUsageDeps) {
     for (const t of tenants) {
       const items = await queryAll(client, `T#${t.tenantId}#USAGE`, skOpts);
       const s = summarizeFamily(items.map(toUsageRow));
-      rows.push({ tenantId: t.tenantId, familyName: t.familyName, ...s });
+      rows.push({ tenantId: t.tenantId, familyName: t.familyName, email: t.consent?.byEmail, ...s });
     }
     return { status: 200, body: rankFamilies(rows) };
   };

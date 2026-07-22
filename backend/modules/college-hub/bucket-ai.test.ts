@@ -49,7 +49,10 @@ describe('buildBucketPrompt', () => {
 
 describe('suggestBucket', () => {
   it('short-circuits to undefined with nothing to reason from', async () => {
-    expect(await suggestBucket({ college: { name: 'X' } })).toBeUndefined(); // returns before any model call
+    expect(await suggestBucket({ college: { name: 'X' }, currentGPA: 3.5 })).toBeUndefined(); // returns before any model call
+  });
+  it('short-circuits to undefined when the student has no GPA (never classifies from selectivity alone)', async () => {
+    expect(await suggestBucket({ college: { name: 'X', acceptanceRateProgram: '12%' } })).toBeUndefined();
   });
 });
 
@@ -63,12 +66,15 @@ describe('async bucket job (worker + enqueuer)', () => {
   const SUGGESTION = { bucket: 'reach' as const, rationale: '12% accept rate', confidence: 'high' as const };
   const newCollege = (over: Partial<College> = {}) =>
     data.colleges.create({ name: 'Arizona State University', acceptanceRateProgram: '12%', ...over } as Parameters<Data['colleges']['create']>[0]);
+  // The job refuses to classify without a student GPA — seed a self-reported one for the happy paths.
+  const seedGPA = () => data.studentProfile.put({ currentGPA: 3.6, gpaType: 'unweighted' });
 
   it('runs the suggester and merges suggestedBucket* for a task:bucket message', async () => {
     const suggester: BucketSuggester = async () => SUGGESTION;
     const handler = makeBucketWorkerHandler(getData, suggester);
     await runWithTenant('t1', () =>
       runWithStudent('s1', async () => {
+        await seedGPA();
         const c = await newCollege();
         await handler({ type: 'college-hydrate', task: 'bucket', collegeId: c.collegeId });
         const after = await data.colleges.get(c.collegeId);
@@ -116,6 +122,7 @@ describe('async bucket job (worker + enqueuer)', () => {
     const suggester: BucketSuggester = async () => ({ bucket: 'target', rationale: 'near profile', confidence: 'medium' });
     await runWithTenant('t1', () =>
       runWithStudent('s1', async () => {
+        await seedGPA();
         const c = await newCollege();
         // Family sets an explicit override (a user field).
         await data.colleges.update(c.collegeId, { bucket: 'safety' });
@@ -133,6 +140,7 @@ describe('async bucket job (worker + enqueuer)', () => {
     };
     await runWithTenant('t1', () =>
       runWithStudent('s1', async () => {
+        await seedGPA();
         const c = await newCollege();
         await expect(runBucketJob(getData, throwing, c.collegeId)).resolves.toBeUndefined();
         expect((await data.colleges.get(c.collegeId))?.suggestedBucket).toBeUndefined();
@@ -144,11 +152,54 @@ describe('async bucket job (worker + enqueuer)', () => {
     const empty: BucketSuggester = async () => undefined;
     await runWithTenant('t1', () =>
       runWithStudent('s1', async () => {
+        await seedGPA();
         const c = await newCollege();
         await runBucketJob(getData, empty, c.collegeId);
         const after = await data.colleges.get(c.collegeId);
         expect(after?.suggestedBucket).toBeUndefined(); // nothing usable — stays Unclassified
         expect(after?.bucketAttempted).toBe(true); // but the attempt is recorded (no re-enqueue storm)
+        expect(after?.bucketSkippedNoGPA).toBe(false); // a GPA-present attempt clears any prior skip
+      }),
+    );
+  });
+
+  it('skips classification entirely when the student has no GPA, stamping the skip', async () => {
+    let called = false;
+    const suggester: BucketSuggester = async () => {
+      called = true;
+      return SUGGESTION;
+    };
+    await runWithTenant('t1', () =>
+      runWithStudent('s1', async () => {
+        const c = await newCollege();
+        await runBucketJob(getData, suggester, c.collegeId);
+        expect(called).toBe(false); // no model call — nothing to reason from
+        const after = await data.colleges.get(c.collegeId);
+        expect(after?.suggestedBucket).toBeUndefined();
+        expect(after?.bucketAttempted).toBe(true);
+        expect(after?.bucketSkippedNoGPA).toBe(true); // lets the back-fill re-fire once a GPA appears
+      }),
+    );
+  });
+
+  it('falls back to the course-derived GPA when the profile has none', async () => {
+    let seen: number | undefined;
+    const suggester: BucketSuggester = async (i) => {
+      seen = i.currentGPA;
+      return SUGGESTION;
+    };
+    await runWithTenant('t1', () =>
+      runWithStudent('s1', async () => {
+        // No profile GPA — but one graded course (A = 4.0 unweighted).
+        await data.courses.create({ name: 'Biology', year: 'freshman', grade: 'A' } as Parameters<
+          Data['courses']['create']
+        >[0]);
+        const c = await newCollege();
+        await runBucketJob(getData, suggester, c.collegeId);
+        expect(seen).toBe(4);
+        const after = await data.colleges.get(c.collegeId);
+        expect(after?.suggestedBucket).toBe('reach');
+        expect(after?.bucketSkippedNoGPA).toBe(false);
       }),
     );
   });
