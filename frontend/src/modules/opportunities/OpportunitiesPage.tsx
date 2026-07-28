@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Button, Card, EmptyState, Field, Input, Select, Spinner, useToast } from '../../shared/ui';
+import { Button, Card, EmptyState, Field, Input, safeHref, Select, Spinner, useToast } from '../../shared/ui';
 import { bulkAdd, deleteOpportunity, listOpportunities, pollDiscovery, startDiscovery, updateOpportunity } from './api';
 import { STATUSES, TYPES, statusLabel, typeLabel } from './logic';
 import type { Opportunity, OpportunityCandidate, OpportunityStatus, OpportunityType } from './types';
@@ -171,12 +171,36 @@ export default function OpportunitiesPage() {
                   onChange={() => toggle(i)}
                   className="mt-1 h-4 w-4 rounded border-surface-border text-primary-600"
                 />
-                <span className="min-w-0">
+                <span className="min-w-0 flex-1">
                   <span className="font-medium text-ink-900">{c.name}</span>
                   {c.organization ? <span className="text-ink-500"> · {c.organization}</span> : null}
                   {c.type ? <span className="text-ink-500"> · {typeLabel(c.type)}</span> : null}
                   {c.description ? <span className="block text-xs text-ink-500">{c.description}</span> : null}
+
+                  {/* Where / when / cost — the practical details discovery returns. */}
+                  {c.location || c.applicationDeadline || c.timeCommitment || c.cost != null ? (
+                    <span className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-ink-600">
+                      {c.location ? <span>📍 {c.location}</span> : null}
+                      {c.applicationDeadline ? <span>🗓 Apply by {c.applicationDeadline}</span> : null}
+                      {c.timeCommitment ? <span>⏱ {c.timeCommitment}</span> : null}
+                      {c.cost != null ? <span>{c.cost === 0 ? 'Free' : `$${c.cost}`}</span> : null}
+                    </span>
+                  ) : null}
                   {c.distanceNote ? <span className="block text-xs text-ink-400">{c.distanceNote}</span> : null}
+                  {c.eligibility && c.eligibility.length > 0 ? (
+                    <span className="block text-xs text-ink-400">Eligibility: {c.eligibility.join(', ')}</span>
+                  ) : null}
+                  {safeHref(c.applicationUrl) ? (
+                    <a
+                      href={safeHref(c.applicationUrl)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="mt-1 inline-block text-xs font-medium text-primary-600 hover:underline"
+                    >
+                      How to apply →
+                    </a>
+                  ) : null}
                 </span>
               </label>
             ))}
