@@ -15,6 +15,10 @@ export default defineConfig({
       '**/build/**',
       '**/cdk.out/**',
       '.worktrees/**',
+      // Per-agent working copies of the whole repo (same category as .worktrees). Untracked, so CI
+      // never sees them, but locally they re-run every suite N times against stale code — which
+      // makes a local failure impossible to attribute.
+      'agents/**',
     ],
     passWithNoTests: true,
     // Default env stays `node` (backend). DOM tests opt in per-file with `// @vitest-environment jsdom`.

@@ -4,9 +4,14 @@ import { PolicyStatement } from "aws-cdk-lib/aws-iam";
  * Least-privilege Bedrock invoke permission for the AI Lambdas (routing + worker).
  *
  * Grants only InvokeModel + InvokeModelWithResponseStream, scoped to:
- *   - the cross-region inference profile (the `us.` prefix the app actually calls), and
+ *   - the inference profile the app actually calls, and
  *   - the underlying Sonnet foundation models the profile fans out to (region-wildcarded,
  *     since a cross-region profile dispatches to several regions).
+ *
+ * Both geo-scoped (`us.`/`eu.`/`apac.`) and `global.` profiles are ACCOUNT-SCOPED resources, so the
+ * one ARN shape below covers either. Verified against the live API 2026-08-01:
+ *   arn:aws:bedrock:us-east-2:<account>:inference-profile/global.anthropic.claude-sonnet-4-6
+ * Switching `bedrockSonnetProfile` between them therefore needs no IAM change.
  *
  * No wildcard action, no `*` resource. The model/profile id is injected (never hardcoded
  * in logic); see config.ts / cdk.json context.

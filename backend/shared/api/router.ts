@@ -4,6 +4,7 @@
 // body, and translates any thrown error into the standard envelope.
 
 import { getRequester, requireRole } from '../auth/index.js';
+import { recordLastSeen, type LastSeenInput } from '../data/last-seen.js';
 import { runWithStudent, runWithTenant } from '../tenant/index.js';
 import { Errors } from './errors.js';
 import { json, responseForError } from './respond.js';
@@ -96,7 +97,13 @@ function parseBody(event: ApiEvent): unknown {
  * specific (static) paths win over parameterized ones. Throws if two routes share method+path
  * (the same guarantee `check:routes` enforces at build time — this is the runtime backstop).
  */
-export function createRouter(routes: RouteDef[]): LambdaHandler {
+export interface RouterOptions {
+  /** Injectable engagement stamp (tests). Defaults to the real DynamoDB-backed recorder. */
+  recordLastSeen?: (input: LastSeenInput) => Promise<void>;
+}
+
+export function createRouter(routes: RouteDef[], opts: RouterOptions = {}): LambdaHandler {
+  const stamp = opts.recordLastSeen ?? recordLastSeen;
   const seen = new Set<string>();
   for (const r of routes) {
     const key = `${r.method.toUpperCase()} ${r.path}`;
@@ -174,6 +181,29 @@ export function createRouter(routes: RouteDef[]): LambdaHandler {
           : (readHeader(event.headers, 'x-student-id') ?? process.env.DEFAULT_STUDENT_ID ?? undefined);
       if (requester.role === 'student' && !requester.studentId) {
         throw Errors.unauthorized('Student is not bound to a roster');
+      }
+      // Engagement telemetry: record that this family was active. AWAITED, not fire-and-forget —
+      // Lambda freezes the container once the response is returned, so a dangling promise would be
+      // dropped or resumed on an unrelated later invocation. `recordLastSeen` throttles to ~one
+      // write per user per hour and never throws, so the cost is a single put on at most one request
+      // per hour and a failure can never break the caller.
+      // Guarded HERE as well as inside recordLastSeen: this await sits inside the dispatch try/catch,
+      // so without its own catch a throwing recorder would surface as a 500 on a perfectly good
+      // request. Telemetry must never be able to fail the caller.
+      if (tenantId) {
+        try {
+          await stamp({
+            tenantId,
+            userId: requester.username,
+            role: requester.role,
+            now: new Date().toISOString(),
+          });
+        } catch (err) {
+          console.error('[last-seen] stamp failed (swallowed)', {
+            tenantId,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
       }
       const ctx: HandlerContext = {
         requester,

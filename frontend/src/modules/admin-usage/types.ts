@@ -31,6 +31,15 @@ export interface FamilyUsageRow {
   inputTokens: number;
   outputTokens: number;
   calls: number;
+  /** Most recent AI call WITHIN the selected range; null if the family made none. */
+  lastAiCallAt: string | null;
+  /** Distinct days in the range with at least one AI call. */
+  activeDays: number;
+  /** Most recent authenticated request by any member — ALL-TIME, deliberately not range-scoped.
+   *  null for families last active before the stamp shipped (2026-08-01); not backfillable. */
+  lastSeenAt: string | null;
+  /** Distinct members ever stamped. */
+  activeUsers: number;
 }
 
 export interface FamiliesUsageResponse {

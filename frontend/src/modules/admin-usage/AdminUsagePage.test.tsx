@@ -77,7 +77,7 @@ vi.mock('../../shared/ui', () => ({
   ),
 }));
 
-import AdminUsagePage from './AdminUsagePage';
+import AdminUsagePage, { STALE_AFTER_DAYS, daysAgo, formatRecency } from './AdminUsagePage';
 
 const RESPONSE: UsageResponse = {
   tenantId: 'fam1',
@@ -90,8 +90,8 @@ const RESPONSE: UsageResponse = {
 
 const FAMILIES: FamiliesUsageResponse = {
   families: [
-    { tenantId: 'fam2', familyName: 'Beta', email: 'beta@x.com', costMicros: 2_000_000, inputTokens: 200, outputTokens: 80, calls: 5 },
-    { tenantId: 'fam1', familyName: 'Alpha', costMicros: 1_500_000, inputTokens: 100, outputTokens: 40, calls: 3 },
+    { tenantId: 'fam2', familyName: 'Beta', email: 'beta@x.com', costMicros: 2_000_000, inputTokens: 200, outputTokens: 80, calls: 5, lastAiCallAt: '2026-07-26T16:34:00.000Z', activeDays: 2, lastSeenAt: '2026-07-26T16:40:00.000Z', activeUsers: 2 },
+    { tenantId: 'fam1', familyName: 'Alpha', costMicros: 1_500_000, inputTokens: 100, outputTokens: 40, calls: 3, lastAiCallAt: null, activeDays: 0, lastSeenAt: null, activeUsers: 0 },
   ],
   totalCostMicros: 3_500_000,
   totalInputTokens: 300,
@@ -222,5 +222,53 @@ describe('AdminUsagePage', () => {
     render(<AdminUsagePage />);
     await waitFor(() => expect(h.getUsage).toHaveBeenCalledTimes(1));
     expect(h.getReconciliation).not.toHaveBeenCalled();
+  });
+
+  // The engagement columns exist because cost alone couldn't answer "is anyone still using this".
+  // Asserted via the cells' `title` (the raw ISO) and the em-dash rather than the rendered
+  // "Nd ago" — that string is relative to the real clock and would rot. The formatting itself is
+  // covered deterministically by the formatRecency/daysAgo suites below.
+  it('platform admin sees engagement cells, with a dash for never-stamped families', async () => {
+    h.user = { username: 'grahem', role: 'admin', tenantId: 'fam1', platformAdmin: true };
+    render(<AdminUsagePage />);
+    await waitFor(() => expect(screen.getByText('Beta')).toBeTruthy());
+    // Beta was stamped — both engagement cells carry their exact timestamps.
+    expect(screen.getByTitle('2026-07-26T16:40:00.000Z')).toBeTruthy(); // last seen
+    expect(screen.getByTitle('2026-07-26T16:34:00.000Z')).toBeTruthy(); // last AI call
+    // Alpha has never been stamped → em-dashes, not "never": it may simply predate the stamp.
+    expect(screen.getAllByText('—').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByTitle('No sign-in recorded since engagement tracking shipped')).toBeTruthy();
+  });
+});
+
+describe('formatRecency', () => {
+  const now = new Date('2026-08-01T00:00:00.000Z');
+
+  it('renders a dash when there is no timestamp', () => {
+    expect(formatRecency(null, now)).toBe('—');
+  });
+  it('renders same-day and previous-day in words', () => {
+    expect(formatRecency('2026-08-01T06:00:00.000Z', now)).toBe('today');
+    expect(formatRecency('2026-07-31T00:00:00.000Z', now)).toBe('yesterday');
+  });
+  it('renders older stamps in whole days', () => {
+    expect(formatRecency('2026-07-26T00:00:00.000Z', now)).toBe('6d ago');
+  });
+  it('renders a dash for an unparseable timestamp rather than NaN', () => {
+    expect(formatRecency('not-a-date', now)).toBe('—');
+  });
+});
+
+describe('daysAgo', () => {
+  const now = new Date('2026-08-01T00:00:00.000Z');
+
+  it('is null without a timestamp and counts whole days otherwise', () => {
+    expect(daysAgo(null, now)).toBeNull();
+    expect(daysAgo('2026-07-18T00:00:00.000Z', now)).toBe(14);
+  });
+
+  it('flags a family idle beyond the stale threshold', () => {
+    expect(daysAgo('2026-07-13T00:00:00.000Z', now)! > STALE_AFTER_DAYS).toBe(true);
+    expect(daysAgo('2026-07-18T00:00:00.000Z', now)! > STALE_AFTER_DAYS).toBe(false);
   });
 });
