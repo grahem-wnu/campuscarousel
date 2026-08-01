@@ -2,7 +2,9 @@
 // interfaces so it is fully unit-testable with fakes; aws-ports.ts wires the real AWS SDK clients.
 
 export interface CostExplorerPort {
-  /** Actual AWS Bedrock cost (micro-dollars) for [fromDate, toDate) — unblended, service=Amazon Bedrock.
+  /** Actual AWS Bedrock cost (micro-dollars) for [fromDate, toDate) — unblended, summed across every
+   *  SERVICE whose name looks like Bedrock (AWS bills per model, e.g. "Claude Sonnet 4.6 (Amazon
+   *  Bedrock Edition)"; there is no service literally named "Amazon Bedrock").
    *  Dates are `YYYY-MM-DD` (Cost Explorer's End is exclusive). */
   bedrockCostMicros(fromDate: string, toDate: string): Promise<number>;
 }

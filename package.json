@@ -17,6 +17,7 @@
     "test": "vitest run",
     "check:routes": "node scripts/check-routes.mjs",
     "check:isolation": "node scripts/check-tenant-isolation.mjs",
+    "check:metering": "node scripts/check-metering.mjs",
     "build": "npm run build --workspaces --if-present"
   },
   "devDependencies": {

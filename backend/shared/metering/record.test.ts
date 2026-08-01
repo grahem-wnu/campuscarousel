@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { InMemoryTableClient } from '../data/index.js';
 import { runWithStudent, runWithTenant } from '../tenant/index.js';
+import { REGIONAL_PREMIUM } from './pricing.js';
 import { recordUsage } from './record.js';
 
 const rates = { 'anthropic.claude-sonnet-4': { inputMicros: 3, outputMicros: 15, cacheReadMicros: 1, cacheWriteMicros: 4 } };
@@ -32,7 +33,9 @@ describe('recordUsage', () => {
       studentId: 'stu1',
       inputTokens: 100,
       outputTokens: 40,
-      costMicros: 100 * 3 + 40 * 15, // 900
+      // The fixture model is a `us.` (geo-scoped) profile, which bills at REGIONAL_PREMIUM over the
+      // base rate table: (100*3 + 40*15) * 1.1 = 990.
+      costMicros: Math.round((100 * 3 + 40 * 15) * REGIONAL_PREMIUM),
       unpriced: false,
     });
   });

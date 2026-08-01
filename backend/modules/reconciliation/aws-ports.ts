@@ -11,14 +11,20 @@ import { CloudWatchClient, PutMetricDataCommand } from '@aws-sdk/client-cloudwat
 import { CostExplorerClient, GetCostAndUsageCommand } from '@aws-sdk/client-cost-explorer';
 import { ListObjectsV2Command, GetObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { PublishCommand, SNSClient } from '@aws-sdk/client-sns';
+import { sumBedrockCostMicros } from './compute.js';
 import { type AlertPort, type CostExplorerPort, type InvocationLogPort, type MetricsPort } from './ports.js';
 
 const INVOCATION_LOG_PREFIX = 'bedrock-invocation-logs/';
 
 /**
  * Cost Explorer actuals for AWS Bedrock. CE is a GLOBAL service — its client MUST target us-east-1
- * regardless of the app region, or the call fails. Sums UnblendedCost across the window's monthly
- * buckets and converts the decimal-string dollars to integer micro-dollars.
+ * regardless of the app region, or the call fails.
+ *
+ * GROUPS by SERVICE rather than FILTERING on one service name, then sums the Bedrock-attributable
+ * groups (see `isBedrockService`). Bedrock model spend is billed under per-model service names like
+ * `Claude Sonnet 4.6 (Amazon Bedrock Edition)`, so the old `Values: ['Amazon Bedrock']` filter
+ * matched nothing and always returned $0. Same single API call; no hardcoded model names to
+ * maintain.
  */
 export function costExplorerPort(): CostExplorerPort {
   const client = new CostExplorerClient({ region: 'us-east-1' });
@@ -29,15 +35,19 @@ export function costExplorerPort(): CostExplorerPort {
           TimePeriod: { Start: fromDate, End: toDate }, // End is exclusive
           Granularity: 'MONTHLY',
           Metrics: ['UnblendedCost'],
-          Filter: { Dimensions: { Key: 'SERVICE', Values: ['Amazon Bedrock'] } },
+          GroupBy: [{ Type: 'DIMENSION', Key: 'SERVICE' }],
         }),
       );
-      let micros = 0;
+      const groups: Array<{ service: string; amount?: string }> = [];
       for (const bucket of res.ResultsByTime ?? []) {
-        const amount = bucket.Total?.UnblendedCost?.Amount;
-        if (amount) micros += Math.round(parseFloat(amount) * 1_000_000);
+        for (const g of bucket.Groups ?? []) {
+          groups.push({
+            service: g.Keys?.[0] ?? '',
+            amount: g.Metrics?.UnblendedCost?.Amount,
+          });
+        }
       }
-      return micros;
+      return sumBedrockCostMicros(groups);
     },
   };
 }
