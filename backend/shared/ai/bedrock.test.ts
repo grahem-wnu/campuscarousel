@@ -169,3 +169,81 @@ describe('converseWithSearch', () => {
     ).rejects.toThrow(/BEDROCK_MODEL_ID/);
   });
 });
+
+// Prompt caching. Every round re-sends the whole transcript and hydration runs up to 7 rounds, so
+// the later rounds were re-paying full input price for everything the earlier ones gathered.
+// college-hydrate alone was 96.5% of all AI spend, with zero cache tokens on every recorded row.
+describe('converseWithSearch prompt caching', () => {
+  const searcher: WebSearcher = vi.fn(async () => [
+    { title: 'UMich Nursing', url: 'https://umich.edu/nursing', snippet: 'Deadline Feb 1, 2026.' },
+  ]);
+
+  /** Count every cache_control mark across a captured request. */
+  function marks(req: CapturedRequest): number {
+    let n = 0;
+    for (const m of req.messages) {
+      if (!Array.isArray(m.content)) continue;
+      for (const b of m.content as Array<{ cache_control?: unknown }>) if (b.cache_control) n += 1;
+    }
+    return n;
+  }
+
+  it('marks a breakpoint at the end of the transcript while tools are still offered', async () => {
+    const { invoker, requests } = fakeInvoker([toolUseResponse, finalResponse]);
+    await converseWithSearch('When is the UMich BSN deadline?', {
+      feature: 'college-hydrate', modelId: MODEL, invoker, searcher, webSearch: true, maxRounds: 3,
+    });
+    // Round 1 offers tools → the bare-string prompt is normalized to blocks and the tail is marked.
+    const first = lastUserBlocks(requests[0]!) as Array<{ cache_control?: unknown }>;
+    expect(first.at(-1)?.cache_control).toEqual({ type: 'ephemeral' });
+  });
+
+  it('keeps at most ONE breakpoint — Anthropic caps them at 4 and hydration runs 7 rounds', async () => {
+    const { invoker, requests } = fakeInvoker([toolUseResponse, toolUseResponse, finalResponse]);
+    await converseWithSearch('q', {
+      feature: 'college-hydrate', modelId: MODEL, invoker, searcher, webSearch: true, maxRounds: 5,
+    });
+    for (const req of requests) expect(marks(req)).toBeLessThanOrEqual(1);
+  });
+
+  it('moves the breakpoint forward as the transcript grows', async () => {
+    const { invoker, requests } = fakeInvoker([toolUseResponse, toolUseResponse, finalResponse]);
+    await converseWithSearch('q', {
+      feature: 'college-hydrate', modelId: MODEL, invoker, searcher, webSearch: true, maxRounds: 5,
+    });
+    // Round 2's mark sits on the newest tool_result turn, not back on the original prompt.
+    const second = lastUserBlocks(requests[1]!) as Array<{ type: string; cache_control?: unknown }>;
+    expect(second.at(-1)?.cache_control).toEqual({ type: 'ephemeral' });
+    expect(second.at(-1)?.type).toBe('tool_result');
+  });
+
+  // Cost trap: the final round drops `tools`, which changes the front of the prompt and invalidates
+  // the cached prefix. A breakpoint there buys nothing and still bills the 1.25x write on the run's
+  // LARGEST transcript.
+  it('strips the breakpoint on the final round, where tools are withdrawn', async () => {
+    const { invoker, requests } = fakeInvoker([toolUseResponse, finalResponse]);
+    await converseWithSearch('q', {
+      feature: 'college-hydrate', modelId: MODEL, invoker, searcher, webSearch: true, maxRounds: 2,
+    });
+    expect(requests[1]!.tools).toBeUndefined();
+    expect(marks(requests[1]!)).toBe(0);
+  });
+
+  // Cost trap: with search off there is only ever one round, so nothing would ever read the cache —
+  // marking it would be a pure 25% surcharge on input.
+  it('does not cache when web search is disabled', async () => {
+    const { invoker, requests } = fakeInvoker([finalResponse]);
+    await converseWithSearch('q', {
+      feature: 'focus', modelId: MODEL, invoker, searcher, webSearch: false,
+    });
+    expect(marks(requests[0]!)).toBe(0);
+  });
+
+  it('can be opted out per feature', async () => {
+    const { invoker, requests } = fakeInvoker([toolUseResponse, finalResponse]);
+    await converseWithSearch('q', {
+      feature: 'focus', modelId: MODEL, invoker, searcher, webSearch: true, maxRounds: 3, cache: false,
+    });
+    for (const req of requests) expect(marks(req)).toBe(0);
+  });
+});

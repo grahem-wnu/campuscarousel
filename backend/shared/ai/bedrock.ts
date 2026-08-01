@@ -19,9 +19,15 @@ export interface BedrockInvoker {
   invoke(modelId: string, body: Uint8Array): Promise<Uint8Array>;
 }
 
+/** Marks the end of a cacheable prompt prefix — everything up to and including this block is cached. */
+interface CacheControl {
+  type: 'ephemeral';
+}
+
 interface TextBlock {
   type: 'text';
   text: string;
+  cache_control?: CacheControl;
 }
 interface ToolUseBlock {
   type: 'tool_use';
@@ -36,6 +42,7 @@ interface ToolResultBlock {
   tool_use_id: string;
   content: string;
   is_error?: boolean;
+  cache_control?: CacheControl;
 }
 interface Message {
   role: 'user' | 'assistant';
@@ -87,6 +94,8 @@ export interface ConverseOptions {
   invoker?: BedrockInvoker;
   /** Inject the searcher (tests) — else Tavily. */
   searcher?: WebSearcher;
+  /** Prompt caching across tool rounds. Default on; set false to opt a feature out. */
+  cache?: boolean;
 }
 
 export interface ConverseResult {
@@ -147,6 +156,45 @@ async function callModel(
   return response;
 }
 
+/**
+ * Remove every cache breakpoint from the conversation.
+ *
+ * Anthropic caps a request at 4 `cache_control` blocks and this loop can run 7 rounds, so marks are
+ * never allowed to accumulate — there is at most ONE live breakpoint at a time.
+ */
+function stripCacheBreakpoints(messages: Message[]): void {
+  for (const m of messages) {
+    if (!Array.isArray(m.content)) continue;
+    for (const block of m.content) {
+      delete (block as { cache_control?: CacheControl }).cache_control;
+    }
+  }
+}
+
+/**
+ * Move the single cache breakpoint to the end of the conversation so far.
+ *
+ * Every round of this loop re-sends the whole transcript, and hydration runs up to 7 rounds — so by
+ * the last round the model is re-reading (and re-paying full input price for) everything the earlier
+ * rounds gathered. Marking the tail makes the next round read that prefix at 0.1x instead of 1.0x.
+ *
+ * Moving the mark is safe: a relocated breakpoint still hits the prefix cached by the previous round.
+ * Verified against Bedrock on 2026-08-01 — round 1 wrote 3,854 tokens, round 2 with the breakpoint
+ * moved to a new trailing turn read back all 3,854. A prompt under the model's ~1024-token minimum
+ * is simply ignored (no error, no write, no 1.25x penalty), so this is safe on short prompts too.
+ */
+function applyCacheBreakpoint(messages: Message[]): void {
+  stripCacheBreakpoints(messages);
+  const last = messages[messages.length - 1];
+  if (!last) return;
+  // Round 1 carries a bare string; cache_control only exists on block form.
+  if (typeof last.content === 'string') {
+    last.content = [{ type: 'text', text: last.content }];
+  }
+  const tail = last.content[last.content.length - 1];
+  if (tail) (tail as { cache_control?: CacheControl }).cache_control = { type: 'ephemeral' };
+}
+
 function textOf(content: ContentBlock[]): string {
   return content
     .filter((b): b is TextBlock => b.type === 'text')
@@ -178,6 +226,7 @@ export async function converseWithSearch(
   const maxRounds = Math.max(1, options.maxRounds ?? 4);
   const searcher = options.searcher ?? tavilySearch;
   const invoker = options.invoker ?? (await defaultInvoker());
+  const cacheEnabled = options.cache ?? true;
   // One request id per converseWithSearch call so all rounds group under it.
   const meter: MeterCtx = {
     feature: options.feature,
@@ -209,6 +258,17 @@ export async function converseWithSearch(
       } else {
         messages.push({ role: 'user', content: [nudge] });
       }
+    }
+
+    // Cache the transcript ONLY while another tool round is still possible.
+    //
+    // The final round drops `tools`, which changes the very front of the prompt and invalidates the
+    // whole cached prefix — so a breakpoint there would buy nothing and still bill the 1.25x write on
+    // the largest transcript of the run. Stripping instead of marking avoids that. Likewise, when web
+    // search is off there is only ever one round, so nothing would read the cache and we skip it.
+    if (cacheEnabled) {
+      if (offerTools) applyCacheBreakpoint(messages);
+      else stripCacheBreakpoints(messages);
     }
 
     const body: Record<string, unknown> = {
