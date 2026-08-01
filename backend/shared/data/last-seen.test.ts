@@ -92,6 +92,24 @@ describe('recordLastSeen', () => {
   });
 });
 
+describe('write timeout', () => {
+  it('gives up on a hung write instead of holding the request', async () => {
+    const hung = { put: () => new Promise<void>(() => {}) } as never; // never settles
+    const started = Date.now();
+    await expect(recordLastSeen(input(), { client: hung, nowMs: 0, timeoutMs: 20 })).resolves.toBeUndefined();
+    expect(Date.now() - started).toBeLessThan(1000);
+  });
+
+  it('does not mark the throttle when the write timed out, so the next request retries', async () => {
+    const hung = { put: () => new Promise<void>(() => {}) } as never;
+    await recordLastSeen(input(), { client: hung, nowMs: 0, timeoutMs: 20 });
+    const client = new InMemoryTableClient();
+    await recordLastSeen(input(), { client, nowMs: 1 }); // well inside the throttle window
+    const rows = await client.query('TENANT#fam1', { skBeginsWith: LAST_SEEN_SK_PREFIX });
+    expect(rows).toHaveLength(1);
+  });
+});
+
 describe('environment guard', () => {
   it('does nothing when neither a client nor TABLE_NAME is available', async () => {
     const before = process.env.TABLE_NAME;

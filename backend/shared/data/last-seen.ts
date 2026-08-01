@@ -11,6 +11,21 @@ import { tableClientFromEnv, type TableClient } from './table-client.js';
 /** How long one container waits before re-stamping the same user. */
 export const THROTTLE_MS = 60 * 60 * 1000; // 1h
 
+/**
+ * Hard ceiling on how long a request may wait for the stamp.
+ *
+ * The write is awaited (a dangling promise would be dropped when Lambda freezes the container), so
+ * without a bound a slow or retrying DynamoDB call would sit on a user's response. The shared client
+ * sets no `requestTimeout`, and the SDK retries with backoff, so the tail here is otherwise unbounded.
+ * On timeout the put is abandoned mid-flight and the throttle is NOT marked, so the next request
+ * simply tries again — losing at most one telemetry row.
+ *
+ * (Setting requestTimeout/connectionTimeout on the shared DynamoDB client would fix this for every
+ * data path, not just this one, and is worth doing — but it changes the blast radius of every query
+ * in the app, so it belongs in its own change.)
+ */
+export const WRITE_TIMEOUT_MS = 1_000;
+
 /** SK prefix for the per-user last-seen rows inside the global `TENANT#<id>` partition. */
 export const LAST_SEEN_SK_PREFIX = 'LASTSEEN#';
 
@@ -26,6 +41,8 @@ export interface LastSeenDeps {
   client?: TableClient;
   /** Epoch millis for the throttle decision; defaults to Date.now(). */
   nowMs?: number;
+  /** Override the write ceiling (tests); defaults to WRITE_TIMEOUT_MS. */
+  timeoutMs?: number;
 }
 
 let cached: TableClient | undefined;
@@ -68,7 +85,7 @@ export async function recordLastSeen(input: LastSeenInput, deps: LastSeenDeps = 
     if (previous !== undefined && nowMs - previous < THROTTLE_MS) return;
 
     const client = deps.client ?? (cached ??= tableClientFromEnv());
-    await client.put({
+    const write = client.put({
       PK: `TENANT#${input.tenantId}`,
       SK: `${LAST_SEEN_SK_PREFIX}${input.userId}`,
       tenantId: input.tenantId,
@@ -76,8 +93,25 @@ export async function recordLastSeen(input: LastSeenInput, deps: LastSeenDeps = 
       role: input.role,
       lastSeenAt: input.now,
     });
-    // Only mark as written AFTER a successful put, so a transient failure retries on the next request
-    // instead of being suppressed for an hour.
+
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([
+        write,
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(
+            () => reject(new Error(`last-seen write exceeded ${deps.timeoutMs ?? WRITE_TIMEOUT_MS}ms`)),
+            deps.timeoutMs ?? WRITE_TIMEOUT_MS,
+          );
+        }),
+      ]);
+    } finally {
+      // Always clear, so a pending timer never holds the event loop open past the response.
+      if (timer) clearTimeout(timer);
+    }
+
+    // Only mark as written AFTER a successful put, so a transient failure (or a timeout) retries on
+    // the next request instead of being suppressed for an hour.
     lastWrittenMs.set(key, nowMs);
   } catch (err) {
     console.error('[last-seen] recordLastSeen failed (swallowed)', {

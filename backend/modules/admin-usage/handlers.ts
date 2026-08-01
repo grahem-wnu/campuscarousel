@@ -58,9 +58,13 @@ export function makeHandlers(deps: AdminUsageDeps) {
     const tenants = await deps.getData().tenants.list();
     const rows: FamilyUsageRow[] = [];
     for (const t of tenants) {
-      const items = await queryAll(client, `T#${t.tenantId}#USAGE`, skOpts);
+      // The two reads are independent — issue them together so the per-tenant cost stays one
+      // round-trip rather than two.
+      const [items, seen] = await Promise.all([
+        queryAll(client, `T#${t.tenantId}#USAGE`, skOpts),
+        readLastSeen(client, t.tenantId),
+      ]);
       const s = summarizeFamily(items.map(toUsageRow));
-      const seen = await readLastSeen(client, t.tenantId);
       rows.push({
         tenantId: t.tenantId,
         familyName: t.familyName,

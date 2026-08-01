@@ -26,13 +26,18 @@ const ALLOW = new Set([
   'backend/shared/ai/bedrock.ts',
 ]);
 
-// Constructing any of these outside ALLOW means the call never reaches recordUsage().
-const NEEDLES = [
-  'new InvokeModelCommand(',
-  'new InvokeModelWithResponseStreamCommand(',
-  'new ConverseCommand(',
-  'new ConverseStreamCommand(',
+// Constructing any of these outside ALLOW means the call never reaches recordUsage(). Matched with a
+// regex rather than a substring so `new  ConverseCommand (` and friends can't slip past on spacing.
+const COMMANDS = [
+  'InvokeModelCommand',
+  'InvokeModelWithResponseStreamCommand',
+  'ConverseCommand',
+  'ConverseStreamCommand',
 ];
+const NEEDLES = COMMANDS.map((name) => ({
+  name,
+  re: new RegExp(String.raw`\bnew\s+${name}\s*\(`),
+}));
 
 function walk(dir) {
   const out = [];
@@ -40,7 +45,11 @@ function walk(dir) {
     const p = join(dir, entry);
     if (statSync(p).isDirectory()) {
       if (entry !== 'node_modules' && entry !== 'dist') out.push(...walk(p));
-    } else if (p.endsWith('.ts') && !p.endsWith('.test.ts')) {
+    } else if (
+      (p.endsWith('.ts') || p.endsWith('.tsx')) &&
+      !p.endsWith('.test.ts') &&
+      !p.endsWith('.test.tsx')
+    ) {
       out.push(p);
     }
   }
@@ -51,10 +60,10 @@ const violations = [];
 for (const file of walk(ROOT)) {
   if (ALLOW.has(file)) continue;
   const src = readFileSync(file, 'utf8');
-  for (const needle of NEEDLES) {
-    if (src.includes(needle)) {
+  for (const { name, re } of NEEDLES) {
+    if (re.test(src)) {
       violations.push(
-        `${file}: builds \`${needle}\` directly — Bedrock calls must go through invokeMessages() or converseWithSearch() so usage is metered against the family.`,
+        `${file}: builds \`new ${name}(\` directly — Bedrock calls must go through invokeMessages() or converseWithSearch() so usage is metered against the family.`,
       );
     }
   }

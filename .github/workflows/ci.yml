@@ -24,10 +24,12 @@ jobs:
         run: npm run lint --if-present
       - name: Guard — no duplicate routes across module manifests
         run: npm run check:routes --if-present
+      # No --if-present on these two: a guard that silently no-ops when the script is renamed or
+      # dropped is worse than no guard, because CI still reports green.
       - name: Guard — every Bedrock call goes through a metered seam
-        run: npm run check:metering --if-present
+        run: npm run check:metering
       - name: Guard — no raw table clients outside the tenant-scoped data layer
-        run: npm run check:isolation --if-present
+        run: npm run check:isolation
       - name: Unit + integration tests
         run: npm test --if-present
       - name: CDK synth (self-contained; only when the infra app exists)

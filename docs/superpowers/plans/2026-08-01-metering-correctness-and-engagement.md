@@ -56,7 +56,7 @@ Token coverage is sound (app 5,367,257 vs invocation logs 5,422,472, a 1.0% resi
 | `.github/workflows/ci.yml` | Run `check:metering`. Also run the **already-written but never-wired** `check:isolation` guard. |
 | `infra/cdk.json` | `bedrockSonnetProfile` → `global.anthropic.claude-sonnet-4-6`. |
 | `infra/lib/policies.ts` | Widen the inference-profile ARN so a `global.` profile resolves; keep the foundation-model scope. |
-| `backend/shared/api/router.ts` | After tenant resolution, fire-and-forget a throttled last-seen stamp. Never blocks or fails the request. |
+| `backend/shared/api/router.ts` | After tenant resolution, await a throttled, time-bounded last-seen stamp inside its own `try/catch`. Can never fail or materially delay the request. |
 | `backend/shared/data/last-seen.ts` | **New.** Write `TENANT#<tid> / LASTSEEN#<userId>`; in-memory 1h per-container throttle. |
 | `backend/modules/admin-usage/families.ts` | Add `lastAiCallAt` + `activeDays` to the per-family summary. |
 | `backend/modules/admin-usage/handlers.ts` | Read each tenant's `LASTSEEN#` rows; merge `lastSeenAt` + `activeUsers` into the families response. |
@@ -74,7 +74,7 @@ Two additions discovered during implementation, both small and in-scope:
 
 One new row shape, in the existing global tenant partition:
 
-```
+```text
 PK: TENANT#<tenantId>
 SK: LASTSEEN#<userId>
     { tenantId, userId, role, lastSeenAt }
@@ -130,18 +130,26 @@ login isn't a function of the range you're looking at. The UI labels this.
 
 ## Acceptance criteria
 
-- [ ] Reconciliation reads non-zero AWS actuals for a month with known Bedrock spend
-- [ ] `driftPct` for July recomputes to a real percentage, not the `awsMicros == 0` sentinel 100
-- [ ] Drift no longer breaches on a month where app and AWS agree within 5%
-- [ ] `priceUsage('us.anthropic.claude-sonnet-4-6', …)` returns exactly 1.1× the `global.` result
-- [ ] Re-pricing July's recorded tokens lands within 5% of the $43.59 CE figure net of pre-metering spend
-- [ ] Interview Prep question + feedback generation writes a `feature: 'interview-prep'` usage row
-- [ ] `npm run check:metering` fails when a new file imports the Bedrock SDK directly
-- [ ] CI runs both `check:metering` and `check:isolation`
-- [ ] An authenticated request stamps `LASTSEEN#<userId>`; a second within the hour does not
-- [ ] `tenants.list()` is unaffected by the new rows
-- [ ] A last-seen write failure does not fail the request
-- [ ] The families table shows Last seen / Last AI / Active days, with stale families visually flagged
+Verified in this branch (unit/integration tests + local guard runs):
+
+- [x] `priceUsage('us.anthropic.claude-sonnet-4-6', …)` returns exactly 1.1× the `global.` result
+- [x] Cost Explorer summing matches the per-model service names AWS actually bills under
+- [x] Interview Prep question + feedback generation writes a `feature: 'interview-prep'` usage row
+- [x] `npm run check:metering` fails when a file builds a Bedrock command directly
+- [x] CI runs both `check:metering` and `check:isolation` (no `--if-present`, so a rename fails the build)
+- [x] An authenticated request stamps `LASTSEEN#<userId>`; a second within the hour does not
+- [x] `tenants.list()` is unaffected by the new rows
+- [x] A last-seen write failure — or a hung write — does not fail or stall the request
+- [x] The families table shows Last seen / Last AI / Active days, with stale families visually flagged
+
+Pending — requires a deployed environment, cannot be closed from this branch:
+
+- [ ] **Staging:** AI still responds under the `global.` inference profile (the one change that can break inference)
+- [ ] **Staging:** a real login produces a `LASTSEEN#` row and the new columns populate
+- [ ] **Prod:** reconciliation reads non-zero AWS actuals for a month with known Bedrock spend
+- [ ] **Prod:** `driftPct` for July recomputes to a real percentage, not the `awsMicros == 0` sentinel 100
+- [ ] **Prod:** re-priced July tokens land within 5% of the $43.59 CE figure, net of pre-metering spend
+- [ ] **Prod:** drift no longer breaches on a month where app and AWS agree within 5%
 
 ## Test plan
 

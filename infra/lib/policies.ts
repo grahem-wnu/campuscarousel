@@ -8,11 +8,10 @@ import { PolicyStatement } from "aws-cdk-lib/aws-iam";
  *   - the underlying Sonnet foundation models the profile fans out to (region-wildcarded,
  *     since a cross-region profile dispatches to several regions).
  *
- * PROFILE ARN SHAPES DIFFER. A geo-scoped profile (`us.`/`eu.`/`apac.`) is an account-owned resource
- * — `arn:aws:bedrock:<region>:<account>:inference-profile/<id>`. A `global.` profile is AWS-owned and
- * carries NO account id — `arn:aws:bedrock:<region>::inference-profile/<id>`. Both forms are granted
- * so switching `bedrockSonnetProfile` between them needs no IAM change; the account-scoped ARN alone
- * would deny every call once the global profile is selected.
+ * Both geo-scoped (`us.`/`eu.`/`apac.`) and `global.` profiles are ACCOUNT-SCOPED resources, so the
+ * one ARN shape below covers either. Verified against the live API 2026-08-01:
+ *   arn:aws:bedrock:us-east-2:<account>:inference-profile/global.anthropic.claude-sonnet-4-6
+ * Switching `bedrockSonnetProfile` between them therefore needs no IAM change.
  *
  * No wildcard action, no `*` resource. The model/profile id is injected (never hardcoded
  * in logic); see config.ts / cdk.json context.
@@ -23,7 +22,6 @@ export function bedrockInvokeStatement(account: string, inferenceProfileId: stri
     actions: ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"],
     resources: [
       `arn:aws:bedrock:*:${account}:inference-profile/${inferenceProfileId}`,
-      `arn:aws:bedrock:*::inference-profile/${inferenceProfileId}`,
       `arn:aws:bedrock:*::foundation-model/anthropic.claude-sonnet-4*`,
     ],
   });
