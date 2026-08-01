@@ -1,5 +1,54 @@
 import { describe, expect, it } from 'vitest';
-import { driftPct, isBreach, monthWindows, rollupItems, type TenantRollup } from './compute.js';
+import {
+  driftPct,
+  isBedrockService,
+  isBreach,
+  monthWindows,
+  rollupItems,
+  sumBedrockCostMicros,
+  type TenantRollup,
+} from './compute.js';
+
+// Regression guard for the 2026-08-01 fix: the job filtered Cost Explorer on
+// `SERVICE = 'Amazon Bedrock'`, a service name AWS does not use. It read $0 every run, which drove
+// driftPct to its awsMicros===0 sentinel of 100 and fired a false breach alert daily.
+describe('isBedrockService', () => {
+  it('matches the per-model service names AWS actually bills under', () => {
+    expect(isBedrockService('Claude Sonnet 4.6 (Amazon Bedrock Edition)')).toBe(true);
+    expect(isBedrockService('Claude Haiku 4.5 (Amazon Bedrock Edition)')).toBe(true);
+  });
+  it('matches a literal Amazon Bedrock service if AWS ever emits one', () => {
+    expect(isBedrockService('Amazon Bedrock')).toBe(true);
+  });
+  it('ignores unrelated services', () => {
+    expect(isBedrockService('Amazon Relational Database Service')).toBe(false);
+    expect(isBedrockService('Amazon Elastic Compute Cloud - Compute')).toBe(false);
+  });
+});
+
+describe('sumBedrockCostMicros', () => {
+  it('sums only the Bedrock groups, in integer micro-dollars', () => {
+    // Shape mirrors real July 2026 prod billing.
+    expect(
+      sumBedrockCostMicros([
+        { service: 'Claude Sonnet 4.6 (Amazon Bedrock Edition)', amount: '43.5159' },
+        { service: 'Claude Haiku 4.5 (Amazon Bedrock Edition)', amount: '0.0778' },
+        { service: 'Amazon Relational Database Service', amount: '103.0793' },
+      ]),
+    ).toBe(43_593_700);
+  });
+  it('is zero when nothing Bedrock-shaped is present', () => {
+    expect(sumBedrockCostMicros([{ service: 'AWS Lambda', amount: '12.5' }])).toBe(0);
+  });
+  it('skips groups with a missing or unparseable amount', () => {
+    expect(
+      sumBedrockCostMicros([
+        { service: 'Claude Sonnet 4.6 (Amazon Bedrock Edition)' },
+        { service: 'Claude Haiku 4.5 (Amazon Bedrock Edition)', amount: 'n/a' },
+      ]),
+    ).toBe(0);
+  });
+});
 
 describe('monthWindows', () => {
   it('returns the current + prior month for a mid-month date (UTC)', () => {

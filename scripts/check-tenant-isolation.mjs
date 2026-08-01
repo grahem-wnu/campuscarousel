@@ -12,10 +12,20 @@ import { join } from 'node:path';
 const ROOT = 'backend';
 
 // Files allowed to construct/translate raw table clients.
+//
+// The second group all address GLOBAL-namespace partitions, where the tenant-scoping decorator would
+// be wrong: they build the tenant prefix into the key LITERALLY (`T#<tenantId>#USAGE`,
+// `TENANT#<tenantId>`) so that platform-admin reads, which run with no tenant context at all, can
+// address a family's partition by explicit key. Isolation is still enforced — by construction rather
+// than by the decorator. Anything NOT on this list must go through makeData/dataFromEnv.
 const ALLOW = new Set([
   'backend/shared/data/index.ts', // dataFromEnv — the single sanctioned construction
   'backend/shared/data/table-client.ts', // defines DynamoTableClient / tableClientFromEnv
   'backend/shared/data/memory-client.ts', // the in-memory test client
+  'backend/shared/metering/record.ts', // appends T#<tenant>#USAGE by literal key (cross-tenant admin reads)
+  'backend/shared/data/last-seen.ts', // stamps TENANT#<id>/LASTSEEN#<user> in the global registry partition
+  'backend/modules/admin-usage/routes.manifest.ts', // base client for platform-admin cross-tenant usage reads
+  'backend/lambda/reconcile.ts', // prod reconcile job: inherently cross-tenant, writes GLOBAL#RECON/GLOBAL#USAGE
 ]);
 
 // Constructing a raw client outside ALLOW bypasses the tenant-scoping decorator.

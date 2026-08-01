@@ -6,6 +6,7 @@
 import { type Handler } from '../../shared/api/index.js';
 import { requireRole } from '../../shared/auth/index.js';
 import { type Data, type TableClient } from '../../shared/data/index.js';
+import { latestSeenAt, readLastSeen } from '../../shared/data/last-seen.js';
 import { maybeTenantId } from '../../shared/tenant/index.js';
 import { aggregate, type GroupBy } from './aggregate.js';
 import { rankFamilies, summarizeFamily, type FamilyUsageRow } from './families.js';
@@ -45,8 +46,12 @@ export function makeHandlers(deps: AdminUsageDeps) {
   // GET /admin/usage/families — platformAdmin-only all-families ranking. The router enforces
   // platformAdmin, so there is NO in-handler tenant scoping (never call currentTenantId here). Reads
   // go through the BASE (un-scoped) client + the global tenant registry.
-  // On-read cost: N tenants × their range's rows, one Query each — O(N) queries. Fine at current
-  // scale; Phase 2B monthly rollups make this O(1). Never silently cap the tenant list.
+  // On-read cost: N tenants × (one usage Query + one last-seen Query) — O(N). Fine at current scale;
+  // Phase 2B monthly rollups make the usage half O(1). Never silently cap the tenant list.
+  //
+  // RANGE SEMANTICS: cost/tokens/calls/lastAiCallAt/activeDays are scoped to the requested window;
+  // lastSeenAt/activeUsers are ALL-TIME. A family's last login isn't a function of the window being
+  // inspected, and scoping it would make an idle family look freshly active whenever the range moved.
   const families: Handler = async (ctx) => {
     const skOpts = rangeToSkOpts(ctx.query.from, ctx.query.to);
     const client = deps.getClient();
@@ -55,7 +60,15 @@ export function makeHandlers(deps: AdminUsageDeps) {
     for (const t of tenants) {
       const items = await queryAll(client, `T#${t.tenantId}#USAGE`, skOpts);
       const s = summarizeFamily(items.map(toUsageRow));
-      rows.push({ tenantId: t.tenantId, familyName: t.familyName, email: t.consent?.byEmail, ...s });
+      const seen = await readLastSeen(client, t.tenantId);
+      rows.push({
+        tenantId: t.tenantId,
+        familyName: t.familyName,
+        email: t.consent?.byEmail,
+        ...s,
+        lastSeenAt: latestSeenAt(seen),
+        activeUsers: seen.length,
+      });
     }
     return { status: 200, body: rankFamilies(rows) };
   };

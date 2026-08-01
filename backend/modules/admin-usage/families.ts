@@ -9,6 +9,10 @@ export interface FamilySummary {
   inputTokens: number;
   outputTokens: number;
   calls: number;
+  /** Most recent AI call in the queried range; null when the family made none. */
+  lastAiCallAt: string | null;
+  /** Distinct UTC days in the range on which the family made at least one AI call. */
+  activeDays: number;
 }
 
 export interface FamilyUsageRow extends FamilySummary {
@@ -17,6 +21,13 @@ export interface FamilyUsageRow extends FamilySummary {
   /** Signup parent's email (tenant consent record) — disambiguates same-named families. Absent on
    *  tenants provisioned before consent capture. */
   email?: string;
+  /** Most recent authenticated request by ANY member — ALL-TIME, not range-scoped, because "when did
+   *  this family last show up" isn't a function of the window you're looking at. Null when nobody has
+   *  been stamped yet (families last active before the stamp shipped on 2026-08-01 read as null;
+   *  there is no source to backfill from). */
+  lastSeenAt: string | null;
+  /** How many distinct members have ever been stamped. */
+  activeUsers: number;
 }
 
 export interface FamiliesUsageResponse {
@@ -27,13 +38,26 @@ export interface FamiliesUsageResponse {
 }
 
 export function summarizeFamily(rows: UsageRow[]): FamilySummary {
-  const s: FamilySummary = { costMicros: 0, inputTokens: 0, outputTokens: 0, calls: 0 };
+  const s: FamilySummary = {
+    costMicros: 0,
+    inputTokens: 0,
+    outputTokens: 0,
+    calls: 0,
+    lastAiCallAt: null,
+    activeDays: 0,
+  };
+  const days = new Set<string>();
   for (const r of rows) {
     s.costMicros += r.costMicros;
     s.inputTokens += r.inputTokens;
     s.outputTokens += r.outputTokens;
     s.calls += 1;
+    if (r.occurredAt) {
+      days.add(r.occurredAt.slice(0, 10));
+      if (s.lastAiCallAt === null || r.occurredAt > s.lastAiCallAt) s.lastAiCallAt = r.occurredAt;
+    }
   }
+  s.activeDays = days.size;
   return s;
 }
 

@@ -19,6 +19,30 @@ const GROUP_BY_OPTIONS: { value: GroupBy; label: string }[] = [
   { value: 'day', label: 'Day' },
 ];
 
+/** A family idle this long is flagged — long enough to rule out "just a quiet week". */
+export const STALE_AFTER_DAYS = 14;
+
+/** Whole days between `iso` and `now`, or null when there's no timestamp. */
+export function daysAgo(iso: string | null, now: Date = new Date()): number | null {
+  if (!iso) return null;
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return null;
+  return Math.floor((now.getTime() - then) / 86_400_000);
+}
+
+/**
+ * Human-readable recency for the engagement columns. An em-dash (not "never") for a null: these
+ * families may well have been active before the last-seen stamp shipped — absence of a row is
+ * absence of evidence, and the table shouldn't assert more than it knows.
+ */
+export function formatRecency(iso: string | null, now: Date = new Date()): string {
+  const d = daysAgo(iso, now);
+  if (d === null) return '—';
+  if (d <= 0) return 'today';
+  if (d === 1) return 'yesterday';
+  return `${d}d ago`;
+}
+
 /** Current calendar month as a [from, to) UTC range. `to` is first-of-NEXT-month at 00:00:00.000Z so
  *  millisecond-precision rows on the last day of the month are still included. */
 function currentMonthRange(now = new Date()): { from: string; to: string } {
@@ -144,6 +168,27 @@ export default function AdminUsagePage() {
         </span>
       ),
     },
+    {
+      // All-time, NOT range-scoped — see the backend handler. Stale families are dimmed+flagged so
+      // churn is readable at a glance instead of having to diff timestamps by eye.
+      key: 'lastSeen',
+      header: 'Last seen',
+      align: 'right',
+      render: (f) => {
+        const d = daysAgo(f.lastSeenAt);
+        const stale = d !== null && d > STALE_AFTER_DAYS;
+        return (
+          <span
+            className={`tabular-nums ${stale ? 'font-medium text-warn-700' : 'text-ink-700'}`}
+            title={f.lastSeenAt ?? 'No sign-in recorded since engagement tracking shipped'}
+          >
+            {formatRecency(f.lastSeenAt)}
+          </span>
+        );
+      },
+    },
+    { key: 'lastAi', header: 'Last AI', align: 'right', render: (f) => <span className="tabular-nums text-ink-700" title={f.lastAiCallAt ?? 'No AI calls in this range'}>{formatRecency(f.lastAiCallAt)}</span> },
+    { key: 'activeDays', header: 'Active days', align: 'right', render: (f) => <span className="tabular-nums text-ink-700">{f.activeDays.toLocaleString()}</span> },
     { key: 'calls', header: 'Calls', align: 'right', render: (f) => <span className="tabular-nums text-ink-700">{f.calls.toLocaleString()}</span> },
     { key: 'input', header: 'Input tokens', align: 'right', render: (f) => <span className="tabular-nums text-ink-700">{f.inputTokens.toLocaleString()}</span> },
     { key: 'output', header: 'Output tokens', align: 'right', render: (f) => <span className="tabular-nums text-ink-700">{f.outputTokens.toLocaleString()}</span> },
@@ -162,7 +207,7 @@ export default function AdminUsagePage() {
         <h1 className="text-2xl font-bold text-ink-900">Usage</h1>
         <p className="text-sm text-ink-600">
           {showFamilies
-            ? `Bedrock token cost across all families, ${range.from.slice(0, 7)}. Ranked by spend — click a family to drill in.`
+            ? `Spend and engagement across all families, ${range.from.slice(0, 7)}. Ranked by spend — click a family to drill in. “Last seen” is all-time; every other column is for the month shown.`
             : `Bedrock token cost for this family, ${range.from.slice(0, 7)}. Broken down by the dimension you choose.`}
         </p>
       </header>

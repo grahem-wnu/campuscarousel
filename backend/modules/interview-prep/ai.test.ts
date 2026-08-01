@@ -7,6 +7,8 @@ import {
   makeBedrockQuestionGenerator,
   type BedrockInvoker,
 } from './ai.js';
+import { InMemoryTableClient } from '../../shared/data/index.js';
+import { runWithTenant } from '../../shared/tenant/index.js';
 import type { GroundingContext } from './grounding.js';
 
 const MODEL = 'us.anthropic.test-model';
@@ -99,5 +101,55 @@ describe('makeBedrockFeedbackGenerator', () => {
     expect(fb.source).toBe('ai');
     expect(fb.rating).toBe(4);
     expect((await makeBedrockFeedbackGenerator({ modelId: MODEL, client: throwing })({ question: 'Q', answer: 'A', grounding })).source).toBe('curated');
+  });
+});
+
+// Regression guard: until 2026-08-01 this module built its own InvokeModelCommand against a private
+// BedrockRuntimeClient, so every Interview Prep call was invisible to per-family metering — no usage
+// row, no cost attribution, and the family's spend silently understated.
+describe('metering', () => {
+  const rates = {
+    'anthropic.test-model': { inputMicros: 3, outputMicros: 15, cacheReadMicros: 0.3, cacheWriteMicros: 3.75 },
+  };
+
+  const metered = (text: string): BedrockInvoker => ({
+    send: async () => ({
+      body: new TextEncoder().encode(
+        JSON.stringify({ content: [{ text }], usage: { input_tokens: 120, output_tokens: 45 } }),
+      ),
+    }),
+  });
+
+  it('records a usage row attributed to the interview-prep feature and the active family', { timeout: 30000 }, async () => {
+    const client = new InMemoryTableClient();
+    await runWithTenant('fam1', () =>
+      makeBedrockQuestionGenerator({
+        modelId: MODEL,
+        client: metered('[{"question":"Q","category":"general"}]'),
+        recordDeps: { client, rates },
+      })({ count: 1, grounding }),
+    );
+    const rows = await client.query('T#fam1#USAGE');
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      feature: 'interview-prep',
+      inputTokens: 120,
+      outputTokens: 45,
+      unpriced: false,
+    });
+  });
+
+  it('also meters per-answer feedback', { timeout: 30000 }, async () => {
+    const client = new InMemoryTableClient();
+    await runWithTenant('fam1', () =>
+      makeBedrockFeedbackGenerator({
+        modelId: MODEL,
+        client: metered(JSON.stringify({ strengths: ['clear'], improvements: [], suggestions: [], rating: 4, references: [] })),
+        recordDeps: { client, rates },
+      })({ question: 'Q', answer: 'A', grounding }),
+    );
+    const rows = await client.query('T#fam1#USAGE');
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ feature: 'interview-prep' });
   });
 });

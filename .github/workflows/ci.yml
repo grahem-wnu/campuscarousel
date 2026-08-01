@@ -24,6 +24,10 @@ jobs:
         run: npm run lint --if-present
       - name: Guard — no duplicate routes across module manifests
         run: npm run check:routes --if-present
+      - name: Guard — every Bedrock call goes through a metered seam
+        run: npm run check:metering --if-present
+      - name: Guard — no raw table clients outside the tenant-scoped data layer
+        run: npm run check:isolation --if-present
       - name: Unit + integration tests
         run: npm test --if-present
       - name: CDK synth (self-contained; only when the infra app exists)

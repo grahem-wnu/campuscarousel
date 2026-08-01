@@ -251,3 +251,52 @@ describe('createRouter', () => {
     ).toThrow(/Duplicate route/);
   });
 });
+
+// Engagement telemetry — the admin dashboard could report AI cost but not whether anyone was still
+// logging in, so a family that browsed and left read as "never active".
+describe('last-seen stamp', () => {
+  const ok: RouteDef[] = [
+    { method: 'GET', path: '/ping', handler: async () => ({ status: 200, body: { ok: true } }) },
+  ];
+
+  it('stamps the authenticated caller and tenant', async () => {
+    const seen: unknown[] = [];
+    const d = createRouter(ok, { recordLastSeen: async (i) => void seen.push(i) });
+    const res = await d(event({ path: '/ping', claims: PARENT }));
+    expect(res.statusCode).toBe(200);
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toMatchObject({ tenantId: 'fam1', userId: 'kate', role: 'parent' });
+    expect((seen[0] as { now: string }).now).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+  });
+
+  it('does not stamp a platform admin with no tenant claim', async () => {
+    const seen: unknown[] = [];
+    const d = createRouter(ok, { recordLastSeen: async (i) => void seen.push(i) });
+    await d(
+      event({
+        path: '/ping',
+        claims: { 'cognito:username': 'grahem', 'custom:role': 'admin', 'custom:platformAdmin': 'true' },
+      }),
+    );
+    expect(seen).toHaveLength(0);
+  });
+
+  it('does not stamp an unauthenticated request', async () => {
+    const seen: unknown[] = [];
+    const d = createRouter(ok, { recordLastSeen: async (i) => void seen.push(i) });
+    const res = await d(event({ path: '/ping', claims: null }));
+    expect(res.statusCode).toBe(401);
+    expect(seen).toHaveLength(0);
+  });
+
+  // The stamp must never be able to break a user's request.
+  it('still serves the request when the stamp throws', async () => {
+    const d = createRouter(ok, {
+      recordLastSeen: async () => {
+        throw new Error('dynamo down');
+      },
+    });
+    const res = await d(event({ path: '/ping', claims: PARENT }));
+    expect(res.statusCode).toBe(200);
+  });
+});

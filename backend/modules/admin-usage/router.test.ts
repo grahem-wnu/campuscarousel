@@ -199,6 +199,41 @@ describe('GET /admin/usage/families', () => {
     expect(body.totalCostMicros).toBe(1139);
   });
 
+  // Engagement columns. Cost alone couldn't answer "is anyone still using this" — four of five prod
+  // families onboarded, did one short session, and were never seen again.
+  it('reports last-seen + active-user counts alongside spend', async () => {
+    const dispatch = await familiesHarness(threeTenants, (c) => {
+      // occurredAt passed explicitly: the helper otherwise defaults it to the SK suffix, which
+      // carries the `#<callId>` — real rows store a clean ISO timestamp.
+      void c.put(usageRow('fam1', '2026-07-13T01:00:00.000Z#a', { costMicros: 100, inputTokens: 10, outputTokens: 5, occurredAt: '2026-07-13T01:00:00.000Z' }));
+      void c.put(usageRow('fam1', '2026-07-20T02:00:00.000Z#b', { costMicros: 40, inputTokens: 4, outputTokens: 2, occurredAt: '2026-07-20T02:00:00.000Z' }));
+      // Two members of fam1 have logged in; fam2 has spend but has never been stamped.
+      void c.put({ PK: 'TENANT#fam1', SK: 'LASTSEEN#kate', tenantId: 'fam1', userId: 'kate', role: 'parent', lastSeenAt: '2026-07-20T02:05:00.000Z' });
+      void c.put({ PK: 'TENANT#fam1', SK: 'LASTSEEN#keira', tenantId: 'fam1', userId: 'keira', role: 'student', lastSeenAt: '2026-07-26T16:34:00.000Z' });
+      void c.put(usageRow('fam2', '2026-07-02T00:00:00.000Z#c', { costMicros: 999, inputTokens: 20, outputTokens: 8 }));
+    });
+    const res = await dispatch(event('GET', '/admin/usage/families', platformAdmin));
+    const families = parse(res).families as Array<Record<string, unknown>>;
+    const fam1 = families.find((f) => f.tenantId === 'fam1');
+    const fam2 = families.find((f) => f.tenantId === 'fam2');
+    // Most recent stamp across members wins, and both members are counted.
+    expect(fam1).toMatchObject({ lastSeenAt: '2026-07-26T16:34:00.000Z', activeUsers: 2, activeDays: 2 });
+    expect(fam1?.lastAiCallAt).toBe('2026-07-20T02:00:00.000Z');
+    // Never stamped → explicit null, not a missing key, so the UI can render a dash.
+    expect(fam2).toMatchObject({ lastSeenAt: null, activeUsers: 0 });
+  });
+
+  // The last-seen rows share the TENANT#<id> partition with the registry's DETAILS row. If they ever
+  // leaked into GSI1PK='TENANTS' the roster would grow a phantom family per user.
+  it('does not let last-seen rows inflate the family list', async () => {
+    const dispatch = await familiesHarness(threeTenants, (c) => {
+      void c.put({ PK: 'TENANT#fam1', SK: 'LASTSEEN#kate', tenantId: 'fam1', userId: 'kate', role: 'parent', lastSeenAt: '2026-08-01T00:00:00.000Z' });
+      void c.put({ PK: 'TENANT#fam1', SK: 'LASTSEEN#keira', tenantId: 'fam1', userId: 'keira', role: 'student', lastSeenAt: '2026-08-01T00:00:00.000Z' });
+    });
+    const res = await dispatch(event('GET', '/admin/usage/families', platformAdmin));
+    expect(parse(res).families as unknown[]).toHaveLength(3);
+  });
+
   it('from/to range filters rows per tenant (out-of-range excluded)', async () => {
     const dispatch = await familiesHarness(
       async (data) => {
