@@ -30,8 +30,7 @@ describe('AuthGate public routing', () => {
     visit('/');
     render(<AuthGate>app</AuthGate>);
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(/the story of the journey/i);
-    // Both ways in are present.
-    expect(screen.getAllByRole('link', { name: /create/i }).length).toBeGreaterThan(0);
+    // Invite-only: sign-in is the only way in from here (invitees arrive via their /join link).
     expect(screen.getAllByRole('link', { name: /sign in/i }).length).toBeGreaterThan(0);
   });
 
@@ -73,12 +72,12 @@ describe('AuthGate public routing', () => {
     expect(screen.queryByRole('link', { name: /create your account/i })).not.toBeInTheDocument();
   });
 
-  it('landing page CTAs point at the real public routes', () => {
+  it('landing page is invite-only: sign-in CTAs only, no signup links', () => {
     visit('/');
     render(<AuthGate>app</AuthGate>);
-    const signup = screen.getAllByRole('link', { name: /create/i });
-    expect(signup.every((a) => a.getAttribute('href') === '/signup')).toBe(true);
+    expect(screen.queryByRole('link', { name: /create/i })).not.toBeInTheDocument();
     const signin = screen.getAllByRole('link', { name: /sign in/i });
+    expect(signin.length).toBeGreaterThan(0);
     expect(signin.every((a) => a.getAttribute('href') === '/login')).toBe(true);
   });
 });

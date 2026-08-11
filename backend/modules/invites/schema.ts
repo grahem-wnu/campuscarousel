@@ -2,9 +2,11 @@
 
 import { z } from '../../shared/api/index.js';
 
+// `email` optional: with it, the code is emailed AND redemption is pinned to that address; without
+// it, the endpoint returns a shareable link the admin copies and sends over any channel.
 export const createInviteSchema = z
   .object({
-    email: z.string().email().max(320),
+    email: z.string().email().max(320).optional(),
     familyName: z.string().max(120).optional(),
     plan: z.enum(['free', 'family']).optional(),
     expiresInDays: z.number().int().min(1).max(365).optional(),

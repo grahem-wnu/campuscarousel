@@ -31,29 +31,34 @@ export function makeHandlers(deps: InviteDeps): InviteHandlers {
   const now = deps.now ?? (() => new Date());
 
   return {
-    // POST /admin/invites — issue a code + email it.
+    // POST /admin/invites — issue a code. With `email`, the code is also emailed (and redemption is
+    // pinned to that address); without, it's a link-only invite the admin copies and texts directly.
+    // Either way the response carries `url` so the console can always re-copy it.
     create: async (ctx) => {
       const input = validateBody(createInviteSchema, ctx);
-      if (!from) throw Errors.conflict('Sender email is not configured on the server.');
+      if (input.email && !from) throw Errors.conflict('Sender email is not configured on the server.');
       const code = newInviteCode();
       const invite = await getData().invites.create({
         code,
-        email: input.email,
+        ...(input.email ? { email: input.email } : {}),
         familyName: input.familyName,
         plan: input.plan ?? 'free',
         status: 'pending',
         invitedBy: ctx.requester.username,
         expiresAt: expiresAt(now(), input.expiresInDays),
       });
-      const redeemUrl = `${appUrl}/redeem?code=${encodeURIComponent(code)}`;
-      await sender.send({
-        from,
-        to: input.email,
-        subject: "You're invited to Campus Carousel",
-        text: `You've been invited to Campus Carousel — a private space to track a student's path to college.\n\nYour signup code: ${code}\n\nCreate your family account: ${redeemUrl}\n\nThis code expires ${invite.expiresAt}.`,
-        html: `<p>You've been invited to <strong>Campus Carousel</strong> — a private space to track a student's path to college.</p><p>Your signup code: <strong>${code}</strong></p><p><a href="${redeemUrl}">Create your family account</a></p><p style="color:#666;font-size:12px">This code expires ${invite.expiresAt}.</p>`,
-      });
-      return { status: 201, body: invite };
+      // NB: /join is the real public redemption route (AuthGate) — the old /redeem link 404'd into login.
+      const redeemUrl = `${appUrl}/join?code=${encodeURIComponent(code)}`;
+      if (input.email) {
+        await sender.send({
+          from,
+          to: input.email,
+          subject: "You're invited to Campus Carousel",
+          text: `You've been invited to Campus Carousel — a private space to track a student's path to college.\n\nYour signup code: ${code}\n\nCreate your family account: ${redeemUrl}\n\nThis code expires ${invite.expiresAt}.`,
+          html: `<p>You've been invited to <strong>Campus Carousel</strong> — a private space to track a student's path to college.</p><p>Your signup code: <strong>${code}</strong></p><p><a href="${redeemUrl}">Create your family account</a></p><p style="color:#666;font-size:12px">This code expires ${invite.expiresAt}.</p>`,
+        });
+      }
+      return { status: 201, body: { ...invite, url: redeemUrl } };
     },
 
     // GET /admin/invites — list all invites (newest first).

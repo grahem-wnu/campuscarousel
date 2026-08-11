@@ -33,6 +33,9 @@ describe('inviteRedeemError', () => {
   it('is case-insensitive on the email', () => {
     expect(inviteRedeemError(invite(), 'FAM@X.com', now)).toBeNull();
   });
+  it('a link-only invite (no pinned email) is redeemable by any email', () => {
+    expect(inviteRedeemError(invite({ email: undefined }), 'whoever@else.com', now)).toBeNull();
+  });
   it('rejects unknown / revoked / used / expired / email-mismatch', () => {
     expect(inviteRedeemError(null, 'a@b.com', now)).toMatch(/Invalid/);
     expect(inviteRedeemError(invite({ status: 'revoked' }), 'fam@x.com', now)).toMatch(/revoked/);

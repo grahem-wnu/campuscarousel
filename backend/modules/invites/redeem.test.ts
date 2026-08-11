@@ -36,6 +36,17 @@ describe('redeemInvite', () => {
     expect(await data.invites.get('CODE1234')).toMatchObject({ status: 'accepted', acceptedTenantId: 'fam1' });
   });
 
+  it('redeems a link-only invite (no pinned email) with whatever email the redeemer provides', async () => {
+    await seedInvite({ email: undefined });
+    const res = await redeemInvite(
+      { data, provisioner, now: () => new Date('2026-06-10T00:00:00Z'), newTenantId: () => 'fam2' },
+      { code: 'CODE1234', email: 'anyone@y.com', password: 'pw12345678', familyName: 'Jones' },
+    );
+    expect(res.tenantId).toBe('fam2');
+    expect(provisioned[0]?.email).toBe('anyone@y.com');
+    expect(await data.invites.get('CODE1234')).toMatchObject({ status: 'accepted' });
+  });
+
   it('422 on an unknown code', async () => {
     await expect(
       redeemInvite({ data, provisioner }, { code: 'nope', email: 'x@y.com', password: 'pw12345678' }),
