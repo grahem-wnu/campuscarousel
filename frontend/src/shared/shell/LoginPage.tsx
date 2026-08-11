@@ -134,10 +134,7 @@ export function LoginPage() {
 
         {phase === "credentials" ? (
           <p className="mt-6 text-center text-sm text-ink-500">
-            New here?{" "}
-            <a href="/signup" className="font-medium text-primary-700 hover:underline">
-              Create an account
-            </a>
+            Campus Carousel is invite-only — new families join through an invite link.
           </p>
         ) : null}
         <p className="mt-6 text-center text-xs text-ink-400">

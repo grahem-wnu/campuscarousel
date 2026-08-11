@@ -43,15 +43,29 @@ export default function AdminInvitesPage() {
     );
   }
 
-  async function create() {
-    if (!email.trim()) {
-      toast.error('Enter an email address.');
-      return;
+  async function copyLink(code: string) {
+    const url = `${window.location.origin}/join?code=${encodeURIComponent(code)}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success('Invite link copied.');
+    } catch {
+      toast.error(`Couldn't copy — share it manually: ${url}`);
     }
+  }
+
+  async function create() {
     setCreating(true);
     try {
-      const inv = await createInvite({ email: email.trim(), familyName: familyName.trim() || undefined });
-      toast.success(`Invite emailed to ${inv.email} (code ${inv.code}).`);
+      const inv = await createInvite({
+        ...(email.trim() ? { email: email.trim() } : {}),
+        familyName: familyName.trim() || undefined,
+      });
+      // Link-only invites go straight to the clipboard — the whole point is texting it onward.
+      if (inv.email) {
+        toast.success(`Invite emailed to ${inv.email} (code ${inv.code}).`);
+      } else {
+        await copyLink(inv.code);
+      }
       setEmail('');
       setFamilyName('');
       await load();
@@ -81,8 +95,12 @@ export default function AdminInvitesPage() {
 
       <Card className="space-y-3">
         <h2 className="text-sm font-semibold text-ink-800">Invite a family</h2>
+        <p className="text-xs text-ink-500">
+          Leave the email blank to get a shareable link (copied to your clipboard) you can text to anyone.
+          With an email, the code is emailed and only that address can redeem it.
+        </p>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Field label="Family email">
+          <Field label="Family email (optional)">
             <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="parent@example.com" />
           </Field>
           <Field label="Family name (optional)">
@@ -91,7 +109,7 @@ export default function AdminInvitesPage() {
         </div>
         <div className="flex justify-end">
           <Button icon="plus" loading={creating} onClick={() => void create()}>
-            Send invite
+            {email.trim() ? 'Send invite' : 'Create invite link'}
           </Button>
         </div>
       </Card>
@@ -116,7 +134,7 @@ export default function AdminInvitesPage() {
             <Card key={i.code} className="flex items-center justify-between gap-3 py-3">
               <div className="min-w-0">
                 <p className="text-sm font-medium text-ink-900">
-                  <span className="font-mono">{i.code}</span> · {i.email}
+                  <span className="font-mono">{i.code}</span> · {i.email ?? 'shareable link'}
                 </p>
                 <p className="text-xs text-ink-500">
                   {i.status}
@@ -125,9 +143,14 @@ export default function AdminInvitesPage() {
                 </p>
               </div>
               {i.status === 'pending' ? (
-                <Button size="sm" variant="ghost" onClick={() => void revoke(i.code)}>
-                  Revoke
-                </Button>
+                <div className="flex shrink-0 items-center gap-1">
+                  <Button size="sm" variant="ghost" onClick={() => void copyLink(i.code)}>
+                    Copy link
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => void revoke(i.code)}>
+                    Revoke
+                  </Button>
+                </div>
               ) : null}
             </Card>
           ))}
