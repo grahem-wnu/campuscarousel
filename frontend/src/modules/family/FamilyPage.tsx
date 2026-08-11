@@ -42,12 +42,17 @@ export default function FamilyPage() {
   // Pending per-child "sign in" invites, so a lost link is recoverable from the child row (the invite
   // modal re-shows the stored code instead of failing against the backend's one-live-invite dedupe).
   const [studentInvites, setStudentInvites] = useState<PendingInvite[]>([]);
+  // Gate the invite action on the initial load: opening the modal before invites arrive would miss an
+  // existing code and send a doomed create into the backend's one-live-invite dedupe.
+  const [invitesLoaded, setInvitesLoaded] = useState(false);
   const loadStudentInvites = useCallback(async () => {
     try {
       const { invites } = await listInvites();
       setStudentInvites(invites.filter((i) => i.kind === "student"));
     } catch {
       setStudentInvites([]); // non-fatal: the row just won't show the pending hint
+    } finally {
+      setInvitesLoaded(true);
     }
   }, []);
   useEffect(() => {
@@ -116,6 +121,7 @@ export default function FamilyPage() {
                 student={s}
                 isActive={s.studentId === activeStudentId}
                 hasPendingInvite={studentInvites.some((i) => i.studentId === s.studentId)}
+                inviteReady={invitesLoaded}
                 onView={() => setActiveStudentId(s.studentId)}
                 onEdit={() => setEditing(s)}
                 onInvite={() => setInvitingStudent(s)}
@@ -183,6 +189,7 @@ function StudentRow({
   student,
   isActive,
   hasPendingInvite,
+  inviteReady,
   onView,
   onEdit,
   onInvite,
@@ -190,6 +197,7 @@ function StudentRow({
   student: Student;
   isActive: boolean;
   hasPendingInvite?: boolean;
+  inviteReady?: boolean;
   onView?: () => void;
   onEdit: () => void;
   onInvite?: () => void;
@@ -236,6 +244,7 @@ function StudentRow({
             variant="outline"
             size="sm"
             onClick={onInvite}
+            disabled={!inviteReady}
             aria-label={`Invite ${student.name} to sign in`}
           >
             {hasPendingInvite ? "Invite pending" : "Invite to sign in"}

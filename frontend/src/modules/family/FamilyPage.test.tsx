@@ -93,8 +93,11 @@ describe('per-child "invite to sign in"', () => {
     h.createInvite.mockResolvedValue({ code: 'ABCD2345', url: 'https://app/join-family?code=ABCD2345' });
 
     render(<FamilyPage />);
-    // Row button shows "Invite to sign in" (child context is on the aria-label + adjacent name).
-    fireEvent.click(await screen.findByText('Invite to sign in'));
+    // Row button shows "Invite to sign in" (child context is on the aria-label + adjacent name). It
+    // unlocks once the pending-invite load settles, so wait for that before clicking.
+    const inviteBtn = (await screen.findByText('Invite to sign in')).closest('button')!;
+    await waitFor(() => expect(inviteBtn).not.toBeDisabled());
+    fireEvent.click(inviteBtn);
 
     const dialog = await screen.findByRole('dialog', { name: /invite keira to sign in/i });
     // No email field anywhere in the flow.
@@ -129,6 +132,19 @@ describe('per-child "invite to sign in"', () => {
     fireEvent.click(within(dialog).getByText('Revoke invite'));
     await waitFor(() => expect(h.revokeInvite).toHaveBeenCalledWith('LOST1234'));
     expect(await within(dialog).findByText('Create invite link')).toBeInTheDocument();
+  });
+
+  it('holds the invite button disabled until pending invites have loaded (no doomed create in the gap)', async () => {
+    h.students = [{ studentId: 's1', name: 'Jozi', status: 'active', createdAt: '', updatedAt: '' }];
+    let resolveInvites!: (v: { invites: unknown[] }) => void;
+    h.listInvites.mockReturnValue(new Promise((r) => { resolveInvites = r; }));
+
+    render(<FamilyPage />);
+    const btn = (await screen.findByText('Invite to sign in')).closest('button')!;
+    expect(btn).toBeDisabled();
+
+    resolveInvites({ invites: [] });
+    await waitFor(() => expect(btn).not.toBeDisabled());
   });
 
   it('shows "Signed in as" and no invite button once the child has a login', async () => {
