@@ -62,6 +62,17 @@ describe('POST /family/invites', () => {
     expect((await dispatch(event('POST', '/family/invites', parent, { kind: 'student', studentId: stu.studentId }))).statusCode).toBe(409);
   });
 
+  it('allows a NEW student invite when the previous pending one has EXPIRED', async () => {
+    const { data, dispatch, seedStudent } = harness();
+    const stu = await seedStudent();
+    // An expired code can't be redeemed, so it must not block a fresh invite (the child would be
+    // permanently un-invitable — nothing ever flips a stored status to 'expired').
+    await runWithTenant('fam1', () =>
+      data.familyInvites.create({ code: 'OLDEXP', tenantId: 'fam1', kind: 'student', studentId: stu.studentId, invitedBy: 'kate', status: 'pending', expiresAt: '2000-01-01T00:00:00Z' }),
+    );
+    expect((await dispatch(event('POST', '/family/invites', parent, { kind: 'student', studentId: stu.studentId }))).statusCode).toBe(201);
+  });
+
   it('creates a co-parent invite (needs a relationship)', async () => {
     const { dispatch } = harness();
     const res = await dispatch(event('POST', '/family/invites', parent, { kind: 'coparent', relationship: 'parent' }));
@@ -101,6 +112,15 @@ describe('GET /family/invites', () => {
     expect(invites).toHaveLength(1);
     expect(invites[0]!.status).toBe('pending');
     expect(invites[0]!.tenantId).toBe('fam1');
+  });
+
+  it('excludes an expired pending invite (a dead code is not live)', async () => {
+    const { data, dispatch } = harness();
+    await runWithTenant('fam1', () =>
+      data.familyInvites.create({ code: 'DEADCODE', tenantId: 'fam1', kind: 'coparent', relationship: 'parent', invitedBy: 'kate', status: 'pending', expiresAt: '2000-01-01T00:00:00Z' }),
+    );
+    const list = parse(await dispatch(event('GET', '/family/invites', parent)));
+    expect(list.invites).toHaveLength(0);
   });
 });
 
