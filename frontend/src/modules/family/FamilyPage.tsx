@@ -39,6 +39,21 @@ export default function FamilyPage() {
   const [editing, setEditing] = useState<Student | null>(null);
   const [invitingStudent, setInvitingStudent] = useState<Student | null>(null);
 
+  // Pending per-child "sign in" invites, so a lost link is recoverable from the child row (the invite
+  // modal re-shows the stored code instead of failing against the backend's one-live-invite dedupe).
+  const [studentInvites, setStudentInvites] = useState<PendingInvite[]>([]);
+  const loadStudentInvites = useCallback(async () => {
+    try {
+      const { invites } = await listInvites();
+      setStudentInvites(invites.filter((i) => i.kind === "student"));
+    } catch {
+      setStudentInvites([]); // non-fatal: the row just won't show the pending hint
+    }
+  }, []);
+  useEffect(() => {
+    void loadStudentInvites();
+  }, [loadStudentInvites]);
+
   async function add() {
     const trimmed = name.trim();
     if (!trimmed) {
@@ -100,6 +115,7 @@ export default function FamilyPage() {
                 key={s.studentId}
                 student={s}
                 isActive={s.studentId === activeStudentId}
+                hasPendingInvite={studentInvites.some((i) => i.studentId === s.studentId)}
                 onView={() => setActiveStudentId(s.studentId)}
                 onEdit={() => setEditing(s)}
                 onInvite={() => setInvitingStudent(s)}
@@ -152,7 +168,12 @@ export default function FamilyPage() {
       )}
 
       {invitingStudent && (
-        <StudentInviteModal student={invitingStudent} onClose={() => setInvitingStudent(null)} />
+        <StudentInviteModal
+          student={invitingStudent}
+          existing={studentInvites.find((i) => i.studentId === invitingStudent.studentId) ?? null}
+          onClose={() => setInvitingStudent(null)}
+          onChanged={loadStudentInvites}
+        />
       )}
     </div>
   );
@@ -161,12 +182,14 @@ export default function FamilyPage() {
 function StudentRow({
   student,
   isActive,
+  hasPendingInvite,
   onView,
   onEdit,
   onInvite,
 }: {
   student: Student;
   isActive: boolean;
+  hasPendingInvite?: boolean;
   onView?: () => void;
   onEdit: () => void;
   onInvite?: () => void;
@@ -206,7 +229,8 @@ function StudentRow({
           </Button>
         )}
         {/* Give the child their own login. An outline button so it reads as an action, not body text.
-            Once linked, we show who they signed up as instead. */}
+            Once linked, we show who they signed up as instead. With an invite already out, the button
+            reopens it (copy the link again / revoke) — the backend allows only one live code per child. */}
         {onInvite && !hasLogin && student.status === "active" && (
           <Button
             variant="outline"
@@ -214,7 +238,7 @@ function StudentRow({
             onClick={onInvite}
             aria-label={`Invite ${student.name} to sign in`}
           >
-            Invite to sign in
+            {hasPendingInvite ? "Invite pending" : "Invite to sign in"}
           </Button>
         )}
         <Button variant="ghost" size="sm" onClick={onEdit} aria-label={`Edit ${student.name}`}>
@@ -262,18 +286,52 @@ function InviteCodePanel({ invite }: { invite: InviteResult }) {
   );
 }
 
-/** Mint a "sign-in" login invite for a specific child, then show the shareable link/code. */
-function StudentInviteModal({ student, onClose }: { student: Student; onClose: () => void }) {
+/**
+ * Mint a "sign-in" login invite for a specific child, then show the shareable link/code. If a code is
+ * already out (`existing`), re-show it instead — the backend allows one live code per child, and a lost
+ * link must be recoverable. Revoke-from-here frees the child for a fresh code.
+ */
+function StudentInviteModal({
+  student,
+  existing,
+  onClose,
+  onChanged,
+}: {
+  student: Student;
+  existing?: PendingInvite | null;
+  onClose: () => void;
+  onChanged: () => Promise<void>;
+}) {
   const toast = useToast();
   const [busy, setBusy] = useState(false);
-  const [invite, setInvite] = useState<InviteResult | null>(null);
+  const [invite, setInvite] = useState<InviteResult | null>(
+    // Recover the stored code: the join URL is reconstructable from origin + code (same as PendingInviteRow).
+    existing ? { code: existing.code, url: `${window.location.origin}/join-family?code=${existing.code}` } : null,
+  );
 
   async function generate() {
     setBusy(true);
     try {
       setInvite(await createInvite({ kind: "student", studentId: student.studentId }));
+      await onChanged();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not create the invite.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function revoke() {
+    if (!invite) return;
+    if (!window.confirm("Revoke this invite? The code will stop working.")) return;
+    setBusy(true);
+    try {
+      await revokeInvite(invite.code);
+      toast.success("Invite revoked.");
+      setInvite(null);
+      await onChanged();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not revoke.");
     } finally {
       setBusy(false);
     }
@@ -289,7 +347,10 @@ function StudentInviteModal({ student, onClose }: { student: Student; onClose: (
               own private view of their journey.
             </p>
             <InviteCodePanel invite={invite} />
-            <div className="flex justify-end pt-1">
+            <div className="flex items-center justify-between pt-1">
+              <Button variant="ghost" onClick={() => void revoke()} disabled={busy}>
+                Revoke invite
+              </Button>
               <Button onClick={onClose}>Done</Button>
             </div>
           </>

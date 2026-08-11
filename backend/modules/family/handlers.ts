@@ -10,7 +10,7 @@
 import { Errors, validateBody, validateParams, type Handler } from '../../shared/api/index.js';
 import { requireRole, type Role } from '../../shared/auth/index.js';
 import { currentTenantId } from '../../shared/tenant/index.js';
-import type { Data, MemberAccessLevel } from '../../shared/data/index.js';
+import type { Data, FamilyInvite, MemberAccessLevel } from '../../shared/data/index.js';
 import { expiresAt, newInviteCode } from '../invites/logic.js';
 import {
   createFamilyInviteSchema,
@@ -61,6 +61,15 @@ export const roleForAccess = (level: MemberAccessLevel): Role => {
 };
 
 const requireManager = requireRole('admin', 'parent');
+
+/**
+ * An invite is LIVE only while pending AND unexpired. Nothing ever flips a stored status to 'expired'
+ * (accept simply refuses stale codes), so liveness must be computed here — a dead code must not block a
+ * fresh student invite or linger in the pending list, or a child whose invite lapsed becomes permanently
+ * un-invitable. Missing expiresAt (pre-TTL records) counts as live, matching accept's leniency.
+ */
+const isLive = (invite: FamilyInvite, nowIso: string): boolean =>
+  invite.status === 'pending' && (!invite.expiresAt || invite.expiresAt > nowIso);
 
 export function makeHandlers(deps: FamilyDeps): FamilyHandlers {
   const { getData, inviter } = deps;
@@ -119,10 +128,11 @@ export function makeHandlers(deps: FamilyDeps): FamilyHandlers {
         const child = await getData().students.get(input.studentId!);
         if (!child) throw Errors.notFound('Student not found');
         if (child.loginUserId) throw Errors.conflict('That child already has a login.');
-        // Dedupe: one live student invite per child — narrows the concurrent-accept race window (accept
+        // Dedupe: one LIVE student invite per child — narrows the concurrent-accept race window (accept
         // still enforces one-login-per-child atomically via students.linkLogin).
         const invites = await getData().familyInvites.listForTenant(tenantId);
-        if (invites.some((i) => i.status === 'pending' && i.kind === 'student' && i.studentId === input.studentId)) {
+        const nowIso = now().toISOString();
+        if (invites.some((i) => i.kind === 'student' && i.studentId === input.studentId && isLive(i, nowIso))) {
           throw Errors.conflict('There is already a pending login invite for this child.');
         }
       }
@@ -141,10 +151,11 @@ export function makeHandlers(deps: FamilyDeps): FamilyHandlers {
       return { status: 201, body: { code: invite.code, url: `${appUrl}/join-family?code=${invite.code}` } };
     },
 
-    // GET /family/invites — the tenant's still-pending invites (admin/parent only).
+    // GET /family/invites — the tenant's LIVE (pending + unexpired) invites (admin/parent only).
     listInvites: async () => {
       const all = await getData().familyInvites.listForTenant(currentTenantId());
-      return { status: 200, body: { invites: all.filter((i) => i.status === 'pending') } };
+      const nowIso = now().toISOString();
+      return { status: 200, body: { invites: all.filter((i) => isLive(i, nowIso)) } };
     },
 
     // POST /family/invites/:code/revoke — cancel a pending invite (admin/parent only). Cross-tenant codes
