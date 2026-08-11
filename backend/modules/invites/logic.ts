@@ -29,7 +29,9 @@ export function inviteRedeemError(invite: Invite | null, email: string, nowIso: 
   if (invite.status === 'expired' || (invite.expiresAt && invite.expiresAt < nowIso)) {
     return 'This invite has expired.';
   }
-  if (invite.email.trim().toLowerCase() !== email.trim().toLowerCase()) {
+  // A link-only invite (no email pinned) may be redeemed by whoever holds the link — it's still
+  // single-use, expiring, and revocable. An emailed invite stays pinned to its address.
+  if (invite.email && invite.email.trim().toLowerCase() !== email.trim().toLowerCase()) {
     return 'This invite was issued to a different email address.';
   }
   return null;

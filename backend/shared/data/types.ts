@@ -45,7 +45,9 @@ export interface Tenant extends Timestamped {
 // ---------------------------------------------------------------------------
 export interface Invite extends Timestamped {
   code: string;
-  email: string;
+  /** Absent on a link-only invite (admin copies the URL and shares it directly — no email sent).
+   *  When present, redemption is pinned to this address; when absent, any email may redeem. */
+  email?: string;
   familyName?: string;
   plan: 'free' | 'family';
   status: 'pending' | 'accepted' | 'revoked' | 'expired';

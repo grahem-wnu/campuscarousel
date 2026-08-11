@@ -45,6 +45,23 @@ describe('POST /admin/invites', () => {
     expect(sent[0]?.text).toContain(invite.code);
   });
 
+  it('issues a LINK-ONLY invite when no email is given: nothing emailed, shareable url returned', async () => {
+    const res = await h.create(ctx({ body: {} }));
+    expect(res.status).toBe(201);
+    const invite = res.body as { code: string; status: string; email?: string; url: string };
+    expect(invite.status).toBe('pending');
+    expect(invite.email).toBeUndefined();
+    expect(invite.url).toBe(`https://app/join?code=${invite.code}`);
+    expect(sent).toHaveLength(0);
+  });
+
+  it('emailed invites link to /join (the real public redemption route)', async () => {
+    const res = await h.create(ctx({ body: { email: 'fam@x.com' } }));
+    const invite = res.body as { code: string; url: string };
+    expect(invite.url).toBe(`https://app/join?code=${invite.code}`);
+    expect(sent[0]?.text).toContain(`https://app/join?code=${invite.code}`);
+  });
+
   it('422 on a bad email', async () => {
     await expect(h.create(ctx({ body: { email: 'not-an-email' } }))).rejects.toMatchObject({ status: 422 });
   });

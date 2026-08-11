@@ -155,7 +155,10 @@ export class ApiStack extends Stack {
       environment: {
         TABLE_NAME: table.tableName,
         USER_POOL_ID: userPool.userPoolId,
-        PUBLIC_SIGNUP_ENABLED: "true",
+        // Invite-only mode (2026-08-10, bot/bill protection): open signup is CLOSED. Families join
+        // via admin-issued invite links (/join) or family invites (/join-family). Flip to "true"
+        // and deploy to reopen.
+        PUBLIC_SIGNUP_ENABLED: "false",
       },
     });
     table.grantReadWriteData(redeem);

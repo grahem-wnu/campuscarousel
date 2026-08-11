@@ -30,9 +30,6 @@ function Step({ n, title, children }: { n: string; title: string; children: stri
 
 const CTA_PRIMARY =
   "inline-flex items-center justify-center whitespace-nowrap rounded-full bg-primary-700 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-primary-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300";
-const CTA_QUIET =
-  "inline-flex items-center justify-center whitespace-nowrap rounded-full border border-ink-300 px-5 py-2.5 text-sm font-medium text-ink-700 transition hover:border-primary-400 hover:text-primary-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300";
-
 export function LandingPage() {
   return (
     <div className="min-h-full bg-surface-base text-ink-900">
@@ -42,11 +39,8 @@ export function LandingPage() {
           Campus <span className="text-primary-700">Carousel</span>
         </p>
         <nav className="flex items-center gap-3">
-          <a href="/login" className="whitespace-nowrap text-sm font-medium text-ink-600 transition hover:text-primary-700">
+          <a href="/login" className={CTA_PRIMARY}>
             Sign in
-          </a>
-          <a href="/signup" className={CTA_PRIMARY}>
-            Create account
           </a>
         </nav>
       </header>
@@ -66,13 +60,14 @@ export function LandingPage() {
             real costs, real dates, kept current in the background.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-3">
-            <a href="/signup" className={CTA_PRIMARY}>
-              Create your account
-            </a>
-            <a href="/login" className={CTA_QUIET}>
+            <a href="/login" className={CTA_PRIMARY}>
               Sign in
             </a>
           </div>
+          {/* Invite-only: no self-serve signup. Families arrive via an admin-issued invite link. */}
+          <p className="mt-3 text-sm text-ink-500">
+            Campus Carousel is invite-only for now — have an invite link? It brings you straight in.
+          </p>
           <p className="mt-3 text-xs text-ink-400">Free while we grow. Set up takes about two minutes.</p>
         </section>
 
@@ -140,10 +135,11 @@ export function LandingPage() {
             </h2>
             <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-ink-600">
               The journey to college is years long and full of moments worth keeping. Give it a home.
+              Campus Carousel is invite-only for now.
             </p>
             <div className="mt-6 flex justify-center">
-              <a href="/signup" className={CTA_PRIMARY}>
-                Create your account
+              <a href="/login" className={CTA_PRIMARY}>
+                Sign in
               </a>
             </div>
           </div>
@@ -157,7 +153,6 @@ export function LandingPage() {
           </p>
           <nav className="flex items-center gap-4 text-xs text-ink-500">
             <a href="/login" className="transition hover:text-primary-700">Sign in</a>
-            <a href="/signup" className="transition hover:text-primary-700">Create account</a>
           </nav>
         </div>
       </footer>
