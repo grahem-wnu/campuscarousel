@@ -47,10 +47,16 @@ const CATEGORY_BRIEF: Record<SearchCategory, string> = {
     'awards, and athletics-department awards by sport.',
 };
 
-/** The current application cycle, stated plainly. Without this the model answers from whatever
- *  cycle its sources happen to show — in testing an August 2026 search returned November 2025
- *  deadlines, i.e. dates that had already passed. A family planning around a stale deadline is the
- *  exact failure this feature exists to prevent, so both prompts carry the date. */
+/** The current application cycle, stated plainly. Without this the model answers from whatever cycle
+ *  its sources happen to show — in testing, an August 2026 search returned November 2025 deadlines,
+ *  dates that had already passed.
+ *
+ *  The instruction is deliberately "roll it forward", NOT "drop it". A first attempt told the model
+ *  to omit anything it could only verify for a past cycle, and it responded by discarding EVERY
+ *  deadline — including ones still comfortably in the future. That trades a stale date for no date,
+ *  which is worse: the deadline drives the whole point of the feature and seeds `applicationDeadline`
+ *  when an award is pushed to Scholarship Tracker. Institutional deadlines almost always recur on the
+ *  same month/day, so rolling forward is both safe and what a counselor would actually tell you. */
 export function cycleContext(now: Date = new Date()): string[] {
   const today = now.toISOString().slice(0, 10);
   // The US admissions cycle turns over in late summer: from August on, applicants are working
@@ -58,9 +64,13 @@ export function cycleContext(now: Date = new Date()): string[] {
   const entryYear = now.getUTCMonth() >= 7 ? now.getUTCFullYear() + 1 : now.getUTCFullYear();
   return [
     `Today's date is ${today}. The student is applying for entry in ${entryYear}, so report the`,
-    `CURRENT or UPCOMING cycle — not a past one. If the only date you can verify has already passed,`,
-    `omit the deadline rather than reporting it, and say in the summary that dates were last published`,
-    `for an earlier cycle.`,
+    `CURRENT or UPCOMING cycle — never a date that has already passed.`,
+    `These deadlines almost always recur on the same month and day every year. If your source shows a`,
+    `date from an earlier cycle (say November 1 of a past year) and the deadline is clearly annual,`,
+    `ROLL IT FORWARD to the equivalent date in the current cycle and report that. Do not discard a`,
+    `deadline just because the page you found is from last year — a recurring date is still useful.`,
+    `Omit the deadline only when you cannot establish even a recurring pattern; if a date is rolled`,
+    `forward or uncertain, say so in the summary.`,
   ];
 }
 
