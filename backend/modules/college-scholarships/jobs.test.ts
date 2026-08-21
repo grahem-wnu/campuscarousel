@@ -263,6 +263,26 @@ describe('a broad "All" sweep searches academic AND athletic', () => {
     expect(names).toEqual(['Merit Award', 'Rowing Award']);
   });
 
+  // The two sweeps must actually OVERLAP. If they ever serialize, an "All" search silently takes
+  // twice as long — the single biggest thing a user feels here.
+  it('runs the two sweeps concurrently, not one after the other', async () => {
+    let running = 0;
+    let maxConcurrent = 0;
+    await data.collegeScholarshipSearch.patch(collegeId, { status: 'in-progress', category: 'all' });
+    await runSearchJob(
+      () => data,
+      async () => {
+        running += 1;
+        maxConcurrent = Math.max(maxConcurrent, running);
+        await new Promise((r) => setTimeout(r, 20));
+        running -= 1;
+        return [];
+      },
+      collegeId,
+    );
+    expect(maxConcurrent).toBe(2);
+  });
+
   it('does NOT split when the family typed a query — their words already scope it', async () => {
     const asked: string[] = [];
     await data.collegeScholarshipSearch.patch(collegeId, { status: 'in-progress', category: 'all', query: 'soccer' });

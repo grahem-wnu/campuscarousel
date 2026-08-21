@@ -37,9 +37,21 @@ export const searchSchema = z
   })
   .strict();
 
-/** Body for POST /colleges/:id/scholarships/:scholarshipId/research — no inputs today; `.strict()`
- *  keeps an accidental payload from looking like it did something. */
+/** Body for POST /colleges/:id/scholarships/:scholarshipId/research — no inputs; `.strict()` keeps
+ *  an accidental payload from looking like it did something. */
 export const researchSchema = z.object({}).strict();
+
+/** Body for POST /colleges/:id/scholarships/research — research several awards from one click.
+ *  Capped at 10: each award is its own ~2-minute web-grounded job and its own Bedrock spend, so an
+ *  unbounded list would be both a long wait and a surprising bill. */
+export const researchBatchSchema = z
+  .object({
+    scholarshipIds: z
+      .array(z.string().min(1))
+      .min(1, 'select at least one scholarship')
+      .max(10, 'research at most 10 at a time'),
+  })
+  .strict();
 
 export type SearchInput = z.infer<typeof searchSchema>;
 export type SearchCategory = (typeof SEARCH_CATEGORIES)[number];

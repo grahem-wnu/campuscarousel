@@ -10,6 +10,7 @@ const h = vi.hoisted(() => ({
   listScholarships: vi.fn(),
   startSearch: vi.fn(),
   startResearch: vi.fn(),
+  startResearchBatch: vi.fn(),
   getScholarship: vi.fn(),
   deleteScholarship: vi.fn(),
   trackScholarship: vi.fn(),
@@ -57,6 +58,13 @@ async function renderTab() {
 async function tick() {
   await act(async () => {
     await vi.advanceTimersByTimeAsync(5000);
+  });
+}
+
+/** Tick an award's checkbox by its accessible name. */
+async function pick(name: string) {
+  await act(async () => {
+    fireEvent.click(screen.getByLabelText(name));
   });
 }
 
@@ -187,57 +195,86 @@ describe('ScholarshipsTab', () => {
     expect(screen.getByText('Search')).toBeTruthy();
   });
 
-  it('researches the picked award, polling until the dossier lands', async () => {
+  it('researches every ticked award in one click, polling until the dossiers land', async () => {
+    const a = award({ scholarshipId: 's1', name: 'Morrill Scholarship' });
+    const b = award({ scholarshipId: 's2', name: 'Rowing Award', category: 'athletic' });
     h.listScholarships.mockResolvedValue(
-      response({ search: { collegeId: 'c1', status: 'complete', found: 1, lastRunAt: '2026-08-20T00:00:00Z' }, scholarships: [award()] }),
+      response({ search: { collegeId: 'c1', status: 'complete', found: 2, lastRunAt: '2026-08-20T00:00:00Z' }, scholarships: [a, b] }),
     );
-    h.startResearch.mockResolvedValue(award({ researchStatus: 'in-progress' }));
-    h.getScholarship.mockResolvedValue(
-      award({
-        researchStatus: 'complete',
-        research: { summary: 'A full-tuition award.', odds: { competitiveness: 'very-high', estimate: 'About 20 of 1,200.' } },
+    h.startResearchBatch.mockResolvedValue({
+      started: 2,
+      scholarships: [{ ...a, researchStatus: 'in-progress' }, { ...b, researchStatus: 'in-progress' }],
+    });
+
+    await renderTab();
+    await pick('Morrill Scholarship');
+    await pick('Rowing Award');
+
+    expect(screen.getByText('Research 2 scholarships')).toBeTruthy();
+
+    // Once both finish, the poll sees them complete.
+    h.listScholarships.mockResolvedValue(
+      response({
+        search: { collegeId: 'c1', status: 'complete', found: 2, lastRunAt: '2026-08-20T00:00:00Z' },
+        scholarships: [
+          { ...a, researchStatus: 'complete', research: { summary: 'A full-tuition award.' } },
+          { ...b, researchStatus: 'complete', research: { summary: 'A rowing award.' } },
+        ],
       }),
     );
 
-    await renderTab();
-
-    // Pick it from the dropdown.
-    const select = screen.getByRole('combobox') as HTMLSelectElement;
     await act(async () => {
-      fireEvent.change(select, { target: { value: 's1' } });
-    });
-
-    await act(async () => {
-      screen.getByText('Research this scholarship').click();
+      fireEvent.click(screen.getByText('Research 2 scholarships'));
       await Promise.resolve();
     });
-    expect(h.startResearch).toHaveBeenCalledWith('c1', 's1');
-    expect(screen.getByText(/Researching/)).toBeTruthy();
+    expect(h.startResearchBatch).toHaveBeenCalledWith('c1', ['s1', 's2']);
 
     await tick();
 
+    // Both are marked researched, and the first dossier opens so the result is visible.
+    expect(screen.getAllByText('Researched')).toHaveLength(2);
     expect(screen.getByText('A full-tuition award.')).toBeTruthy();
-    expect(screen.getByText('Very competitive')).toBeTruthy();
-    expect(screen.getByText('About 20 of 1,200.')).toBeTruthy();
   });
 
-  it('shows an error when research comes back failed', async () => {
+  it('keeps the research button disabled until something is ticked', async () => {
     h.listScholarships.mockResolvedValue(
       response({ search: { collegeId: 'c1', status: 'complete', found: 1, lastRunAt: '2026-08-20T00:00:00Z' }, scholarships: [award()] }),
     );
-    h.startResearch.mockResolvedValue(award({ researchStatus: 'failed' }));
 
     await renderTab();
-    const select = screen.getByRole('combobox') as HTMLSelectElement;
+
+    expect((screen.getByText('Research').closest('button') as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('reports a partial failure without hiding the dossiers that did work', async () => {
+    const a = award({ scholarshipId: 's1', name: 'Morrill Scholarship' });
+    const b = award({ scholarshipId: 's2', name: 'Rowing Award', category: 'athletic' });
+    h.listScholarships.mockResolvedValue(
+      response({ search: { collegeId: 'c1', status: 'complete', found: 2, lastRunAt: '2026-08-20T00:00:00Z' }, scholarships: [a, b] }),
+    );
+    h.startResearchBatch.mockResolvedValue({ started: 2, scholarships: [a, b] });
+
+    await renderTab();
+    await pick('Morrill Scholarship');
+    await pick('Rowing Award');
+
+    h.listScholarships.mockResolvedValue(
+      response({
+        search: { collegeId: 'c1', status: 'complete', found: 2, lastRunAt: '2026-08-20T00:00:00Z' },
+        scholarships: [
+          { ...a, researchStatus: 'complete', research: { summary: 'Worked.' } },
+          { ...b, researchStatus: 'failed' },
+        ],
+      }),
+    );
     await act(async () => {
-      fireEvent.change(select, { target: { value: 's1' } });
-    });
-    await act(async () => {
-      screen.getByText('Research this scholarship').click();
+      fireEvent.click(screen.getByText('Research 2 scholarships'));
       await Promise.resolve();
     });
+    await tick();
 
-    expect(screen.getByText(/Couldn’t finish that research/)).toBeTruthy();
+    expect(screen.getByText(/1 of 2 couldn’t be researched/)).toBeTruthy();
+    expect(screen.getByText('Worked.')).toBeTruthy();
   });
 
   it('explains an empty result instead of leaving a blank tab', async () => {

@@ -151,7 +151,12 @@ export function buildSearchPrompt(input: {
     ' "amount":number,"amountDescription":string,"deadline":"YYYY-MM-DD","url":string,',
     ' "renewable":boolean,"eligibility":string[],"summary":string}',
     '`amount` is a single yearly USD figure only when the award has one; otherwise omit it and put the',
-    'range or terms in `amountDescription`. `summary` is one sentence on who it is for.',
+    'range or terms in `amountDescription`.',
+    '',
+    'KEEP THE OUTPUT SHORT — this is a list someone picks from, not the full write-up. `summary` is ONE',
+    'short sentence. `eligibility` is AT MOST 3 brief phrases ("3.5 GPA", "Ohio resident"), not full',
+    'sentences. Detail belongs in the per-award research step, and every extra word here is time the',
+    'family spends watching a spinner.',
   );
   return lines.join('\n');
 }
@@ -188,21 +193,68 @@ export function nameKey(name: string): string {
 }
 
 /**
+ * Parse a JSON array out of model text, SALVAGING a truncated one.
+ *
+ * If a run bumps the model's output ceiling, the array is cut off mid-object and a plain
+ * `JSON.parse` fails — which used to mean a search that genuinely found fourteen awards reported
+ * none at all. That failure mode is invisible and looks exactly like "this school offers nothing",
+ * which is the worst possible way to be wrong here. So when the whole array won't parse, we walk it
+ * and keep every complete top-level object, discarding only the partial one at the end.
+ */
+function parseArray(text: string): unknown[] | null {
+  const end = text.lastIndexOf(']');
+  if (end > 0) {
+    try {
+      const whole = JSON.parse(text.slice(0, end + 1));
+      if (Array.isArray(whole)) return whole;
+    } catch {
+      // fall through to salvage
+    }
+  }
+
+  // Scan for balanced top-level `{...}` objects, ignoring braces inside strings.
+  const out: unknown[] = [];
+  let depth = 0;
+  let objStart = -1;
+  let inString = false;
+  let escaped = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]!;
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === '\\') escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') inString = true;
+    else if (ch === '{') {
+      if (depth === 0) objStart = i;
+      depth++;
+    } else if (ch === '}') {
+      depth--;
+      if (depth === 0 && objStart !== -1) {
+        try {
+          out.push(JSON.parse(text.slice(objStart, i + 1)));
+        } catch {
+          // a malformed object is skipped, not fatal
+        }
+        objStart = -1;
+      }
+    }
+  }
+  return out.length ? out : null;
+}
+
+/**
  * Coerce raw model output into clean awards: tolerate a JSON array embedded in prose, drop anything
  * without a name, clamp every field, and dedupe by normalized name. Returns [] on unparseable
  * output rather than throwing — the job marks itself failed and the UI offers a retry.
  */
 export function parseSearchResults(raw: string, limit = SEARCH_LIMIT): FoundScholarship[] {
   const start = raw.indexOf('[');
-  const end = raw.lastIndexOf(']');
-  if (start === -1 || end <= start) return [];
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw.slice(start, end + 1));
-  } catch {
-    return [];
-  }
-  if (!Array.isArray(parsed)) return [];
+  if (start === -1) return [];
+  const parsed = parseArray(raw.slice(start));
+  if (!parsed) return [];
 
   const out: FoundScholarship[] = [];
   const seen = new Set<string>();
@@ -229,10 +281,13 @@ export function parseSearchResults(raw: string, limit = SEARCH_LIMIT): FoundScho
     if (url) s.url = url;
     if (typeof r.renewable === 'boolean') s.renewable = r.renewable;
     if (Array.isArray(r.eligibility)) {
-      const e = r.eligibility.map((x) => str(x, 400)).filter((x): x is string => !!x).slice(0, 20);
+      // Hard-capped to match the prompt: this is picker metadata, and the dossier carries the full
+      // eligibility story. Before this cap, eligibility was the single largest field in the response
+      // and most of what made the final synthesis round slow.
+      const e = r.eligibility.map((x) => str(x, 120)).filter((x): x is string => !!x).slice(0, 3);
       if (e.length) s.eligibility = e;
     }
-    const summary = str(r.summary, 600);
+    const summary = str(r.summary, 240);
     if (summary) s.summary = summary;
 
     out.push(s);

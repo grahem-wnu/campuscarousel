@@ -30,7 +30,21 @@ export interface AiOptions {
  *  final answer costs roughly a second per 60-80 output tokens, so the research ceiling is set at
  *  6000 (a very long dossier) rather than higher — a run that blew past 300s would be redelivered by
  *  SQS mid-write instead of failing cleanly. */
-const SEARCH_ROUNDS = 5;
+// Search: 4 rounds is enough to find a school's awards (measured — the 5th round mostly re-read
+// pages it already had).
+//
+// SEARCH_TOKENS is a SAFETY ceiling, not a speed lever, and it has to stay well clear of what a real
+// run generates. Measured on staging: a 14-award list is ~2,500 output tokens (~180 per award). An
+// earlier attempt to speed things up by trimming this to 2,600 bought nothing — that round still ran
+// 43s — and left only 5% of headroom. A run that hits the ceiling has its JSON array truncated
+// mid-object, so a family would see "no scholarships found" for a search that actually worked.
+// 4,000 leaves room for a long list plus preamble.
+//
+// What a search actually costs is generation speed: ~58 output tokens/sec, so the synthesis round
+// takes roughly (awards x 180) / 58 seconds however the prompt is worded. Making a search
+// meaningfully faster means generating fewer tokens or generating them on a faster model — not
+// asking this one to be brief.
+const SEARCH_ROUNDS = 4;
 const SEARCH_TOKENS = 4000;
 const RESEARCH_ROUNDS = 6;
 const RESEARCH_TOKENS = 6000;
