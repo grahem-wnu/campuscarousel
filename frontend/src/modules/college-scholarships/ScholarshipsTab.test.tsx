@@ -236,6 +236,70 @@ describe('ScholarshipsTab', () => {
     expect(screen.getByText('A full-tuition award.')).toBeTruthy();
   });
 
+  // Regression: the dossier used to render AFTER the whole list. On a long list, clicking
+  // "See details" flipped the label and appeared to do nothing — the content was real, just far
+  // below the fold. Asserting the text exists is not enough to catch that; it has to be asserted
+  // INSIDE the row it belongs to.
+  it('opens the dossier inside the row it belongs to, not at the bottom of the page', async () => {
+    const a = award({
+      scholarshipId: 's1',
+      name: 'Morrill Scholarship',
+      researchStatus: 'complete',
+      research: { summary: 'A full-tuition award.' },
+    });
+    const b = award({ scholarshipId: 's2', name: 'Rowing Award', category: 'athletic' });
+    h.listScholarships.mockResolvedValue(
+      response({ search: { collegeId: 'c1', status: 'complete', found: 2, lastRunAt: '2026-08-20T00:00:00Z' }, scholarships: [a, b] }),
+    );
+
+    await renderTab();
+
+    // Collapsed to begin with.
+    expect(screen.queryByText('A full-tuition award.')).toBeNull();
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('See details'));
+    });
+
+    const dossier = screen.getByText('A full-tuition award.');
+    const row = screen.getByLabelText('Morrill Scholarship').closest('li');
+    expect(row).toBeTruthy();
+    expect(row!.contains(dossier)).toBe(true);
+  });
+
+  it('collapses the dossier from the row toggle and from the bottom of the dossier', async () => {
+    const a = award({
+      scholarshipId: 's1',
+      name: 'Morrill Scholarship',
+      researchStatus: 'complete',
+      research: { summary: 'A full-tuition award.' },
+    });
+    h.listScholarships.mockResolvedValue(
+      response({ search: { collegeId: 'c1', status: 'complete', found: 1, lastRunAt: '2026-08-20T00:00:00Z' }, scholarships: [a] }),
+    );
+
+    await renderTab();
+    await act(async () => {
+      fireEvent.click(screen.getByText('See details'));
+    });
+    expect(screen.getByText('A full-tuition award.')).toBeTruthy();
+
+    // The row's own toggle closes it...
+    await act(async () => {
+      fireEvent.click(screen.getByText('Hide details'));
+    });
+    expect(screen.queryByText('A full-tuition award.')).toBeNull();
+
+    // ...and so does the Collapse control at the end of a long dossier.
+    await act(async () => {
+      fireEvent.click(screen.getByText('See details'));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByText('Collapse'));
+    });
+    expect(screen.queryByText('A full-tuition award.')).toBeNull();
+  });
+
   it('keeps the research button disabled until something is ticked', async () => {
     h.listScholarships.mockResolvedValue(
       response({ search: { collegeId: 'c1', status: 'complete', found: 1, lastRunAt: '2026-08-20T00:00:00Z' }, scholarships: [award()] }),
