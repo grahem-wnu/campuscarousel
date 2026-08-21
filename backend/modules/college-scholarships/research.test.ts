@@ -66,6 +66,12 @@ describe('buildResearchPrompt', () => {
     expect(p).toContain('2028');
   });
 
+  it('states the current cycle so it cannot report a deadline that has already passed', () => {
+    const p = buildResearchPrompt({ collegeName: 'X', scholarship: award(), now: new Date('2026-08-20T00:00:00Z') });
+    expect(p).toContain("Today's date is 2026-08-20");
+    expect(p).toContain('entry in 2027');
+  });
+
   it('flattens an injection attempt hidden in the award name', () => {
     const p = buildResearchPrompt({
       collegeName: 'X',

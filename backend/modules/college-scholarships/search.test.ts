@@ -2,7 +2,7 @@
 // the parser — it is the only thing standing between raw model output and what a family reads.
 
 import { describe, expect, it } from 'vitest';
-import { buildSearchPrompt, cleanUrl, nameKey, parseSearchResults, SEARCH_LIMIT } from './search.js';
+import { buildSearchPrompt, cleanUrl, cycleContext, nameKey, parseSearchResults, SEARCH_LIMIT } from './search.js';
 
 describe('buildSearchPrompt', () => {
   it('names the college and scopes the sweep to that school', () => {
@@ -146,5 +146,29 @@ describe('cleanUrl', () => {
     expect(cleanUrl('http://a.edu')).toBe('http://a.edu');
     expect(cleanUrl('ftp://a.edu')).toBeUndefined();
     expect(cleanUrl(42)).toBeUndefined();
+  });
+});
+
+describe('cycleContext', () => {
+  // Regression: a live August-2026 staging search came back with November 2025 deadlines — the
+  // previous cycle, already passed. The prompt now states the date and the entry year.
+  it('states today and the entry year, and refuses past deadlines', () => {
+    const lines = cycleContext(new Date('2026-08-20T00:00:00Z')).join(' ');
+    expect(lines).toContain('2026-08-20');
+    expect(lines).toContain('entry in 2027');
+    expect(lines).toContain('not a past one');
+  });
+
+  it('rolls the entry year over in August, when the US cycle turns', () => {
+    expect(cycleContext(new Date('2026-07-31T00:00:00Z')).join(' ')).toContain('entry in 2026');
+    expect(cycleContext(new Date('2026-08-01T00:00:00Z')).join(' ')).toContain('entry in 2027');
+  });
+});
+
+describe('prompts carry the cycle', () => {
+  it('the search prompt states the date', () => {
+    expect(buildSearchPrompt({ collegeName: 'X', category: 'all', now: new Date('2026-08-20T00:00:00Z') })).toContain(
+      "Today's date is 2026-08-20",
+    );
   });
 });
