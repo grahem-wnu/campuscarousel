@@ -14,9 +14,11 @@ const h = vi.hoisted(() => ({
   getScholarship: vi.fn(),
   deleteScholarship: vi.fn(),
   trackScholarship: vi.fn(),
+  navigate: vi.fn(),
 }));
 
 vi.mock('./api', () => h);
+vi.mock('react-router-dom', () => ({ useNavigate: () => h.navigate }));
 vi.mock('../../shared/ui', async () => {
   const actual = await vi.importActual<typeof import('../../shared/ui')>('../../shared/ui');
   return { ...actual, useToast: () => ({ success: vi.fn(), error: vi.fn(), info: vi.fn() }) };
@@ -231,43 +233,14 @@ describe('ScholarshipsTab', () => {
 
     await tick();
 
-    // Both are marked researched, and the first dossier opens so the result is visible.
+    // Both are marked researched, each with its own way through to the dossier page.
     expect(screen.getAllByText('Researched')).toHaveLength(2);
-    expect(screen.getByText('A full-tuition award.')).toBeTruthy();
+    expect(screen.getAllByText('See details')).toHaveLength(2);
   });
 
-  // Regression: the dossier used to render AFTER the whole list. On a long list, clicking
-  // "See details" flipped the label and appeared to do nothing — the content was real, just far
-  // below the fold. Asserting the text exists is not enough to catch that; it has to be asserted
-  // INSIDE the row it belongs to.
-  it('opens the dossier inside the row it belongs to, not at the bottom of the page', async () => {
-    const a = award({
-      scholarshipId: 's1',
-      name: 'Morrill Scholarship',
-      researchStatus: 'complete',
-      research: { summary: 'A full-tuition award.' },
-    });
-    const b = award({ scholarshipId: 's2', name: 'Rowing Award', category: 'athletic' });
-    h.listScholarships.mockResolvedValue(
-      response({ search: { collegeId: 'c1', status: 'complete', found: 2, lastRunAt: '2026-08-20T00:00:00Z' }, scholarships: [a, b] }),
-    );
-
-    await renderTab();
-
-    // Collapsed to begin with.
-    expect(screen.queryByText('A full-tuition award.')).toBeNull();
-
-    await act(async () => {
-      fireEvent.click(screen.getByText('See details'));
-    });
-
-    const dossier = screen.getByText('A full-tuition award.');
-    const row = screen.getByLabelText('Morrill Scholarship').closest('li');
-    expect(row).toBeTruthy();
-    expect(row!.contains(dossier)).toBe(true);
-  });
-
-  it('collapses the dossier from the row toggle and from the bottom of the dossier', async () => {
+  // The dossier is a fifteen-section document, so it lives on its own page. Expanding it inside a
+  // list of twenty-odd awards pushed everything below it down and read as if nothing had happened.
+  it('sends you to the dossier page instead of expanding the row', async () => {
     const a = award({
       scholarshipId: 's1',
       name: 'Morrill Scholarship',
@@ -279,25 +252,83 @@ describe('ScholarshipsTab', () => {
     );
 
     await renderTab();
+
+    // The dossier body is never rendered in the list — that's the page's job now.
+    expect(screen.queryByText('A full-tuition award.')).toBeNull();
+
     await act(async () => {
       fireEvent.click(screen.getByText('See details'));
     });
-    expect(screen.getByText('A full-tuition award.')).toBeTruthy();
 
-    // The row's own toggle closes it...
-    await act(async () => {
-      fireEvent.click(screen.getByText('Hide details'));
-    });
-    expect(screen.queryByText('A full-tuition award.')).toBeNull();
+    expect(h.navigate).toHaveBeenCalledWith('/colleges/c1/scholarships/s1');
+  });
 
-    // ...and so does the Collapse control at the end of a long dossier.
+  it('offers "See details" only once an award has actually been researched', async () => {
+    const done = award({ scholarshipId: 's1', name: 'Researched Award', researchStatus: 'complete', research: { summary: 'x' } });
+    const notYet = award({ scholarshipId: 's2', name: 'Untouched Award', category: 'athletic' });
+    h.listScholarships.mockResolvedValue(
+      response({ search: { collegeId: 'c1', status: 'complete', found: 2, lastRunAt: '2026-08-20T00:00:00Z' }, scholarships: [done, notYet] }),
+    );
+
+    await renderTab();
+
+    expect(screen.getAllByText('See details')).toHaveLength(1);
+  });
+
+  it('jumps straight to the dossier when only one award was researched', async () => {
+    const a = award({ scholarshipId: 's1', name: 'Morrill Scholarship' });
+    h.listScholarships.mockResolvedValue(
+      response({ search: { collegeId: 'c1', status: 'complete', found: 1, lastRunAt: '2026-08-20T00:00:00Z' }, scholarships: [a] }),
+    );
+    h.startResearchBatch.mockResolvedValue({ started: 1, scholarships: [{ ...a, researchStatus: 'in-progress' }] });
+
+    await renderTab();
+    await pick('Morrill Scholarship');
+
+    h.listScholarships.mockResolvedValue(
+      response({
+        search: { collegeId: 'c1', status: 'complete', found: 1, lastRunAt: '2026-08-20T00:00:00Z' },
+        scholarships: [{ ...a, researchStatus: 'complete', research: { summary: 'Done.' } }],
+      }),
+    );
     await act(async () => {
-      fireEvent.click(screen.getByText('See details'));
+      fireEvent.click(screen.getByText('Research 1 scholarship'));
+      await Promise.resolve();
     });
+    await tick();
+
+    expect(h.navigate).toHaveBeenCalledWith('/colleges/c1/scholarships/s1');
+  });
+
+  it('stays on the list when several were researched, so none of them are hidden', async () => {
+    const a = award({ scholarshipId: 's1', name: 'Morrill Scholarship' });
+    const b = award({ scholarshipId: 's2', name: 'Rowing Award', category: 'athletic' });
+    h.listScholarships.mockResolvedValue(
+      response({ search: { collegeId: 'c1', status: 'complete', found: 2, lastRunAt: '2026-08-20T00:00:00Z' }, scholarships: [a, b] }),
+    );
+    h.startResearchBatch.mockResolvedValue({ started: 2, scholarships: [a, b] });
+
+    await renderTab();
+    await pick('Morrill Scholarship');
+    await pick('Rowing Award');
+
+    h.listScholarships.mockResolvedValue(
+      response({
+        search: { collegeId: 'c1', status: 'complete', found: 2, lastRunAt: '2026-08-20T00:00:00Z' },
+        scholarships: [
+          { ...a, researchStatus: 'complete', research: { summary: 'One.' } },
+          { ...b, researchStatus: 'complete', research: { summary: 'Two.' } },
+        ],
+      }),
+    );
     await act(async () => {
-      fireEvent.click(screen.getByText('Collapse'));
+      fireEvent.click(screen.getByText('Research 2 scholarships'));
+      await Promise.resolve();
     });
-    expect(screen.queryByText('A full-tuition award.')).toBeNull();
+    await tick();
+
+    expect(h.navigate).not.toHaveBeenCalled();
+    expect(screen.getAllByText('See details')).toHaveLength(2);
   });
 
   it('keeps the research button disabled until something is ticked', async () => {
@@ -338,7 +369,8 @@ describe('ScholarshipsTab', () => {
     await tick();
 
     expect(screen.getByText(/1 of 2 couldn’t be researched/)).toBeTruthy();
-    expect(screen.getByText('Worked.')).toBeTruthy();
+    // The one that worked is still reachable; the failure didn't hide it.
+    expect(screen.getByText('See details')).toBeTruthy();
   });
 
   it('explains an empty result instead of leaving a blank tab', async () => {
