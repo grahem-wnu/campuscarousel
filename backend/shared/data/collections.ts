@@ -13,6 +13,8 @@ import type {
   Budget,
   CollegeChecklist,
   CollegeNote,
+  CollegeScholarship,
+  CollegeScholarshipSearch,
   Conversation,
   ConversationMessage,
   Benchmark,
@@ -166,6 +168,18 @@ export const makeVisits = (client: TableClient): ChildRepo<Visit, 'visitId', 'co
     idStrategy: 'uuid',
   });
 
+/** Scholarships found at one college (SK=SCHOLARSHIP#<uuid>). Separate from the top-level
+ *  `Scholarship` entity (PK=SCHOLARSHIP#<id>) that Scholarship Tracker owns — these hang off the
+ *  college partition because they only mean anything in the context of that school. */
+export const makeCollegeScholarships = (client: TableClient): ChildRepo<CollegeScholarship, 'scholarshipId', 'collegeId'> =>
+  makeChildRepo<CollegeScholarship, 'scholarshipId', 'collegeId'>(client, {
+    parentPrefix: 'COLLEGE',
+    skPrefix: 'SCHOLARSHIP',
+    parentField: 'collegeId',
+    idField: 'scholarshipId',
+    idStrategy: 'uuid',
+  });
+
 // ---------------------------------------------------------------------------
 // Per-college singletons: checklist (SK=CHECKLIST) and benchmark (SK=BENCHMARK).
 // ---------------------------------------------------------------------------
@@ -191,6 +205,43 @@ export function makeCollegeChecklist(client: TableClient): CollegeChecklistRepo 
         updatedAt: now,
       };
       await client.put({ ...(domain as unknown as Record<string, unknown>), PK: pkOf(collegeId), SK: 'CHECKLIST' });
+      return domain;
+    },
+  };
+}
+
+/** Per-college scholarship-search state (SK=SCHOLARSHIPSEARCH): the lifecycle of the last search
+ *  run, so the tab can show "last searched X, N found" and poll a spinner without reading every
+ *  child award. `patch` upserts — the first search on a college has nothing to merge into. */
+export interface CollegeScholarshipSearchRepo {
+  get(collegeId: string): Promise<CollegeScholarshipSearch | null>;
+  patch(
+    collegeId: string,
+    changes: Partial<Omit<CollegeScholarshipSearch, 'collegeId' | 'createdAt' | 'updatedAt'>>,
+  ): Promise<CollegeScholarshipSearch>;
+}
+
+export function makeCollegeScholarshipSearch(client: TableClient): CollegeScholarshipSearchRepo {
+  const pkOf = (id: string): string => `COLLEGE#${id}`;
+  const SK = 'SCHOLARSHIPSEARCH';
+  return {
+    async get(collegeId) {
+      const item = await client.get(pkOf(collegeId), SK);
+      return item ? toDomain<CollegeScholarshipSearch>(item) : null;
+    },
+    async patch(collegeId, changes) {
+      const existing = await client.get(pkOf(collegeId), SK);
+      const now = isoNow();
+      const current = existing ? toDomain<CollegeScholarshipSearch>(existing) : undefined;
+      const domain: CollegeScholarshipSearch = {
+        status: 'pending',
+        ...(current ?? {}),
+        ...changes,
+        collegeId,
+        createdAt: current?.createdAt ?? now,
+        updatedAt: now,
+      };
+      await client.put({ ...(domain as unknown as Record<string, unknown>), PK: pkOf(collegeId), SK });
       return domain;
     },
   };
