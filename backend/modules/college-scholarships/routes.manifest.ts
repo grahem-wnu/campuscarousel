@@ -26,6 +26,7 @@ const handlers = makeHandlers({
 export const routes: RouteDef[] = [
   { method: 'GET', path: '/colleges/:id/scholarships', handler: handlers.list },
   { method: 'POST', path: '/colleges/:id/scholarships/search', handler: handlers.search },
+  { method: 'POST', path: '/colleges/:id/scholarships/research', handler: handlers.researchBatch },
   { method: 'GET', path: '/colleges/:id/scholarships/:scholarshipId', handler: handlers.detail },
   { method: 'POST', path: '/colleges/:id/scholarships/:scholarshipId/research', handler: handlers.research },
   { method: 'DELETE', path: '/colleges/:id/scholarships/:scholarshipId', handler: handlers.remove },

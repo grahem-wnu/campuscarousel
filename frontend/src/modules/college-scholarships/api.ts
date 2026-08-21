@@ -42,6 +42,18 @@ export function startResearch(collegeId: string, scholarshipId: string): Promise
   return api.post<CollegeScholarship>(`/colleges/${enc(collegeId)}/scholarships/${enc(scholarshipId)}/research`, {});
 }
 
+/** Start research on several awards at once. Each still gets its own job, so dossiers land one by
+ *  one rather than all at the end. Returns the full list so the caller can poll from there. */
+export function startResearchBatch(
+  collegeId: string,
+  scholarshipIds: string[],
+): Promise<{ started: number; scholarships: CollegeScholarship[] }> {
+  return api.post<{ started: number; scholarships: CollegeScholarship[] }>(
+    `/colleges/${enc(collegeId)}/scholarships/research`,
+    { scholarshipIds },
+  );
+}
+
 /** Remove an award the family doesn't care about. */
 export function deleteScholarship(collegeId: string, scholarshipId: string): Promise<CollegeScholarship> {
   return api.del<CollegeScholarship>(`/colleges/${enc(collegeId)}/scholarships/${enc(scholarshipId)}`);

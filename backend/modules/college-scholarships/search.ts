@@ -151,7 +151,12 @@ export function buildSearchPrompt(input: {
     ' "amount":number,"amountDescription":string,"deadline":"YYYY-MM-DD","url":string,',
     ' "renewable":boolean,"eligibility":string[],"summary":string}',
     '`amount` is a single yearly USD figure only when the award has one; otherwise omit it and put the',
-    'range or terms in `amountDescription`. `summary` is one sentence on who it is for.',
+    'range or terms in `amountDescription`.',
+    '',
+    'KEEP THE OUTPUT SHORT — this is a list someone picks from, not the full write-up. `summary` is ONE',
+    'short sentence. `eligibility` is AT MOST 3 brief phrases ("3.5 GPA", "Ohio resident"), not full',
+    'sentences. Detail belongs in the per-award research step, and every extra word here is time the',
+    'family spends watching a spinner.',
   );
   return lines.join('\n');
 }
@@ -229,10 +234,13 @@ export function parseSearchResults(raw: string, limit = SEARCH_LIMIT): FoundScho
     if (url) s.url = url;
     if (typeof r.renewable === 'boolean') s.renewable = r.renewable;
     if (Array.isArray(r.eligibility)) {
-      const e = r.eligibility.map((x) => str(x, 400)).filter((x): x is string => !!x).slice(0, 20);
+      // Hard-capped to match the prompt: this is picker metadata, and the dossier carries the full
+      // eligibility story. Before this cap, eligibility was the single largest field in the response
+      // and most of what made the final synthesis round slow.
+      const e = r.eligibility.map((x) => str(x, 120)).filter((x): x is string => !!x).slice(0, 3);
       if (e.length) s.eligibility = e;
     }
-    const summary = str(r.summary, 600);
+    const summary = str(r.summary, 240);
     if (summary) s.summary = summary;
 
     out.push(s);

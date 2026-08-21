@@ -20,13 +20,14 @@ describe('routes.manifest ↔ buildRoutes', () => {
     expect(manifestRoutes.map(sig).sort()).toEqual(built);
   });
 
-  it('exposes all five endpoints', () => {
+  it('exposes all six endpoints', () => {
     expect(manifestRoutes.map(sig).sort()).toEqual(
       [
         'DELETE /colleges/:id/scholarships/:scholarshipId',
         'GET /colleges/:id/scholarships',
         'GET /colleges/:id/scholarships/:scholarshipId',
         'POST /colleges/:id/scholarships/:scholarshipId/research',
+        'POST /colleges/:id/scholarships/research',
         'POST /colleges/:id/scholarships/search',
       ].sort(),
     );
