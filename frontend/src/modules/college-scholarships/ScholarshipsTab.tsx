@@ -5,13 +5,17 @@
 //      ask. An earlier version searched automatically on open, which pre-empted the search the
 //      person actually came here to type and spent a web-search call they never requested.
 //   2. RESEARCH — tick the awards worth a closer look and research them together. Each one is its
-//      own job, so dossiers land one at a time rather than all at the end.
+//      own job, so dossiers land one at a time rather than all at the end. The dossier itself opens
+//      on its OWN PAGE (ScholarshipDetailPage): it runs to fifteen sections, and expanding that
+//      inside a list of twenty-odd awards pushed everything else down the page and read as
+//      confusing.
 //
 // Both run on the backend worker (60-180s), so this component starts a job and then polls until the
 // status settles. Every poll is guarded by a mounted ref, because a family will absolutely click
 // away while a two-minute search runs.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Badge, Button, Card, Chip, Field, Icon, Input, Spinner, safeHref, useToast } from '../../shared/ui';
 import {
   deleteScholarship,
@@ -34,7 +38,6 @@ import {
   searchBusy,
   searchScopeLabel,
 } from './logic';
-import { ResearchView } from './ResearchView';
 import { SEARCH_CATEGORIES, type CollegeScholarship, type ScholarshipSearchState, type SearchCategory } from './types';
 
 /** Poll cadence and caps. The jobs are web-grounded and genuinely slow; these ceilings are generous
@@ -50,13 +53,15 @@ const RESEARCH_ERR = 'Couldn’t finish that research — try again in a moment.
 
 export function ScholarshipsTab({ collegeId, collegeName }: { collegeId: string; collegeName: string }) {
   const toast = useToast();
+  const navigate = useNavigate();
+  /** Open one award's dossier on its own page. */
+  const openDossier = (scholarshipId: string) =>
+    navigate(`/colleges/${encodeURIComponent(collegeId)}/scholarships/${encodeURIComponent(scholarshipId)}`);
   const [search, setSearch] = useState<ScholarshipSearchState | null>(null);
   const [scholarships, setScholarships] = useState<CollegeScholarship[]>([]);
   // Multi-select: researching several awards from one click is the normal case, since a family is
   // usually weighing a shortlist rather than one award.
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  /** Which dossier is expanded. Several can be complete at once, so they collapse by default. */
-  const [openId, setOpenId] = useState<string>('');
   const [category, setCategory] = useState<SearchCategory>('all');
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
@@ -199,9 +204,13 @@ export function ScholarshipsTab({ collegeId, collegeName }: { collegeId: string;
           // Only complain when nothing at all worked; a partial result is still worth showing.
           if (done === 0 && failed > 0) setError(RESEARCH_ERR);
           else if (failed > 0) setError(`${failed} of ${ids.length} couldn’t be researched — try those again.`);
-          // Open the first finished dossier so the result is visible without another click.
-          const first = fresh.scholarships.find((x) => ids.includes(x.scholarshipId) && hasResearch(x));
-          if (first) setOpenId((prev) => prev || first.scholarshipId);
+          // Researching ONE award is an unambiguous "show me this" — go straight to its dossier.
+          // With several, jumping into one of them would hide the rest, so the list stays put and
+          // each row offers its own "See details".
+          if (ids.length === 1 && done === 1) {
+            const only = fresh.scholarships.find((x) => x.scholarshipId === ids[0] && hasResearch(x));
+            if (only) openDossier(only.scholarshipId);
+          }
           return;
         }
       }
@@ -383,10 +392,10 @@ export function ScholarshipsTab({ collegeId, collegeName }: { collegeId: string;
                           {done ? (
                             <button
                               type="button"
-                              className="text-xs font-medium text-primary-600 hover:text-primary-700"
-                              onClick={() => setOpenId((prev) => (prev === sch.scholarshipId ? '' : sch.scholarshipId))}
+                              className="flex items-center gap-0.5 text-xs font-medium text-primary-600 hover:text-primary-700"
+                              onClick={() => openDossier(sch.scholarshipId)}
                             >
-                              {openId === sch.scholarshipId ? 'Hide details' : 'See details'}
+                              See details <Icon name="chevron-right" size={13} />
                             </button>
                           ) : null}
                           {done ? (
@@ -419,26 +428,6 @@ export function ScholarshipsTab({ collegeId, collegeName }: { collegeId: string;
                       </div>
                       </div>
 
-                      {/* The dossier opens HERE, directly under the award it belongs to. It used to
-                          render after the whole list, so on a long list clicking "See details"
-                          flipped the label and appeared to do nothing — the content was real, just
-                          far below the fold. */}
-                      {openId === sch.scholarshipId && sch.research ? (
-                        <div className="mt-3 border-t border-surface-border pt-3">
-                          <ResearchView research={sch.research} />
-                          {/* A dossier runs to fifteen sections, so offer a way out at the bottom
-                              rather than making someone scroll back to the row's toggle. Labelled
-                              differently from that toggle so the two controls never read as
-                              duplicates of each other. */}
-                          <button
-                            type="button"
-                            className="mt-2 text-xs text-ink-400 hover:text-ink-700"
-                            onClick={() => setOpenId('')}
-                          >
-                            Collapse
-                          </button>
-                        </div>
-                      ) : null}
                     </li>
                   );
                 })}
