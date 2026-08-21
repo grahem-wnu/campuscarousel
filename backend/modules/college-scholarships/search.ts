@@ -193,21 +193,68 @@ export function nameKey(name: string): string {
 }
 
 /**
+ * Parse a JSON array out of model text, SALVAGING a truncated one.
+ *
+ * If a run bumps the model's output ceiling, the array is cut off mid-object and a plain
+ * `JSON.parse` fails — which used to mean a search that genuinely found fourteen awards reported
+ * none at all. That failure mode is invisible and looks exactly like "this school offers nothing",
+ * which is the worst possible way to be wrong here. So when the whole array won't parse, we walk it
+ * and keep every complete top-level object, discarding only the partial one at the end.
+ */
+function parseArray(text: string): unknown[] | null {
+  const end = text.lastIndexOf(']');
+  if (end > 0) {
+    try {
+      const whole = JSON.parse(text.slice(0, end + 1));
+      if (Array.isArray(whole)) return whole;
+    } catch {
+      // fall through to salvage
+    }
+  }
+
+  // Scan for balanced top-level `{...}` objects, ignoring braces inside strings.
+  const out: unknown[] = [];
+  let depth = 0;
+  let objStart = -1;
+  let inString = false;
+  let escaped = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]!;
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === '\\') escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') inString = true;
+    else if (ch === '{') {
+      if (depth === 0) objStart = i;
+      depth++;
+    } else if (ch === '}') {
+      depth--;
+      if (depth === 0 && objStart !== -1) {
+        try {
+          out.push(JSON.parse(text.slice(objStart, i + 1)));
+        } catch {
+          // a malformed object is skipped, not fatal
+        }
+        objStart = -1;
+      }
+    }
+  }
+  return out.length ? out : null;
+}
+
+/**
  * Coerce raw model output into clean awards: tolerate a JSON array embedded in prose, drop anything
  * without a name, clamp every field, and dedupe by normalized name. Returns [] on unparseable
  * output rather than throwing — the job marks itself failed and the UI offers a retry.
  */
 export function parseSearchResults(raw: string, limit = SEARCH_LIMIT): FoundScholarship[] {
   const start = raw.indexOf('[');
-  const end = raw.lastIndexOf(']');
-  if (start === -1 || end <= start) return [];
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw.slice(start, end + 1));
-  } catch {
-    return [];
-  }
-  if (!Array.isArray(parsed)) return [];
+  if (start === -1) return [];
+  const parsed = parseArray(raw.slice(start));
+  if (!parsed) return [];
 
   const out: FoundScholarship[] = [];
   const seen = new Set<string>();
