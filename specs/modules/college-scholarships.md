@@ -23,7 +23,7 @@ off), `scholarship-tracker` (the "Track this scholarship" hand-off writes a `Sch
 | method | path | behavior |
 | --- | --- | --- |
 | GET | `/colleges/:id/scholarships` | `{ search, scholarships[] }`. 404 if the college is gone. |
-| POST | `/colleges/:id/scholarships/search` | Body `{ category?: 'academic'\|'athletic'\|'all', sport?: string }`. Marks the search `in-progress`, enqueues, **202**. |
+| POST | `/colleges/:id/scholarships/search` | Body `{ query?: string, category?: 'academic'\|'athletic'\|'all', sport?: string }`. `query` is the family's own words and is the primary input; omitting it makes the run a broad sweep. Marks the search `in-progress`, enqueues, **202**. |
 | GET | `/colleges/:id/scholarships/:scholarshipId` | One award (research polling). 404 when absent. |
 | POST | `/colleges/:id/scholarships/:scholarshipId/research` | Marks `researchStatus: 'in-progress'`, enqueues, **202**. |
 | DELETE | `/colleges/:id/scholarships/:scholarshipId` | Remove one result. |
@@ -35,9 +35,14 @@ shared router's role guard.
 ## Frontend
 A **Scholarships** tab on `/colleges/:id`, after *Prepare*.
 
-- Category chips **All / Academic / Athletic**; picking Athletic reveals an optional sport input.
-- First visit with no prior search auto-runs one; afterwards the tab shows the stored results with a
-  **Search again** action and the last-run timestamp.
+- A free-text box leads — "What are you looking for?" (a sport, a major, an activity, a background) —
+  submitted by Enter or the Search button. Secondary: "Or search every scholarship at this school",
+  plus **All / Academic / Athletic** chips that scope the run.
+- **Nothing runs on open.** The tab is intent-first: a search starts only when the family asks for
+  one. (An earlier version auto-searched on first open; it pre-empted the search the person came to
+  type and spent a web-search call they never requested.) A run already in flight is rejoined.
+- The box prefills with the last search, and the tab shows what the last run was looking for
+  ("Showing “soccer” · searched Aug 20 · 9 found").
 - Results populate a `<select>` grouped by category (`optgroup` Academic / Athletic / Other). The
   selected award renders a compact card (amount, deadline, renewable, link).
 - **Research this scholarship** starts the dossier job and polls; the dossier renders as labeled
@@ -51,8 +56,15 @@ Two Bedrock calls, both **web-grounded** (`converseWithSearch`, `webSearch: true
 on the 300s SQS worker** — never on the 30s request path.
 
 - **Search** (`feature: 'scholarship-search'`, `maxRounds` 5, `maxTokens` 4000): "list the
-  scholarships available at `<college>` for a student pursuing `<majors>`", scoped to the requested
-  category. Returns a JSON array of award summaries.
+  scholarships available at `<college>` for a student pursuing `<majors>`", led by the family's
+  `query` when there is one and scoped to the requested category. Returns a JSON array of award
+  summaries.
+  - A broad **All** run (no query) issues the academic and athletic searches as **two concurrent
+    calls** and merges them. One combined sweep reliably drifted academic-only: a school's merit
+    awards are all over its financial-aid pages, while athletic aid lives on a separate athletics
+    site. Running in parallel buys coverage without spending wall-clock against the 300s timeout.
+  - A **targeted** search (any query) adds and refreshes but never prunes — typing "soccer" must not
+    delete the merit awards a broad sweep already found. Only a broad sweep is authoritative.
 - **Research** (`feature: 'scholarship-research'`, `maxRounds` 6, `maxTokens` 6000): a single-award
   dossier as one JSON object, schema in `research.ts`.
 

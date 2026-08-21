@@ -75,8 +75,12 @@ export function makeHandlers(deps: ScholarshipDeps): ScholarshipHandlers {
       const body = validateBody(searchSchema, ctx);
       await requireCollege(id);
       const data = getData();
+      // The worker reads these back, so the request's intent has to be persisted before dispatch.
+      // An empty/whitespace query is stored as undefined so "searched for nothing" and "swept
+      // broadly" stay the same thing — the job branches on exactly that distinction.
       await data.collegeScholarshipSearch.patch(id, {
         status: 'in-progress',
+        query: body.query?.trim() || undefined,
         category: body.category ?? 'all',
         sport: body.sport,
         error: undefined,

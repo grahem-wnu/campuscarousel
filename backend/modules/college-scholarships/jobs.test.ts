@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { InMemoryTableClient, makeData, type Data } from '../../shared/data/index.js';
 import type { ScholarshipResearcher } from './research.js';
 import type { FoundScholarship, ScholarshipSearcher } from './search.js';
-import { coveredCategories, makeWorkerHandler, reconcileResults, runResearchJob, runSearchJob } from './jobs.js';
+import { coveredCategories, makeWorkerHandler, mergeFound, reconcileResults, runResearchJob, runSearchJob } from './jobs.js';
 
 let data: Data;
 let collegeId: string;
@@ -225,5 +225,101 @@ describe('makeWorkerHandler', () => {
     await expect(handler({ kind: 'research', collegeId })).resolves.toBeUndefined();
     await expect(handler({ kind: 'nonsense', collegeId })).resolves.toBeUndefined();
     expect(await data.collegeScholarships.list(collegeId)).toHaveLength(0);
+  });
+});
+
+describe('mergeFound', () => {
+  it('flattens batches and drops a repeat the second sweep also returned', () => {
+    const out = mergeFound([
+      [found('Scholar-Athlete Award'), found('Merit Award')],
+      [found('scholar athlete award!'), found('Rowing Award')],
+    ]);
+    expect(out.map((s) => s.name)).toEqual(['Scholar-Athlete Award', 'Merit Award', 'Rowing Award']);
+  });
+
+  it('handles empty batches', () => {
+    expect(mergeFound([[], []])).toEqual([]);
+  });
+});
+
+describe('a broad "All" sweep searches academic AND athletic', () => {
+  // A single combined sweep drifted academic-only in practice, so the job runs two scoped searches
+  // concurrently and merges them. This pins that.
+  it('runs both scoped searches and merges the results', async () => {
+    const asked: string[] = [];
+    await data.collegeScholarshipSearch.patch(collegeId, { status: 'in-progress', category: 'all' });
+    await runSearchJob(
+      () => data,
+      async (input) => {
+        asked.push(input.category);
+        return input.category === 'athletic'
+          ? [found('Rowing Award', { category: 'athletic' })]
+          : [found('Merit Award', { category: 'academic' })];
+      },
+      collegeId,
+    );
+    expect(asked.sort()).toEqual(['academic', 'athletic']);
+    const names = (await data.collegeScholarships.list(collegeId)).map((s) => s.name).sort();
+    expect(names).toEqual(['Merit Award', 'Rowing Award']);
+  });
+
+  it('does NOT split when the family typed a query — their words already scope it', async () => {
+    const asked: string[] = [];
+    await data.collegeScholarshipSearch.patch(collegeId, { status: 'in-progress', category: 'all', query: 'soccer' });
+    await runSearchJob(
+      () => data,
+      async (input) => {
+        asked.push(input.category);
+        return [found('Soccer Award', { category: 'athletic' })];
+      },
+      collegeId,
+    );
+    expect(asked).toEqual(['all']);
+  });
+
+  it('passes the query through to the searcher', async () => {
+    let seen: string | undefined = 'unset';
+    await data.collegeScholarshipSearch.patch(collegeId, { status: 'in-progress', category: 'all', query: 'soccer' });
+    await runSearchJob(
+      () => data,
+      async (input) => {
+        seen = input.query;
+        return [];
+      },
+      collegeId,
+    );
+    expect(seen).toBe('soccer');
+  });
+});
+
+describe('a targeted search never deletes what a broad sweep found', () => {
+  // Typing "soccer" must not silently wipe out the merit awards already on the college.
+  it('adds to the list instead of replacing it', async () => {
+    await data.collegeScholarshipSearch.patch(collegeId, { status: 'in-progress', category: 'all' });
+    await runSearchJob(() => data, searcher([found('Merit Award'), found('Provost Award')]), collegeId);
+    expect(await data.collegeScholarships.list(collegeId)).toHaveLength(2);
+
+    await data.collegeScholarshipSearch.patch(collegeId, { status: 'in-progress', category: 'all', query: 'soccer' });
+    await runSearchJob(() => data, searcher([found('Soccer Award', { category: 'athletic' })]), collegeId);
+
+    const names = (await data.collegeScholarships.list(collegeId)).map((s) => s.name).sort();
+    expect(names).toEqual(['Merit Award', 'Provost Award', 'Soccer Award']);
+  });
+
+  it('but a broad sweep still prunes what it no longer finds', async () => {
+    await data.collegeScholarshipSearch.patch(collegeId, { status: 'in-progress', category: 'all' });
+    await runSearchJob(() => data, searcher([found('Gone Award')]), collegeId);
+    await runSearchJob(() => data, searcher([found('Still Here')]), collegeId);
+    const names = (await data.collegeScholarships.list(collegeId)).map((s) => s.name);
+    expect(names).toEqual(['Still Here']);
+  });
+});
+
+describe('reconcileResults prune flag', () => {
+  it('leaves everything alone when pruning is off', async () => {
+    await reconcileResults(data, collegeId, [found('A'), found('B')], 'all');
+    await reconcileResults(data, collegeId, [found('C')], 'all', false);
+    const names = (await data.collegeScholarships.list(collegeId)).map((s) => s.name).sort();
+    expect(names).toEqual(['A', 'B', 'C']);
   });
 });

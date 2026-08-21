@@ -102,9 +102,20 @@ export function lastRunLabel(iso: string | undefined): string | null {
   return new Date(t).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-/** Headline for the empty/zero-results state, which differs from "we never searched". */
+/** Headline for the empty/zero-results state, which differs from "we never searched". When the run
+ *  had a query, echo it back — "nothing for 'soccer'" is a very different message from "this school
+ *  publishes nothing", and only one of them means try a different word. */
 export function emptyMessage(state: ScholarshipSearchState | null | undefined, category: SearchCategory): string {
   if (!state || !state.lastRunAt) return 'No search has been run for this school yet.';
+  if (state.query) return `Nothing came back for “${state.query}” at this school.`;
   const scope = category === 'all' ? '' : ` ${SEARCH_CATEGORY_LABEL[category].toLowerCase()}`;
   return `The last search didn’t turn up any${scope} scholarships published for this school.`;
+}
+
+/** What the last run was looking for, for the "showing results for…" line. Null before any run. */
+export function searchScopeLabel(state: ScholarshipSearchState | null | undefined): string | null {
+  if (!state?.lastRunAt) return null;
+  if (state.query) return `“${state.query}”`;
+  const c = state.category ?? 'all';
+  return c === 'all' ? 'all scholarships' : `${SEARCH_CATEGORY_LABEL[c].toLowerCase()} scholarships`;
 }

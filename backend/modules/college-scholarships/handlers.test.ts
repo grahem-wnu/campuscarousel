@@ -88,6 +88,26 @@ describe('POST /colleges/:id/scholarships/search', () => {
     expect((await data.collegeScholarshipSearch.get(collegeId))?.error).toBeUndefined();
   });
 
+  it('persists the family’s query so the worker can read it back', async () => {
+    await h.search(ctx({ params: { id: collegeId }, body: { query: 'soccer' } }));
+    expect((await data.collegeScholarshipSearch.get(collegeId))?.query).toBe('soccer');
+  });
+
+  it('treats a blank query as a broad sweep, not a search for nothing', async () => {
+    await h.search(ctx({ params: { id: collegeId }, body: { query: '   ' } }));
+    expect((await data.collegeScholarshipSearch.get(collegeId))?.query).toBeUndefined();
+  });
+
+  it('clears a previous query when a broad sweep follows a targeted search', async () => {
+    await h.search(ctx({ params: { id: collegeId }, body: { query: 'soccer' } }));
+    await h.search(ctx({ params: { id: collegeId }, body: {} }));
+    expect((await data.collegeScholarshipSearch.get(collegeId))?.query).toBeUndefined();
+  });
+
+  it('422s on an over-long query', async () => {
+    await expectStatus(h.search(ctx({ params: { id: collegeId }, body: { query: 'x'.repeat(201) } })), 422);
+  });
+
   it('422s on an unknown category', async () => {
     await expectStatus(h.search(ctx({ params: { id: collegeId }, body: { category: 'sports' } })), 422);
   });

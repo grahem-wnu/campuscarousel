@@ -26,8 +26,13 @@ export const scholarshipParamSchema = z.object({
  *  than being silently ignored. Everything is optional — the default is a broad "all" sweep. */
 export const searchSchema = z
   .object({
+    /** What the family actually typed — "soccer", "nursing", "first-generation", "marching band".
+     *  This is the PRIMARY input: the tab is intent-first, so a search normally starts because
+     *  someone described what they're looking for. Absent, the search is a broad sweep. */
+    query: z.string().max(200).optional(),
     category: z.enum(SEARCH_CATEGORIES).optional(),
-    /** Narrows an athletic search to one sport ("women's soccer"). Ignored for academic searches. */
+    /** Narrows an athletic search to one sport ("women's soccer"). Predates `query` and is still
+     *  honored for callers that send it; the UI now folds this into the free-text box instead. */
     sport: z.string().max(80).optional(),
   })
   .strict();
