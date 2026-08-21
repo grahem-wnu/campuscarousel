@@ -75,7 +75,6 @@ export function ScholarshipsTab({ collegeId, collegeName }: { collegeId: string;
 
   const groups = groupByCategory(scholarships);
   const selectedIds = [...selected];
-  const researched = scholarships.filter((s) => hasResearch(s));
   const toggle = (id: string) =>
     setSelected((prev) => {
       const next = new Set(prev);
@@ -358,7 +357,8 @@ export function ScholarshipsTab({ collegeId, collegeName }: { collegeId: string;
                   const done = hasResearch(sch);
                   const busyOne = researchBusy(sch);
                   return (
-                    <li key={sch.scholarshipId} className="flex items-start gap-3 px-3 py-2">
+                    <li key={sch.scholarshipId} className="px-3 py-2">
+                      <div className="flex items-start gap-3">
                       <input
                         type="checkbox"
                         className="mt-1 h-4 w-4 shrink-0 accent-primary-600"
@@ -417,6 +417,28 @@ export function ScholarshipsTab({ collegeId, collegeName }: { collegeId: string;
                           </button>
                         </div>
                       </div>
+                      </div>
+
+                      {/* The dossier opens HERE, directly under the award it belongs to. It used to
+                          render after the whole list, so on a long list clicking "See details"
+                          flipped the label and appeared to do nothing — the content was real, just
+                          far below the fold. */}
+                      {openId === sch.scholarshipId && sch.research ? (
+                        <div className="mt-3 border-t border-surface-border pt-3">
+                          <ResearchView research={sch.research} />
+                          {/* A dossier runs to fifteen sections, so offer a way out at the bottom
+                              rather than making someone scroll back to the row's toggle. Labelled
+                              differently from that toggle so the two controls never read as
+                              duplicates of each other. */}
+                          <button
+                            type="button"
+                            className="mt-2 text-xs text-ink-400 hover:text-ink-700"
+                            onClick={() => setOpenId('')}
+                          >
+                            Collapse
+                          </button>
+                        </div>
+                      ) : null}
                     </li>
                   );
                 })}
@@ -475,23 +497,6 @@ export function ScholarshipsTab({ collegeId, collegeName }: { collegeId: string;
         </Card>
       ) : null}
 
-      {researched.map((sch) =>
-        openId === sch.scholarshipId && sch.research ? (
-          <div key={sch.scholarshipId} className="space-y-2">
-            <div className="flex items-center justify-between gap-2">
-              <h3 className="text-sm font-semibold text-ink-900">{sch.name}</h3>
-              <button
-                type="button"
-                className="text-xs text-ink-400 hover:text-ink-700"
-                onClick={() => setOpenId('')}
-              >
-                Hide
-              </button>
-            </div>
-            <ResearchView research={sch.research} />
-          </div>
-        ) : null,
-      )}
     </div>
   );
 }
