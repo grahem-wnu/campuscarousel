@@ -156,7 +156,17 @@ describe('cycleContext', () => {
     const lines = cycleContext(new Date('2026-08-20T00:00:00Z')).join(' ');
     expect(lines).toContain('2026-08-20');
     expect(lines).toContain('entry in 2027');
-    expect(lines).toContain('not a past one');
+    expect(lines).toContain('never a date that has already passed');
+  });
+
+  // Regression: the first version of this preamble told the model to OMIT anything it could only
+  // verify for a past cycle, and a live staging run came back with every deadline stripped — even
+  // ones still in the future. Rolling a recurring date forward keeps the field useful.
+  it('tells the model to roll a recurring deadline forward rather than drop it', () => {
+    const lines = cycleContext(new Date('2026-08-20T00:00:00Z')).join(' ');
+    expect(lines).toContain('ROLL IT FORWARD');
+    expect(lines).toContain('Do not discard a deadline');
+    expect(lines).toContain('Omit the deadline only when');
   });
 
   it('rolls the entry year over in August, when the US cycle turns', () => {
