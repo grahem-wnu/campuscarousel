@@ -222,3 +222,38 @@ describe('the "All" brief demands athletic coverage', () => {
     expect(buildSearchPrompt({ collegeName: 'X', category: 'all' })).toContain('Division III');
   });
 });
+
+describe('a truncated response still yields what arrived', () => {
+  // Regression with teeth: when the model hits its output ceiling the array is cut mid-object.
+  // JSON.parse fails on the whole thing, and returning [] would report "this school offers no
+  // scholarships" for a search that actually found plenty — an invisible, entirely wrong answer.
+  it('salvages the complete awards from a cut-off array', () => {
+    const truncated =
+      '[{"name":"Morrill Scholarship","category":"academic"},' +
+      '{"name":"Trustees Scholarship","category":"academic"},' +
+      '{"name":"Provost Scho';
+    const out = parseSearchResults(truncated);
+    expect(out.map((s) => s.name)).toEqual(['Morrill Scholarship', 'Trustees Scholarship']);
+  });
+
+  it('is not fooled by braces inside award names', () => {
+    const truncated =
+      '[{"name":"The {Weird} Award","category":"academic"},{"name":"Half of a nam';
+    expect(parseSearchResults(truncated).map((s) => s.name)).toEqual(['The {Weird} Award']);
+  });
+
+  it('handles an escaped quote in a truncated payload', () => {
+    const truncated = '[{"name":"The \\"Big\\" Award","category":"academic"},{"name":"cut';
+    expect(parseSearchResults(truncated).map((s) => s.name)).toEqual(['The "Big" Award']);
+  });
+
+  it('still prefers the clean parse when the array is intact', () => {
+    const out = parseSearchResults('[{"name":"A"},{"name":"B"}]');
+    expect(out.map((s) => s.name)).toEqual(['A', 'B']);
+  });
+
+  it('returns [] when there is nothing salvageable at all', () => {
+    expect(parseSearchResults('[{"na')).toEqual([]);
+    expect(parseSearchResults('no json here')).toEqual([]);
+  });
+});
