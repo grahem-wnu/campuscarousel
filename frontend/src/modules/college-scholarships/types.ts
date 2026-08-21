@@ -95,6 +95,8 @@ export interface CollegeScholarship {
 export interface ScholarshipSearchState {
   collegeId: string;
   status: JobStatus;
+  /** What the family typed for the last run. Absent means it was a broad sweep. */
+  query?: string;
   category?: SearchCategory;
   sport?: string;
   found?: number;

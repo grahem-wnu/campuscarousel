@@ -450,6 +450,9 @@ export interface CollegeScholarship extends Timestamped {
 export interface CollegeScholarshipSearch extends Timestamped {
   collegeId: string;
   status: 'pending' | 'in-progress' | 'complete' | 'failed';
+  /** What the family typed for the last run ("soccer", "nursing"). Absent means a broad sweep.
+   *  Persisted so the worker can read it back and the tab can show "results for 'soccer'". */
+  query?: string;
   /** The filter the last run used ('all' searches both academic and athletic). */
   category?: ScholarshipCategory | 'all';
   sport?: string;

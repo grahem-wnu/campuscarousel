@@ -1,7 +1,9 @@
 // The Scholarships tab on a college. Two AI passes, two progress states:
 //
-//   1. SEARCH — a web-grounded sweep of what this school offers (academic / athletic / both). Runs
-//      automatically the first time the tab is opened for a college, and on demand after that.
+//   1. SEARCH — the family says what they're after ("soccer", "nursing") or asks for everything, and
+//      a web-grounded search finds what this school offers. INTENT-FIRST: nothing runs until they
+//      ask. An earlier version searched automatically on open, which pre-empted the search the
+//      person actually came here to type and spent a web-search call they never requested.
 //   2. RESEARCH — pick one award from the dropdown, and get the full dossier on it.
 //
 // Both run on the backend worker (60-180s), so this component starts a job and then polls until the
@@ -28,6 +30,7 @@ import {
   researchBusy,
   scholarshipMeta,
   searchBusy,
+  searchScopeLabel,
 } from './logic';
 import { ResearchView } from './ResearchView';
 import { SEARCH_CATEGORIES, type CollegeScholarship, type ScholarshipSearchState, type SearchCategory } from './types';
@@ -49,16 +52,13 @@ export function ScholarshipsTab({ collegeId, collegeName }: { collegeId: string;
   const [scholarships, setScholarships] = useState<CollegeScholarship[]>([]);
   const [selectedId, setSelectedId] = useState<string>('');
   const [category, setCategory] = useState<SearchCategory>('all');
-  const [sport, setSport] = useState('');
+  const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [searching, setSearching] = useState(false);
   const [researching, setResearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const mounted = useRef(true);
-  // Guards the "search automatically the first time" behavior so it fires once per college, never
-  // again on a re-render or a poll-driven state update.
-  const autoStarted = useRef<string | null>(null);
 
   useEffect(() => {
     mounted.current = true;
@@ -99,7 +99,7 @@ export function ScholarshipsTab({ collegeId, collegeName }: { collegeId: string;
   }, [collegeId, apply]);
 
   const runSearch = useCallback(
-    async (opts: { category: SearchCategory; sport?: string }) => {
+    async (opts: { query?: string; category: SearchCategory }) => {
       setSearching(true);
       setError(null);
       try {
@@ -120,8 +120,10 @@ export function ScholarshipsTab({ collegeId, collegeName }: { collegeId: string;
     [collegeId, apply, pollSearch],
   );
 
-  // First load: read what's already stored. If this college has never been searched, start one —
-  // the tab's whole promise is that opening it finds the money.
+  // First load: read what's already stored, and nothing more. Opening the tab must never START a
+  // search — the person came here to say what they're looking for, and running a generic sweep at
+  // them both pre-empts that and spends a web-search call they didn't ask for. The one exception is
+  // rejoining a run that is already in flight (another tab, or a reload part-way through).
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -130,11 +132,10 @@ export function ScholarshipsTab({ collegeId, collegeName }: { collegeId: string;
         const res = await listScholarships(collegeId);
         if (cancelled || !mounted.current) return;
         apply(res);
-        if (!res.search && autoStarted.current !== collegeId) {
-          autoStarted.current = collegeId;
-          void runSearch({ category: 'all' });
-        } else if (searchBusy(res.search)) {
-          // A search started elsewhere (another tab, a reload mid-run) is still going — join it.
+        // Prefill the box with whatever was last searched, so "search again" is one click.
+        if (res.search?.query) setQuery(res.search.query);
+        if (res.search?.category) setCategory(res.search.category);
+        if (searchBusy(res.search)) {
           setSearching(true);
           void pollSearch().finally(() => {
             if (mounted.current) setSearching(false);
@@ -151,7 +152,7 @@ export function ScholarshipsTab({ collegeId, collegeName }: { collegeId: string;
     return () => {
       cancelled = true;
     };
-  }, [collegeId, apply, runSearch, pollSearch]);
+  }, [collegeId, apply, pollSearch]);
 
   /** Kick off the dossier for the selected award and poll it to completion. */
   async function research(): Promise<void> {
@@ -228,46 +229,77 @@ export function ScholarshipsTab({ collegeId, collegeName }: { collegeId: string;
 
   const busy = searching || searchBusy(search);
   const lastRun = lastRunLabel(search?.lastRunAt);
+  const scope = searchScopeLabel(search);
 
   return (
     <div className="space-y-4">
       {/* --- search controls ------------------------------------------------------------- */}
       <Card className="space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold text-ink-800">Scholarships at {collegeName}</h2>
-          <Button
-            size="sm"
-            variant="ghost"
-            icon="search"
-            loading={busy}
-            onClick={() => void runSearch({ category, sport })}
-          >
-            {scholarships.length > 0 ? 'Search again' : 'Search'}
+        <h2 className="text-sm font-semibold text-ink-800">Scholarships at {collegeName}</h2>
+
+        {/* The search box leads: this tab is intent-first, and typing then pressing Enter is the
+            fastest path for someone who already knows what they want. */}
+        <form
+          className="flex flex-wrap items-end gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!busy) void runSearch({ query, category });
+          }}
+        >
+          <div className="min-w-[12rem] flex-1">
+            <Field
+              label="What are you looking for?"
+              hint="A sport, a major, an activity, a background — or leave it blank for everything."
+            >
+              <Input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="e.g. soccer, nursing, first-generation, marching band"
+                maxLength={200}
+                aria-label="What are you looking for?"
+              />
+            </Field>
+          </div>
+          <Button type="submit" icon="search" loading={busy} className="mb-0.5">
+            Search
           </Button>
-        </div>
+        </form>
 
-        <div className="flex flex-wrap items-center gap-2">
-          {SEARCH_CATEGORIES.map((c) => (
-            <Chip key={c} selected={category === c} onClick={() => setCategory(c)}>
-              {SEARCH_CATEGORY_LABEL[c]}
-            </Chip>
-          ))}
+        {/* Secondary: the broad sweep, and the scope filter. Kept visually quieter than the box so
+            the typed search stays the obvious primary action. */}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => {
+              setQuery('');
+              void runSearch({ category });
+            }}
+            className="text-xs font-medium text-primary-600 hover:text-primary-700 disabled:opacity-50"
+          >
+            Or search every scholarship at this school →
+          </button>
+          <span className="flex flex-wrap items-center gap-1.5">
+            {SEARCH_CATEGORIES.map((c) => (
+              <Chip key={c} selected={category === c} onClick={() => setCategory(c)}>
+                {SEARCH_CATEGORY_LABEL[c]}
+              </Chip>
+            ))}
+          </span>
         </div>
-
-        {category === 'athletic' ? (
-          <Field label="Sport (optional)" hint="Narrows the search — e.g. “women’s soccer”.">
-            <Input value={sport} onChange={(e) => setSport(e.target.value)} placeholder="Any sport" maxLength={80} />
-          </Field>
-        ) : null}
 
         {busy ? (
           <div className="flex items-center gap-2 rounded-lg bg-surface-sunken px-3 py-2 text-sm text-ink-600">
             <Spinner size={15} />
-            <span>Searching the web for scholarships at {collegeName}… this takes a minute or two.</span>
+            <span>
+              Searching {collegeName} for {query.trim() ? `“${query.trim()}”` : 'every scholarship it offers'}… this
+              takes a minute or two.
+            </span>
           </div>
-        ) : lastRun ? (
+        ) : scope ? (
           <p className="text-xs text-ink-400">
-            Last searched {lastRun}
+            Showing {scope}
+            {lastRun ? ` · searched ${lastRun}` : ''}
             {typeof search?.found === 'number' ? ` · ${search.found} found` : ''}
           </p>
         ) : null}
@@ -343,12 +375,27 @@ export function ScholarshipsTab({ collegeId, collegeName }: { collegeId: string;
           ) : null}
         </Card>
       ) : !busy ? (
+        // Two different empty states. Before any search this is an invitation, not a failure — the
+        // tab is intent-first, so "nothing here" is simply the starting position.
         <Card className="space-y-2 text-center">
-          <p className="text-sm font-medium text-ink-800">Nothing found yet</p>
-          <p className="mx-auto max-w-md text-xs text-ink-500">{emptyMessage(search, category)}</p>
-          <p className="mx-auto max-w-md text-xs text-ink-500">
-            Try a different category — athletic awards live on a school’s athletics site, not its financial-aid page.
-          </p>
+          {search?.lastRunAt ? (
+            <>
+              <p className="text-sm font-medium text-ink-800">Nothing found yet</p>
+              <p className="mx-auto max-w-md text-xs text-ink-500">{emptyMessage(search, category)}</p>
+              <p className="mx-auto max-w-md text-xs text-ink-500">
+                Try different words, or search every scholarship at this school.
+              </p>
+            </>
+          ) : (
+            <>
+              <Icon name="scholarship" size={22} className="mx-auto text-primary-500" />
+              <p className="text-sm font-medium text-ink-800">Find money for {collegeName}</p>
+              <p className="mx-auto max-w-md text-xs text-ink-500">
+                Say what you’re after — a sport, a major, an activity, something about your background — and we’ll
+                search this school for awards that fit. Or search everything it offers and browse.
+              </p>
+            </>
+          )}
         </Card>
       ) : null}
 

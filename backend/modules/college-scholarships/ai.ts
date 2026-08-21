@@ -37,10 +37,10 @@ const RESEARCH_TOKENS = 6000;
 
 /** Web-grounded search for the awards one college offers. Returns [] on any failure. */
 export function makeBedrockSearcher(options: AiOptions = {}): ScholarshipSearcher {
-  return async ({ collegeName, category, sport, majors, state }): Promise<FoundScholarship[]> => {
+  return async ({ collegeName, category, query, sport, majors, state }): Promise<FoundScholarship[]> => {
     try {
       const { text } = await converseWithSearch(
-        buildSearchPrompt({ collegeName, category, sport, majors, state }),
+        buildSearchPrompt({ collegeName, category, query, sport, majors, state }),
         {
           feature: 'scholarship-search',
           modelId: options.modelId,

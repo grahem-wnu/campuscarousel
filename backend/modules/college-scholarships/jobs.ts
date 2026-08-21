@@ -67,13 +67,20 @@ export function coveredCategories(category: SearchCategory): Set<string> {
  * - A stored award in this run's categories that was NOT re-found is deleted, unless it carries a
  *   dossier (or one is in flight), in which case it stays.
  *
- * Returns the number of awards the college now has in the searched categories.
+ * `prune` is the whole reason this takes a flag. A BROAD sweep is authoritative for its categories,
+ * so clearing out what it no longer finds keeps the list honest. A TARGETED search ("soccer") is
+ * not: it only ever looked for one thing, so anything it didn't return is simply outside its scope,
+ * not stale. Pruning on a targeted search would mean typing "soccer" silently deleted the merit
+ * awards a previous sweep found — searches must accumulate, never quietly destroy.
+ *
+ * Returns the number of awards the college now has.
  */
 export async function reconcileResults(
   data: Data,
   collegeId: string,
   found: FoundScholarship[],
   category: SearchCategory,
+  prune = true,
 ): Promise<number> {
   const existing = await data.collegeScholarships.list(collegeId);
   const byKey = new Map<string, CollegeScholarship>();
@@ -94,7 +101,7 @@ export async function reconcileResults(
   }
 
   const covered = coveredCategories(category);
-  for (const item of existing) {
+  for (const item of prune ? existing : []) {
     const key = nameKey(item.name);
     if (foundKeys.has(key)) continue;
     if (!covered.has(item.category ?? 'other')) continue; // a different search's territory
@@ -104,6 +111,23 @@ export async function reconcileResults(
 
   const after = await data.collegeScholarships.list(collegeId);
   return after.length;
+}
+
+/** Flatten several sweeps into one list, dropping awards a later sweep repeats. The academic and
+ *  athletic passes overlap on things like scholar-athlete awards, so without this an "All" search
+ *  would list them twice. First occurrence wins, so the academic pass's richer copy is kept. */
+export function mergeFound(batches: FoundScholarship[][]): FoundScholarship[] {
+  const out: FoundScholarship[] = [];
+  const seen = new Set<string>();
+  for (const batch of batches) {
+    for (const award of batch) {
+      const key = nameKey(award.name);
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      out.push(award);
+    }
+  }
+  return out;
 }
 
 /** Run one search job: sweep the web for this college's awards and reconcile them into the college.
@@ -120,14 +144,24 @@ export async function runSearchJob(
   try {
     const state = await data.collegeScholarshipSearch.get(collegeId);
     const category = (state?.category ?? 'all') as SearchCategory;
+    const query = state?.query;
     const { majors } = await majorsOf(data);
-    const found = await (searcher ?? makeBedrockSearcher())({
-      collegeName: college.name,
-      category,
-      sport: state?.sport,
-      majors,
-      state: college.state,
-    });
+    const run = searcher ?? makeBedrockSearcher();
+    const common = { collegeName: college.name, query, sport: state?.sport, majors, state: college.state };
+
+    // A broad "All" sweep runs the academic and athletic searches as TWO CONCURRENT calls rather
+    // than one combined one. A single combined sweep reliably drifted academic in practice: a
+    // school's merit awards are all over its financial-aid pages, while athletic aid lives on a
+    // separate athletics site under different rules, so one search that could satisfy itself with
+    // either would come back academic-only. Two scoped searches each have to answer for their own
+    // half. They run in parallel, so this costs tokens but not wall-clock — important, because the
+    // worker still has to finish inside its 300s timeout.
+    const found =
+      category === 'all' && !query
+        ? mergeFound(
+            await Promise.all([run({ ...common, category: 'academic' }), run({ ...common, category: 'athletic' })]),
+          )
+        : await run({ ...common, category });
     if (found.length === 0) {
       // A genuinely empty sweep and a broken model call are indistinguishable from here, and both
       // are best surfaced the same way: complete, zero found, with a retry available.
@@ -139,7 +173,9 @@ export async function runSearchJob(
       });
       return;
     }
-    const total = await reconcileResults(data, collegeId, found, category);
+    // Only a broad sweep is authoritative enough to prune; a targeted search only adds. See
+    // reconcileResults.
+    const total = await reconcileResults(data, collegeId, found, category, !query);
     await data.collegeScholarshipSearch.patch(collegeId, {
       status: 'complete',
       found: total,

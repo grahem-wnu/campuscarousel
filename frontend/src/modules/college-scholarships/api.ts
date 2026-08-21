@@ -15,15 +15,19 @@ export function listScholarships(collegeId: string): Promise<ScholarshipsRespons
   return api.get<ScholarshipsResponse>(`/colleges/${enc(collegeId)}/scholarships`);
 }
 
-/** Start a web-grounded sweep for this school's awards. Returns the state right after starting —
- *  normally `in-progress`; already settled when the backend ran the job inline (tests/local). */
+/** Start a web-grounded search for this school's awards. `query` is the family's own words
+ *  ("soccer", "nursing"); omitting it makes this a broad sweep of everything the school offers.
+ *  Returns the state right after starting — normally `in-progress`; already settled when the backend
+ *  ran the job inline (tests/local). */
 export function startSearch(
   collegeId: string,
-  input: { category?: SearchCategory; sport?: string } = {},
+  input: { query?: string; category?: SearchCategory; sport?: string } = {},
 ): Promise<ScholarshipsResponse> {
-  const body: { category?: SearchCategory; sport?: string } = {};
+  const body: { query?: string; category?: SearchCategory; sport?: string } = {};
+  // Only send fields that carry meaning — an empty string would fail validation, and an empty query
+  // must read as "broad sweep" rather than "searched for nothing".
+  if (input.query?.trim()) body.query = input.query.trim();
   if (input.category) body.category = input.category;
-  // Only send a sport when it is meaningful — an empty string would fail validation.
   if (input.sport?.trim()) body.sport = input.sport.trim();
   return api.post<ScholarshipsResponse>(`/colleges/${enc(collegeId)}/scholarships/search`, body);
 }
