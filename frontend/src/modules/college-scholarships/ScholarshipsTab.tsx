@@ -4,30 +4,32 @@
 //      a web-grounded search finds what this school offers. INTENT-FIRST: nothing runs until they
 //      ask. An earlier version searched automatically on open, which pre-empted the search the
 //      person actually came here to type and spent a web-search call they never requested.
-//   2. RESEARCH — pick one award from the dropdown, and get the full dossier on it.
+//   2. RESEARCH — tick the awards worth a closer look and research them together. Each one is its
+//      own job, so dossiers land one at a time rather than all at the end.
 //
 // Both run on the backend worker (60-180s), so this component starts a job and then polls until the
 // status settles. Every poll is guarded by a mounted ref, because a family will absolutely click
 // away while a two-minute search runs.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Button, Card, Chip, Field, Icon, Input, Select, Spinner, safeHref, useToast } from '../../shared/ui';
+import { Badge, Button, Card, Chip, Field, Icon, Input, Spinner, safeHref, useToast } from '../../shared/ui';
 import {
   deleteScholarship,
-  getScholarship,
   listScholarships,
-  startResearch,
+  startResearchBatch,
   startSearch,
   trackScholarship,
 } from './api';
 import {
-  CATEGORY_LABEL,
+  MAX_RESEARCH_BATCH,
   SEARCH_CATEGORY_LABEL,
   emptyMessage,
   groupByCategory,
   hasResearch,
   lastRunLabel,
   researchBusy,
+  researchButtonLabel,
+  researchProgress,
   scholarshipMeta,
   searchBusy,
   searchScopeLabel,
@@ -50,7 +52,11 @@ export function ScholarshipsTab({ collegeId, collegeName }: { collegeId: string;
   const toast = useToast();
   const [search, setSearch] = useState<ScholarshipSearchState | null>(null);
   const [scholarships, setScholarships] = useState<CollegeScholarship[]>([]);
-  const [selectedId, setSelectedId] = useState<string>('');
+  // Multi-select: researching several awards from one click is the normal case, since a family is
+  // usually weighing a shortlist rather than one award.
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  /** Which dossier is expanded. Several can be complete at once, so they collapse by default. */
+  const [openId, setOpenId] = useState<string>('');
   const [category, setCategory] = useState<SearchCategory>('all');
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
@@ -67,14 +73,27 @@ export function ScholarshipsTab({ collegeId, collegeName }: { collegeId: string;
     };
   }, []);
 
-  const selected = scholarships.find((s) => s.scholarshipId === selectedId) ?? null;
   const groups = groupByCategory(scholarships);
+  const selectedIds = [...selected];
+  const researched = scholarships.filter((s) => hasResearch(s));
+  const toggle = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      // Cap client-side too, so the button never sends a request the API will reject.
+      else if (next.size < MAX_RESEARCH_BATCH) next.add(id);
+      return next;
+    });
 
   /** Apply a fresh list response, keeping the current selection when it still exists. */
   const apply = useCallback((res: { search: ScholarshipSearchState | null; scholarships: CollegeScholarship[] }) => {
     setSearch(res.search);
     setScholarships(res.scholarships);
-    setSelectedId((prev) => (prev && res.scholarships.some((s) => s.scholarshipId === prev) ? prev : ''));
+    // Drop selections for awards a re-search removed, so the count can't drift from what's shown.
+    setSelected((prev) => {
+      const alive = new Set(res.scholarships.map((s) => s.scholarshipId));
+      return new Set([...prev].filter((id) => alive.has(id)));
+    });
   }, []);
 
   /** Poll the list until the search settles (or we run out of patience). */
@@ -154,36 +173,36 @@ export function ScholarshipsTab({ collegeId, collegeName }: { collegeId: string;
     };
   }, [collegeId, apply, pollSearch]);
 
-  /** Kick off the dossier for the selected award and poll it to completion. */
-  async function research(): Promise<void> {
-    if (!selected) return;
-    const scholarshipId = selected.scholarshipId;
+  /** Research every ticked award. Each gets its own job on the backend, so they land one at a time;
+   *  this polls the whole list and lets the UI fill in as each dossier arrives. */
+  async function researchSelected(): Promise<void> {
+    if (selectedIds.length === 0) return;
+    const ids = selectedIds;
     setResearching(true);
     setError(null);
     try {
-      const started = await startResearch(collegeId, scholarshipId);
+      const res = await startResearchBatch(collegeId, ids);
       if (!mounted.current) return;
-      const merge = (fresh: CollegeScholarship) =>
-        setScholarships((prev) => prev.map((s) => (s.scholarshipId === scholarshipId ? fresh : s)));
-      merge(started);
-      if (!researchBusy(started)) {
-        if (started.researchStatus === 'failed') setError(RESEARCH_ERR);
-        return;
-      }
+      setScholarships(res.scholarships);
       for (let i = 0; i < RESEARCH_POLLS; i++) {
         await sleep(POLL_MS);
         if (!mounted.current) return;
         let fresh;
         try {
-          fresh = await getScholarship(collegeId, scholarshipId);
+          fresh = await listScholarships(collegeId);
         } catch {
-          continue;
+          continue; // transient read error — keep waiting
         }
         if (!mounted.current) return;
-        merge(fresh);
-        if (fresh.researchStatus === 'complete') return;
-        if (fresh.researchStatus === 'failed') {
-          setError(RESEARCH_ERR);
+        setScholarships(fresh.scholarships);
+        const { pending, failed, done } = researchProgress(fresh.scholarships, ids);
+        if (pending === 0) {
+          // Only complain when nothing at all worked; a partial result is still worth showing.
+          if (done === 0 && failed > 0) setError(RESEARCH_ERR);
+          else if (failed > 0) setError(`${failed} of ${ids.length} couldn’t be researched — try those again.`);
+          // Open the first finished dossier so the result is visible without another click.
+          const first = fresh.scholarships.find((x) => ids.includes(x.scholarshipId) && hasResearch(x));
+          if (first) setOpenId((prev) => prev || first.scholarshipId);
           return;
         }
       }
@@ -195,24 +214,26 @@ export function ScholarshipsTab({ collegeId, collegeName }: { collegeId: string;
     }
   }
 
-  async function onTrack(): Promise<void> {
-    if (!selected) return;
+  async function onTrack(award: CollegeScholarship): Promise<void> {
     try {
-      await trackScholarship(selected, collegeName);
-      toast.success(`Added “${selected.name}” to your scholarship tracker.`);
+      await trackScholarship(award, collegeName);
+      toast.success(`Added “${award.name}” to your scholarship tracker.`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Could not track that scholarship.');
     }
   }
 
-  async function onRemove(): Promise<void> {
-    if (!selected) return;
-    const { scholarshipId, name } = selected;
+  async function onRemove(award: CollegeScholarship): Promise<void> {
+    const { scholarshipId, name } = award;
     try {
       await deleteScholarship(collegeId, scholarshipId);
       if (!mounted.current) return;
       setScholarships((prev) => prev.filter((s) => s.scholarshipId !== scholarshipId));
-      setSelectedId('');
+      setSelected((prev) => {
+        const next = new Set(prev);
+        next.delete(scholarshipId);
+        return next;
+      });
       toast.success(`Removed “${name}”.`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Could not remove that scholarship.');
@@ -307,71 +328,106 @@ export function ScholarshipsTab({ collegeId, collegeName }: { collegeId: string;
         {error ? <p className="text-xs text-error-600">{error}</p> : null}
       </Card>
 
-      {/* --- pick one ------------------------------------------------------------------- */}
+      {/* --- pick as many as you want --------------------------------------------------- */}
       {scholarships.length > 0 ? (
         <Card className="space-y-3">
-          <Field label="Pick a scholarship to research">
-            <Select value={selectedId} onChange={(e) => setSelectedId(e.target.value)}>
-              <option value="">Select a scholarship…</option>
-              {groups.map((g) => (
-                <optgroup key={g.category} label={`${g.label} (${g.items.length})`}>
-                  {g.items.map((s) => (
-                    <option key={s.scholarshipId} value={s.scholarshipId}>
-                      {s.name}
-                      {s.research ? ' ✓' : ''}
-                    </option>
-                  ))}
-                </optgroup>
-              ))}
-            </Select>
-          </Field>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-sm font-semibold text-ink-800">
+              Pick the ones worth a closer look
+              {selected.size > 0 ? <span className="ml-1 font-normal text-ink-500">· {selected.size} selected</span> : null}
+            </h3>
+            <Button
+              size="sm"
+              icon="search"
+              disabled={selected.size === 0}
+              loading={researching}
+              onClick={() => void researchSelected()}
+            >
+              {researchButtonLabel(selected.size)}
+            </Button>
+          </div>
 
-          {selected ? (
-            <div className="space-y-2 rounded-lg border border-surface-border bg-surface-sunken p-3">
-              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                <span className="text-sm font-semibold text-ink-900">{selected.name}</span>
-                {selected.category ? (
-                  <span className="text-xs text-ink-400">{CATEGORY_LABEL[selected.category]}</span>
-                ) : null}
-              </div>
-              {selected.provider ? <p className="text-xs text-ink-500">{selected.provider}</p> : null}
-              {selected.summary ? <p className="text-sm text-ink-700">{selected.summary}</p> : null}
-              {scholarshipMeta(selected).length > 0 ? (
-                <p className="text-xs text-ink-600">{scholarshipMeta(selected).join(' · ')}</p>
-              ) : null}
-              <div className="flex flex-wrap items-center gap-2 pt-1">
-                <Button
-                  size="sm"
-                  icon="search"
-                  loading={researching || researchBusy(selected)}
-                  onClick={() => void research()}
-                >
-                  {hasResearch(selected) ? 'Research again' : 'Research'}
-                </Button>
-                {hasResearch(selected) ? (
-                  <Button size="sm" variant="outline" icon="scholarship" onClick={() => void onTrack()}>
-                    Track this
-                  </Button>
-                ) : null}
-                {safeHref(selected.url) ? (
-                  <a
-                    className="text-xs text-primary-600 hover:underline"
-                    href={safeHref(selected.url)}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Scholarship page
-                  </a>
-                ) : null}
-                <button
-                  type="button"
-                  className="ml-auto text-xs text-ink-400 hover:text-error-600"
-                  onClick={() => void onRemove()}
-                >
-                  Remove
-                </button>
-              </div>
+          {groups.map((g) => (
+            <div key={g.category}>
+              <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-ink-500">
+                {g.label} ({g.items.length})
+              </p>
+              <ul className="divide-y divide-surface-border rounded-lg border border-surface-border">
+                {g.items.map((sch) => {
+                  const meta = scholarshipMeta(sch);
+                  const done = hasResearch(sch);
+                  const busyOne = researchBusy(sch);
+                  return (
+                    <li key={sch.scholarshipId} className="flex items-start gap-3 px-3 py-2">
+                      <input
+                        type="checkbox"
+                        className="mt-1 h-4 w-4 shrink-0 accent-primary-600"
+                        checked={selected.has(sch.scholarshipId)}
+                        onChange={() => toggle(sch.scholarshipId)}
+                        aria-label={sch.name}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <span className="text-sm font-medium text-ink-900">{sch.name}</span>
+                          {busyOne ? (
+                            <Badge tone="info">Researching…</Badge>
+                          ) : done ? (
+                            <Badge tone="success">Researched</Badge>
+                          ) : sch.researchStatus === 'failed' ? (
+                            <Badge tone="error">Didn’t finish</Badge>
+                          ) : null}
+                        </div>
+                        {meta.length > 0 ? <p className="text-xs text-ink-600">{meta.join(' · ')}</p> : null}
+                        {sch.summary ? <p className="mt-0.5 text-xs text-ink-500">{sch.summary}</p> : null}
+                        <div className="mt-1 flex flex-wrap items-center gap-3">
+                          {done ? (
+                            <button
+                              type="button"
+                              className="text-xs font-medium text-primary-600 hover:text-primary-700"
+                              onClick={() => setOpenId((prev) => (prev === sch.scholarshipId ? '' : sch.scholarshipId))}
+                            >
+                              {openId === sch.scholarshipId ? 'Hide details' : 'See details'}
+                            </button>
+                          ) : null}
+                          {done ? (
+                            <button
+                              type="button"
+                              className="text-xs text-primary-600 hover:text-primary-700"
+                              onClick={() => void onTrack(sch)}
+                            >
+                              Track this
+                            </button>
+                          ) : null}
+                          {safeHref(sch.url) ? (
+                            <a
+                              className="text-xs text-primary-600 hover:underline"
+                              href={safeHref(sch.url)}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              Scholarship page
+                            </a>
+                          ) : null}
+                          <button
+                            type="button"
+                            className="ml-auto text-xs text-ink-400 hover:text-error-600"
+                            onClick={() => void onRemove(sch)}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
             </div>
+          ))}
+
+          {selected.size >= MAX_RESEARCH_BATCH ? (
+            <p className="text-xs text-ink-400">
+              That’s the most we’ll research in one go — each one is its own couple of minutes of web research.
+            </p>
           ) : null}
         </Card>
       ) : !busy ? (
@@ -399,35 +455,43 @@ export function ScholarshipsTab({ collegeId, collegeName }: { collegeId: string;
         </Card>
       ) : null}
 
-      {/* --- the dossier ---------------------------------------------------------------- */}
-      {selected ? (
-        researching || researchBusy(selected) ? (
-          <Card className="flex items-center gap-3">
-            <Spinner size={18} />
-            <div>
-              <p className="text-sm font-medium text-ink-800">Researching “{selected.name}”…</p>
-              <p className="text-xs text-ink-500">
-                Reading the school’s pages for the odds, the criteria, the process, and who to contact. A couple of
-                minutes.
-              </p>
-            </div>
-          </Card>
-        ) : hasResearch(selected) && selected.research ? (
-          <ResearchView research={selected.research} />
-        ) : (
-          <Card className="space-y-2 text-center">
-            <Icon name="scholarship" size={22} className="mx-auto text-primary-500" />
-            <p className="text-sm font-medium text-ink-800">Research “{selected.name}”</p>
-            <p className="mx-auto max-w-md text-xs text-ink-500">
-              We’ll dig up what the award really is, your realistic odds, what wins it, how to apply, the dates that
-              matter, and the actual people to contact.
+      {/* --- research progress + the dossiers -------------------------------------------- */}
+      {researching ? (
+        <Card className="flex items-center gap-3">
+          <Spinner size={18} />
+          <div>
+            <p className="text-sm font-medium text-ink-800">
+              Researching {selectedIds.length} scholarship{selectedIds.length === 1 ? '' : 's'}…{' '}
+              {(() => {
+                const { done, total } = researchProgress(scholarships, selectedIds);
+                return `${done} of ${total} done`;
+              })()}
             </p>
-            <Button className="mt-1" icon="search" loading={researching} onClick={() => void research()}>
-              Research this scholarship
-            </Button>
-          </Card>
-        )
+            <p className="text-xs text-ink-500">
+              Each one is read from the school’s own pages — the odds, the criteria, the process, and who to contact.
+              They finish one at a time, so results appear as they land.
+            </p>
+          </div>
+        </Card>
       ) : null}
+
+      {researched.map((sch) =>
+        openId === sch.scholarshipId && sch.research ? (
+          <div key={sch.scholarshipId} className="space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-sm font-semibold text-ink-900">{sch.name}</h3>
+              <button
+                type="button"
+                className="text-xs text-ink-400 hover:text-ink-700"
+                onClick={() => setOpenId('')}
+              >
+                Hide
+              </button>
+            </div>
+            <ResearchView research={sch.research} />
+          </div>
+        ) : null,
+      )}
     </div>
   );
 }

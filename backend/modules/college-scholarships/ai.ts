@@ -30,8 +30,13 @@ export interface AiOptions {
  *  final answer costs roughly a second per 60-80 output tokens, so the research ceiling is set at
  *  6000 (a very long dossier) rather than higher — a run that blew past 300s would be redelivered by
  *  SQS mid-write instead of failing cleanly. */
-const SEARCH_ROUNDS = 5;
-const SEARCH_TOKENS = 4000;
+// Search: 4 rounds is enough to find a school's awards (measured in prod, the 5th round mostly
+// re-read pages it already had), and the output budget is sized for a SHORT picker list rather than
+// full write-ups. The final synthesis round is where a search actually spends its time — roughly
+// two-thirds of the wall clock — so capping what it has to write is the most effective lever there
+// is on how long the family waits.
+const SEARCH_ROUNDS = 4;
+const SEARCH_TOKENS = 2600;
 const RESEARCH_ROUNDS = 6;
 const RESEARCH_TOKENS = 6000;
 

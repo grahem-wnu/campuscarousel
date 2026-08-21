@@ -16,13 +16,20 @@ import {
   type ResearchDispatcher,
   type SearchDispatcher,
 } from './jobs.js';
-import { collegeParamSchema, researchSchema, scholarshipParamSchema, searchSchema } from './schema.js';
+import {
+  collegeParamSchema,
+  researchBatchSchema,
+  researchSchema,
+  scholarshipParamSchema,
+  searchSchema,
+} from './schema.js';
 
 export interface ScholarshipHandlers {
   list: Handler;
   search: Handler;
   detail: Handler;
   research: Handler;
+  researchBatch: Handler;
   remove: Handler;
 }
 
@@ -51,6 +58,13 @@ export function makeHandlers(deps: ScholarshipDeps): ScholarshipHandlers {
     const found = await getData().collegeScholarships.get(collegeId, scholarshipId);
     if (!found) throw Errors.notFound('Scholarship not found');
     return found;
+  }
+
+  /** Mark one award as being researched and dispatch its job. Shared by the single and batch
+   *  routes so both can never drift on what "starting research" means. */
+  async function startResearch(collegeId: string, scholarshipId: string): Promise<void> {
+    await getData().collegeScholarships.update(collegeId, scholarshipId, { researchStatus: 'in-progress' });
+    await researchDispatch(collegeId, scholarshipId);
   }
 
   return {
@@ -106,10 +120,27 @@ export function makeHandlers(deps: ScholarshipDeps): ScholarshipHandlers {
       validateBody(researchSchema, ctx);
       await requireCollege(id);
       await requireScholarship(id, scholarshipId);
-      const data = getData();
-      await data.collegeScholarships.update(id, scholarshipId, { researchStatus: 'in-progress' });
-      await researchDispatch(id, scholarshipId);
+      await startResearch(id, scholarshipId);
       return { status: 202, body: await requireScholarship(id, scholarshipId) };
+    },
+
+    // POST /colleges/:id/scholarships/research — research several awards from one click. Each award
+    // still gets its OWN job, so they queue and run independently: the family sees each dossier land
+    // as it finishes instead of waiting for the slowest one, and a single failure can't take the
+    // batch down with it. Every id is validated before anything is dispatched, so a bad id fails the
+    // whole request rather than half-starting it.
+    researchBatch: async (ctx) => {
+      const { id } = validateParams(collegeParamSchema, ctx);
+      const { scholarshipIds } = validateBody(researchBatchSchema, ctx);
+      await requireCollege(id);
+      const unique = [...new Set(scholarshipIds)];
+      for (const scholarshipId of unique) await requireScholarship(id, scholarshipId);
+      for (const scholarshipId of unique) await startResearch(id, scholarshipId);
+      const data = getData();
+      return {
+        status: 202,
+        body: { started: unique.length, scholarships: await data.collegeScholarships.list(id) },
+      };
     },
 
     // DELETE /colleges/:id/scholarships/:scholarshipId — drop an award the family doesn't care about.
@@ -129,6 +160,7 @@ export function buildRoutes(h: ScholarshipHandlers) {
   return [
     { method: 'GET' as const, path: '/colleges/:id/scholarships', handler: h.list },
     { method: 'POST' as const, path: '/colleges/:id/scholarships/search', handler: h.search },
+    { method: 'POST' as const, path: '/colleges/:id/scholarships/research', handler: h.researchBatch },
     { method: 'GET' as const, path: '/colleges/:id/scholarships/:scholarshipId', handler: h.detail },
     { method: 'POST' as const, path: '/colleges/:id/scholarships/:scholarshipId/research', handler: h.research },
     { method: 'DELETE' as const, path: '/colleges/:id/scholarships/:scholarshipId', handler: h.remove },

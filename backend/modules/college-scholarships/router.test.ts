@@ -99,6 +99,27 @@ describe('router integration', () => {
     expect((parse(detail).research as { summary: string }).summary).toBe('A dossier.');
   });
 
+  it('researches several awards from one request', async () => {
+    await dispatch(event('POST', `/colleges/${collegeId}/scholarships/search`, { as: keira, body: {} }));
+    await data.collegeScholarships.add(collegeId, { name: 'Second Award', category: 'athletic' });
+    const ids = (await data.collegeScholarships.list(collegeId)).map((s) => s.scholarshipId);
+
+    const res = await dispatch(
+      event('POST', `/colleges/${collegeId}/scholarships/research`, { as: keira, body: { scholarshipIds: ids } }),
+    );
+    expect(res.statusCode).toBe(202);
+    expect(parse(res).started).toBe(2);
+  });
+
+  it('routes the static /research segment ahead of the :scholarshipId pattern', async () => {
+    // `/scholarships/research` (batch) must not be read as scholarshipId="research".
+    const res = await dispatch(
+      event('POST', `/colleges/${collegeId}/scholarships/research`, { as: keira, body: { scholarshipIds: ['nope'] } }),
+    );
+    expect(res.statusCode).toBe(404);
+    expect((parse(res).error as { message: string }).message).toBe('Scholarship not found');
+  });
+
   it('deletes one award', async () => {
     await dispatch(event('POST', `/colleges/${collegeId}/scholarships/search`, { as: keira, body: {} }));
     const [award] = await data.collegeScholarships.list(collegeId);

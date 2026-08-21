@@ -26,6 +26,7 @@ off), `scholarship-tracker` (the "Track this scholarship" hand-off writes a `Sch
 | POST | `/colleges/:id/scholarships/search` | Body `{ query?: string, category?: 'academic'\|'athletic'\|'all', sport?: string }`. `query` is the family's own words and is the primary input; omitting it makes the run a broad sweep. Marks the search `in-progress`, enqueues, **202**. |
 | GET | `/colleges/:id/scholarships/:scholarshipId` | One award (research polling). 404 when absent. |
 | POST | `/colleges/:id/scholarships/:scholarshipId/research` | Marks `researchStatus: 'in-progress'`, enqueues, **202**. |
+| POST | `/colleges/:id/scholarships/research` | Body `{ scholarshipIds: string[] }` (1–10). Validates every id first, then starts one job per award. **202** with `{ started, scholarships }`. |
 | DELETE | `/colleges/:id/scholarships/:scholarshipId` | Remove one result. |
 
 All zod-validated (`schema.ts`); unknown body fields → 422. Any authenticated family member of the
@@ -43,9 +44,14 @@ A **Scholarships** tab on `/colleges/:id`, after *Prepare*.
   type and spent a web-search call they never requested.) A run already in flight is rejoined.
 - The box prefills with the last search, and the tab shows what the last run was looking for
   ("Showing “soccer” · searched Aug 20 · 9 found").
-- Results populate a `<select>` grouped by category (`optgroup` Academic / Athletic / Other). The
-  selected award renders a compact card (amount, deadline, renewable, link).
-- **Research this scholarship** starts the dossier job and polls; the dossier renders as labeled
+- Results render as a **checkbox list** grouped by category, each row showing amount / deadline /
+  renewable plus a status badge (Researching… / Researched / Didn't finish). A family is usually
+  weighing a shortlist, so researching several at once is the normal case, not the exception.
+- **Research N scholarships** starts one job per ticked award (cap 10 — each is its own couple of
+  minutes and its own Bedrock spend). They run independently, so dossiers land one at a time and a
+  single failure never takes the batch down; a partial failure is reported while the successful
+  dossiers still render. Dossiers collapse behind "See details", with the first result auto-opened.
+- Each dossier renders as labeled
   sections — Odds, How to win it, What to expect, How to apply, Deadlines, Who to contact, Staff,
   Tips, Common mistakes — followed by cited sources and an "as of" line.
 - **Track this scholarship** posts the award into Scholarship Tracker with `linkedColleges` set.

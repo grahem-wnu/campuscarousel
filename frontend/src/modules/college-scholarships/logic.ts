@@ -119,3 +119,26 @@ export function searchScopeLabel(state: ScholarshipSearchState | null | undefine
   const c = state.category ?? 'all';
   return c === 'all' ? 'all scholarships' : `${SEARCH_CATEGORY_LABEL[c].toLowerCase()} scholarships`;
 }
+
+/** Awards currently being researched, for the "3 of 5 done" progress line. */
+export function researchProgress(
+  scholarships: readonly CollegeScholarship[],
+  ids: readonly string[],
+): { done: number; failed: number; pending: number; total: number } {
+  const set = new Set(ids);
+  const picked = scholarships.filter((s) => set.has(s.scholarshipId));
+  const done = picked.filter((s) => s.researchStatus === 'complete').length;
+  const failed = picked.filter((s) => s.researchStatus === 'failed').length;
+  return { done, failed, pending: picked.length - done - failed, total: picked.length };
+}
+
+/** Label for the research button — states plainly how many awards a click will research, because
+ *  each one is its own couple of minutes and its own AI spend. */
+export function researchButtonLabel(selectedCount: number): string {
+  if (selectedCount === 0) return 'Research';
+  if (selectedCount === 1) return 'Research 1 scholarship';
+  return `Research ${selectedCount} scholarships`;
+}
+
+/** How many awards may be researched in one click (mirrors the API cap). */
+export const MAX_RESEARCH_BATCH = 10;

@@ -150,6 +150,51 @@ describe('POST /colleges/:id/scholarships/:scholarshipId/research', () => {
   });
 });
 
+describe('POST /colleges/:id/scholarships/research (batch)', () => {
+  async function seedMany(): Promise<string[]> {
+    const a = await data.collegeScholarships.add(collegeId, { name: 'A', category: 'academic' });
+    const b = await data.collegeScholarships.add(collegeId, { name: 'B', category: 'athletic' });
+    return [a.scholarshipId, b.scholarshipId];
+  }
+
+  it('starts a job for every selected award and returns 202', async () => {
+    const ids = await seedMany();
+    const res = await h.researchBatch(ctx({ params: { id: collegeId }, body: { scholarshipIds: ids } }));
+    expect(res.status).toBe(202);
+    expect((res.body as { started: number }).started).toBe(2);
+    expect(researchCalls.map(([, s]) => s).sort()).toEqual([...ids].sort());
+  });
+
+  it('dedupes a repeated id so one award is never researched twice in a batch', async () => {
+    const [a] = await seedMany();
+    const res = await h.researchBatch(ctx({ params: { id: collegeId }, body: { scholarshipIds: [a, a, a] } }));
+    expect((res.body as { started: number }).started).toBe(1);
+    expect(researchCalls).toHaveLength(1);
+  });
+
+  it('validates every id BEFORE dispatching, so a bad one never half-starts the batch', async () => {
+    const [a] = await seedMany();
+    await expectStatus(
+      h.researchBatch(ctx({ params: { id: collegeId }, body: { scholarshipIds: [a, 'nope'] } })),
+      404,
+    );
+    expect(researchCalls).toHaveLength(0);
+  });
+
+  it('422s on an empty selection', async () => {
+    await expectStatus(h.researchBatch(ctx({ params: { id: collegeId }, body: { scholarshipIds: [] } })), 422);
+  });
+
+  it('422s past the batch cap, so one click cannot run away with time or spend', async () => {
+    const ids = Array.from({ length: 11 }, (_, i) => `id-${i}`);
+    await expectStatus(h.researchBatch(ctx({ params: { id: collegeId }, body: { scholarshipIds: ids } })), 422);
+  });
+
+  it('404s for a missing college', async () => {
+    await expectStatus(h.researchBatch(ctx({ params: { id: 'nope' }, body: { scholarshipIds: ['x'] } })), 404);
+  });
+});
+
 describe('GET + DELETE /colleges/:id/scholarships/:scholarshipId', () => {
   it('returns one award, then removes it', async () => {
     await h.search(ctx({ params: { id: collegeId }, body: {} }));
@@ -171,7 +216,7 @@ describe('GET + DELETE /colleges/:id/scholarships/:scholarshipId', () => {
 });
 
 describe('buildRoutes', () => {
-  it('declares the five endpoints', () => {
+  it('declares the six endpoints', () => {
     const sigs = buildRoutes(h)
       .map((r) => `${r.method} ${r.path}`)
       .sort();
@@ -181,6 +226,7 @@ describe('buildRoutes', () => {
         'GET /colleges/:id/scholarships',
         'GET /colleges/:id/scholarships/:scholarshipId',
         'POST /colleges/:id/scholarships/:scholarshipId/research',
+        'POST /colleges/:id/scholarships/research',
         'POST /colleges/:id/scholarships/search',
       ].sort(),
     );
