@@ -14,6 +14,7 @@ import {
   researchBusy,
   scholarshipMeta,
   searchBusy,
+  searchScopeLabel,
 } from './logic';
 import type { CollegeScholarship, ScholarshipSearchState } from './types';
 
@@ -156,5 +157,44 @@ describe('competitiveness display', () => {
     }
     expect(COMPETITIVENESS_TONE.accessible).toBe('success');
     expect(COMPETITIVENESS_TONE['very-high']).toBe('error');
+  });
+});
+
+describe('searchScopeLabel', () => {
+  const ran = (over: Partial<ScholarshipSearchState> = {}): ScholarshipSearchState => ({
+    collegeId: 'c1',
+    status: 'complete',
+    lastRunAt: '2026-08-20T00:00:00Z',
+    ...over,
+  });
+
+  it('quotes what the family typed', () => {
+    expect(searchScopeLabel(ran({ query: 'soccer' }))).toBe('“soccer”');
+  });
+
+  it('describes a broad sweep in plain words', () => {
+    expect(searchScopeLabel(ran({ category: 'all' }))).toBe('all scholarships');
+    expect(searchScopeLabel(ran())).toBe('all scholarships');
+  });
+
+  it('names the scope for a category-only search', () => {
+    expect(searchScopeLabel(ran({ category: 'athletic' }))).toBe('athletic scholarships');
+  });
+
+  it('is null before anything has ever run, so the tab shows no stale scope line', () => {
+    expect(searchScopeLabel(null)).toBeNull();
+    expect(searchScopeLabel({ collegeId: 'c1', status: 'pending' })).toBeNull();
+  });
+});
+
+describe('emptyMessage with a query', () => {
+  it('blames the search term, not the school — only one of those means try other words', () => {
+    const state: ScholarshipSearchState = {
+      collegeId: 'c1',
+      status: 'complete',
+      lastRunAt: '2026-08-20T00:00:00Z',
+      query: 'underwater basket weaving',
+    };
+    expect(emptyMessage(state, 'all')).toContain('“underwater basket weaving”');
   });
 });

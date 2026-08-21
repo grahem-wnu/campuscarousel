@@ -23,6 +23,8 @@ export type FoundScholarship = Pick<
 export type ScholarshipSearcher = (input: {
   collegeName: string;
   category: SearchCategory;
+  /** The family's own words for what they're after. Drives the search when present. */
+  query?: string;
   sport?: string;
   majors: string[];
   state?: string;
@@ -43,8 +45,14 @@ const CATEGORY_BRIEF: Record<SearchCategory, string> = {
     'sports), plus any athletics-linked academic award (scholar-athlete or team academic awards). Note the ' +
     'division (NCAA D1/D2/D3, NAIA, NJCAA) and say plainly when a division does not grant athletic aid.',
   all:
-    'BOTH academic and athletic awards: institutional merit and honors awards, departmental and endowed ' +
-    'awards, and athletics-department awards by sport.',
+    'BOTH academic AND athletic awards — this is a coverage requirement, not a preference. Academic: ' +
+    'institutional merit and honors awards, departmental and endowed awards. Athletic: ' +
+    'athletics-department awards by sport. Athletic aid is easy to miss because it lives on the ' +
+    "school's separate athletics site rather than its financial-aid pages, so search the athletics " +
+    'site specifically before you answer. Do NOT return an academic-only list by default. The one ' +
+    'acceptable reason to return no athletic awards is that this school genuinely grants none ' +
+    '(NCAA Division III schools award no athletic scholarships) — if so, still include its ' +
+    'athletics-linked academic awards, such as scholar-athlete awards.',
 };
 
 /** The current application cycle, stated plainly. Without this the model answers from whatever cycle
@@ -82,6 +90,8 @@ export function cycleContext(now: Date = new Date()): string[] {
 export function buildSearchPrompt(input: {
   collegeName: string;
   category: SearchCategory;
+  /** The family's own words. When set, this is what the search is FOR. */
+  query?: string;
   sport?: string;
   majors?: string[];
   state?: string;
@@ -94,6 +104,8 @@ export function buildSearchPrompt(input: {
   const program = majorPhrase(input.majors, 'their intended college program');
   const sport = input.sport ? promptLiteral(input.sport, 80) : undefined;
 
+  const wanted = input.query ? promptLiteral(input.query, 200) : undefined;
+
   const lines: string[] = [
     `You are a college financial-aid researcher. Find the scholarships that "${name}" itself offers`,
     `to an incoming undergraduate pursuing ${program}.`,
@@ -101,8 +113,21 @@ export function buildSearchPrompt(input: {
     '',
     ...cycleContext(input.now),
     '',
-    CATEGORY_BRIEF[input.category],
   ];
+  // The family's own words lead, because they are the whole reason this search is running. Someone
+  // who typed "soccer" wants soccer money, not a balanced portfolio of the school's merit awards.
+  if (wanted) {
+    lines.push(
+      `THE FAMILY IS LOOKING FOR: "${wanted}".`,
+      `Treat that as the point of this search. Prioritise awards that genuinely match it — by sport,`,
+      `major, department, activity, background, or circumstance, whichever applies. Interpret it`,
+      `generously (a sport also covers that team's booster and scholar-athlete awards; a major also`,
+      `covers its department and college). If you truly cannot find awards matching it at this school,`,
+      `say so by returning the closest relevant awards you did find rather than an unrelated list.`,
+      '',
+    );
+  }
+  lines.push(CATEGORY_BRIEF[input.category]);
   if (sport) lines.push(`Focus on awards for ${sport}, but still include general athletics-department awards.`);
   if (input.state) lines.push(`This school is in ${promptLiteral(input.state, 60)}; include its in-state/resident awards.`);
 

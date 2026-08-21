@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
-// The tab's state machine is the thing worth locking: it auto-searches a college that has never been
-// searched, polls a slow search to completion, and turns a picked award into a polled dossier. Each
-// of those is an async round-trip a refactor could silently break.
+// The tab's state machine is the thing worth locking: it starts NOTHING on open, searches what the
+// family actually typed, polls a slow search to completion, and turns a picked award into a polled
+// dossier. Each of those is an async round-trip a refactor could silently break.
 
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
@@ -60,20 +60,31 @@ async function tick() {
   });
 }
 
+/** Nothing runs on open now, so every search-path test has to actually ask for one. */
+async function submitSearch(text?: string) {
+  if (text !== undefined) {
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('What are you looking for?'), { target: { value: text } });
+    });
+  }
+  await act(async () => {
+    fireEvent.click(screen.getByText('Search'));
+    await Promise.resolve();
+  });
+}
+
 describe('ScholarshipsTab', () => {
-  it('auto-searches a college that has never been searched', async () => {
+  // The headline behavior change: arriving must not spend a web search on a guess at your intent.
+  it('starts NOTHING on open, and invites the family to say what they want', async () => {
     h.listScholarships.mockResolvedValue(response());
-    h.startSearch.mockResolvedValue(
-      response({ search: { collegeId: 'c1', status: 'complete', found: 1, lastRunAt: '2026-08-20T00:00:00Z' }, scholarships: [award()] }),
-    );
 
     await renderTab();
 
-    expect(h.startSearch).toHaveBeenCalledWith('c1', { category: 'all' });
-    expect(screen.getByText('Morrill Scholarship')).toBeTruthy();
+    expect(h.startSearch).not.toHaveBeenCalled();
+    expect(screen.getByText(/Find money for Ohio State/)).toBeTruthy();
   });
 
-  it('does not auto-search a college that already has results', async () => {
+  it('does not search on open even for a college that already has results', async () => {
     h.listScholarships.mockResolvedValue(
       response({ search: { collegeId: 'c1', status: 'complete', found: 1, lastRunAt: '2026-08-20T00:00:00Z' }, scholarships: [award()] }),
     );
@@ -81,7 +92,69 @@ describe('ScholarshipsTab', () => {
     await renderTab();
 
     expect(h.startSearch).not.toHaveBeenCalled();
-    expect(screen.getByText(/Last searched/)).toBeTruthy();
+    expect(screen.getByText('Morrill Scholarship')).toBeTruthy();
+  });
+
+  it('searches for what the family typed', async () => {
+    h.listScholarships.mockResolvedValue(response());
+    h.startSearch.mockResolvedValue(
+      response({ search: { collegeId: 'c1', status: 'complete', found: 1, lastRunAt: '2026-08-20T00:00:00Z' }, scholarships: [award()] }),
+    );
+
+    await renderTab();
+    const box = screen.getByLabelText('What are you looking for?') as HTMLInputElement;
+    await act(async () => {
+      fireEvent.change(box, { target: { value: 'soccer' } });
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByText('Search'));
+      await Promise.resolve();
+    });
+
+    expect(h.startSearch).toHaveBeenCalledWith('c1', { query: 'soccer', category: 'all' });
+  });
+
+  it('sweeps everything when asked, sending no query at all', async () => {
+    h.listScholarships.mockResolvedValue(response());
+    h.startSearch.mockResolvedValue(
+      response({ search: { collegeId: 'c1', status: 'complete', found: 0, lastRunAt: '2026-08-20T00:00:00Z' } }),
+    );
+
+    await renderTab();
+    await act(async () => {
+      fireEvent.click(screen.getByText(/Or search every scholarship/));
+      await Promise.resolve();
+    });
+
+    expect(h.startSearch).toHaveBeenCalledWith('c1', { category: 'all' });
+  });
+
+  it('echoes back what the last run was looking for', async () => {
+    h.listScholarships.mockResolvedValue(
+      response({
+        search: { collegeId: 'c1', status: 'complete', query: 'soccer', found: 1, lastRunAt: '2026-08-20T00:00:00Z' },
+        scholarships: [award()],
+      }),
+    );
+
+    await renderTab();
+
+    expect(screen.getByText(/Showing “soccer”/)).toBeTruthy();
+  });
+
+  it('rejoins a search that was already running when the tab opened', async () => {
+    h.listScholarships
+      .mockResolvedValueOnce(response({ search: { collegeId: 'c1', status: 'in-progress' } }))
+      .mockResolvedValueOnce(
+        response({ search: { collegeId: 'c1', status: 'complete', found: 1, lastRunAt: '2026-08-20T00:00:00Z' }, scholarships: [award()] }),
+      );
+
+    await renderTab();
+    expect(h.startSearch).not.toHaveBeenCalled();
+    expect(screen.getByText(/Searching Ohio State/)).toBeTruthy();
+
+    await tick();
+    expect(screen.getByText('Morrill Scholarship')).toBeTruthy();
   });
 
   it('polls a slow search until the worker finishes, then lists what it found', async () => {
@@ -94,7 +167,8 @@ describe('ScholarshipsTab', () => {
     h.startSearch.mockResolvedValue(response({ search: { collegeId: 'c1', status: 'in-progress' } }));
 
     await renderTab();
-    expect(screen.getByText(/Searching the web/)).toBeTruthy();
+    await submitSearch('soccer');
+    expect(screen.getByText(/Searching Ohio State/)).toBeTruthy();
 
     await tick();
     await tick();
@@ -107,6 +181,7 @@ describe('ScholarshipsTab', () => {
     h.startSearch.mockResolvedValue(response({ search: { collegeId: 'c1', status: 'failed', error: 'boom' } }));
 
     await renderTab();
+    await submitSearch('soccer');
 
     expect(screen.getByText(/didn’t finish/)).toBeTruthy();
     expect(screen.getByText('Search')).toBeTruthy();
@@ -172,12 +247,13 @@ describe('ScholarshipsTab', () => {
     );
 
     await renderTab();
+    await submitSearch();
 
     expect(screen.getByText('Nothing found yet')).toBeTruthy();
     expect(screen.getByText(/didn’t turn up/)).toBeTruthy();
   });
 
-  it('sends the chosen category and sport when the user searches again', async () => {
+  it('scopes the search to the chosen category', async () => {
     h.listScholarships.mockResolvedValue(
       response({ search: { collegeId: 'c1', status: 'complete', found: 0, lastRunAt: '2026-08-20T00:00:00Z' } }),
     );
@@ -186,19 +262,24 @@ describe('ScholarshipsTab', () => {
     );
 
     await renderTab();
+    await act(async () => {
+      fireEvent.click(screen.getByText('Athletic'));
+    });
+    await submitSearch('rowing');
 
-    await act(async () => {
-      screen.getByText('Athletic').click();
-    });
-    const sportInput = screen.getByPlaceholderText('Any sport') as HTMLInputElement;
-    await act(async () => {
-      fireEvent.change(sportInput, { target: { value: 'rowing' } });
-    });
-    await act(async () => {
-      screen.getByText('Search').click();
-      await Promise.resolve();
-    });
+    expect(h.startSearch).toHaveBeenCalledWith('c1', { query: 'rowing', category: 'athletic' });
+  });
 
-    expect(h.startSearch).toHaveBeenCalledWith('c1', { category: 'athletic', sport: 'rowing' });
+  it('prefills the box with the last search so running it again is one click', async () => {
+    h.listScholarships.mockResolvedValue(
+      response({
+        search: { collegeId: 'c1', status: 'complete', query: 'soccer', found: 1, lastRunAt: '2026-08-20T00:00:00Z' },
+        scholarships: [award()],
+      }),
+    );
+
+    await renderTab();
+
+    expect((screen.getByLabelText('What are you looking for?') as HTMLInputElement).value).toBe('soccer');
   });
 });
