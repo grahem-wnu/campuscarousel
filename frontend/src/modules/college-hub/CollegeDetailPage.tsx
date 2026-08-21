@@ -46,8 +46,9 @@ import {
   suggestChecklist,
 } from './api';
 import type { ChecklistItem, College, CollegeNote, HsPrepItem, HsPrepPlan } from './types';
+import { ScholarshipsTab } from '../college-scholarships/ScholarshipsTab';
 
-type TabId = 'overview' | 'notes' | 'checklist' | 'prep' | 'fit' | 'photos';
+type TabId = 'overview' | 'notes' | 'checklist' | 'prep' | 'scholarships' | 'fit' | 'photos';
 
 /** College detail — branded header + Overview / Notes / Checklist / Fit tabs, edit, refresh, delete.
  *  Touchpoints, Visits, and Benchmark tabs are owned by their own modules and slot in separately. */
@@ -131,6 +132,7 @@ export default function CollegeDetailPage() {
   const tabs: TabItem[] = [
     { id: 'overview', label: 'Overview' },
     { id: 'prep', label: 'Prepare' },
+    { id: 'scholarships', label: 'Scholarships' },
     { id: 'checklist', label: 'Checklist' },
     { id: 'fit', label: 'Fit analysis' },
     { id: 'photos', label: 'Photos' },
@@ -215,6 +217,8 @@ export default function CollegeDetailPage() {
         <ChecklistTab college={college} onSaved={load} />
       ) : tab === 'prep' ? (
         <PrepTab college={college} onUpdate={setCollege} />
+      ) : tab === 'scholarships' ? (
+        <ScholarshipsTab collegeId={id} collegeName={college.name} />
       ) : tab === 'photos' ? (
         <PhotosTab college={college} busy={busy} onRefresh={() => void onRefresh()} />
       ) : (

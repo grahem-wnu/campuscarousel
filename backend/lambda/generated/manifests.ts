@@ -11,6 +11,7 @@ import { routes as applicationCentralRoutes } from '../../modules/application-ce
 import { routes as campusVisitPlannerRoutes } from '../../modules/campus-visit-planner/routes.manifest.js';
 import { routes as certificationsRoutes } from '../../modules/certifications/routes.manifest.js';
 import { routes as collegeHubRoutes } from '../../modules/college-hub/routes.manifest.js';
+import { routes as collegeScholarshipsRoutes } from '../../modules/college-scholarships/routes.manifest.js';
 import { routes as coursePlannerRoutes } from '../../modules/course-planner/routes.manifest.js';
 import { routes as dashboardRoutes } from '../../modules/dashboard/routes.manifest.js';
 import { routes as demonstratedInterestContactsRoutes } from '../../modules/demonstrated-interest-contacts/routes.manifest.js';
@@ -42,6 +43,7 @@ export const manifests: RouteManifest[] = [
   { routes: campusVisitPlannerRoutes },
   { routes: certificationsRoutes },
   { routes: collegeHubRoutes },
+  { routes: collegeScholarshipsRoutes },
   { routes: coursePlannerRoutes },
   { routes: dashboardRoutes },
   { routes: demonstratedInterestContactsRoutes },
