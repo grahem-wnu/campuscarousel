@@ -12,6 +12,7 @@ import {
   signOut,
   confirmSignIn,
   fetchAuthSession,
+  updatePassword,
   type SignInOutput,
 } from "aws-amplify/auth";
 import type { Role } from "./types";
@@ -102,6 +103,38 @@ export async function completeNewPassword(newPassword: string): Promise<SignInRe
     const out = await confirmSignIn({ challengeResponse: newPassword });
     return fromSignInOutput(out);
   } catch (err) {
+    return { status: "error", message: humanizeAuthError(err) };
+  }
+}
+
+/** Outcome of a password change — a plain result rather than a thrown error, so callers render a
+ *  message instead of needing a try/catch. */
+export type ChangePasswordResult = { status: "ok" } | { status: "error"; message: string };
+
+/**
+ * Change the signed-in user's own password. Goes straight to Cognito from the browser — there is no
+ * backend involved, and the current password is required, so this cannot be used to take over a
+ * session someone else left open.
+ *
+ * Until this existed, the ONLY way a password was ever set was the NEW_PASSWORD_REQUIRED challenge
+ * at first login; after that a reset meant an admin running an AWS CLI command.
+ */
+export async function changePassword(
+  oldPassword: string,
+  newPassword: string,
+): Promise<ChangePasswordResult> {
+  try {
+    await updatePassword({ oldPassword, newPassword });
+    return { status: "ok" };
+  } catch (err) {
+    // The shared humanizer is written for the LOGIN form, where a rejected credential is reported as
+    // "Incorrect username or password". On a change-password form there is no username field, so
+    // that wording sends people looking for a problem that isn't there — here the same error can
+    // only mean the current password was wrong.
+    const name = (err as { name?: string })?.name ?? "";
+    if (name === "NotAuthorizedException") {
+      return { status: "error", message: "That current password isn't right." };
+    }
     return { status: "error", message: humanizeAuthError(err) };
   }
 }

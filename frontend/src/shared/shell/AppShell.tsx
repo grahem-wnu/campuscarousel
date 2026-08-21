@@ -10,6 +10,7 @@ import { SlideOver } from "./SlideOver";
 import { Modal } from "../ui/Modal";
 import { SlotOutlet } from "./SlotOutlet";
 import type { AssembledNav, NavEntry } from "./types";
+import { ChangePasswordModal } from "./ChangePasswordModal";
 
 /** Number of primary entries shown in the mobile bottom bar. */
 const MOBILE_PRIMARY_MAX = 5;
@@ -32,6 +33,7 @@ function navIcon(entry: NavEntry, size: number) {
  */
 export function AppShell({ nav }: { nav: AssembledNav }) {
   const { user, signOut } = useAuth();
+  const [passwordOpen, setPasswordOpen] = useState(false);
   const { activeStudentId } = useActiveStudent();
   const [menuOpen, setMenuOpen] = useState(false); // mobile hamburger (secondary)
   const [moreOpen, setMoreOpen] = useState(false); // desktop "More" dropdown
@@ -118,6 +120,16 @@ export function AppShell({ nav }: { nav: AssembledNav }) {
                     type="button"
                     onClick={() => {
                       setUserOpen(false);
+                      setPasswordOpen(true);
+                    }}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-ink-700 hover:bg-ink-100"
+                  >
+                    <Icon name="certificate" size={16} /> Change password
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUserOpen(false);
                       void signOut();
                     }}
                     className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-ink-700 hover:bg-ink-100"
@@ -142,6 +154,10 @@ export function AppShell({ nav }: { nav: AssembledNav }) {
           </div>
         </div>
       </header>
+
+      {/* Account: change your own password. Mounted at shell level so it stays open while the
+          account dropdown closes behind it. */}
+      <ChangePasswordModal open={passwordOpen} onClose={() => setPasswordOpen(false)} />
 
       {/* Routed content. Keyed by the active student so switching kids remounts the page and each
           module re-fetches for the newly-selected child — no per-module change needed. */}
