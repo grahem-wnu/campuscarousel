@@ -7,6 +7,7 @@ import { hydration as applicationCentralHydration } from '../../modules/applicat
 import { hydration as certificationsHydration } from '../../modules/certifications/hydration.manifest.js';
 import { hydration as collegeAssetsHydration } from '../../modules/college-assets/hydration.manifest.js';
 import { hydration as collegeHubHydration } from '../../modules/college-hub/hydration.manifest.js';
+import { hydration as collegeScholarshipsHydration } from '../../modules/college-scholarships/hydration.manifest.js';
 import { hydration as focusHydration } from '../../modules/focus/hydration.manifest.js';
 import { hydration as onboardingChatHydration } from '../../modules/onboarding-chat/hydration.manifest.js';
 import { hydration as opportunitiesHydration } from '../../modules/opportunities/hydration.manifest.js';
@@ -18,6 +19,7 @@ export const hydrationRegistrations: HydrationRegistration[] = [
   certificationsHydration,
   collegeAssetsHydration,
   collegeHubHydration,
+  collegeScholarshipsHydration,
   focusHydration,
   onboardingChatHydration,
   opportunitiesHydration,

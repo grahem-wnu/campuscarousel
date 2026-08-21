@@ -316,6 +316,149 @@ export interface DiscoveryJob extends Timestamped {
   error?: string;
 }
 
+// ---------------------------------------------------------------------------
+// College scholarship research (PK: COLLEGE#<id>, SK: SCHOLARSHIP#<sid> / SCHOLARSHIPSEARCH)
+//
+// Distinct from the standalone `Scholarship` entity (Scholarship Tracker), which is the family's
+// tracked pipeline of awards they intend to apply for. These are the awards a SPECIFIC school
+// offers, discovered by a web-grounded search scoped to that college, plus an on-demand deep
+// research dossier for a single award. See specs/modules/college-scholarships.md.
+// ---------------------------------------------------------------------------
+
+/** Which slice of a school's awards a search targets (and what a found award is). `all` is a search
+ *  filter only — a stored award is always academic/athletic/other. */
+export type ScholarshipCategory = 'academic' | 'athletic' | 'other';
+
+/** How hard this award is to win. A closed union so the UI can color a badge; every other odds
+ *  field is prose, because honest selectivity is rarely a clean number and a fabricated percentage
+ *  would be worse than a sentence. */
+export type ScholarshipCompetitiveness = 'very-high' | 'high' | 'moderate' | 'accessible' | 'unknown';
+
+/** A labeled point in a dossier list (step, criterion, expectation) — short label + one-line why. */
+export interface ResearchPoint {
+  label: string;
+  detail?: string;
+}
+
+/** A dated milestone in the award's cycle (application close, notification, appeal window). */
+export interface ResearchDeadline {
+  label: string;
+  /** ISO date when the source stated one; otherwise the prose lives in `detail`. */
+  date?: string;
+  detail?: string;
+}
+
+/** A real person to contact about this award. Every field is optional because the prompt forbids
+ *  inventing one — an unknown email is omitted, never guessed. */
+export interface ResearchContact {
+  name?: string;
+  title?: string;
+  department?: string;
+  email?: string;
+  phone?: string;
+  office?: string;
+  /** What this person actually handles ("chairs the selection committee"). */
+  note?: string;
+}
+
+/** A source page the research relied on, kept so a family can verify anything before acting. */
+export interface ResearchSource {
+  url: string;
+  title?: string;
+}
+
+/** The realistic-odds section: how many apply, how many win, and what separates the winners. */
+export interface ScholarshipOdds {
+  competitiveness?: ScholarshipCompetitiveness;
+  /** Narrative estimate, including what the estimate is based on. */
+  estimate?: string;
+  /** Size/shape of the applicant pool, when the school publishes or implies it. */
+  applicantPool?: string;
+  /** Awards granted vs applications received, however the source expresses it. */
+  selectionRate?: string;
+  /** The concrete things winning applications had that others didn't. */
+  whatSetsWinnersApart?: string[];
+}
+
+/** Headline award facts, kept as strings: sources say "up to $12,000/yr, renewable for 4 years"
+ *  far more often than they publish a single clean number. */
+export interface ScholarshipAward {
+  amount?: string;
+  renewable?: string;
+  numberAwarded?: string;
+  duration?: string;
+  /** Whether it stacks with other aid — the question families always ask second. */
+  stackable?: string;
+}
+
+/** The deep-research dossier for one award, produced by the async web-grounded research job.
+ *  Every section is optional: a thin but honest dossier beats a padded, invented one. */
+export interface ScholarshipResearch {
+  /** 2-3 paragraph plain-language overview of the award. */
+  summary?: string;
+  award?: ScholarshipAward;
+  odds?: ScholarshipOdds;
+  /** Criteria + benchmarks: what the committee actually weights. */
+  howToWin?: ResearchPoint[];
+  /** The process as experienced: timeline, interview/audition/tryout, notification, obligations. */
+  whatToExpect?: ResearchPoint[];
+  /** Ordered, concrete application steps. */
+  applicationSteps?: ResearchPoint[];
+  requiredMaterials?: string[];
+  deadlines?: ResearchDeadline[];
+  /** Who to contact — the ask-a-question people. */
+  contacts?: ResearchContact[];
+  /** Who runs or decides it — coordinator, coach, department chair, committee. */
+  staff?: ResearchContact[];
+  tips?: string[];
+  /** Common mistakes and disqualifiers. */
+  redFlags?: string[];
+  applicationUrl?: string;
+  sources?: ResearchSource[];
+  /** Academic year / date the figures reflect, e.g. "2026-2027". */
+  asOf?: string;
+}
+
+/** One scholarship offered at a specific college. Search fills the summary fields; the on-demand
+ *  research job fills `research`. */
+export interface CollegeScholarship extends Timestamped {
+  collegeId: string;
+  scholarshipId: string;
+  /** The award's name — the anchor identity; re-searches dedupe on a normalized form of it. */
+  name: string;
+  category?: ScholarshipCategory;
+  /** Sport this award is tied to, for athletic scholarships. */
+  sport?: string;
+  /** Who funds/administers it (the school, a department, athletics, a named foundation). */
+  provider?: string;
+  amount?: number;
+  amountDescription?: string;
+  /** ISO date, when the source published a firm one. */
+  deadline?: string;
+  url?: string;
+  summary?: string;
+  renewable?: boolean;
+  eligibility?: string[];
+  research?: ScholarshipResearch;
+  /** Dossier lifecycle, polled by the UI (research runs on the 300s worker). */
+  researchStatus?: 'pending' | 'in-progress' | 'complete' | 'failed';
+  researchedAt?: string;
+}
+
+/** Per-college search lifecycle (singleton). Lets the tab show "last searched X, N found" and drive
+ *  its spinner without reading every child item. */
+export interface CollegeScholarshipSearch extends Timestamped {
+  collegeId: string;
+  status: 'pending' | 'in-progress' | 'complete' | 'failed';
+  /** The filter the last run used ('all' searches both academic and athletic). */
+  category?: ScholarshipCategory | 'all';
+  sport?: string;
+  /** How many awards the last successful run stored. */
+  found?: number;
+  error?: string;
+  lastRunAt?: string;
+}
+
 export interface CollegeNote extends Timestamped {
   collegeId: string;
   noteId: string; // derived from the SK timestamp
