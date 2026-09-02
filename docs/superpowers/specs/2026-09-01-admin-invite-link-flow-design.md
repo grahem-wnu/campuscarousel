@@ -26,6 +26,8 @@
 back in to pick up the claim. This alone restores the Invites console + Usage page in prod.
 
 ### `/join` (JoinPage) — the invite landing page is a sign-up page
+`AuthGate` keeps routing `/join*` to `JoinPage` unconditionally (public path); the branching below lives
+inside `JoinPage` itself, off `useAuth()`.
 - While auth state is resolving: spinner (no flicker between "form" and "already signed in").
 - **Already signed in** (a valid session in this browser): instead of the form, a notice —
   "You're already signed in as *username*. Invite links create a new family account." with
@@ -33,20 +35,28 @@ back in to pick up the claim. This alone restores the Invites console + Usage pa
 - **Form** (signed out): heading *Create your account*; invite code (prefilled from `?code=`), email,
   family name (optional), password. Under the button: *Already have an account? Sign in* → `/login`.
 - **Already registered** (backend 409 `conflict` — Cognito `UsernameExistsException`, the only way to
-  know without a user-enumeration endpoint): remember the email as a one-shot login hint, toast
-  "You already have an account — sign in instead.", navigate to `/login` (username prefilled).
+  know without a user-enumeration endpoint): hand off to `/login` via `goToLoginWithHint({ username:
+  email, note: "You already have an account — sign in below." })`. No toast — a full navigation follows,
+  so the explanation travels in the hint and is rendered on the login page instead.
 - **Success**: sign in straight away with the chosen credentials (same pattern as `JoinFamilyPage`:
   `startSignIn` → `replaceState("/")` → `refresh()`), so the family lands in onboarding without
   retyping anything. If auto sign-in doesn't complete, fall back to *Your account is ready* with a
-  **Go to sign in** button → `/login` with the email prefilled.
+  **Go to sign in** button → `goToLoginWithHint` with the email and a "your account is ready" note.
 
 ### `/login` (LoginPage)
 - Replace the invite-only line with: **Don't have an account? Reach out to Grahem for an invite link.**
-- Prefill the username from the one-shot hint (set by `/join`), then clear the hint.
+- Prefill the username from the one-shot hint (set by `/join`) and show its `note` (if any) as a
+  `role="status"` line above the form, then clear the hint.
+- StrictMode-safe: the hint is read with a non-consuming `peekLoginHint()` in the `useState`
+  initializer and cleared in a mount effect. Both run twice in dev under `<StrictMode>`
+  (`main.tsx`); a read-and-clear initializer would come back empty on the second pass.
 
 ### Login hint (`shared/shell/loginHint.ts`)
-Two functions over `sessionStorage` (try/catch — private mode may throw): `rememberLoginHint(username)`
-and `takeLoginHint()` (read + clear). Keeps the email out of the URL.
+`interface LoginHint { username: string; note?: string }` over `sessionStorage` (every access in
+try/catch — private mode may throw on the accessor). Functions: `rememberLoginHint(hint)`,
+`peekLoginHint(): LoginHint | null` (non-consuming, tolerant of junk), `clearLoginHint()`, and
+`goToLoginWithHint(hint)` = remember + `window.location.assign("/login")` (a full navigation on
+purpose: `/login` is served by `AuthGate` outside the router). Keeps the email out of the URL.
 
 ### Admin Invites console
 - After minting a link-only invite, show the link **inline** in the create card with its own **Copy**
@@ -60,12 +70,14 @@ and `takeLoginHint()` (read + clear). Keeps the email out of the URL.
 ## Testing
 - `JoinPage.test.tsx` (jsdom): signed-in notice; 409 → hint + `/login`; success → auto sign-in;
   sign-in link present.
-- `LoginPage.test.tsx` (jsdom): new copy; username prefilled from the hint and the hint cleared.
+- `LoginPage.test.tsx` (jsdom): new copy; username prefilled from the hint, note shown, hint cleared.
 - `AdminInvitesPage.test.tsx`: inline link + Copy after a link-only create.
-- `loginHint.test.ts`: remember/take round trip, take clears.
+- `loginHint.test.ts`: remember/peek/clear round trip (peek twice still works), junk tolerated,
+  storage failures never throw.
 - Staging: mint a link as a platform admin, open it signed out → sign-up form; open it signed in →
   notice; redeem with an existing email → lands on `/login` prefilled.
 
 ## Rollout
 Code → PR into `dev` → staging auto-deploy → verified. Prod code promotion (`dev→main`) waits for
-Grahem's explicit go. The prod Cognito attribute is applied immediately (reversible, admin's own account).
+Grahem's explicit go. The prod Cognito attribute is a prod mutation too — per the repo rule it is
+handed to Grahem as a one-line command (or run on his explicit go), not applied unprompted.
