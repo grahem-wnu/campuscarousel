@@ -59,6 +59,26 @@ describe('AdminInvitesPage (invite-only mode)', () => {
     );
   });
 
+  it('shows the freshly minted link inline with its own Copy button (clipboard may have refused)', async () => {
+    h.createInvite.mockResolvedValue({ code: 'LINK2345', status: 'pending' });
+    Object.assign(navigator, { clipboard: { writeText: vi.fn().mockRejectedValue(new Error('NotAllowedError')) } });
+
+    render(<AdminInvitesPage />);
+    fireEvent.click(await screen.findByText('Create invite link'));
+
+    const field = await screen.findByDisplayValue(/\/join\?code=LINK2345$/);
+    expect(field).toHaveAttribute('readonly');
+    expect(h.toast.error).toHaveBeenCalled(); // the auto-copy failed, but the link is right there
+
+    // The inline Copy is a direct tap — the case iOS allows.
+    Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } });
+    fireEvent.click(screen.getByText('Copy'));
+    await waitFor(() =>
+      expect(navigator.clipboard.writeText).toHaveBeenCalledWith(expect.stringContaining('/join?code=LINK2345')),
+    );
+    expect(h.toast.success).toHaveBeenCalledWith('Invite link copied.');
+  });
+
   it('every pending invite can re-copy its link (and link-only rows say so)', async () => {
     h.listInvites.mockResolvedValue([
       { code: 'PEND9876', status: 'pending', plan: 'free', invitedBy: 'grahem', createdAt: '', updatedAt: '' },
