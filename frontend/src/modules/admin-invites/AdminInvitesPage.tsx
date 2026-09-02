@@ -13,6 +13,10 @@ export default function AdminInvitesPage() {
   const [email, setEmail] = useState('');
   const [familyName, setFamilyName] = useState('');
   const [creating, setCreating] = useState(false);
+  // The link just minted, shown inline with its own Copy button. The auto-copy below is best-effort:
+  // iOS Safari refuses clipboard writes that don't happen directly inside a tap (ours follows an
+  // await), and a toast is no place to recover a link from.
+  const [lastLink, setLastLink] = useState<{ code: string; url: string } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -43,8 +47,12 @@ export default function AdminInvitesPage() {
     );
   }
 
+  function linkFor(code: string) {
+    return `${window.location.origin}/join?code=${encodeURIComponent(code)}`;
+  }
+
   async function copyLink(code: string) {
-    const url = `${window.location.origin}/join?code=${encodeURIComponent(code)}`;
+    const url = linkFor(code);
     try {
       await navigator.clipboard.writeText(url);
       toast.success('Invite link copied.');
@@ -64,6 +72,7 @@ export default function AdminInvitesPage() {
       if (inv.email) {
         toast.success(`Invite emailed to ${inv.email} (code ${inv.code}).`);
       } else {
+        setLastLink({ code: inv.code, url: linkFor(inv.code) });
         await copyLink(inv.code);
       }
       setEmail('');
@@ -90,7 +99,10 @@ export default function AdminInvitesPage() {
     <div className="mx-auto max-w-3xl space-y-5 p-4 sm:p-6">
       <header className="space-y-1">
         <h1 className="text-2xl font-bold text-ink-900">Invites</h1>
-        <p className="text-sm text-ink-600">Send a free signup code to a family. They redeem it to create their own private account.</p>
+        <p className="text-sm text-ink-600">
+          Invite a new family to Campus Carousel. The link lands them on a sign-up page; they create their own
+          private account and land in onboarding.
+        </p>
       </header>
 
       <Card className="space-y-3">
@@ -112,6 +124,19 @@ export default function AdminInvitesPage() {
             {email.trim() ? 'Send invite' : 'Create invite link'}
           </Button>
         </div>
+        {lastLink ? (
+          <Field
+            label="Your new invite link"
+            hint="Text this to the family. It opens a sign-up page; the link is single-use and expires in 30 days."
+          >
+            <div className="flex items-center gap-2">
+              <Input readOnly value={lastLink.url} onFocus={(e) => e.currentTarget.select()} />
+              <Button variant="outline" size="sm" onClick={() => void copyLink(lastLink.code)}>
+                Copy
+              </Button>
+            </div>
+          </Field>
+        ) : null}
       </Card>
 
       <h2 className="text-sm font-semibold text-ink-800">Sent invites</h2>
