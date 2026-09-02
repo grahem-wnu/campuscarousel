@@ -1,8 +1,9 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Button } from "../ui/Button";
 import { TextField } from "../ui/Field";
 import { useAuth } from "./AuthContext";
 import { completeNewPassword, startSignIn } from "./amplify";
+import { clearLoginHint, peekLoginHint } from "./loginHint";
 
 type Phase = "credentials" | "new_password";
 
@@ -10,16 +11,25 @@ type Phase = "credentials" | "new_password";
  * Login screen. Username + password (no email). Handles the first-login
  * NEW_PASSWORD_REQUIRED challenge by prompting for a new password, then refreshes
  * the auth state so the shell takes over.
+ *
+ * The sign-up page (/join) can hand off a one-shot hint — the username to prefill and a line saying
+ * why they're here (e.g. "you already have an account"). It's read once in the state initializer and
+ * cleared in a mount effect (StrictMode-safe: both run twice in dev, and peek doesn't consume).
  */
 export function LoginPage() {
   const { refresh } = useAuth();
   const [phase, setPhase] = useState<Phase>("credentials");
-  const [username, setUsername] = useState("");
+  const [hint] = useState(() => peekLoginHint());
+  const [username, setUsername] = useState(hint?.username ?? "");
   const [password, setPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    clearLoginHint();
+  }, []);
 
   // The dedicated /login path isn't an app route — once signed in, the router would 404 on it.
   // Land on the root instead (which redirects to the first tab). Deep links keep their path.
@@ -81,6 +91,11 @@ export function LoginPage() {
         <div className="rounded-xl border border-surface-border bg-surface-raised p-6 shadow-md">
           {phase === "credentials" ? (
             <form onSubmit={onSubmitCredentials} className="flex flex-col gap-4">
+              {hint?.note ? (
+                <p role="status" className="rounded-lg border border-primary-200 bg-primary-50 px-3 py-2 text-sm text-primary-800">
+                  {hint.note}
+                </p>
+              ) : null}
               <TextField
                 label="Username"
                 autoComplete="username"
@@ -134,7 +149,7 @@ export function LoginPage() {
 
         {phase === "credentials" ? (
           <p className="mt-6 text-center text-sm text-ink-500">
-            Campus Carousel is invite-only — new families join through an invite link.
+            Don&rsquo;t have an account? Reach out to Grahem for an invite link.
           </p>
         ) : null}
         <p className="mt-6 text-center text-xs text-ink-400">
